@@ -32,6 +32,10 @@ var state: Dictionary = {}
 ## The manifest actually mounted by this process ({} = bundled baseline).
 var active: Dictionary = {}
 var boot_log: Array[String] = []
+## Time the last boot() spent verifying stored packages (signature, runtime, size, SHA-256) and
+## mounting one, in milliseconds. No network is involved at boot.
+var boot_verify_ms := 0.0
+var boot_mount_ms := 0.0
 
 
 func _init(p_root := "user://ota", p_runtime := "", p_channel := Config.CHANNEL,
@@ -324,6 +328,8 @@ func known_seq() -> int:
 ## on device). Every outcome falls back towards CURRENT, PREVIOUS and finally the baseline.
 func boot(loader: Callable) -> Dictionary:
 	active = {}
+	boot_verify_ms = 0.0
+	boot_mount_ms = 0.0
 	if state["disabled"]:
 		event("load", "OTA disabled by user: running bundled baseline")
 		state["boot"]["ota_id"] = ""
@@ -346,9 +352,11 @@ func boot(loader: Callable) -> Dictionary:
 		if b["ota_id"] == id and int(b["starts"]) >= MAX_UNHEALTHY_STARTS:
 			mark_bad(m, "never reached boot health after %d starts" % int(b["starts"]))
 			continue
+		var t0 := Time.get_ticks_usec()
 		var why := validate_manifest(m)
 		if why == "":
 			why = verify_installed(m)
+		boot_verify_ms += (Time.get_ticks_usec() - t0) / 1000.0
 		if why != "":
 			if why.begins_with("save incompatible") or why.begins_with("native update required"):
 				event("load", "skipped %s: %s" % [id, why])
@@ -365,7 +373,10 @@ func boot(loader: Callable) -> Dictionary:
 		# Count the attempt BEFORE mounting, so a crash during load still counts.
 		state["boot"] = {"ota_id": id, "starts": (int(b["starts"]) if b["ota_id"] == id else 0) + 1, "healthy_id": b.get("healthy_id", "")}
 		save_state()
-		if loader.call(package_path(id)):
+		var t1 := Time.get_ticks_usec()
+		var mounted: bool = loader.call(package_path(id))
+		boot_mount_ms += (Time.get_ticks_usec() - t1) / 1000.0
+		if mounted:
 			active = m
 			event("load", "loaded %s (%s) from %s" % [id, name, str(m["source_sha"]).left(12)])
 			save_state()

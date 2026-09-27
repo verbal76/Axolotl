@@ -40,9 +40,13 @@ var _ready_frames := 0
 var _overlay: Overlay
 var _taps: Array[int] = []
 var _last_auto_check_ms := -1
+## Native startup milestones [label, engine-clock usec]; the game layer's StartupTrace merges
+## them into the timeline shown in Diagnostics.
+var boot_marks: Array = []
 
 
 func _init() -> void:
+	_mark("native: bootstrap starts (first autoload)")
 	for a in OS.get_cmdline_user_args():
 		if a.begins_with("--"):
 			var kv := a.substr(2).split("=", true, 1)
@@ -58,6 +62,7 @@ func _init() -> void:
 	if _args.has("test") and not _args.has("ota-root"):
 		ota_enabled = false
 	if not ota_enabled:
+		_mark("native: bootstrap done (no OTA client)")
 		return
 	core = OtaCore.new(_args.get("ota-root", "user://ota"), "", channel)
 	core.device_save_schema = _device_save_schema()
@@ -66,6 +71,12 @@ func _init() -> void:
 	core.boot(func(path: String) -> bool: return ProjectSettings.load_resource_pack(path, true))
 	for line in core.boot_log:
 		print("[OTA] ", line)
+	_mark("native: OTA package chosen (%s): verify %.1f ms, mount %.1f ms, no network" % [core.active.get("ota_id", "bundled game"), core.boot_verify_ms, core.boot_mount_ms])
+
+
+func _mark(label: String) -> void:
+	boot_marks.append([label, Time.get_ticks_usec()])
+	print("[STARTUP] %9.1f ms  %s" % [Time.get_ticks_usec() / 1000.0, label])
 
 
 func _ready() -> void:
@@ -109,6 +120,7 @@ static func _device_save_schema() -> int:
 func report_ready() -> void:
 	if _ready_at < 0:
 		_ready_at = Time.get_ticks_msec()
+		_mark("native: game reported ready")
 
 
 func _process(_dt: float) -> void:
@@ -120,6 +132,7 @@ func _process(_dt: float) -> void:
 	_ready_frames += 1
 	if Time.get_ticks_msec() - _ready_at >= HEALTHY_AFTER_MS and _ready_frames >= 30:
 		healthy = true
+		_mark("native: boot healthy")
 		if ota_enabled:
 			core.mark_healthy()
 			print("[OTA] boot healthy: ", core.active.get("ota_id", "bundled baseline"))
@@ -152,6 +165,7 @@ func auto_check(reason: String) -> bool:
 	if not auto_check_due(reason, now, _last_auto_check_ms):
 		return false
 	_last_auto_check_ms = now
+	_mark("native: automatic OTA check starts (%s)" % reason)
 	print("[OTA] automatic check (%s)" % reason)
 	updater.check(true)
 	return true
@@ -253,6 +267,11 @@ func diagnostics_text() -> String:
 		L.append("  Rollback count: %d" % int(st["rollback_count"]))
 		L.append("  OTA disabled (baseline mode): %s" % ("yes" if st["disabled"] else "no"))
 		L.append("  Rejected OTAs: %s" % (", ".join(st["bad"]) if not (st["bad"] as Array).is_empty() else "none"))
+	var trace: Script = load("res://scripts/core/startup_trace.gd") if ResourceLoader.exists("res://scripts/core/startup_trace.gd") else null
+	if trace != null:
+		L.append("")
+		L.append("Startup (this launch; ms on the engine clock)")
+		L.append(trace.call("timeline_text", boot_marks))
 	L.append("")
 	L.append("Source")
 	L.append("  Git SHA (running code): %s" % id["source_sha"])
