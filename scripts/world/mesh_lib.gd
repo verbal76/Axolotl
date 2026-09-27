@@ -130,7 +130,8 @@ static func cushion_mesh(radius: float, height: float, sink: float = 1.2, radial
 			var v01 := Vector3(cos(a1) * p0.x, p0.y, sin(a1) * p0.x)
 			var v10 := Vector3(cos(a0) * p1.x, p1.y, sin(a0) * p1.x)
 			var v11 := Vector3(cos(a1) * p1.x, p1.y, sin(a1) * p1.x)
-			for v in [v00, v10, v11, v00, v11, v01]:
+			# Godot front faces wind clockwise seen from outside.
+			for v in [v00, v11, v10, v00, v01, v11]:
 				st.set_uv(Vector2(float(s) / radial, (v as Vector3).y / height))
 				st.add_vertex(v)
 	st.generate_normals()
@@ -170,7 +171,7 @@ static func stem_mesh(r0: float, r1: float, height: float, radial := 10, bend :=
 			var v01 := oa + Vector3(cos(a1) * ra, t0 * height, sin(a1) * ra)
 			var v10 := ob + Vector3(cos(a0) * rb, t1 * height, sin(a0) * rb)
 			var v11 := ob + Vector3(cos(a1) * rb, t1 * height, sin(a1) * rb)
-			for v in [[v00, t0], [v10, t1], [v11, t1], [v00, t0], [v11, t1], [v01, t0]]:
+			for v in [[v00, t0], [v11, t1], [v10, t1], [v00, t0], [v01, t0], [v11, t1]]:
 				st.set_uv(Vector2(0.5, v[1]))
 				st.add_vertex(v[0])
 	st.generate_normals()
@@ -200,9 +201,10 @@ static func dome_shell(radius: float, thickness: float, height_scale: float, doo
 				# Entrance gap facing +Z.
 				if centre.z > 0 and absf(centre.x) < door_w * 0.5 and centre.y < door_h:
 					continue
-				var tris := [quad[0], quad[1], quad[2], quad[0], quad[2], quad[3]]
+				# Outer layer faces out, inner layer faces into the cave.
+				var tris := [quad[0], quad[2], quad[1], quad[0], quad[3], quad[2]]
 				if layer == 1:
-					tris = [quad[0], quad[2], quad[1], quad[0], quad[3], quad[2]]
+					tris = [quad[0], quad[1], quad[2], quad[0], quad[2], quad[3]]
 				for v in tris:
 					st.set_uv(Vector2(float(s) / radial, (v as Vector3).y / (radius * height_scale)))
 					st.add_vertex(v)

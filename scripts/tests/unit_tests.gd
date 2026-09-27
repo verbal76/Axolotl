@@ -14,7 +14,7 @@ func run(runner) -> void:
 	p.use_bot_input = true
 	await t.seconds(0.5)
 	var only: String = Settings.test_args.get("only", "")
-	for name_ in ["_test_placements", "_test_tutorial_route", "_test_sphere_walk", "_test_jump_and_burst", "_test_coyote_and_buffer", "_test_swipe_direction_and_stages", "_test_hard_landing", "_test_food", "_test_darter_and_burrower", "_test_food_repopulates", "_test_motes", "_test_checkpoint_and_regen", "_test_crumble", "_test_restoration_continuity", "_test_vortex", "_test_current", "_test_canopy", "_test_upgrades", "_test_ui", "_test_all_clear"]:
+	for name_ in ["_test_mesh_winding", "_test_placements", "_test_tutorial_route", "_test_sphere_walk", "_test_jump_and_burst", "_test_coyote_and_buffer", "_test_swipe_direction_and_stages", "_test_hard_landing", "_test_food", "_test_darter_and_burrower", "_test_food_repopulates", "_test_motes", "_test_checkpoint_and_regen", "_test_crumble", "_test_restoration_continuity", "_test_vortex", "_test_current", "_test_canopy", "_test_upgrades", "_test_ui", "_test_all_clear"]:
 		if only == "" or name_.contains(only):
 			await call(name_)
 
@@ -79,6 +79,32 @@ func _surface_height(b: MossBall, dir: Vector3, h_hint: float) -> float:
 	var q := PhysicsRayQueryParameters3D.create(top, b.global_position, 1 | 2)
 	var hit := g.get_world_3d().direct_space_state.intersect_ray(q)
 	return -99.0 if hit.is_empty() else (hit.position - b.global_position).length() - b.radius
+
+
+## Godot culls back faces and treats clockwise-from-outside as front, so every solid
+## procedural mesh must have (c - a) x (b - a) pointing away from its interior.
+func _front_faces_out(mesh: ArrayMesh, interior: Callable) -> int:
+	var v: PackedVector3Array = mesh.surface_get_arrays(0)[Mesh.ARRAY_VERTEX]
+	var wrong := 0
+	for i in range(0, v.size(), 3):
+		var n := (v[i + 2] - v[i]).cross(v[i + 1] - v[i])
+		if n.length_squared() < 1e-12:
+			continue
+		var c := (v[i] + v[i + 1] + v[i + 2]) / 3.0
+		if n.dot(c - (interior.call(c) as Vector3)) <= 0.0:
+			wrong += 1
+	return wrong
+
+
+func _test_mesh_winding() -> void:
+	var cushion := _front_faces_out(MeshLib.cushion_mesh(1.4, 2.8, 1.5), func(_c: Vector3) -> Vector3: return Vector3(0, 1.0, 0))
+	t.check("cushion_faces_outward", cushion == 0, "%d inward faces" % cushion)
+	var stem := _front_faces_out(MeshLib.stem_mesh(0.3, 0.2, 3.0, 9), func(c: Vector3) -> Vector3: return Vector3(0, c.y, 0))
+	t.check("stem_faces_outward", stem == 0, "%d inward faces" % stem)
+	# Dome: outer layer faces out, inner layer faces into the cave.
+	var dome: ArrayMesh = MeshLib.dome_shell(8.0, 0.9, 0.9, 2.6, 1.8)[0]
+	var dome_bad := _front_faces_out(dome, func(c: Vector3) -> Vector3: return Vector3.ZERO if Vector3(c.x, c.y / 0.9, c.z).length() > 7.55 else c * 2.0)
+	t.check("cave_dome_faces_correct_side", dome_bad == 0, "%d wrong faces" % dome_bad)
 
 
 func _test_placements() -> void:

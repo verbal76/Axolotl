@@ -200,9 +200,10 @@ below comes from running the real game in Godot 4.7.2: headless for logic, and o
 (llvmpipe) for screenshots. The CI builds prove the Android APK exports and the iOS app compiles, but
 neither was installed or run on a device or simulator.
 
-**Mechanics suite** (`--test=unit`, 68 checks, all passing locally and in CI). These drive the real
+**Mechanics suite** (`--test=unit`, 71 checks, all passing locally and in CI). These drive the real
 controller through the same input actions the touch HUD and gamepad use:
 - All 118 authored actors land on their intended surface.
+- Moss cushions, stems and cave domes face the right way, so no platform renders hollow or see-through.
 - Tutorial route: every start point makes jump → M1 → jump+burst → M2, and a plain jump cannot cross the gap.
 - A full lap around a moss ball with no camera flips and no unintended airborne frames.
 - Jump apex, the water burst (exactly once, follows direction, no third action), landing resets it, coyote time, jump buffering.
