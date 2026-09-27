@@ -7,12 +7,15 @@ extends RefCounted
 ## Version of the on-device OTA bootstrap protocol. Manifests may demand a minimum.
 const BOOTSTRAP_VERSION := 1
 ## Bumped whenever the native layer changes incompatibly (see ota/runtime_lock.json).
-const RUNTIME_REVISION := 3
-## The only channel the dev APK follows. Channels are manifest pointers, not packages.
+const RUNTIME_REVISION := 4
+## The channel an installed app follows unless its native build info names another one
+## (the "ota_channel" field written at APK build time). Channels are manifest pointers, not
+## packages: a later stable/release channel is a second pointer, not a second code path.
 const CHANNEL := "dev"
 const REPO := "verbal76/Axolotl"
-## Custom export feature that turns the OTA client on (set only by the "Android Dev" preset).
-const FEATURE := "ota_dev"
+## Custom export feature that turns the OTA client on. Both Android presets (Mote and Mote Dev)
+## set it: the installed game is fully playable offline and updates itself when it can.
+const FEATURE := "ota"
 
 ## Public half of the Mote OTA signing key. The private half lives only in the
 ## MOTE_OTA_SIGNING_KEY GitHub Actions secret. (The first dev key was retired and replaced.)

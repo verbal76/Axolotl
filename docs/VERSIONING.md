@@ -11,11 +11,11 @@ stands in for another, and none is derived from another.
 | **Source** | Which exact commit produced the running code? | git SHA of the APK build (the branch commit, never a PR merge ref), or of the active OTA | `5190d30c…` |
 | **Native version** | Which native shell release is installed? | `version/name` in the export preset (Android versionName) | `0.1.0` |
 | **Android build** | Which packaged APK is installed? | `version/code`, set by CI to the Build & Verify run number | `27` |
-| **Build flavor** | Offline player build or OTA dev build? | Export preset: `Android` (normal) or `Android Dev` (dev) | `dev` |
+| **Build flavor** | Which package is this (both are offline-first and OTA-capable)? | Export preset: `Android` (normal, "Mote") or `Android Dev` (dev, "Mote Dev") | `normal` |
 | **OTA** | Which remote game payload is active *right now*? | the OTA state after boot selection (`Boot.core.active`) | `dev-000042` |
 | **Automation** | Which CI run built or published it? | GitHub Actions run id (in native build info and the OTA manifest) | `17234…` |
 | **Save schema** | Which persisted-data format is this? | `SAVE_SCHEMA` in `scripts/core/save_schema.gd` | `1` |
-| **Runtime** | Which OTAs can this APK run? | `ota_config.gd` + `ota/runtime_lock.json` | `android-godot-4.7.2-r3` |
+| **Runtime** | Which OTAs can this APK run? | `ota_config.gd` + `ota/runtime_lock.json` | `android-godot-4.7.2-r4` |
 
 Values that don't exist for a build are shown as `local`, `unknown` or `none`, never invented.
 For example, a local editor run has no Android build and no CI run.

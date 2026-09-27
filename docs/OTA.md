@@ -1,9 +1,36 @@
-# Mote development OTA channel
+# Mote OTA updates (dev channel)
 
-Install one **Mote Dev** APK once. After that, compatible game changes reach it
-over the air (OTA). You push a commit, CI tests it and publishes a signed Godot PCK, and the phone
-downloads it and runs it after the next restart. You only build a new APK when the installed
-**runtime** changes.
+Mote is **offline-capable, not offline-only** (owner ruling). The installed **Mote** app bundles the
+complete game and needs no connection to launch, load, play, save, restore saves or finish. When a
+connection happens to be available it checks for signed, compatible over-the-air (OTA) game updates
+in the background, downloads and verifies them, and runs them after the next restart. You push a
+commit, CI tests it and publishes a signed Godot PCK, and the phone picks it up. You only build a new
+APK when the installed **runtime** changes.
+
+Both Android packages carry the OTA client and follow the `dev` channel: **Mote**
+(`com.verbal76.axolotl`, the app to play) and **Mote Dev** (`com.verbal76.axolotl.dev`, an optional
+side-by-side test install). Before runtime r4 the normal Mote app had no OTA client and no network
+permission; that architecture is superseded.
+
+## Automatic checks (never blocking)
+
+```
+app start -> Boot mounts the newest VERIFIED package already on the device (no network)
+          -> game starts immediately (bundled baseline, or the active OTA)
+          -> game reports ready, runs 3 s -> boot healthy
+          -> automatic check in the background: pointer -> manifest -> PCK -> verify -> PENDING
+          -> "restart to run it" toast; the update runs on the next start
+```
+
+- **When:** once per launch (after boot health); again when the app returns to the foreground if the
+  last automatic attempt was at least 15 minutes ago; and every 60 minutes while it keeps running.
+  Failed attempts count, so an offline phone is not hammered. `Boot.auto_check_due()` holds the policy.
+- **Never while** the game is starting, in baseline mode (OTA disabled), or when a check is already running.
+- **Non-blocking:** requests are polled from the main loop (DNS, TLS and reads are non-blocking);
+  15 s timeout for the pointer and manifest, 15 min for the package. Godot 4.7.2's *threaded*
+  HTTPRequest ignores its timeout when a server accepts but never answers, so the client is not threaded.
+- **Any failure keeps the current game:** no network, DNS failure, GitHub down, timeout, invalid
+  pointer/manifest, bad signature, wrong runtime, bad hash, corrupt or interrupted download.
 
 This is an application-level Godot patch channel, not Google Play updating.
 
@@ -34,8 +61,8 @@ change any of them:
 - native `.so` libraries, Android plugins, Gradle, Java or Kotlin (none are used today).
 
 When one of these changes, bump the runtime with `python3 tools/ota_runtime.py --bump` (the
-revision becomes part of the runtime ID, e.g. `android-godot-4.7.2-r3`). Commit, then install
-the new Dev APK. Older APKs reject OTAs built for the new runtime ("native update required").
+revision becomes part of the runtime ID, e.g. `android-godot-4.7.2-r4`). Commit, then install
+the new APK. Older APKs reject OTAs built for the new runtime ("native update required").
 
 ## Boot order
 
@@ -72,7 +99,7 @@ The APK's bundled game is never modified and is always the final fallback.
 ```json
 {
   "schema": 1, "channel": "dev", "ota_id": "dev-000123", "seq": 123,
-  "source_sha": "<40-hex commit SHA>", "runtime_id": "android-godot-4.7.2-r3",
+  "source_sha": "<40-hex commit SHA>", "runtime_id": "android-godot-4.7.2-r4",
   "minimum_bootstrap_version": 1, "game_version": "0.1.0",
   "save_schema": 1, "min_save_schema": 1,
   "pck_url": "https://github.com/verbal76/Axolotl/releases/download/ota-dev-000123/axolotl-dev-000123.pck",
@@ -94,7 +121,7 @@ It runs on every push to `claude/axolotl-aquarium-platformer-3y0qyy`, or manuall
 3. installs Godot 4.7.2 (no export templates are needed for a pack) and imports;
 4. reads canonical identities (`tools/print_identity.gd`);
 5. runs the script check, mechanics suite and playthrough bot;
-6. exports the PCK with the **Android Dev** preset;
+6. exports the PCK with the **Android** preset (the game layer is identical for both packages);
 7. builds the manifest (`tools/ota_make_manifest.gd`), signs it, then re-checks it with the on-device client code (`tools/ota_inspect_pack.gd`). That check covers signature, runtime, size, SHA-256, and that the game version inside the pack equals the manifest's and the canonical one;
 8. creates the immutable release, and fails if the tag already exists;
 9. downloads the published objects again and verifies them;
@@ -112,9 +139,9 @@ If `MOTE_OTA_SIGNING_KEY` is missing, the job stays green but the receipt says `
      PKCS12 keystores, and Godot's signing step, use a single password, so the key password must equal the keystore password. CI checks this.
    - CI reports only whether each secret is present, never its value.
    - The first generic secrets (`OTA_SIGNING_KEY`, `ANDROID_DEV_KEYSTORE_B64`) and their key/keystore are retired and no longer read.
-2. Push, or re-run **Build & Verify**, and download the `mote-android-dev-v…` artifact.
-3. Install **Mote Dev** once. It installs alongside the normal offline **Mote**.
-4. Re-run **OTA publish (dev channel)** (or push). Open Mote Dev, then **Pause → About / Diagnostics**. When "Latest on channel" shows the OTA, close the app from recents and reopen it.
+2. Push, or re-run **Build & Verify**, and download the `mote-android-v…` artifact (Mote) or `mote-android-dev-v…` (Mote Dev).
+3. Install it. A newer Mote APK signed with the same Mote key installs **over** the old one and keeps its saves; do not uninstall first.
+4. Push (or re-run **OTA publish (dev channel)**). The app finds the OTA by itself; **Pause → About / Diagnostics** shows it. Close the app from recents and reopen it to run it.
 
 ## Recovery
 
@@ -122,11 +149,29 @@ The diagnostics and recovery screen is part of the APK. It still opens when the 
 - **Five quick taps in the top-left corner** of any screen, or **F9** on a keyboard;
 - **Pause → About / Diagnostics** when the game UI works.
 
+The OTA section opens with the lines that say whether the game is current:
+
+```
+OTA
+  Enabled: yes
+  Channel: dev
+  Status: Up to date | Update available: dev-… | Update downloaded: dev-… runs after the app restarts
+          | Offline: update channel not reachable; playing the current game | Not checked yet | …
+  Bundled baseline: <APK source SHA> (Android Build <n>)
+  Active: dev-… (source <sha>) | bundled baseline
+  Latest on channel: dev-… (checked <UTC>) | not checked yet
+  Pending (runs after restart): …
+  Downloaded, not activated: …
+  Runtime compatibility: this app runs android-godot-4.7.2-r4; latest OTA compatible | NOT compatible: …
+  Last check: <result>  <UTC>
+```
+
 Controls:
-- **Check for update**, **Download update**, **Activate on restart** (for when auto-activation is off);
+- **Check for update**; **Download update** (enabled when a check found one, or to retry a failed download);
+- **Activate on restart** (for when auto-activation is off); **Close app (reopen to restart)**;
 - **Roll back** returns to PREVIOUS on the next start, and the abandoned OTA is not downloaded again;
 - **Boot bundled baseline** / **Re-enable OTA**;
-- **Copy diagnostics**, **Quit**.
+- **Copy diagnostics**, **Close**.
 
 Automatic protections:
 - A start that never reaches boot health counts against that OTA. After two such starts it is abandoned, and the next start falls back.
@@ -144,9 +189,11 @@ Developer and scripted equivalents of the buttons are available as user args:
 
 | Situation | Result |
 |---|---|
-| No network / pointer or manifest download fails | keep running the current package |
+| No network / DNS / GitHub down / pointer or manifest download fails | keep running the current package |
+| Server accepts but never answers | times out (15 s); current package kept |
 | Invalid manifest / bad signature | rejected |
-| Runtime or bootstrap mismatch | rejected: "native update required" |
+| OTA built for a newer runtime or bootstrap | not used: "native update required" (install the newer APK) |
+| OTA built for an older runtime | not used: "incompatible runtime"; a package left over from before an APK upgrade is dropped and the bundled game runs |
 | Interrupted or short download | temp file deleted, current package kept, retried later |
 | SHA-256 mismatch | temp file deleted, OTA marked rejected (published packages are immutable) |
 | Pack fails to mount | fall back to CURRENT, then PREVIOUS, then baseline, in the same boot |
@@ -163,5 +210,6 @@ Developer and scripted equivalents of the buttons are available as user args:
 ## Verification tooling
 
 - `scripts/tests/ota_tests.gd` is part of the unit suite. It covers manifest validation, runtime and bootstrap mismatch, the signature (tampered or wrong key), hash and size rejection, and state transitions. It also covers unhealthy-start fallback, load-failure fallback, corrupt package and corrupt state, rollback, baseline mode, and a real PCK mount through the verifier.
-- `tools/ota_e2e_local.sh` runs the full loop against a real exported game. Desktop Linux stands in for the phone, with a local HTTP server mirroring the Releases layout. It covers milestone steps 1–16 apart from the Android device itself.
+- The same suite drives the real update client against a local HTTP server (`scripts/tests/ota_http_stub.gd`): offline (gameplay keeps running), a server that hangs, discovery and staging, up to date, older/newer runtime, bad signature, bad hash, an interrupted download and its retry, the automatic-check policy, and the Diagnostics bundled / active / latest / status lines.
+- `tools/ota_e2e_local.sh` runs the full loop against a real exported game. Desktop Linux stands in for the phone, with a local HTTP server mirroring the Releases layout. It covers milestone steps 1–16 apart from the Android device itself, plus a channel server that hangs (the game reaches boot health first) and a full playthrough by the exported game with the channel unreachable.
 - `tools/version_drift_check.sh` is described in `docs/VERSIONING.md`.

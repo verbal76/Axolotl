@@ -1,6 +1,6 @@
 name: OTA publish (dev channel)
 
-# Publishes the game layer as a signed, immutable OTA for installed Mote Dev APKs.
+# Publishes the game layer as a signed, immutable OTA for installed Mote (and Mote Dev) APKs.
 # No APK is built here. Order of evidence:
 #   exact SHA -> runtime gate -> tests -> PCK -> SHA-256/size -> signed manifest
 #   -> client-side inspection -> immutable release -> re-download + re-verify
@@ -27,7 +27,7 @@ env:
   GODOT_VERSION: 4.7.2
   GODOT_BASE: https://github.com/godotengine/godot/releases/download/4.7.2-stable
   CHANNEL: dev
-  PRESET: Android Dev
+  PRESET: Android
   MOTE_OTA_PUBKEY_DER_SHA256: a003a45ce422325ef1de52958bd9d4d2a06b912ae119c6c7a7f9e40ff2720cf2
 
 jobs:
@@ -64,11 +64,14 @@ jobs:
         id: ident
         run: |
           godot --headless --path . --import || true
-          godot --headless --path . -s tools/print_identity.gd | grep IDENTITY_JSON | sed 's/^IDENTITY_JSON //' > identity.json
-          cat identity.json
-          test "$(jq -r .godot_version identity.json)" = "$GODOT_VERSION"
-          echo "game_version=$(jq -r .game_version identity.json)" >> $GITHUB_OUTPUT
-          echo "runtime_id=$(jq -r .runtime_id identity.json)" >> $GITHUB_OUTPUT
+          # Written outside the project so it is never packed into the PCK.
+          ID="$RUNNER_TEMP/identity.json"
+          godot --headless --path . -s tools/print_identity.gd | grep IDENTITY_JSON | sed 's/^IDENTITY_JSON //' > "$ID"
+          cat "$ID"
+          test "$(jq -r .godot_version "$ID")" = "$GODOT_VERSION"
+          test "$(jq -r .channel "$ID")" = "$CHANNEL"
+          echo "game_version=$(jq -r .game_version "$ID")" >> $GITHUB_OUTPUT
+          echo "runtime_id=$(jq -r .runtime_id "$ID")" >> $GITHUB_OUTPUT
 
       - name: Required checks (scripts, mechanics, playthrough)
         run: |

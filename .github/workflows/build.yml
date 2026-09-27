@@ -53,7 +53,7 @@ jobs:
           path: test_out/
 
   android:
-    name: Android APKs (normal offline + dev OTA)
+    name: Android APKs (Mote + Mote Dev, both offline-first with OTA)
     runs-on: ubuntu-latest
     timeout-minutes: 45
     steps:
@@ -117,11 +117,14 @@ jobs:
         id: ident
         run: |
           godot --headless --path . --import || true
-          godot --headless --path . -s tools/print_identity.gd | grep IDENTITY_JSON | sed 's/^IDENTITY_JSON //' > identity.json
-          cat identity.json
-          echo "game_version=$(jq -r .game_version identity.json)" >> $GITHUB_OUTPUT
-          echo "runtime_id=$(jq -r .runtime_id identity.json)" >> $GITHUB_OUTPUT
-          test "$(jq -r .godot_version identity.json)" = "$GODOT_VERSION"
+          # Written outside the project so it is never packed into an APK or PCK.
+          ID="$RUNNER_TEMP/identity.json"
+          godot --headless --path . -s tools/print_identity.gd | grep IDENTITY_JSON | sed 's/^IDENTITY_JSON //' > "$ID"
+          cat "$ID"
+          echo "game_version=$(jq -r .game_version "$ID")" >> $GITHUB_OUTPUT
+          echo "runtime_id=$(jq -r .runtime_id "$ID")" >> $GITHUB_OUTPUT
+          echo "channel=$(jq -r .channel "$ID")" >> $GITHUB_OUTPUT
+          test "$(jq -r .godot_version "$ID")" = "$GODOT_VERSION"
       - name: Export APKs
         env:
           GV: ${{ steps.ident.outputs.game_version }}
@@ -151,13 +154,13 @@ jobs:
             "$AAPT2" dump xmltree --file AndroidManifest.xml "$apk" > "$apk.manifest.txt"
             grep -oE 'android.permission\.[A-Z_]+' "$apk.manifest.txt" | sort -u | sed 's/^/  permission: /'
           done
-          # The normal build must stay offline; the dev build is the only one with network access.
-          if grep -q "android.permission.INTERNET" "build/android/mote-v$GV-b$BUILD.apk.manifest.txt"; then
-            echo "::error::the normal (offline) APK requests INTERNET"; exit 1
-          fi
-          if ! grep -q "android.permission.INTERNET" "build/android/mote-dev-v$GV-b$BUILD.apk.manifest.txt"; then
-            echo "::error::the dev APK cannot reach the OTA channel (no INTERNET permission)"; exit 1
-          fi
+          # Owner ruling: Mote is offline-CAPABLE, not offline-only. Both apps play fully offline and
+          # both carry the OTA client, so both need network access to reach the update channel.
+          for f in "mote-v$GV-b$BUILD.apk" "mote-dev-v$GV-b$BUILD.apk"; do
+            if ! grep -q "android.permission.INTERNET" "build/android/$f.manifest.txt"; then
+              echo "::error::$f cannot reach the OTA channel (no INTERNET permission)"; exit 1
+            fi
+          done
           # Player-facing labels and the (unchanged) package identities.
           for pair in "mote-v$GV-b$BUILD.apk|com.verbal76.axolotl|Mote" "mote-dev-v$GV-b$BUILD.apk|com.verbal76.axolotl.dev|Mote Dev"; do
             IFS='|' read -r f pkg label <<< "$pair"
@@ -185,9 +188,9 @@ jobs:
           rm -f pub.pem
           rm -f build/android/*.manifest.txt build/android/*.idsig
           jq -n --arg gv "$GV" --arg b "$BUILD" --arg sha "$SOURCE_SHA" --arg run "$RUN" --arg url "$RUN_URL" \
-            --arg rt "${{ steps.ident.outputs.runtime_id }}" \
+            --arg rt "${{ steps.ident.outputs.runtime_id }}" --arg ch "${{ steps.ident.outputs.channel }}" \
             '{game_version:$gv, android_build:($b|tonumber), source_sha:$sha, build_run:$run, build_run_url:$url, runtime_id:$rt,
-              apks:{normal:{package:"com.verbal76.axolotl", ota:false}, dev:{package:"com.verbal76.axolotl.dev", ota:true, channel:"dev"}}}' \
+              apks:{normal:{package:"com.verbal76.axolotl", label:"Mote", ota:true, channel:$ch}, dev:{package:"com.verbal76.axolotl.dev", label:"Mote Dev", ota:true, channel:$ch}}}' \
             > build/android/build-info.json
           cat build/android/build-info.json
       - uses: actions/upload-artifact@v4

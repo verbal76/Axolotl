@@ -8,6 +8,10 @@ extends Node
 ## Also owns: the runtime identity stack, the boot-health checkpoint, the update client and
 ## the recovery/diagnostics screen (reachable even when the game layer is broken: F9, or five
 ## quick taps in the top-left corner).
+##
+## Offline first: nothing here waits for the network. The game starts from the newest verified
+## package already on the device (or the bundled baseline); update checks run afterwards in the
+## background, and any failure just leaves the current game running.
 
 const Config := preload("res://scripts/boot/ota_config.gd")
 const OtaCore := preload("res://scripts/boot/ota_core.gd")
@@ -15,9 +19,15 @@ const OtaUpdater := preload("res://scripts/boot/ota_updater.gd")
 const Overlay := preload("res://scripts/boot/diagnostics_overlay.gd")
 const NATIVE_INFO_PATH := "res://scripts/generated/native_build_info.gd"
 const HEALTHY_AFTER_MS := 3000
+## Automatic update checks: once per start (after boot health), then on returning to the app or
+## while it keeps running, never more often than AUTO_CHECK_MIN_GAP_S apart.
+const AUTO_CHECK_MIN_GAP_S := 15 * 60
+const AUTO_CHECK_PERIOD_S := 60 * 60
 
 var ota_enabled := false
 var flavor := "local"
+## The update channel this install follows (native build info, else ota_config.gd).
+var channel := ""
 ## Native-shell identity baked in by the APK build (pinned before any pack is mounted).
 var native_info: Dictionary = {}
 var core: OtaCore
@@ -29,6 +39,7 @@ var _ready_at := -1
 var _ready_frames := 0
 var _overlay: Overlay
 var _taps: Array[int] = []
+var _last_auto_check_ms := -1
 
 
 func _init() -> void:
@@ -39,15 +50,16 @@ func _init() -> void:
 	if ResourceLoader.exists(NATIVE_INFO_PATH):
 		var s: Script = load(NATIVE_INFO_PATH)
 		native_info = s.get_script_constant_map().get("INFO", {})
-	flavor = native_info.get("flavor", "dev" if OS.has_feature(Config.FEATURE) else "local")
-	# The OTA client exists only in the dev flavour (or a desktop run that asks for it).
-	# Automated test runs never touch user://ota unless given their own root.
+	flavor = native_info.get("flavor", "local")
+	channel = native_info.get("ota_channel", Config.CHANNEL)
+	# Every Android build carries the OTA client (the "ota" export feature); a desktop run can
+	# ask for it. Automated test runs never touch user://ota unless given their own root.
 	ota_enabled = OS.has_feature(Config.FEATURE) or _args.has("ota-force")
 	if _args.has("test") and not _args.has("ota-root"):
 		ota_enabled = false
 	if not ota_enabled:
 		return
-	core = OtaCore.new(_args.get("ota-root", "user://ota"))
+	core = OtaCore.new(_args.get("ota-root", "user://ota"), "", channel)
 	core.device_save_schema = _device_save_schema()
 	var ptr: String = _args.get("ota-pointer", "")
 	core.allow_local_http = ptr.begins_with("http://127.0.0.1:") and OS.get_name() != "Android"
@@ -62,7 +74,7 @@ func _ready() -> void:
 		updater = OtaUpdater.new()
 		updater.core = core
 		var ptr: String = _args.get("ota-pointer", "")
-		updater.pointer_url = ptr if ptr != "" else Config.pointer_url()
+		updater.pointer_url = ptr if ptr != "" else Config.pointer_url(channel)
 		updater.finished.connect(_on_update_finished)
 		add_child(updater)
 		# Scriptable equivalents of the recovery buttons (developer / end-to-end runs).
@@ -100,7 +112,10 @@ func report_ready() -> void:
 
 
 func _process(_dt: float) -> void:
-	if healthy or _ready_at < 0:
+	if healthy:
+		auto_check("periodic")
+		return
+	if _ready_at < 0:
 		return
 	_ready_frames += 1
 	if Time.get_ticks_msec() - _ready_at >= HEALTHY_AFTER_MS and _ready_frames >= 30:
@@ -108,8 +123,38 @@ func _process(_dt: float) -> void:
 		if ota_enabled:
 			core.mark_healthy()
 			print("[OTA] boot healthy: ", core.active.get("ota_id", "bundled baseline"))
-			if not _args.has("ota-no-autocheck"):
-				updater.check(true)
+			auto_check("start")
+
+
+func _notification(what: int) -> void:
+	if what == NOTIFICATION_APPLICATION_RESUMED or what == NOTIFICATION_APPLICATION_FOCUS_IN:
+		auto_check("resume")
+
+
+## Pure policy: may an automatic check for `reason` run now? "start" always may (once per
+## launch); "resume" needs AUTO_CHECK_MIN_GAP_S since the last automatic attempt and "periodic"
+## AUTO_CHECK_PERIOD_S. Failed attempts count as attempts, so an offline device is not hammered.
+static func auto_check_due(reason: String, now_ms: int, last_ms: int) -> bool:
+	if reason == "start" or last_ms < 0:
+		return reason == "start"
+	var gap := AUTO_CHECK_PERIOD_S if reason == "periodic" else AUTO_CHECK_MIN_GAP_S
+	return now_ms - last_ms >= gap * 1000
+
+
+## Starts a background check (and download of a verified update) if the policy allows it.
+## Returns immediately; the result arrives through the updater's `finished` signal.
+func auto_check(reason: String) -> bool:
+	if not ota_enabled or not healthy or updater == null or updater.busy or core.state["disabled"]:
+		return false
+	if _args.has("ota-no-autocheck"):
+		return false
+	var now := Time.get_ticks_msec()
+	if not auto_check_due(reason, now, _last_auto_check_ms):
+		return false
+	_last_auto_check_ms = now
+	print("[OTA] automatic check (%s)" % reason)
+	updater.check(true)
+	return true
 
 
 func _on_update_finished(result: String) -> void:
@@ -150,7 +195,7 @@ func identity() -> Dictionary:
 		"godot_version": Config.engine_version(),
 		"runtime_id": Config.runtime_id(),
 		"ota_enabled": ota_enabled,
-		"ota_channel": Config.CHANNEL if ota_enabled else "none",
+		"ota_channel": channel if ota_enabled else "none",
 		"ota_id": act.get("ota_id", "none"),
 		"ota_game_version": act.get("game_version", ""),
 		"ota_source_sha": act.get("source_sha", ""),
@@ -183,20 +228,25 @@ func diagnostics_text() -> String:
 	L.append("OTA")
 	L.append("  Enabled: %s" % ("yes" if ota_enabled else "no"))
 	L.append("  Channel: %s" % id["ota_channel"])
+	L.append("  Status: %s" % ota_status())
+	L.append("  Bundled baseline: %s (%s %s)" % [id["native_source_sha"], build_label, id["native_build"]])
 	if ota_enabled:
 		var st: Dictionary = core.state
 		var ev: Dictionary = st["events"]
-		L.append("  Active OTA (this run): %s" % (id["ota_id"] if id["ota_id"] != "none" else "none (bundled baseline)"))
-		if id["ota_id"] != "none":
+		var active_id: String = id["ota_id"]
+		L.append("  Active: %s" % (("%s (source %s)" % [active_id, id["ota_source_sha"]]) if active_id != "none" else "bundled baseline"))
+		L.append("  Latest on channel: %s" % latest_text())
+		L.append("  Pending (runs after restart): %s" % _slot_text("pending"))
+		L.append("  Downloaded, not activated: %s" % _slot_text("ready"))
+		L.append("  Runtime compatibility: this app runs %s; latest OTA %s" % [id["runtime_id"], _compat_text()])
+		var chk: Dictionary = ev.get("check", {})
+		L.append("  Last check: %s" % (("%s  %s" % [chk["result"], chk["time"]]) if not chk.is_empty() else "none"))
+		if active_id != "none":
 			L.append("  Active OTA claims game: %s%s" % [id["ota_game_version"], "" if id["ota_game_version"] == id["game_version"] else "  (MISMATCH with running game!)"])
-			L.append("  Active OTA source SHA: %s" % id["ota_source_sha"])
 			L.append("  Active PCK SHA-256: %s" % id["ota_pck_sha256"])
 		L.append("  Current: %s" % _slot_text("current"))
 		L.append("  Previous: %s" % _slot_text("previous"))
-		L.append("  Pending (next start): %s" % _slot_text("pending"))
-		L.append("  Downloaded, not activated: %s" % _slot_text("ready"))
-		L.append("  Latest on channel (last check): %s" % updater.remote.get("ota_id", "not checked this run"))
-		for k in [["check", "Last update check"], ["download", "Last download"], ["verify", "Last verification"], ["load", "Last load"], ["health", "Boot health"], ["rollback", "Last rollback"]]:
+		for k in [["download", "Last download"], ["verify", "Last verification"], ["load", "Last load"], ["health", "Boot health"], ["rollback", "Last rollback"]]:
 			var e: Dictionary = ev.get(k[0], {})
 			L.append("  %s: %s" % [k[1], ("%s  %s" % [e["result"], e["time"]]) if not e.is_empty() else "none"])
 		L.append("  This run healthy: %s" % ("yes" if healthy else "not yet"))
@@ -214,6 +264,53 @@ func diagnostics_text() -> String:
 	L.append("Persistence")
 	L.append("  Save Schema: %s" % id["save_schema"])
 	return "\n".join(L)
+
+
+## One line that says whether the game is current. Never guesses: "not checked yet" until a
+## check has actually completed.
+func ota_status() -> String:
+	if not ota_enabled:
+		return "no OTA client in this build: it plays its bundled game"
+	if core.state["disabled"]:
+		return "OTA disabled: running the bundled baseline (Re-enable OTA to resume updates)"
+	var pend := core.slot("pending")
+	if not pend.is_empty() and pend.get("ota_id", "") != core.active.get("ota_id", ""):
+		return "Update downloaded: %s runs after the app restarts" % pend["ota_id"]
+	var rdy := core.slot("ready")
+	if not rdy.is_empty():
+		return "Update downloaded: %s (press Activate on restart)" % rdy["ota_id"]
+	var st: String = updater.status if updater != null else "unchecked"
+	match st:
+		"checking":
+			return "Checking the %s channel..." % channel
+		"downloading":
+			return "Downloading %s..." % updater.remote.get("ota_id", "update")
+		"available":
+			return "Update available: %s" % updater.remote.get("ota_id", "?")
+		"up_to_date":
+			return "Up to date"
+		"offline":
+			return "Offline: update channel not reachable; playing the current game"
+		"incompatible":
+			return "Latest OTA %s cannot run on this app; playing the current game" % updater.remote.get("ota_id", "?")
+		"rejected":
+			return "Latest OTA %s was rejected; playing the current game" % updater.remote.get("ota_id", "?")
+		"failed":
+			return "Update failed (%s); playing the current game" % updater.status_detail
+	return "Not checked yet"
+
+
+func latest_text() -> String:
+	if updater == null or updater.remote.is_empty():
+		return "not checked yet"
+	return "%s (checked %s)" % [updater.remote.get("ota_id", "?"), updater.checked_at]
+
+
+func _compat_text() -> String:
+	var c: String = updater.latest_compat if updater != null else ""
+	if c == "":
+		return "not checked yet"
+	return "compatible" if c == "compatible" else "NOT compatible: " + c
 
 
 func _slot_text(name: String) -> String:

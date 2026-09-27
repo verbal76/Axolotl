@@ -14,9 +14,12 @@ anyone explaining it — slowly cleans up the whole tank.
 * Engine: **Godot 4.7.2** (Mobile renderer, GDScript). No plugins, no accounts.
 * Game version **v0.1.0**, shown on the title screen. Its single source is `scripts/core/game_version.gd`, and
   it is independent of APK builds, OTAs and commits (see [docs/VERSIONING.md](docs/VERSIONING.md)).
-* Two Android builds:
-  * **Mote**, the normal build. It is fully offline and has no network permission.
-  * **Mote Dev**. It installs alongside the normal build and receives signed over-the-air game updates from the dev channel, so it needs no reinstall per change (see [docs/OTA.md](docs/OTA.md)).
+* Offline first, updates when it can: Mote needs no connection to launch, play, save or finish. The
+  installed app also checks for signed, compatible over-the-air (OTA) game updates in the background
+  whenever a connection happens to be available, and never waits for one (see [docs/OTA.md](docs/OTA.md)).
+* Two Android builds, both with the complete game bundled and both receiving OTAs from the `dev` channel:
+  * **Mote** (`com.verbal76.axolotl`), the app to play.
+  * **Mote Dev** (`com.verbal76.axolotl.dev`), an optional side-by-side test install.
 * Art and audio are **100% original and procedural**: meshes are built in code at load time,
   textures come from `tools/gen_textures.py`, and all music and sound comes from the synthesizer in
   `tools/gen_audio.py` (both are committed outputs, so the build doesn't need Python).
@@ -44,12 +47,12 @@ godot --headless --path . --import
 godot --headless --path . --export-debug "Android" build/android/axolotl-debug.apk
 adb install -r build/android/axolotl-debug.apk
 ```
-The `Android` preset exports a signed **debug** arm64 APK (`com.verbal76.axolotl`), landscape only, with the
-VIBRATE permission and no INTERNET permission. The OTA client is inert in this build.
+The `Android` preset exports a signed **debug** arm64 APK (`com.verbal76.axolotl`, label "Mote"), landscape
+only, with the VIBRATE and INTERNET permissions and the `ota` feature, which turns on the OTA client. The
+game it bundles is complete and plays with no connection; updates arrive over the air afterwards.
 
-The `Android Dev` preset (`com.verbal76.axolotl.dev`, label "Mote Dev") adds INTERNET and the `ota_dev`
-feature, which turns on the OTA client. Install it once and update it over the air afterwards; see
-[docs/OTA.md](docs/OTA.md).
+The `Android Dev` preset (`com.verbal76.axolotl.dev`, label "Mote Dev") is the same app under a second
+package, so a test install can sit beside the one you play. See [docs/OTA.md](docs/OTA.md).
 
 ### iOS
 ```bash
@@ -76,7 +79,7 @@ cd build/ios && xcodebuild -project Axolotl.xcodeproj -scheme Axolotl -sdk iphon
    - Android build (versionCode) = the run number;
    - both are signed with the stable Mote Dev keystore (alias `mote_dev`) when the `MOTE_ANDROID_DEV_KEYSTORE_*` secrets are set;
    - it checks the installed labels ("Mote" / "Mote Dev") and that the package IDs are unchanged, and prints the signing-certificate SHA-256;
-   - it checks that the normal APK has no INTERNET permission and the dev APK has it;
+   - it checks that both APKs have the INTERNET permission their OTA client needs;
    - it uploads `mote-android-v<game>-b<build>` and `mote-android-dev-v<game>-b<build>` with a `build-info.json`.
 3. **ios** exports the Xcode project on macOS, builds it for the iOS Simulator (unsigned), and
    uploads the `.app` as `axolotl-ios-simulator-app`.

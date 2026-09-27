@@ -3,6 +3,9 @@ extends RefCounted
 ## Uses a throwaway RSA key and scratch storage; never touches the real user://ota.
 
 const OtaCore := preload("res://scripts/boot/ota_core.gd")
+const OtaUpdater := preload("res://scripts/boot/ota_updater.gd")
+const HttpStub := preload("res://scripts/tests/ota_http_stub.gd")
+const BootScript := preload("res://scripts/boot/boot.gd")
 const RUNTIME := "testos-godot-4.7.2-r1"
 
 var t
@@ -70,6 +73,9 @@ func run() -> void:
 	_test_boot_health_and_fallback()
 	_test_rollback_and_baseline()
 	_test_real_pack_mount()
+	_test_runtime_generations()
+	_test_auto_check_policy()
+	await _test_update_client()
 	await _test_version_identity()
 	await _test_product_identity()
 
@@ -91,6 +97,10 @@ func _test_manifest_validation() -> void:
 	c.device_save_schema = 2
 	var sv := c.validate_manifest(_manifest(1, p))
 	t.check("ota_newer_save_blocks_older_ota", sv.begins_with("save incompatible"), sv)
+	# An OTA built for an older revision of this runtime: permanently unusable, not "update the app".
+	c.device_save_schema = 0
+	var old := c.validate_manifest(_manifest(1, p, {"runtime_id": "testos-godot-4.7.2-r0"}))
+	t.check("ota_older_runtime_rejected_as_incompatible", old.begins_with("incompatible runtime"), old)
 
 
 func _test_verification() -> void:
@@ -219,6 +229,168 @@ func _test_real_pack_mount() -> void:
 	t.check("ota_real_pack_mounts_after_verification", c.active.get("ota_id") == "dev-000001" and content == "patched by OTA", content)
 
 
+## The r3 -> r4 change: neither generation of app accepts the other's OTAs, and a package left
+## over from before an APK upgrade is dropped (not treated as a crash) and the bundled game runs.
+func _test_runtime_generations() -> void:
+	var p := _payload("gen")
+	var r3 := OtaCore.new(OS.get_user_data_dir().path_join("ota_gen3_%d" % Time.get_ticks_usec()), "android-godot-4.7.2-r3", "dev", _key.save_to_string(true), 1)
+	var r4 := OtaCore.new(OS.get_user_data_dir().path_join("ota_gen4_%d" % Time.get_ticks_usec()), "android-godot-4.7.2-r4", "dev", _key.save_to_string(true), 1)
+	var to_r3 := r4.validate_manifest(_manifest(12, p, {"runtime_id": "android-godot-4.7.2-r3"}))
+	var to_r4 := r3.validate_manifest(_manifest(13, p, {"runtime_id": "android-godot-4.7.2-r4"}))
+	t.check("ota_r4_app_rejects_r3_ota", to_r3.begins_with("incompatible runtime"), to_r3)
+	t.check("ota_r3_app_rejects_r4_ota", to_r4.begins_with("native update required"), to_r4)
+	var c := _core()
+	c.state["current"] = _manifest(3, p, {"runtime_id": "testos-godot-4.7.2-r0"})
+	c.save_state()
+	c = _core(false)
+	c.boot(func(_path: String) -> bool: return true)
+	t.check("ota_older_runtime_package_dropped_after_app_upgrade", c.active.is_empty() and c.slot("current").is_empty() and not c.is_bad("dev-000003") and int(c.state["rollback_count"]) == 0, str(c.state["events"].get("load", {})))
+
+
+func _test_auto_check_policy() -> void:
+	var min_gap: int = BootScript.AUTO_CHECK_MIN_GAP_S * 1000
+	var period: int = BootScript.AUTO_CHECK_PERIOD_S * 1000
+	var ok := BootScript.auto_check_due("start", 5000, -1) and BootScript.auto_check_due("start", 5000, 4000)
+	ok = ok and not BootScript.auto_check_due("resume", 10000, -1)
+	ok = ok and not BootScript.auto_check_due("resume", 1000 + min_gap - 1, 1000) and BootScript.auto_check_due("resume", 1000 + min_gap, 1000)
+	ok = ok and not BootScript.auto_check_due("periodic", 1000 + min_gap, 1000) and BootScript.auto_check_due("periodic", 1000 + period, 1000)
+	t.check("ota_auto_check_policy", ok, "start always; resume after %d min; periodic every %d min" % [BootScript.AUTO_CHECK_MIN_GAP_S / 60, BootScript.AUTO_CHECK_PERIOD_S / 60])
+	# The automatic check never runs before the game is up, nor in baseline mode, nor without OTA.
+	t.check("ota_auto_check_waits_for_health_and_ota", not Boot.auto_check("start") if not Boot.ota_enabled else true, "")
+
+
+## Serves a signed update from the local stub and returns its manifest.
+func _publish(srv, seq: int, payload: PackedByteArray, over := {}, sig := "") -> Dictionary:
+	var id := "dev-%06d" % seq
+	var m := _manifest(seq, payload, {"pck_url": srv.url("/%s.pck" % id)})
+	m.merge(over, true)
+	var s := _sign(m)
+	srv.routes["/%s/manifest.json" % id] = s[0]
+	srv.routes["/%s/manifest.json.sig" % id] = (sig if sig != "" else s[1]).to_utf8_buffer()
+	srv.routes["/%s.pck" % id] = payload
+	srv.routes["/latest.json"] = JSON.stringify({"channel": "dev", "ota_id": id, "seq": seq,
+			"manifest_url": srv.url("/%s/manifest.json" % id), "signature_url": srv.url("/%s/manifest.json.sig" % id)}).to_utf8_buffer()
+	return m
+
+
+## The real update client against a local server: offline, hung server, discovery, runtime,
+## signature, hash and interrupted downloads. Gameplay keeps running the whole time.
+func _test_update_client() -> void:
+	var srv := HttpStub.new()
+	g.add_child(srv)
+	if srv.start() == 0:
+		t.check("ota_stub_server_listens", false, "no free port")
+		return
+	var c := _core()
+	c.allow_local_http = true
+	var up := OtaUpdater.new()
+	up.core = c
+	up.timeout = 10.0
+	up.process_mode = Node.PROCESS_MODE_ALWAYS
+	g.add_child(up)
+	var known := _manifest(4, _payload("known"))
+	_deliver(c, known, _payload("known"))
+
+	# No network: nothing listens on the channel. The game keeps playing while the check runs.
+	up.pointer_url = "http://127.0.0.1:%d/latest.json" % (srv.port + 1000)
+	var pl: Axolotl = g.player
+	var start_pos := pl.global_position
+	var f0 := Engine.get_physics_frames()
+	pl.bot_input = Vector2(0, 1)
+	var r: String = await up.check(true)
+	await t.frames(30)
+	pl.bot_input = Vector2.ZERO
+	var moved := pl.global_position.distance_to(start_pos)
+	t.check("ota_offline_check_nonfatal", r.begins_with("channel unreachable") and up.status == "offline" and c.slot("pending")["ota_id"] == "dev-000004", r)
+	t.check("ota_offline_gameplay_continues", moved > 0.5 and g.state == "play" and Engine.get_physics_frames() > f0, "moved %.2f m, %d frames" % [moved, Engine.get_physics_frames() - f0])
+
+	# A server that accepts and never answers: the game runs on; the check times out cleanly.
+	srv.routes["/latest.json"] = "{}".to_utf8_buffer()
+	srv.modes["/latest.json"] = "hang"
+	up.pointer_url = srv.url("/latest.json")
+	up.timeout = 2.0
+	f0 = Engine.get_physics_frames()
+	r = await up.check(true)
+	var waited := Engine.get_physics_frames() - f0
+	t.check("ota_hanging_server_does_not_block", r.begins_with("channel unreachable") and waited >= 60 and c.slot("pending")["ota_id"] == "dev-000004", "%s after %d frames of play" % [r, waited])
+	srv.modes.erase("/latest.json")
+	up.timeout = 10.0
+
+	# A compatible signed update is discovered, downloaded, verified and staged.
+	var m5 := _publish(srv, 5, _payload("five"))
+	r = await up.check(true)
+	t.check("ota_check_discovers_and_stages_update", r == "dev-000005 ready: restart to run it" and c.slot("pending")["ota_id"] == "dev-000005" and up.status == "downloaded" and up.latest_compat == "compatible", r)
+	r = await up.check(true)
+	t.check("ota_check_up_to_date", up.status == "up_to_date", r)
+
+	# Wrong runtime (older and newer), bad signature, bad hash: nothing replaces dev-000005.
+	_publish(srv, 6, _payload("six"), {"runtime_id": "testos-godot-4.7.2-r0"})
+	r = await up.check(true)
+	t.check("ota_client_ignores_older_runtime", up.status == "incompatible" and r.contains("incompatible runtime") and c.slot("pending")["ota_id"] == "dev-000005", r)
+	_publish(srv, 7, _payload("seven"), {"runtime_id": "testos-godot-4.7.2-r2"})
+	r = await up.check(true)
+	t.check("ota_client_newer_runtime_needs_new_app", up.status == "incompatible" and r.contains("native update required") and c.slot("pending")["ota_id"] == "dev-000005", r)
+	var other := Crypto.new().generate_rsa(2048)
+	var p8 := _payload("eight")
+	var m8 := _manifest(8, p8, {"pck_url": srv.url("/dev-000008.pck")})
+	var forged := Marshalls.raw_to_base64(Crypto.new().sign(HashingContext.HASH_SHA256, OtaCore.sha256_bytes(_sign(m8)[0]), other))
+	_publish(srv, 8, p8, {}, forged)
+	r = await up.check(true)
+	t.check("ota_client_rejects_bad_signature", up.status == "rejected" and r.contains("signature verification failed") and c.slot("pending")["ota_id"] == "dev-000005", r)
+	var p9 := _payload("nine")
+	_publish(srv, 9, p9)
+	var evil := p9.duplicate()
+	evil[0] = evil[0] ^ 0xFF
+	srv.routes["/dev-000009.pck"] = evil
+	r = await up.check(true)
+	t.check("ota_client_rejects_bad_hash", up.status == "rejected" and r.contains("SHA-256 mismatch") and c.slot("pending")["ota_id"] == "dev-000005" and not FileAccess.file_exists(c.package_path("dev-000009")), r)
+
+	# Interrupted download: the partial file is discarded and the known-good package stays.
+	var p10 := ("ten " + "x".repeat(4000)).to_utf8_buffer()
+	_publish(srv, 10, p10)
+	srv.modes["/dev-000010.pck"] = "truncate"
+	r = await up.check(true)
+	t.check("ota_interrupted_download_keeps_known_good", up.status == "failed" and c.slot("pending")["ota_id"] == "dev-000005" and not FileAccess.file_exists(c.incoming_path("dev-000010")) and not FileAccess.file_exists(c.package_path("dev-000010")) and FileAccess.file_exists(c.package_path("dev-000005")), r)
+	srv.modes.erase("/dev-000010.pck")
+	r = await up.download_available()
+	t.check("ota_download_retry_after_interruption", r == "dev-000010 ready: restart to run it" and c.slot("pending")["ota_id"] == "dev-000010", r)
+
+	# Diagnostics: bundled baseline vs active OTA vs latest on channel vs pending, and status.
+	var saved := [Boot.core, Boot.updater, Boot.ota_enabled]
+	Boot.core = c
+	Boot.updater = up
+	Boot.ota_enabled = true
+	var d1: String = Boot.diagnostics_text()
+	var ok1 := d1.contains("  Active: bundled baseline\n") and d1.contains("  Latest on channel: dev-000010 (checked ") \
+			and d1.contains("  Pending (runs after restart): dev-000010 ") and d1.contains("  Status: Update downloaded: dev-000010 runs after the app restarts\n") \
+			and d1.contains("  Bundled baseline: ") and d1.contains("  Enabled: yes\n")
+	c.active = c.slot("pending")
+	c.mark_healthy()
+	r = await up.check(true)
+	var d2: String = Boot.diagnostics_text()
+	var ok2 := d2.contains("  Active: dev-000010 (source %s)\n" % ("%040x" % 10)) and d2.contains("  Status: Up to date\n") \
+			and d2.contains("  Pending (runs after restart): none\n") and d2.contains("latest OTA compatible\n")
+	c.set_disabled(true)
+	var d3: String = Boot.diagnostics_text()
+	var ok3 := d3.contains("  Status: OTA disabled: running the bundled baseline")
+	c.set_disabled(false)
+	up.status = "unchecked"
+	up.remote = {}
+	var d4: String = Boot.diagnostics_text()
+	var ok4 := d4.contains("  Status: Not checked yet\n") and d4.contains("  Latest on channel: not checked yet\n")
+	Boot.core = saved[0]
+	Boot.updater = saved[1]
+	Boot.ota_enabled = saved[2]
+	t.check("ota_diagnostics_bundled_active_latest", ok1 and ok2 and ok3 and ok4, "%s %s %s %s" % [ok1, ok2, ok3, ok4])
+	if not (ok1 and ok2):
+		t.log_line(d1)
+		t.log_line(d2)
+	up.queue_free()
+	srv.stop()
+	srv.queue_free()
+	await t.frames(1)
+
+
 # --- product version + identity stack --------------------------------------------------------
 
 func _test_version_identity() -> void:
@@ -302,8 +474,12 @@ func _test_product_identity() -> void:
 	t.check("app_label_normal_is_Mote", _opt(pr, "Android", "package/name") == GameVersion.PRODUCT_NAME, str(_opt(pr, "Android", "package/name")))
 	t.check("app_label_dev_is_Mote_Dev", _opt(pr, "Android Dev", "package/name") == GameVersion.PRODUCT_NAME + " Dev", str(_opt(pr, "Android Dev", "package/name")))
 	t.check("package_ids_unchanged", _opt(pr, "Android", "package/unique_name") == "com.verbal76.axolotl" and _opt(pr, "Android Dev", "package/unique_name") == "com.verbal76.axolotl.dev", "")
-	t.check("normal_build_offline_no_ota", _opt(pr, "Android", "permissions/internet") == false and str(_opt(pr, "Android", "custom_features")) == "", "")
-	t.check("dev_build_internet_and_ota", _opt(pr, "Android Dev", "permissions/internet") == true and str(_opt(pr, "Android Dev", "custom_features")).contains("ota_dev"), "")
+	# Owner ruling: the Mote app itself receives OTAs (offline-capable, not offline-only).
+	var cfg: Script = load("res://scripts/boot/ota_config.gd")
+	var feature: String = cfg.get_script_constant_map()["FEATURE"]
+	t.check("normal_build_ota_capable", _opt(pr, "Android", "permissions/internet") == true and str(_opt(pr, "Android", "custom_features")).split(",").has(feature), str(_opt(pr, "Android", "custom_features")))
+	t.check("dev_build_ota_capable", _opt(pr, "Android Dev", "permissions/internet") == true and str(_opt(pr, "Android Dev", "custom_features")).split(",").has(feature), str(_opt(pr, "Android Dev", "custom_features")))
+	t.check("ios_build_has_no_ota", pr.has("iOS") and not str(_opt(pr, "iOS", "custom_features")).split(",").has(feature), "")
 	var icons_ok := true
 	for preset in ["Android", "Android Dev"]:
 		for key in ["launcher_icons/main_192x192", "launcher_icons/adaptive_foreground_432x432", "launcher_icons/adaptive_background_432x432", "launcher_icons/adaptive_monochrome_432x432"]:

@@ -2,7 +2,9 @@
 # End-to-end OTA proof on a real exported game (desktop Linux stands in for the phone).
 #
 #  1. export an OTA-capable "installed shell" (Linux Dev preset, throwaway signing key)
-#  2. it boots the bundled baseline
+#  2. it boots the bundled baseline with no channel, and with a channel server that hangs;
+#     the game reaches boot health before the check gives up, and a full playthrough runs
+#     to the end with the channel unreachable (offline first)
 #  3-4. publish OTA 1 from a modified copy: PCK + signed immutable manifest + channel pointer
 #  5-7. the installed game discovers, downloads and verifies it (SHA-256 + signature)
 #  8-11. restart: the pack is loaded before game content; the visible change appears and
@@ -40,7 +42,7 @@ name="Linux Dev"
 platform="Linux"
 runnable=true
 dedicated_server=false
-custom_features="ota_dev"
+custom_features="ota"
 export_filter="all_resources"
 include_filter=""
 exclude_filter="tools/*"
@@ -119,7 +121,36 @@ sleep 1
 
 run_game 01_baseline_no_channel
 expect "2 baseline boots with no channel" "$W/run_01_baseline_no_channel.log" "no OTA selected: running bundled baseline"
+expect "2 game reaches boot health offline" "$W/run_01_baseline_no_channel.log" "boot healthy: bundled baseline"
+expect "2 automatic check runs after start" "$W/run_01_baseline_no_channel.log" "automatic check \(start\)"
 expect "2 unreachable channel keeps current" "$W/run_01_baseline_no_channel.log" "channel unreachable|invalid channel pointer"
+
+# A channel server that accepts connections and never answers (a stalled network).
+HPORT=$((PORT + 1))
+python3 -c "
+import socket
+s = socket.socket(); s.setsockopt(socket.SOL_SOCKET, socket.SO_REUSEADDR, 1)
+s.bind(('127.0.0.1', $HPORT)); s.listen(16); held = []
+while True: held.append(s.accept()[0])
+" >/dev/null 2>&1 &
+HANG=$!
+sleep 1
+run_game 01b_hanging_channel --ota-pointer="http://127.0.0.1:$HPORT/ota-channel-dev/latest.json"
+kill $HANG 2>/dev/null
+expect "2 hanging channel: game still starts" "$W/run_01b_hanging_channel.log" "boot healthy: bundled baseline"
+expect "2 hanging channel: check times out, current kept" "$W/run_01b_hanging_channel.log" "channel unreachable \(network result 13\)"
+H=$(grep -n "boot healthy" "$W/run_01b_hanging_channel.log" | head -1 | cut -d: -f1)
+U=$(grep -n "channel unreachable" "$W/run_01b_hanging_channel.log" | head -1 | cut -d: -f1)
+if [ -n "$H" ] && [ -n "$U" ] && [ "$H" -lt "$U" ]; then pass "2 startup never waited for the network"; else fail "2 startup order (healthy line $H, timeout line $U)"; fi
+
+# The whole game, start to ALL CLEAR, with the OTA client on and its channel unreachable.
+echo "--- offline playthrough (seed 4242, channel unreachable)"
+timeout "${PLAY_TIMEOUT:-1200}" "$W/axolotl.x86_64" --headless --fixed-fps 60 --max-fps 0 -- --test=playthrough --seed=4242 \
+	--out="$W/offline_play" --ota-root="$W/device_offline" --ota-pointer="http://127.0.0.1:$((PORT + 2))/ota-channel-dev/latest.json" \
+	> "$W/run_offline_playthrough.log" 2>&1
+grep -E "\[TEST\] SUMMARY|^\[OTA\]" "$W/run_offline_playthrough.log" | cut -c1-200
+expect "15 offline: full playthrough completes" "$W/run_offline_playthrough.log" "\[TEST\] SUMMARY 12 passed, 0 failed"
+expect "15 offline: OTA check failed quietly during play" "$W/run_offline_playthrough.log" "channel unreachable"
 
 O1=$(make_copy ota1); mark_game "$O1" 1; publish "$O1" 1
 run_game 02_download_ota1

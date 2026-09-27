@@ -51,8 +51,8 @@ func _ready() -> void:
 	var defs := []
 	if boot.ota_enabled:
 		defs = [["check", "Check for update"], ["download", "Download update"], ["activate", "Activate on restart"],
-				["rollback", "Roll back"], ["baseline", "Boot bundled baseline"], ["copy", "Copy diagnostics"],
-				["quit", "Quit (restart app)"], ["close", "Close"]]
+				["quit", "Close app (reopen to restart)"], ["rollback", "Roll back"], ["baseline", "Boot bundled baseline"],
+				["copy", "Copy diagnostics"], ["close", "Close"]]
 	else:
 		defs = [["copy", "Copy diagnostics"], ["close", "Close"]]
 	for d in defs:
@@ -85,8 +85,12 @@ func refresh() -> void:
 	_text.text = boot.diagnostics_text()
 	if boot.ota_enabled:
 		(_buttons["baseline"] as Button).text = "Re-enable OTA" if boot.core.state["disabled"] else "Boot bundled baseline"
-		(_buttons["download"] as Button).disabled = boot.updater.busy
-		(_buttons["check"] as Button).disabled = boot.updater.busy
+		var busy: bool = boot.updater.busy
+		(_buttons["check"] as Button).disabled = busy
+		# Download: an update the last check found, or (after a failed download) try again.
+		(_buttons["download"] as Button).disabled = busy or not (boot.updater.has_available() or boot.updater.status == "failed")
+		(_buttons["activate"] as Button).disabled = boot.core.slot("ready").is_empty()
+		(_buttons["rollback"] as Button).disabled = boot.core.slot("current").is_empty()
 
 
 func toast(msg: String) -> void:
@@ -118,7 +122,8 @@ func _on_button(id: String) -> void:
 			boot.get_tree().quit()
 		"check":
 			_say("Checking the %s channel..." % boot.core.channel)
-			_say(await boot.updater.check(false))
+			var r: String = await boot.updater.check(false)
+			_say("Update available: %s. Press Download update." % boot.updater.remote.get("ota_id", "?") if r == "available" else r)
 		"download":
 			_say("Downloading...")
 			var r: String = await boot.updater.download_available()

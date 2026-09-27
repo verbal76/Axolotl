@@ -171,7 +171,7 @@ func validate_manifest(m: Dictionary) -> String:
 	if m["channel"] != channel:
 		return "invalid manifest: channel '%s' (this install follows '%s')" % [m["channel"], channel]
 	if m["runtime_id"] != runtime_id:
-		return "native update required: OTA targets runtime %s, installed runtime is %s" % [m["runtime_id"], runtime_id]
+		return runtime_mismatch(str(m["runtime_id"]))
 	if int(m["minimum_bootstrap_version"]) > bootstrap_version:
 		return "native update required: OTA needs bootstrap v%d, installed v%d" % [int(m["minimum_bootstrap_version"]), bootstrap_version]
 	if not _is_hex(str(m["source_sha"]), 40):
@@ -189,6 +189,18 @@ func validate_manifest(m: Dictionary) -> String:
 	if gv.size() != 3 or not (gv[0].is_valid_int() and gv[1].is_valid_int() and gv[2].is_valid_int()):
 		return "invalid manifest: game_version is not MAJOR.MINOR.PATCH"
 	return save_compat(m)
+
+
+## Why an OTA for `other` cannot run here. An OTA built for an OLDER revision of this same
+## runtime is permanently incompatible with this app ("incompatible runtime"); anything else
+## needs a newer app ("native update required").
+func runtime_mismatch(other: String) -> String:
+	var re := RegEx.create_from_string("^(.*)-r(\\d+)$")
+	var a := re.search(other)
+	var b := re.search(runtime_id)
+	if a != null and b != null and a.get_string(1) == b.get_string(1) and int(a.get_string(2)) < int(b.get_string(2)):
+		return "incompatible runtime: OTA targets older runtime %s, this app runs %s (waiting for a compatible OTA)" % [other, runtime_id]
+	return "native update required: OTA targets runtime %s, installed runtime is %s" % [other, runtime_id]
 
 
 ## An OTA reads saves from min_save_schema up to save_schema. A save newer than the OTA
@@ -340,6 +352,13 @@ func boot(loader: Callable) -> Dictionary:
 		if why != "":
 			if why.begins_with("save incompatible") or why.begins_with("native update required"):
 				event("load", "skipped %s: %s" % [id, why])
+				continue
+			if why.begins_with("incompatible runtime"):
+				# Left over from before this APK was installed: it can never run here again.
+				# Not a faulty OTA, so it is dropped rather than marked bad.
+				if slot(name).get("ota_id", "") == id:
+					state[name] = {}
+				event("load", "dropped %s: %s" % [id, why])
 				continue
 			mark_bad(m, why)
 			continue
