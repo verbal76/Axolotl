@@ -118,7 +118,7 @@ Test names refer to `scripts/tests/unit_tests.gd`, `scripts/tests/ota_tests.gd` 
 | O-16 | `dev` channel only (channels are pointers) | I+V | `ota_config.gd` | `ota_channel_mismatch_rejected` |
 | O-17 | Diagnostics fields and controls | I+V (text, actions) / I+NYV (touch buttons) | `boot.gd`, `diagnostics_overlay.gd` | `diagnostics_*` tests; buttons not exercised |
 | O-18 | Stable HTTPS publication (GitHub Releases) | I+V | `ota-publish.yml` | `ota-dev-000008` release and `ota-channel-dev/latest.json` served publicly |
-| O-19 | One real Android end-to-end proof | BLOCKED | | needs the new Dev APK and the owner's phone |
+| O-19 | One real Android end-to-end proof | BLOCKED | | needs b18 installed on the owner's phone and an OTA activated there |
 | O-20 | Docs: OTA-safe vs APK-required changes | I+V | `docs/OTA.md` | |
 | O-21 | Tests: manifest, runtime mismatch, hash, state transitions, rollback | I+V | `ota_tests.gd` | 29 OTA checks |
 | O-22 | Every push to the dev branch publishes an OTA | I+V | `ota-publish.yml` trigger | push of `d235cb2` published `dev-000008`; each later push publishes the next id |
@@ -169,10 +169,10 @@ Test names refer to `scripts/tests/unit_tests.gd`, `scripts/tests/ota_tests.gd` 
 
 | ID | Requirement | Status | Evidence |
 |---|---|---|---|
-| A-01 | CI functional and green | I+V | Build & Verify (tests, Android, iOS) and OTA publish all green on `d235cb2`; the final commit's runs are listed in the PR |
-| A-02 | New Mote Dev APK built from the final reconciled source | I+V | signed with the Mote Dev keystore (MOTE_STABLE_KEY=true), certificate pin enforced; built from the branch head commit (not the PR merge ref) |
-| A-03 | APK identity report (SHA-256, versionCode, …) | I+V | from the Android job log of the final commit (see the PR description) |
-| A-04 | First OTA after that APK comes from today's source | I+V | the OTA published by the final commit's push carries the same source SHA and runtime `android-godot-4.7.2-r2` |
+| A-01 | CI functional and green | I+V | Build & Verify (tests + playthrough, Android, iOS) and OTA publish green on every pushed commit from `d235cb2` on; the final commit's runs are listed in the PR description |
+| A-02 | New Mote Dev APK built from the final native source | I+V | current native baseline **b18** (`mote-dev-v0.1.0-b18.apk`, source `854ea84`, runtime r3, SHA-256 `8066cbb1…9504f6b`), signed with the Mote Dev key (certificate pin enforced), built from the branch commit, not the PR merge ref |
+| A-03 | APK identity report (SHA-256, versionCode, …) | I+V | from the b18 Android job log (Build & Verify run 36335461294) |
+| A-04 | Later game changes reach that APK by OTA | I+V | commits after `854ea84` touch only the game layer (`ota_runtime.py --check`: r3 unchanged); each push publishes a signed runtime-r3 OTA that b18 accepts. Activation on the phone: see O-19 |
 | A-05 | Physical-device verification | BLOCKED | owner's phone |
 | A-06 | Normal offline APK as a second artifact | I+V | same run: `mote-android-v0.1.0-b<build>` (no INTERNET, same certificate) |
 
