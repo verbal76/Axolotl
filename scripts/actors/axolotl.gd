@@ -48,6 +48,7 @@ var burst_available := true
 var air_time := 0.0
 var apex_r := 0.0
 var swipe_t := -1.0
+var _swipe_aim := Vector3.ZERO
 var swipe_cd := 0.0
 var lunge_t := -1.0
 var lunge_cd := 0.0
@@ -213,10 +214,18 @@ func _physics_process(dt: float) -> void:
 	if want_swipe and swipe_cd <= 0.0 and lunge_t < 0.0:
 		swipe_t = 0.0
 		swipe_cd = SWIPE_TIME + 0.08
-		model.swipe_side = 1.0 if randf() < 0.5 else -1.0
+		_swipe_aim = Game.inst.swipe_aim(self)
+		if _swipe_aim != Vector3.ZERO:
+			model.swipe_side = signf(facing.cross(_swipe_aim).dot(up))
+		else:
+			model.swipe_side = 1.0 if randf() < 0.5 else -1.0
 		swiped.emit()
 		WaterFX.inst.impulse(global_position + up * 0.3 - facing * 0.6, 1.3, 0.5)
 	if swipe_t >= 0.0:
+		# Aim assist: whip the body round during the wind-up, before the hit frame.
+		if _swipe_aim != Vector3.ZERO and swipe_t < 0.3:
+			_swipe_aim = (_swipe_aim - up * _swipe_aim.dot(up)).normalized()
+			facing = _slerp_tangent(facing, _swipe_aim, minf(1.0, 30.0 * dt))
 		var prev := swipe_t
 		swipe_t += dt / SWIPE_TIME
 		if prev < 0.3 and swipe_t >= 0.3:

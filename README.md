@@ -125,7 +125,7 @@ rear-and-snap telegraph, knockback/partial dislodge). Their health is shown only
 from head to rear. A kill returns vitality to the moss; the body loses its grip and drifts away, then
 hands off to a cheap drifting speck (never popped). No respawns.
 
-**Combat** — a tail swipe covering the ~180° behind and beside him, on the ground or in the air.
+**Combat** — a tail swipe covering 270° (everything except a 90° cone straight ahead), on the ground or in the air. If the nearest parasite in reach is in front, he whips round up to 60° so it lands inside the sweep.
 Hard landings make a small pressure wave (kills small, one stage plus knockback on larger). The
 extreme canopy drop on Moss Ball #3 costs one segment but never the last, uses a bigger radius, and
 deals two stages. Dangerous falls are telegraphed only by body language and water streaming.
@@ -207,7 +207,7 @@ controller through the same input actions the touch HUD and gamepad use:
 - Tutorial route: every start point makes jump → M1 → jump+burst → M2, and a plain jump cannot cross the gap.
 - A full lap around a moss ball with no camera flips and no unintended airborne frames.
 - Jump apex, the water burst (exactly once, follows direction, no third action), landing resets it, coyote time, jump buffering.
-- The swipe misses in front and hits behind; 1/2/3-hit colour drain in the right stages, draining head to rear; dead parasites drift, then hand off to debris.
+- The swipe spares only the 90° cone ahead, hits across the rest of its 270° arc, and turns up to 60° to reach a parasite dead ahead; 1/2/3-hit colour drain in the right stages, draining head to rear; dead parasites drift, then hand off to debris.
 - Hard landing kills small parasites and does one stage plus knockback to medium ones. The extreme canopy drop costs 1 health, never the last one, and deals 2 stages, with a visible telegraph. The flexible leaf cushions the fall and gives a modest rebound.
 - Food heals +1, +2 and full, and works at full health. The darter darts, the burrower retreats and re-emerges, and food repopulates out of view.
 - Motes aren't auto-collected, are pushed by a near miss, need the lunge, and restore the patch.

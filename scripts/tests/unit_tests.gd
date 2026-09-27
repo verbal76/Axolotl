@@ -338,11 +338,36 @@ func _swipe_at(par: Parasite, behind: bool) -> void:
 	await t.seconds(0.4)
 
 
+## Stand 1.1 from the parasite, facing `fwd`, with the parasite `deg` degrees off that facing.
+func _place_at_angle(par: Parasite, deg: float) -> void:
+	var b := par.ball
+	var up := b.up_at(par.global_position)
+	var fwd := MossBall.frame_at(up, 0).z * -1.0
+	var pos := par.global_position - fwd.rotated(up, deg_to_rad(deg)) * 1.1
+	place_at(b.index, b.surface_point(b.up_at(pos), 0.1), fwd)
+	p.invuln_t = 999
+	await t.frames(2)
+
+
 func _test_swipe_direction_and_stages() -> void:
-	var small := first_alive(0, Parasite.Kind.SMALL, "meadow")
 	await t.seconds(0.2)
-	await _swipe_at(small, false)
-	t.check("swipe_misses_in_front", small.is_alive(), "hp %d" % small.hp)
+	# Arc geometry, without aim assist: only a 90-degree cone straight ahead is safe.
+	var small := first_alive(0, Parasite.Kind.SMALL, "meadow")
+	await _place_at_angle(small, 25.0)
+	g.player_swipe(p)
+	t.check("swipe_misses_front_cone", small.is_alive(), "hp %d" % small.hp)
+	await _place_at_angle(small, 65.0)
+	g.player_swipe(p)
+	t.check("swipe_hits_270_arc", not small.is_alive(), "hp %d" % small.hp)
+	# Aim assist: a parasite dead ahead gets swept after a part-way turn.
+	var ahead := first_alive(0, Parasite.Kind.SMALL, "meadow")
+	await _place_at_angle(ahead, 0.0)
+	var f0 := p.facing
+	await press("swipe")
+	await t.seconds(0.4)
+	var turned := rad_to_deg(f0.angle_to(p.facing))
+	t.check("swipe_aim_turns_and_hits_ahead", not ahead.is_alive() and turned > 20.0 and turned < 62.0, "hp %d turned %.0f deg" % [ahead.hp, turned])
+	small = first_alive(0, Parasite.Kind.SMALL, "east")
 	await _swipe_at(small, true)
 	t.check("swipe_kills_small_behind", not small.is_alive(), "hp %d" % small.hp)
 	var med := first_alive(0, Parasite.Kind.MEDIUM, "east")
@@ -535,7 +560,9 @@ func _test_motes() -> void:
 	var side := fwd.cross(up)
 	m.set_physics_process(false)   # hold it still so only the lunge's water moves it
 	m.vel = Vector3.ZERO
-	place_at(0, m.anchor + m.anchor_up * 0.3 + (m.global_position - m.anchor) * 0.0 - fwd * 1.8 + side * 1.6, fwd)
+	# Pass beside where the mote actually is (it wanders up to ~3.5 from its anchor).
+	var mp := m.global_position - m.anchor_up * (m.global_position - m.anchor).dot(m.anchor_up)
+	place_at(0, mp + m.anchor_up * 0.3 - fwd * 1.8 + side * 1.6, fwd)
 	await t.frames(2)
 	await press("lunge")
 	var v0 := m.vel

@@ -251,21 +251,58 @@ func _update_all_clear(dt: float) -> void:
 
 # --- Combat ------------------------------------------------------------------------------
 
-func player_swipe(p: Axolotl) -> void:
-	var connected := false
+const SWIPE_REACH := 1.95
+## The sweep covers 270 degrees: everything except a 90-degree cone straight ahead.
+const SWIPE_FRONT_DOT := 0.7071
+## Aim assist turns the body at most this far so the nearest parasite sits inside the arc.
+const SWIPE_AIM_MAX := deg_to_rad(60.0)
+const SWIPE_AIM_TARGET := deg_to_rad(80.0)
+
+
+## Flattened offset from the swiping axolotl to a parasite, or ZERO when out of reach.
+func _swipe_offset(p: Axolotl, par: Parasite) -> Vector3:
 	var c := p.body_center()
+	var to: Vector3 = par.closest_body_point(c) - c
+	if to.length() > SWIPE_REACH + par.body_extent() or absf(to.dot(p.up)) > 1.5:
+		return Vector3.ZERO
+	var flat := to - p.up * to.dot(p.up)
+	return flat if flat.length() > 0.001 else p.facing * 0.001
+
+
+## Facing the swipe should turn toward so the nearest parasite in reach falls inside the
+## arc (part-way turn, never more than SWIPE_AIM_MAX). ZERO when no turn is needed.
+func swipe_aim(p: Axolotl) -> Vector3:
+	var best := Vector3.ZERO
+	var bd := INF
 	for par in p.ball.parasites:
 		if not par.is_alive():
 			continue
-		var cp: Vector3 = par.closest_body_point(c)
-		var to := cp - c
-		if to.length() > 1.95 + par.body_extent():
+		var flat := _swipe_offset(p, par)
+		if flat != Vector3.ZERO and flat.length() < bd:
+			bd = flat.length()
+			best = flat
+	if best == Vector3.ZERO:
+		return Vector3.ZERO
+	var ang := p.facing.angle_to(best)
+	if ang >= SWIPE_AIM_TARGET:
+		return Vector3.ZERO
+	var side := signf(p.facing.cross(best).dot(p.up))
+	if side == 0.0:
+		side = 1.0
+	# Turn away from the parasite so the tail sweeps across it.
+	return p.facing.rotated(p.up, -side * minf(SWIPE_AIM_TARGET - ang, SWIPE_AIM_MAX))
+
+
+func player_swipe(p: Axolotl) -> void:
+	var connected := false
+	for par in p.ball.parasites:
+		if not par.is_alive():
 			continue
-		if absf(to.dot(p.up)) > 1.5:
+		var flat := _swipe_offset(p, par)
+		if flat == Vector3.ZERO:
 			continue
-		var flat := to - p.up * to.dot(p.up)
-		# Directional 180-degree sweep behind/beside — not a 360 spin.
-		if flat.length() > 0.35 and flat.normalized().dot(p.facing) > 0.1:
+		# 270-degree sweep behind and beside; only a narrow cone straight ahead is safe.
+		if flat.length() > 0.35 and flat.normalized().dot(p.facing) > SWIPE_FRONT_DOT:
 			continue
 		if par.hit(1, p.global_position):
 			connected = true
