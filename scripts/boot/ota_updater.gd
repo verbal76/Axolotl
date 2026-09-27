@@ -25,6 +25,10 @@ var status_detail := ""
 ## cannot, or "" when unknown.
 var latest_compat := ""
 var checked_at := ""
+## Source commit of the game bundled in this APK. An OTA built from the same commit is the game
+## already installed: while nothing newer is staged or running, it is reported as up to date
+## instead of being downloaded again.
+var bundled_source_sha := ""
 var _available: Array = []   # [manifest_bytes, sig_b64, manifest] of a checked, unpulled update
 
 
@@ -106,6 +110,9 @@ func check(download := true) -> String:
 	if m["ota_id"] != remote["ota_id"]:
 		return _done("check", "pointer/manifest mismatch (%s vs %s)" % [remote["ota_id"], m["ota_id"]], "rejected")
 	latest_compat = "compatible"
+	if bundled_source_sha != "" and str(m["source_sha"]) == bundled_source_sha and core.active.is_empty() \
+			and core.slot("pending").is_empty() and core.slot("ready").is_empty():
+		return _done("check", "up to date (latest %s is the game bundled in this app, %s)" % [m["ota_id"], bundled_source_sha.left(12)], "up_to_date")
 	_available = [mb[2], sig, m]
 	core.event("check", "update available: %s (game %s, %s)" % [m["ota_id"], m["game_version"], str(m["source_sha"]).left(12)])
 	status = "available"

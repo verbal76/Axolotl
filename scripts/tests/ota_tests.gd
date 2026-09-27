@@ -355,6 +355,26 @@ func _test_update_client() -> void:
 	r = await up.download_available()
 	t.check("ota_download_retry_after_interruption", r == "dev-000010 ready: restart to run it" and c.slot("pending")["ota_id"] == "dev-000010", r)
 
+	# The latest OTA is the very game this app bundles: up to date, nothing downloaded; a newer
+	# one still arrives.
+	var fresh := _core()
+	fresh.allow_local_http = true
+	var up2 := OtaUpdater.new()
+	up2.core = fresh
+	up2.timeout = 10.0
+	up2.process_mode = Node.PROCESS_MODE_ALWAYS
+	up2.pointer_url = srv.url("/latest.json")
+	up2.bundled_source_sha = "%040x" % 11
+	g.add_child(up2)
+	_publish(srv, 11, _payload("eleven"))
+	r = await up2.check(true)
+	t.check("ota_bundled_game_is_up_to_date", up2.status == "up_to_date" and r.contains("bundled in this app") and fresh.slot("pending").is_empty() and not FileAccess.file_exists(fresh.package_path("dev-000011")), r)
+	_publish(srv, 12, _payload("twelve"))
+	r = await up2.check(true)
+	t.check("ota_newer_than_bundled_still_downloads", r == "dev-000012 ready: restart to run it" and fresh.slot("pending")["ota_id"] == "dev-000012", r)
+	up2.queue_free()
+	_publish(srv, 10, p10)   # the channel points at dev-000010 again for the checks below
+
 	# Diagnostics: bundled baseline vs active OTA vs latest on channel vs pending, and status.
 	var saved := [Boot.core, Boot.updater, Boot.ota_enabled]
 	Boot.core = c
@@ -470,18 +490,19 @@ func _test_product_identity() -> void:
 	t.check("identity_product_separate", id["product"] == "Mote" and id["character"] == "Gill" and id["product"] != id["game_version"], "")
 	# Packaging: labels follow the product name; package identities and build split unchanged.
 	var pr := _presets()
-	t.check("android_presets_present", pr.has("Android") and pr.has("Android Dev"), str(pr.keys()))
+	# Owner decision: ONE Android app, Mote. The separate Mote Dev app is retired.
+	var android := pr.keys().filter(func(k) -> bool: return _opt(pr, k, "platform") == "Android")
+	t.check("android_single_app_preset", android == ["Android"], str(android))
 	t.check("app_label_normal_is_Mote", _opt(pr, "Android", "package/name") == GameVersion.PRODUCT_NAME, str(_opt(pr, "Android", "package/name")))
-	t.check("app_label_dev_is_Mote_Dev", _opt(pr, "Android Dev", "package/name") == GameVersion.PRODUCT_NAME + " Dev", str(_opt(pr, "Android Dev", "package/name")))
-	t.check("package_ids_unchanged", _opt(pr, "Android", "package/unique_name") == "com.verbal76.axolotl" and _opt(pr, "Android Dev", "package/unique_name") == "com.verbal76.axolotl.dev", "")
+	t.check("package_ids_unchanged", _opt(pr, "Android", "package/unique_name") == "com.verbal76.axolotl", "")
 	# Owner ruling: the Mote app itself receives OTAs (offline-capable, not offline-only).
 	var cfg: Script = load("res://scripts/boot/ota_config.gd")
 	var feature: String = cfg.get_script_constant_map()["FEATURE"]
 	t.check("normal_build_ota_capable", _opt(pr, "Android", "permissions/internet") == true and str(_opt(pr, "Android", "custom_features")).split(",").has(feature), str(_opt(pr, "Android", "custom_features")))
-	t.check("dev_build_ota_capable", _opt(pr, "Android Dev", "permissions/internet") == true and str(_opt(pr, "Android Dev", "custom_features")).split(",").has(feature), str(_opt(pr, "Android Dev", "custom_features")))
+	t.check("android_shader_baker_on", _opt(pr, "Android", "shader_baker/enabled") == true, "")
 	t.check("ios_build_has_no_ota", pr.has("iOS") and not str(_opt(pr, "iOS", "custom_features")).split(",").has(feature), "")
 	var icons_ok := true
-	for preset in ["Android", "Android Dev"]:
+	for preset in ["Android"]:
 		for key in ["launcher_icons/main_192x192", "launcher_icons/adaptive_foreground_432x432", "launcher_icons/adaptive_background_432x432", "launcher_icons/adaptive_monochrome_432x432"]:
 			var path := str(_opt(pr, preset, key))
 			icons_ok = icons_ok and path.begins_with("res://assets/icon/") and FileAccess.file_exists(path)

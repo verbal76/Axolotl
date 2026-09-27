@@ -1,7 +1,7 @@
 # Mote
 
-Product name **Mote**, protagonist **Gill** (owner-ruled). The repository, package IDs
-(`com.verbal76.axolotl`, `com.verbal76.axolotl.dev`) and internal code identifiers such as `AxolotlModel`
+Product name **Mote**, protagonist **Gill** (owner-ruled). The repository, package ID
+(`com.verbal76.axolotl`) and internal code identifiers such as `AxolotlModel`
 keep their original technical names on purpose.
 
 *Moss balls 4 life.*
@@ -17,9 +17,8 @@ anyone explaining it — slowly cleans up the whole tank.
 * Offline first, updates when it can: Mote needs no connection to launch, play, save or finish. The
   installed app also checks for signed, compatible over-the-air (OTA) game updates in the background
   whenever a connection happens to be available, and never waits for one (see [docs/OTA.md](docs/OTA.md)).
-* Two Android builds, both with the complete game bundled and both receiving OTAs from the `dev` channel:
-  * **Mote** (`com.verbal76.axolotl`), the app to play.
-  * **Mote Dev** (`com.verbal76.axolotl.dev`), an optional side-by-side test install.
+* One Android app, **Mote** (`com.verbal76.axolotl`): the complete current game is bundled in the APK,
+  and it follows the `dev` OTA channel. (The separate Mote Dev app is retired.)
 * Art and audio are **100% original and procedural**: meshes are built in code at load time,
   textures come from `tools/gen_textures.py`, and all music and sound comes from the synthesizer in
   `tools/gen_audio.py` (both are committed outputs, so the build doesn't need Python).
@@ -51,8 +50,8 @@ The `Android` preset exports a signed **debug** arm64 APK (`com.verbal76.axolotl
 only, with the VIBRATE and INTERNET permissions and the `ota` feature, which turns on the OTA client. The
 game it bundles is complete and plays with no connection; updates arrive over the air afterwards.
 
-The `Android Dev` preset (`com.verbal76.axolotl.dev`, label "Mote Dev") is the same app under a second
-package, so a test install can sit beside the one you play. See [docs/OTA.md](docs/OTA.md).
+Shaders are baked into the APK at export (`shader_baker/enabled`); that only works when the exporting
+editor runs the Vulkan Mobile renderer, so CI exports under a virtual display. See [docs/OTA.md](docs/OTA.md).
 
 ### iOS
 ```bash
@@ -75,12 +74,12 @@ cd build/ios && xcodebuild -project Axolotl.xcodeproj -scheme Axolotl -sdk iphon
    - runs the mechanics suite and the beginning-to-end playthrough bot headless;
    - runs the version-drift regression and the native-runtime lock check;
    - uploads the results.
-2. **android** exports both APKs:
+2. **android** exports the one Mote APK, with shaders baked:
    - Android build (versionCode) = the run number;
-   - both are signed with the stable Mote Dev keystore (alias `mote_dev`) when the `MOTE_ANDROID_DEV_KEYSTORE_*` secrets are set;
-   - it checks the installed labels ("Mote" / "Mote Dev") and that the package IDs are unchanged, and prints the signing-certificate SHA-256;
-   - it checks that both APKs have the INTERNET permission their OTA client needs;
-   - it uploads `mote-android-v<game>-b<build>` and `mote-android-dev-v<game>-b<build>` with a `build-info.json`.
+   - it is signed with the stable Mote keystore (alias `mote_dev`; secrets `MOTE_ANDROID_DEV_KEYSTORE_*`, names kept from before the Mote Dev app was retired), and the certificate pin is enforced;
+   - it checks the package ID, label "Mote", versionCode/versionName, the INTERNET permission, the embedded OTA key pin, the baked shader caches and the splash image inside the APK;
+   - it runs the APK's own bundled game (`--print-identity`) and requires it to report this commit, this build, the normal flavour, OTA on `dev` and the current runtime;
+   - it uploads `mote-android-v<game>-b<build>` (the APK and `build-info.json`).
 3. **ios** exports the Xcode project on macOS, builds it for the iOS Simulator (unsigned), and
    uploads the `.app` as `axolotl-ios-simulator-app`.
 

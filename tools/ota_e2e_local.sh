@@ -1,7 +1,7 @@
 #!/usr/bin/env bash
 # End-to-end OTA proof on a real exported game (desktop Linux stands in for the phone).
 #
-#  1. export an OTA-capable "installed shell" (Linux Dev preset, throwaway signing key)
+#  1. export an OTA-capable "installed shell" (Linux OTA test preset, throwaway signing key)
 #  2. it boots the bundled baseline with no channel, and with a channel server that hangs;
 #     the game reaches boot health before the check gives up, and a full playthrough runs
 #     to the end with the channel unreachable (offline first)
@@ -46,7 +46,7 @@ openssl pkey -in "$W/key.pem" -pubout -out "$W/pub.pem"
 LINUX_PRESET='
 [preset.3]
 
-name="Linux Dev"
+name="Linux OTA test"
 platform="Linux"
 runnable=true
 dedicated_server=false
@@ -64,7 +64,7 @@ binary_format/embed_pck=true
 binary_format/architecture="x86_64"
 '
 
-make_copy() { # make_copy <name> -> path; repo copy with Linux Dev preset + test public key
+make_copy() { # make_copy <name> -> path; repo copy with the Linux OTA test preset + test public key
 	local d="$W/copies/$1"
 	mkdir -p "$d"
 	tar -C "$SRC" --exclude=./.git --exclude=./build -cf - . | tar -xf - -C "$d"
@@ -96,7 +96,7 @@ publish() { # publish <copy> <seq> [corrupt|nohealth]
 	local id; id=$(printf "dev-%06d" "$seq")
 	local tag="ota-$id" rel="$W/site/ota-$id"
 	mkdir -p "$rel" "$W/site/ota-channel-dev"
-	(cd "$d" && "$GODOT" --headless --path . --import >/dev/null 2>&1; "$GODOT" --headless --path . --export-pack "Linux Dev" "$rel/axolotl-$id.pck" >/dev/null 2>&1)
+	(cd "$d" && "$GODOT" --headless --path . --import >/dev/null 2>&1; "$GODOT" --headless --path . --export-pack "Linux OTA test" "$rel/axolotl-$id.pck" >/dev/null 2>&1)
 	local sha; sha=$(printf '%040x' "$seq")
 	(cd "$d" && "$GODOT" --headless --path . -s tools/ota_make_manifest.gd -- pck="$rel/axolotl-$id.pck" out="$rel/manifest.json" \
 		seq="$seq" sha="$sha" platform=linux url="$BASEURL/$tag/axolotl-$id.pck" run_id="e2e-$seq" 2>/dev/null | grep MANIFEST)
@@ -119,7 +119,7 @@ run_game() { # run_game <label> [extra args...]
 
 echo "== building installed shell (baseline)"
 BASE=$(make_copy base)
-(cd "$BASE" && "$GODOT" --headless --path . --import >/dev/null 2>&1; "$GODOT" --headless --path . --export-debug "Linux Dev" "$W/axolotl.x86_64" >/dev/null 2>&1)
+(cd "$BASE" && "$GODOT" --headless --path . --import >/dev/null 2>&1; "$GODOT" --headless --path . --export-debug "Linux OTA test" "$W/axolotl.x86_64" >/dev/null 2>&1)
 [ -x "$W/axolotl.x86_64" ] || { echo "E2E FAIL could not export the shell (Linux templates installed?)"; exit 1; }
 
 python3 -m http.server "$PORT" --bind 127.0.0.1 --directory "$W/site" >/dev/null 2>&1 &

@@ -7,10 +7,14 @@ in the background, downloads and verifies them, and runs them after the next res
 commit, CI tests it and publishes a signed Godot PCK, and the phone picks it up. You only build a new
 APK when the installed **runtime** changes.
 
-Both Android packages carry the OTA client and follow the `dev` channel: **Mote**
-(`com.verbal76.axolotl`, the app to play) and **Mote Dev** (`com.verbal76.axolotl.dev`, an optional
-side-by-side test install). Before runtime r4 the normal Mote app had no OTA client and no network
-permission; that architecture is superseded.
+There is one Android app, **Mote** (`com.verbal76.axolotl`); it carries the OTA client and follows
+the `dev` channel. Superseded: before runtime r4 the Mote app had no OTA client and no network
+permission, and until r5 a separate **Mote Dev** app (`com.verbal76.axolotl.dev`) existed. That app
+is retired; the `dev` *channel* stays.
+
+**Fresh APK, current channel.** The APK bundles the current game. An OTA built from the same commit as
+the APK is recognised as the bundled game ("up to date"), so a fresh install does not download a copy
+of itself; the next newer OTA is downloaded as usual.
 
 ## Automatic checks (never blocking)
 
@@ -61,7 +65,7 @@ change any of them:
 - native `.so` libraries, Android plugins, Gradle, Java or Kotlin (none are used today).
 
 When one of these changes, bump the runtime with `python3 tools/ota_runtime.py --bump` (the
-revision becomes part of the runtime ID, e.g. `android-godot-4.7.2-r4`). Commit, then install
+revision becomes part of the runtime ID, e.g. `android-godot-4.7.2-r5`). Commit, then install
 the new APK. Older APKs reject OTAs built for the new runtime ("native update required").
 
 ## Boot order
@@ -99,7 +103,7 @@ The APK's bundled game is never modified and is always the final fallback.
 ```json
 {
   "schema": 1, "channel": "dev", "ota_id": "dev-000123", "seq": 123,
-  "source_sha": "<40-hex commit SHA>", "runtime_id": "android-godot-4.7.2-r4",
+  "source_sha": "<40-hex commit SHA>", "runtime_id": "android-godot-4.7.2-r5",
   "minimum_bootstrap_version": 1, "game_version": "0.1.0",
   "save_schema": 1, "min_save_schema": 1,
   "pck_url": "https://github.com/verbal76/Axolotl/releases/download/ota-dev-000123/axolotl-dev-000123.pck",
@@ -134,12 +138,12 @@ If `MOTE_OTA_SIGNING_KEY` is missing, the job stays green but the receipt says `
 
 1. Add five repository secrets (**Settings → Secrets and variables → Actions → New repository secret**):
    - `MOTE_OTA_SIGNING_KEY`: the private PEM that matches the public key in `ota_config.gd`.
-   - `MOTE_ANDROID_DEV_KEYSTORE_B64`: the Mote Dev keystore (PKCS12), base64 on one line. With a stable keystore, later APKs install over earlier ones.
+   - `MOTE_ANDROID_DEV_KEYSTORE_B64`: the Mote signing keystore (PKCS12), base64 on one line (the name predates the retirement of the Mote Dev app). With a stable keystore, later APKs install over earlier ones.
    - `MOTE_ANDROID_DEV_KEYSTORE_PASSWORD`, `MOTE_ANDROID_DEV_KEY_ALIAS` (`mote_dev`), `MOTE_ANDROID_DEV_KEY_PASSWORD`.
      PKCS12 keystores, and Godot's signing step, use a single password, so the key password must equal the keystore password. CI checks this.
    - CI reports only whether each secret is present, never its value.
    - The first generic secrets (`OTA_SIGNING_KEY`, `ANDROID_DEV_KEYSTORE_B64`) and their key/keystore are retired and no longer read.
-2. Push, or re-run **Build & Verify**, and download the `mote-android-v…` artifact (Mote) or `mote-android-dev-v…` (Mote Dev).
+2. Push, or re-run **Build & Verify**, and download the `mote-android-v…` artifact.
 3. Install it. A newer Mote APK signed with the same Mote key installs **over** the old one and keeps its saves; do not uninstall first.
 4. Push (or re-run **OTA publish (dev channel)**). The app finds the OTA by itself; **Pause → About / Diagnostics** shows it. Close the app from recents and reopen it to run it.
 
@@ -162,7 +166,7 @@ OTA
   Latest on channel: dev-… (checked <UTC>) | not checked yet
   Pending (runs after restart): …
   Downloaded, not activated: …
-  Runtime compatibility: this app runs android-godot-4.7.2-r4; latest OTA compatible | NOT compatible: …
+  Runtime compatibility: this app runs android-godot-4.7.2-r5; latest OTA compatible | NOT compatible: …
   Last check: <result>  <UTC>
 ```
 

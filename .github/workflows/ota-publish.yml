@@ -1,6 +1,6 @@
 name: OTA publish (dev channel)
 
-# Publishes the game layer as a signed, immutable OTA for installed Mote (and Mote Dev) APKs.
+# Publishes the game layer as a signed, immutable OTA for the installed Mote app.
 # No APK is built here. Order of evidence:
 #   exact SHA -> runtime gate -> tests -> PCK -> SHA-256/size -> signed manifest
 #   -> client-side inspection -> immutable release -> re-download + re-verify
@@ -147,6 +147,7 @@ jobs:
             --export-pack "$PRESET" "out/axolotl-$ID.pck" 2>&1 | tee export.log | grep -E "Baking shaders|ERROR" || true
           grep -q "Started Baking shaders" export.log || { echo "::error::shaders were not baked into the OTA pack"; exit 1; }
           test -s "out/axolotl-$ID.pck"
+          python3 tools/pck_files.py "out/axolotl-$ID.pck" --require-baked
           URL="${{ github.server_url }}/${{ github.repository }}/releases/download/$TAG/axolotl-$ID.pck"
           godot --headless --path . -s tools/ota_make_manifest.gd -- pck="out/axolotl-$ID.pck" out=out/manifest.json \
             seq="$SEQ" sha="$SHA" url="$URL" channel="$CHANNEL" run_id="${{ github.run_id }}" \

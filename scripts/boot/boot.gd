@@ -81,11 +81,18 @@ func _mark(label: String) -> void:
 
 func _ready() -> void:
 	process_mode = Node.PROCESS_MODE_ALWAYS
+	if _args.has("print-identity"):
+		# Release verification (CI runs the APK's own bundled content): what this build reports
+		# about itself at runtime, read from whatever is mounted.
+		print("IDENTITY_JSON " + JSON.stringify(identity()))
+		get_tree().quit.call_deferred()
+		return
 	if ota_enabled:
 		updater = OtaUpdater.new()
 		updater.core = core
 		var ptr: String = _args.get("ota-pointer", "")
 		updater.pointer_url = ptr if ptr != "" else Config.pointer_url(channel)
+		updater.bundled_source_sha = native_info.get("source_sha", "")
 		updater.finished.connect(_on_update_finished)
 		add_child(updater)
 		# Scriptable equivalents of the recovery buttons (developer / end-to-end runs).

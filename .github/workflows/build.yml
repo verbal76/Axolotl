@@ -10,7 +10,7 @@ env:
   GODOT_VERSION: 4.7.2
   # Build the branch commit itself, not the synthetic PR merge ref, so every identity names a real commit.
   SOURCE_SHA: ${{ github.event.pull_request.head.sha || github.sha }}
-  # Public verification pins (not secrets): the Mote Dev signing certificate and OTA public key.
+  # Public verification pins (not secrets): the Mote signing certificate and OTA public key.
   MOTE_DEV_CERT_SHA256: A8:4F:BA:D5:61:B9:F5:E2:4E:BB:45:E2:95:17:94:F6:17:28:19:56:CF:DB:CA:FF:3A:CF:DB:9E:63:E2:C2:E3
   MOTE_OTA_PUBKEY_DER_SHA256: a003a45ce422325ef1de52958bd9d4d2a06b912ae119c6c7a7f9e40ff2720cf2
   GODOT_BASE: https://github.com/godotengine/godot/releases/download/4.7.2-stable
@@ -53,7 +53,7 @@ jobs:
           path: test_out/
 
   android:
-    name: Android APKs (Mote + Mote Dev, both offline-first with OTA)
+    name: Android APK (Mote, offline-first with OTA)
     runs-on: ubuntu-latest
     timeout-minutes: 45
     steps:
@@ -71,7 +71,7 @@ jobs:
           curl -sSL -o tpl.tpz "$GODOT_BASE/Godot_v${GODOT_VERSION}-stable_export_templates.tpz"
           mkdir -p ~/.local/share/godot/export_templates/${GODOT_VERSION}.stable
           unzip -q tpl.tpz -d tpl && mv tpl/templates/* ~/.local/share/godot/export_templates/${GODOT_VERSION}.stable/
-      - name: Mote Dev signing keystore (stable, from Mote secrets)
+      - name: Mote signing keystore (stable, from Mote secrets)
         env:
           MOTE_ANDROID_DEV_KEYSTORE_B64: ${{ secrets.MOTE_ANDROID_DEV_KEYSTORE_B64 }}
           MOTE_ANDROID_DEV_KEYSTORE_PASSWORD: ${{ secrets.MOTE_ANDROID_DEV_KEYSTORE_PASSWORD }}
@@ -91,17 +91,17 @@ jobs:
               echo "::error::MOTE_ANDROID_DEV_KEY_PASSWORD must equal MOTE_ANDROID_DEV_KEYSTORE_PASSWORD (PKCS12 keystore)"; exit 1
             fi
             if ! keytool -list -keystore "$KS" -storepass "$MOTE_ANDROID_DEV_KEYSTORE_PASSWORD" -alias "$MOTE_ANDROID_DEV_KEY_ALIAS" >/dev/null 2>&1; then
-              echo "::error::the Mote Dev keystore does not open with the given password/alias"; exit 1
+              echo "::error::the Mote keystore does not open with the given password/alias"; exit 1
             fi
             ALIAS="$MOTE_ANDROID_DEV_KEY_ALIAS"; PASS="$MOTE_ANDROID_DEV_KEYSTORE_PASSWORD"
-            echo "Using the stable Mote Dev keystore."
+            echo "Using the stable Mote keystore."
             echo "MOTE_STABLE_KEY=true" >> "$GITHUB_ENV"
           else
-            echo "::warning::Mote Dev keystore secrets not set: signing with a throwaway key. This APK will NOT install over a previously installed one (uninstall first)."
+            echo "::warning::Mote keystore secrets not set: signing with a throwaway key. This APK will NOT install over a previously installed one (uninstall first)."
             ALIAS=mote_dev; PASS=$(openssl rand -hex 24)
             echo "::add-mask::$PASS"
             keytool -genkeypair -storetype PKCS12 -keyalg RSA -keysize 2048 -validity 9999 -alias "$ALIAS" -keystore "$KS" \
-              -storepass "$PASS" -keypass "$PASS" -dname "CN=Mote Dev (throwaway),O=verbal76,C=US" -noprompt >/dev/null
+              -storepass "$PASS" -keypass "$PASS" -dname "CN=Mote (throwaway),O=verbal76,C=US" -noprompt >/dev/null
           fi
           echo "Signing certificate: $(keytool -list -v -keystore "$KS" -storepass "$PASS" -alias "$ALIAS" 2>/dev/null | grep -m1 'SHA256:' | sed 's/.*SHA256: //')"
           {
@@ -125,7 +125,7 @@ jobs:
           echo "runtime_id=$(jq -r .runtime_id "$ID")" >> $GITHUB_OUTPUT
           echo "channel=$(jq -r .channel "$ID")" >> $GITHUB_OUTPUT
           test "$(jq -r .godot_version "$ID")" = "$GODOT_VERSION"
-      - name: Export APKs
+      - name: Export the Mote APK (shaders baked)
         env:
           GV: ${{ steps.ident.outputs.game_version }}
         run: |
@@ -140,68 +140,76 @@ jobs:
           test "$(git rev-parse HEAD)" = "$SOURCE_SHA"
           echo "source commit: $SOURCE_SHA"
           mkdir -p build/android
-          # The shader baker (shader_baker/enabled in both presets) precompiles shaders into the APK
-          # so the phone does not compile them on first launch. It only runs when the exporting
-          # editor uses the target renderer, so export on software Vulkan (Mobile) under a virtual
-          # display, and fail if no shaders were baked.
-          sudo apt-get update -q > /dev/null && sudo apt-get install -y -q mesa-vulkan-drivers xvfb > /dev/null
-          export_baked() {
-            xvfb-run -a -s "-screen 0 1280x720x24" godot --path . --rendering-driver vulkan --rendering-method mobile \
-              --export-debug "$1" "$2" 2>&1 | tee "$2.export.log" | grep -E "Baking shaders|ERROR" || true
-            grep -q "Started Baking shaders" "$2.export.log" || { echo "::error::$2: shaders were not baked"; exit 1; }
-            rm -f "$2.export.log"
-          }
+          APK="build/android/mote-v$GV-b$BUILD.apk"
+          echo "APK=$APK" >> $GITHUB_ENV
+          echo "BUILD=$BUILD" >> $GITHUB_ENV
           python3 tools/write_native_build_info.py "Android" normal "$BUILD" "$SOURCE_SHA" "$RUN" "$RUN_URL"
-          export_baked "Android" "build/android/mote-v$GV-b$BUILD.apk"
-          python3 tools/write_native_build_info.py "Android Dev" dev "$BUILD" "$SOURCE_SHA" "$RUN" "$RUN_URL"
-          export_baked "Android Dev" "build/android/mote-dev-v$GV-b$BUILD.apk"
+          # The shader baker (shader_baker/enabled) precompiles shaders into the APK so the phone
+          # does not compile them on first launch. It only runs when the exporting editor uses the
+          # target renderer: export on software Vulkan (Mobile) under a virtual display.
+          sudo apt-get update -q > /dev/null && sudo apt-get install -y -q mesa-vulkan-drivers xvfb > /dev/null
+          xvfb-run -a -s "-screen 0 1280x720x24" godot --path . --rendering-driver vulkan --rendering-method mobile \
+            --export-debug "Android" "$APK" 2>&1 | tee export.log | grep -E "Baking shaders|ERROR" || true
+          grep -q "Started Baking shaders" export.log || { echo "::error::shaders were not baked"; exit 1; }
+          test -s "$APK"
           ls -la build/android
+
+      - name: Verify the APK (identity, permissions, signing, baked shaders, bundled baseline)
+        env:
+          GV: ${{ steps.ident.outputs.game_version }}
+        run: |
           AAPT=$(ls "$ANDROID_HOME"/build-tools/*/aapt | tail -1)
           AAPT2=$(ls "$ANDROID_HOME"/build-tools/*/aapt2 | tail -1)
-          for apk in build/android/*.apk; do
-            test -s "$apk"
-            echo "== $apk"
-            "$AAPT" dump badging "$apk" 2>/dev/null | grep -E "^package:|application-label:|application-icon-160|launchable" || true
-            "$AAPT2" dump xmltree --file AndroidManifest.xml "$apk" > "$apk.manifest.txt"
-            grep -oE 'android.permission\.[A-Z_]+' "$apk.manifest.txt" | sort -u | sed 's/^/  permission: /'
-          done
-          # Owner ruling: Mote is offline-CAPABLE, not offline-only. Both apps play fully offline and
-          # both carry the OTA client, so both need network access to reach the update channel.
-          for f in "mote-v$GV-b$BUILD.apk" "mote-dev-v$GV-b$BUILD.apk"; do
-            if ! grep -q "android.permission.INTERNET" "build/android/$f.manifest.txt"; then
-              echo "::error::$f cannot reach the OTA channel (no INTERNET permission)"; exit 1
-            fi
-          done
-          # Player-facing labels and the (unchanged) package identities.
-          for pair in "mote-v$GV-b$BUILD.apk|com.verbal76.axolotl|Mote" "mote-dev-v$GV-b$BUILD.apk|com.verbal76.axolotl.dev|Mote Dev"; do
-            IFS='|' read -r f pkg label <<< "$pair"
-            # aapt exits non-zero on this manifest's android:required attribute but still prints badging.
-            B=$("$AAPT" dump badging "build/android/$f" 2>/dev/null || true)
-            echo "$B" | grep -q "^package: name='$pkg'" || { echo "::error::$f package id is not $pkg"; exit 1; }
-            echo "$B" | grep -q "^application-label:'$label'$" || { echo "::error::$f label is not '$label'"; exit 1; }
-            echo "$f: package $pkg, label '$label'"
-          done
           APKSIGNER=$(ls "$ANDROID_HOME"/build-tools/*/apksigner | tail -1)
+          # aapt exits non-zero on this manifest's android:required attribute but still prints badging.
+          B=$("$AAPT" dump badging "$APK" 2>/dev/null || true)
+          echo "$B" | grep -E "^package:|application-label:|application-icon-160|launchable" || true
+          echo "$B" | grep -q "^package: name='com.verbal76.axolotl' versionCode='$BUILD' versionName='$GV'" || { echo "::error::package id / versionCode / versionName wrong"; exit 1; }
+          echo "$B" | grep -q "^application-label:'Mote'$" || { echo "::error::label is not 'Mote'"; exit 1; }
+          # Offline-capable, not offline-only: the OTA client needs network access.
+          "$AAPT2" dump xmltree --file AndroidManifest.xml "$APK" > manifest.txt
+          grep -oE 'android.permission\.[A-Z_]+' manifest.txt | sort -u | sed 's/^/  permission: /'
+          grep -q "android.permission.INTERNET" manifest.txt || { echo "::error::no INTERNET permission"; exit 1; }
+          # Signing: the pinned Mote certificate.
+          "$APKSIGNER" verify "$APK"
+          GOT=$("$APKSIGNER" verify --print-certs "$APK" | grep -m1 "certificate SHA-256 digest" | sed 's/.*digest: //')
           WANT=$(echo "$MOTE_DEV_CERT_SHA256" | tr -d ':' | tr 'A-F' 'a-f')
-          for apk in build/android/*.apk; do
-            "$APKSIGNER" verify "$apk"
-            GOT=$("$APKSIGNER" verify --print-certs "$apk" | grep -m1 "certificate SHA-256 digest" | sed 's/.*digest: //')
-            echo "$(basename "$apk"): signature verified, certificate SHA-256 $GOT"
-            if [ "${MOTE_STABLE_KEY:-false}" = "true" ] && [ "$GOT" != "$WANT" ]; then
-              echo "::error::$(basename "$apk") is signed by an unexpected certificate (want $WANT)"; exit 1
-            fi
-            sha256sum "$apk"
-          done
-          # The OTA public key baked into these APKs is the pinned Mote key.
+          echo "signature verified, certificate SHA-256 $GOT"
+          if [ "${MOTE_STABLE_KEY:-false}" = "true" ] && [ "$GOT" != "$WANT" ]; then
+            echo "::error::signed by an unexpected certificate (want $WANT)"; exit 1
+          fi
+          # The OTA public key baked into the APK is the pinned Mote key.
           python3 -c "import re;print(re.search(r'const PUBLIC_KEY_PEM := \"\"\"(.*?)\"\"\"',open('scripts/boot/ota_config.gd').read(),re.S).group(1).strip())" > pub.pem
           test "$(openssl pkey -pubin -in pub.pem -outform DER | sha256sum | cut -d' ' -f1)" = "$MOTE_OTA_PUBKEY_DER_SHA256"
           echo "embedded OTA public key SHA-256 matches the pin"
-          rm -f pub.pem
-          rm -f build/android/*.manifest.txt build/android/*.idsig
-          jq -n --arg gv "$GV" --arg b "$BUILD" --arg sha "$SOURCE_SHA" --arg run "$RUN" --arg url "$RUN_URL" \
+          rm -f pub.pem manifest.txt
+          # Baked shaders really are inside the APK: engine core shaders and the scene/material shaders.
+          unzip -l "$APK" | awk '{print $4}' | grep '^assets/.godot/shader_cache/' > baked.txt || true
+          echo "baked shader caches in the APK: $(wc -l < baked.txt)"
+          cut -d/ -f4 baked.txt | sort | uniq -c
+          [ "$(wc -l < baked.txt)" -ge 30 ] || { echo "::error::too few baked shader caches in the APK"; exit 1; }
+          grep -q "/SceneForwardMobileShaderRD/" baked.txt || { echo "::error::scene/material shaders not baked"; exit 1; }
+          unzip -l "$APK" | grep -q "assets/.godot/imported/splash.png-" || { echo "::error::boot splash image missing"; exit 1; }
+          # Run the APK's own bundled game and ask it who it is: the bundled baseline must be this
+          # commit, this build, the normal Mote flavour, OTA on the dev channel, on this runtime.
+          rm -rf apkx && mkdir apkx && unzip -q "$APK" 'assets/*' -d apkx
+          godot --headless --path apkx/assets -- --print-identity --ota-root="$RUNNER_TEMP/ota_probe" | grep IDENTITY_JSON | sed 's/^IDENTITY_JSON //' > apk_identity.json
+          cat apk_identity.json
+          REV=$(jq -r .runtime_revision "$RUNNER_TEMP/identity.json")
+          jq -e --arg sha "$SOURCE_SHA" --arg b "$BUILD" --arg gv "$GV" --arg rev "-r$REV" \
+            '.native_source_sha == $sha and .source_sha == $sha and .native_build == $b and .build_flavor == "normal"
+             and .ota_enabled == true and .ota_channel == "dev" and .ota_id == "none" and .game_version == $gv
+             and .product == "Mote" and .save_schema == 1 and (.runtime_id | endswith($rev))' apk_identity.json > /dev/null \
+            || { echo "::error::the APK's bundled game does not report the expected identity"; exit 1; }
+          echo "bundled baseline verified: $SOURCE_SHA, build $BUILD, runtime r$REV"
+          rm -rf apkx baked.txt
+          sha256sum "$APK"
+          jq -n --arg gv "$GV" --arg b "$BUILD" --arg sha "$SOURCE_SHA" --arg run "${{ github.run_id }}" \
+            --arg url "${{ github.server_url }}/${{ github.repository }}/actions/runs/${{ github.run_id }}" \
             --arg rt "${{ steps.ident.outputs.runtime_id }}" --arg ch "${{ steps.ident.outputs.channel }}" \
+            --arg apk "$(basename "$APK")" --arg apksha "$(sha256sum "$APK" | cut -d' ' -f1)" \
             '{game_version:$gv, android_build:($b|tonumber), source_sha:$sha, build_run:$run, build_run_url:$url, runtime_id:$rt,
-              apks:{normal:{package:"com.verbal76.axolotl", label:"Mote", ota:true, channel:$ch}, dev:{package:"com.verbal76.axolotl.dev", label:"Mote Dev", ota:true, channel:$ch}}}' \
+              apk:{file:$apk, sha256:$apksha, package:"com.verbal76.axolotl", label:"Mote", ota:true, channel:$ch}}' \
             > build/android/build-info.json
           cat build/android/build-info.json
       - uses: actions/upload-artifact@v4
@@ -209,12 +217,6 @@ jobs:
           name: mote-android-v${{ steps.ident.outputs.game_version }}-b${{ github.run_number }}
           path: |
             build/android/mote-v*.apk
-            build/android/build-info.json
-      - uses: actions/upload-artifact@v4
-        with:
-          name: mote-android-dev-v${{ steps.ident.outputs.game_version }}-b${{ github.run_number }}
-          path: |
-            build/android/mote-dev-v*.apk
             build/android/build-info.json
 
   ios:
