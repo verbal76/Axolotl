@@ -23,6 +23,21 @@ func run(runner) -> void:
 	g = t.g
 	p = g.player
 	_shots = DisplayServer.get_name() != "headless"
+	if Settings.test_args.get("start", "") == "b2vortex":
+		# Debug scenario: from moss ball #2's cave entrance to the vortex toward #3.
+		g.start_play(true)
+		var b2 := g.balls[1]
+		var lb2: LevelBuilder = b2.get_meta("builder")
+		for h in lb2.bot_hints:
+			if h.has("cave"):
+				p.place(b2, h["entry"] + b2.up_at(h["entry"]) * 0.3, Vector3.FORWARD)
+		g.audio.set_ball(1, false)
+		b2.vortex_out.connected = true
+		await wait(1.0)
+		await enter_vortex(b2.vortex_out, false)
+		t.check("debug_reached_ball3", p.ball == g.balls[2], "")
+		_report()
+		return
 	# Start from the title screen like a player would.
 	g._enter_title()
 	await wait(2.0)
@@ -53,7 +68,13 @@ func run(runner) -> void:
 	t.check("backtrack_to_ball1", p.ball == g.balls[0], "")
 	await clear_ball(0, 1.01, [])
 	t.check("ball1_fully_restored", g.balls[0].completed, "%.2f" % g.balls[0].restoration)
-	mark("300% restored")
+	for bi in [1, 2, 0]:
+		if not g.balls[bi].completed:
+			await travel_to(bi)
+			await clear_ball(bi, 1.01, [])
+	if p.ball.index != 0:
+		await travel_to(0)
+	mark("300% restored" if g.balls.all(func(bb): return bb.completed) else "finished (incomplete)")
 	await t.shot("pt_40_all_restored")
 	# Quiet period, then ALL CLEAR, then free roam continues.
 	var shown := false
@@ -84,6 +105,8 @@ func _report() -> void:
 	t.log_line("stuck recoveries: %d" % stuck_events)
 	for f in failures:
 		t.log_line("fallback: " + f)
+	if _perf_n > 0:
+		t.log_line("cpu wall time per frame (headless, includes bot): avg %.2f ms over %d frames, worst %.2f ms" % [_perf_proc / _perf_n, _perf_n, _perf_max])
 	var q = g.quality
 	if q and q.history.size() > 0:
 		var s := 0.0
@@ -101,6 +124,12 @@ func wait(s: float) -> void:
 
 
 var activity := ""
+var goto_info := ""
+var _perf_n := 0
+var _perf_proc := 0.0
+var _perf_phys := 0.0
+var _last_us := 0
+var _perf_max := 0.0
 var _hb := 0.0
 
 
@@ -108,11 +137,18 @@ func tick() -> void:
 	await t.frames(1)
 	sim_time += 1.0 / 60.0
 	_hb += 1.0 / 60.0
-	if _hb >= 20.0:
+	var now := Time.get_ticks_usec()
+	if _last_us > 0:
+		var ms := (now - _last_us) / 1000.0
+		_perf_n += 1
+		_perf_proc += ms
+		_perf_max = maxf(_perf_max, ms)
+	_last_us = now
+	if _hb >= float(Settings.test_args.get("hb", "20")):
 		_hb = 0.0
-		t.log_line("heartbeat %.0fs ball %d h %.1f act '%s' R %.2f %.2f %.2f hp %d cine '%s' state %s" % [sim_time, p.ball.index + 1,
+		t.log_line("heartbeat %.0fs ball %d h %.1f act '%s' R %.2f %.2f %.2f hp %d cine '%s' state %s %s" % [sim_time, p.ball.index + 1,
 				(p.global_position - p.ball.global_position).length() - p.ball.radius, activity, g.balls[0].restoration,
-				g.balls[1].restoration, g.balls[2].restoration, p.health, g.cinematic, p.state])
+				g.balls[1].restoration, g.balls[2].restoration, p.health, g.cinematic, p.state, goto_info])
 
 
 func set_stick(v: Vector2) -> void:
@@ -180,6 +216,7 @@ func goto(target: Variant, radius := 0.9, timeout := 45.0, allow_vortex: Vortex 
 	while el < timeout:
 		var tgt: Vector3 = target.call() if target is Callable else target
 		var flat := tangent_to(tgt)
+		goto_info = "d=%.1f pos=%s" % [flat.length(), str(Levels._latlon(p.ball.up_at(p.global_position)).round())]
 		if flat.length() < radius and absf(height_of(tgt)) < 2.5:
 			set_stick(Vector2.ZERO)
 			return true
@@ -195,6 +232,7 @@ func goto(target: Variant, radius := 0.9, timeout := 45.0, allow_vortex: Vortex 
 		if p.health <= 1 and p.max_health > 1:
 			await eat_nearby(8.0)
 		var dir := flat.normalized()
+		dir = _wall_follow(dir)
 		dir = _avoid_mouths(dir, allow_vortex)
 		var mag := 1.0 if flat.length() > 2.0 else clampf(flat.length() / 2.0, 0.35, 1.0)
 		set_stick(stick_for(dir, mag))
@@ -208,22 +246,61 @@ func goto(target: Variant, radius := 0.9, timeout := 45.0, allow_vortex: Vortex 
 			if moved < 1.0 and flat.length() > radius:
 				stuck_events += 1
 				escalate += 1
-				match escalate % 4:
+				# Escalating detours: hop, then walk around the obstacle on alternating sides.
+				match escalate % 5:
 					1:
 						await hop_toward(tgt, true)
 					2:
-						await sidestep(dir, side, 0.7)
+						await detour(dir, side, 70.0, 1.5)
 					3:
 						side = -side
-						await sidestep(dir, side, 1.1)
+						await detour(dir, side, 70.0, 2.5)
+					4:
+						await detour(dir, side, 100.0, 4.0)
 					0:
-						await sidestep(-dir, 1.0, 0.6)
+						side = -side
+						await detour(dir, side, 100.0, 5.0)
 						await hop_toward(tgt, true)
 			else:
 				escalate = 0
 	set_stick(Vector2.ZERO)
 	failures.append("goto timeout on ball %d" % p.ball.index)
 	return false
+
+
+func detour(dir: Vector3, side: float, angle_deg: float, time: float) -> void:
+	var n := int(time * 60)
+	for i in n:
+		var d := dir.rotated(p.up, deg_to_rad(angle_deg) * side)
+		set_stick(stick_for(d))
+		await tick()
+		if i % 30 == 29 and p.velocity.length() < 1.0:
+			await press("jump")
+
+
+var _follow_side := 0.0
+var _follow_clear := 0.0
+
+
+## Bug-style obstacle handling: if a steep surface blocks the way, slide along it on one
+## consistent side until the path is clear again.
+func _wall_follow(dir: Vector3) -> Vector3:
+	var from := p.body_center()
+	var q := PhysicsRayQueryParameters3D.create(from, from + dir * 2.4, 1 | 2)
+	q.exclude = [p.get_rid()]
+	var hit := p.get_world_3d().direct_space_state.intersect_ray(q)
+	if hit.is_empty() or (hit.normal as Vector3).dot(p.up) > 0.55:
+		_follow_clear += 1.0 / 60.0
+		if _follow_clear > 1.2:
+			_follow_side = 0.0
+		return dir
+	_follow_clear = 0.0
+	var n: Vector3 = hit.normal
+	n = (n - p.up * n.dot(p.up)).normalized()
+	var along := n.cross(p.up).normalized()
+	if _follow_side == 0.0:
+		_follow_side = 1.0 if along.dot(dir) >= 0.0 else -1.0
+	return (along * _follow_side * 0.85 + n * 0.15).normalized()
 
 
 func sidestep(dir: Vector3, side: float, time: float) -> void:
@@ -477,16 +554,21 @@ func tutorial() -> void:
 	await fight_parasite(par)
 	mark("first parasite restored")
 	await t.shot("pt_02_first_restore")
-	# 6-7: touch the bloom.
-	var bloom: Bloom = b.blooms[0]
-	await goto(bloom.global_position, 0.6, 10.0)
-	await wait(0.5)
-	t.check("tutorial_bloom_checkpoint", g.checkpoint == bloom, "")
 	# The gentle framing shot plays by itself; wait for it.
 	for i in 60 * 8:
 		await tick()
 		if g.cinematic == "" and i > 60 * 2:
 			break
+	# 6-7: touch the bloom.
+	var bloom: Bloom = b.blooms[0]
+	for attempt in 3:
+		await goto(bloom.global_position, 0.5, 12.0)
+		await wait(0.5)
+		if g.checkpoint == bloom:
+			break
+		# Fell off the platform: climb back up.
+		await hop_toward(b.surface_point(MossBall.dir_ll(56.5, 0), 2.3), true, 0.1)
+	t.check("tutorial_bloom_checkpoint", g.checkpoint == bloom, "")
 	mark("tutorial complete")
 	t.check("tutorial_under_60s", sim_time < 60.0, "%.1fs" % sim_time)
 
@@ -518,17 +600,26 @@ func clear_ball(bi: int, target: float, skip_zones: Array) -> void:
 			routines_done["cave"] = true
 			await cave(b, h)
 	mark("ball %d at %.0f%%" % [bi + 1, b.restoration * 100.0])
+	for par in b.parasites:
+		if par.is_alive():
+			t.log_line("  remaining parasite zone %s kind %d state %s" % [par.zone_id, par.kind, par.state])
+	for m in b.motes:
+		if m.is_available():
+			t.log_line("  remaining mote zone %s h %.1f" % [m.zone_id, m.h_hint])
 
 
 func _collect_tasks(b: MossBall, lb: LevelBuilder, skip_zones: Array, done: Dictionary) -> Array:
 	var tasks := []
 	var special := {}
+	for k in ["tower", "mesa", "canopy"]:
+		if done.has(k) and done[k] < 3 and _routine_pending(b, k):
+			done["retry_" + k] = true
 	for h in lb.bot_hints:
-		if h.has("tower") and not done.has("tower"):
+		if h.has("tower") and (not done.has("tower") or done.has("retry_tower")):
 			tasks.append({"kind": "tower", "hint": h, "pos": func(): return b.surface_point(MossBall.dir_ll(h["lat"], h["lon"]))})
-		if h.has("mesa") and not done.has("mesa"):
+		if h.has("mesa") and (not done.has("mesa") or done.has("retry_mesa")):
 			tasks.append({"kind": "mesa", "hint": h, "pos": func(): return b.surface_point(MossBall.dir_ll(h["site"][0], h["site"][1]))})
-		if h.has("canopy") and not done.has("canopy"):
+		if h.has("canopy") and (not done.has("canopy") or done.has("retry_canopy")):
 			tasks.append({"kind": "canopy", "hint": h, "pos": func(): return (h["spiral"][0] as Transform3D).origin})
 	for par in b.parasites:
 		if par.is_alive() and not par.zone_id in skip_zones and par.state != "init":
@@ -539,6 +630,22 @@ func _collect_tasks(b: MossBall, lb: LevelBuilder, skip_zones: Array, done: Dict
 		if m.is_available() and not m.zone_id in skip_zones and m.h_hint <= 2.5:
 			tasks.append({"kind": "mote", "ref": m, "pos": func(): return m.global_position})
 	return tasks
+
+
+func _routine_pending(b: MossBall, k: String) -> bool:
+	var zones := []
+	match k:
+		"tower": zones = [b.crumbles[0].zone_id] if b.crumbles.size() > 0 else []
+		"mesa": zones = ["mesa"]
+		"canopy": zones = ["canopy", "drop"]
+	for m in b.motes:
+		if m.is_available() and m.zone_id in zones and m.h_hint > 2.5:
+			return true
+	if k != "tower":
+		for par in b.parasites:
+			if par.is_alive() and par.zone_id in zones:
+				return true
+	return false
 
 
 func _do_task(b: MossBall, task: Dictionary, done: Dictionary) -> void:
@@ -552,15 +659,14 @@ func _do_task(b: MossBall, task: Dictionary, done: Dictionary) -> void:
 			await fight_parasite(par, 25.0)
 		"mote":
 			await capture_mote(task["ref"])
-		"tower":
-			done["tower"] = true
-			await tower(b, task["hint"])
-		"mesa":
-			done["mesa"] = true
-			await mesa(b, task["hint"])
-		"canopy":
-			done["canopy"] = true
-			await canopy(b, task["hint"])
+		"tower", "mesa", "canopy":
+			var k: String = task["kind"]
+			done[k] = int(done.get(k, 0)) + 1
+			done.erase("retry_" + k)
+			match k:
+				"tower": await tower(b, task["hint"])
+				"mesa": await mesa(b, task["hint"])
+				"canopy": await canopy(b, task["hint"])
 
 
 func tower(b: MossBall, h: Dictionary) -> void:
@@ -611,9 +717,10 @@ func mesa(b: MossBall, h: Dictionary) -> void:
 	for par in b.parasites:
 		if par.zone_id == "mesa" and par.is_alive():
 			await fight_parasite(par, 20.0)
-	for m in b.motes:
-		if m.zone_id == "mesa" and m.is_available():
-			await lunge_at(func(): return m.global_position, 15.0)
+	for attempt in 3:
+		for m in b.motes:
+			if m.zone_id == "mesa" and m.is_available():
+				await lunge_at(func(): return m.global_position, 15.0, true)
 
 
 func canopy(b: MossBall, h: Dictionary) -> void:
@@ -654,9 +761,10 @@ func canopy(b: MossBall, h: Dictionary) -> void:
 	for par in b.parasites:
 		if par.zone_id == "canopy" and par.kind == Parasite.Kind.MEDIUM and par.is_alive():
 			await fight_parasite(par, 15.0)
-	for m in b.motes:
-		if m.zone_id == "canopy" and m.is_available() and m.global_position.distance_to(c2.origin) < 6.0:
-			await lunge_at(func(): return m.global_position, 10.0)
+	for attempt in 3:
+		for m in b.motes:
+			if m.zone_id == "canopy" and m.is_available() and m.global_position.distance_to(c2.origin) < 6.0:
+				await lunge_at(func(): return m.global_position, 10.0, true)
 	# The big one: walk off C2's tip -> uncontrolled drop -> extreme superhero landing.
 	mark("canopy drop")
 	await goto(Levels.leaf_mid(c2, 3.8, 0.0).origin, 0.5, 8.0)
@@ -713,6 +821,17 @@ func enter_vortex(v: Vortex, from_b: bool) -> void:
 			break
 	await wait(0.5)
 	mark("arrived on ball %d" % (p.ball.index + 1))
+
+
+func travel_to(bi: int) -> void:
+	var guard := 0
+	while p.ball.index != bi and guard < 4:
+		guard += 1
+		var cur := p.ball.index
+		if bi > cur:
+			await enter_vortex(g.balls[cur].vortex_out, false)
+		else:
+			await enter_vortex(g.balls[cur - 1].vortex_out, true)
 
 
 func wander(time: float) -> void:

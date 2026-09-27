@@ -164,11 +164,16 @@ func _build() -> void:
 			g.rotation = Vector3(0, side * (0.9 + k * 0.25), side * (0.6 - k * 0.45))
 			head.add_child(g)
 			var stalk_len := 0.2 - k * 0.02
-			_capsule(0.018, stalk_len, gill_mat, g, Vector3(side * stalk_len * 0.5, 0, 0), Vector3(0, 0, PI / 2))
+			# Stalk + feathery filaments merged into one mesh (one draw call per gill).
+			var parts := [[MeshLib.capsule(0.018, stalk_len), Transform3D(Basis.from_euler(Vector3(0, 0, PI / 2)), Vector3(side * stalk_len * 0.5, 0, 0))]]
 			for f in 5:
 				var fx: float = side * (0.04 + f * 0.035)
-				_capsule(0.009, 0.07, gill_mat, g, Vector3(fx, 0.022, 0), Vector3(0.3, 0, 0))
-				_capsule(0.009, 0.07, gill_mat, g, Vector3(fx, -0.022, 0), Vector3(-0.3, 0, 0))
+				parts.append([MeshLib.capsule(0.009, 0.07), Transform3D(Basis.from_euler(Vector3(0.3, 0, 0)), Vector3(fx, 0.022, 0))])
+				parts.append([MeshLib.capsule(0.009, 0.07), Transform3D(Basis.from_euler(Vector3(-0.3, 0, 0)), Vector3(fx, -0.022, 0))])
+			var gm := MeshInstance3D.new()
+			gm.mesh = MeshLib.merge(parts)
+			gm.material_override = gill_mat
+			g.add_child(gm)
 			gills.append(g)
 
 	# Legs: little splayed limbs with four-toed hands.
@@ -184,10 +189,14 @@ func _build() -> void:
 		var hand := Node3D.new()
 		hand.position = Vector3(side * 0.11, -0.12, 0)
 		upper.add_child(hand)
-		_sphere(0.035, body_mat, hand, Vector3.ZERO, Vector3(1.2, 0.6, 1.2))
+		var hparts := [[MeshLib.sphere(0.035, 8, 4), Transform3D(Basis().scaled(Vector3(1.2, 0.6, 1.2)), Vector3.ZERO)]]
 		for t in 4:
 			var a := -0.7 + t * 0.47
-			_capsule(0.01, 0.05, body_mat, hand, Vector3(sin(a) * 0.035, -0.004, -cos(a) * 0.035), Vector3(PI / 2, -a, 0))
+			hparts.append([MeshLib.capsule(0.01, 0.05), Transform3D(Basis.from_euler(Vector3(PI / 2, -a, 0)), Vector3(sin(a) * 0.035, -0.004, -cos(a) * 0.035))])
+		var hm := MeshInstance3D.new()
+		hm.mesh = MeshLib.merge(hparts)
+		hm.material_override = body_mat
+		hand.add_child(hm)
 		legs.append(hip)
 
 	# Tail: segment chain, flattened with a fin.

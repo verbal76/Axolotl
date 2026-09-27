@@ -130,22 +130,27 @@ func _ready() -> void:
 		m.rotation = Vector3(-PI / 2 + 0.3, 0, side * -0.4)
 		m.name = "Mandible"
 		_segs[0].add_child(m)
-	# Tiny bristly legs on larger bodies.
+	# Tiny bristly legs on larger bodies, merged into one mesh per segment.
 	if kind > Kind.SMALL:
+		var leg := CylinderMesh.new()
+		leg.top_radius = 0.0
+		leg.bottom_radius = seg_radius * 0.12
+		leg.height = seg_radius * 1.2
+		leg.radial_segments = 4
 		for i in range(1, seg_count - 1):
+			var parts := []
 			for side in [-1.0, 1.0]:
-				var l := MeshInstance3D.new()
-				var lm := CylinderMesh.new()
-				lm.top_radius = 0.0
-				lm.bottom_radius = seg_radius * 0.12
-				lm.height = seg_radius * 1.2
-				lm.radial_segments = 4
-				l.mesh = lm
-				l.material_override = _mat
-				l.set_instance_shader_parameter("seg_t", (float(i) + 0.5) / seg_count)
-				l.position = Vector3(side * seg_radius * 0.8, -seg_radius * 0.35, 0)
-				l.rotation = Vector3(0, 0, side * 1.1)
-				_segs[i].add_child(l)
+				parts.append([leg, Transform3D(Basis.from_euler(Vector3(0, 0, side * 1.1)), Vector3(side * seg_radius * 0.8, -seg_radius * 0.35, 0))])
+			var l := MeshInstance3D.new()
+			l.mesh = MeshLib.merge(parts)
+			l.material_override = _mat
+			l.set_instance_shader_parameter("seg_t", (float(i) + 0.5) / seg_count)
+			l.visibility_range_end = 40.0
+			_segs[i].add_child(l)
+	for sgi in _segs:
+		for c in sgi.get_children():
+			if c is GeometryInstance3D:
+				c.visibility_range_end = 40.0
 
 
 func is_alive() -> bool:

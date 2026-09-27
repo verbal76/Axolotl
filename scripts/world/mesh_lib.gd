@@ -282,3 +282,34 @@ static func mat(color: Color, rough := 0.85, emission := Color.BLACK, energy := 
 		m.emission = emission
 		m.emission_energy_multiplier = energy
 	return m
+
+
+## Merge several primitive meshes (each with a local transform) into one ArrayMesh so a
+## multi-part static shape costs one draw call.
+static func merge(parts: Array) -> ArrayMesh:
+	var st := SurfaceTool.new()
+	st.begin(Mesh.PRIMITIVE_TRIANGLES)
+	for p in parts:
+		var m: Mesh = p[0]
+		var xf: Transform3D = p[1]
+		for s in m.get_surface_count():
+			st.append_from(m, s, xf)
+	return st.commit()
+
+
+static func sphere(r: float, radial := 10, rings := 5) -> SphereMesh:
+	var s := SphereMesh.new()
+	s.radius = r
+	s.height = r * 2.0
+	s.radial_segments = radial
+	s.rings = rings
+	return s
+
+
+static func capsule(r: float, h: float) -> CapsuleMesh:
+	var c := CapsuleMesh.new()
+	c.radius = r
+	c.height = maxf(h, r * 2.0)
+	c.radial_segments = 8
+	c.rings = 2
+	return c

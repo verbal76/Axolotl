@@ -105,7 +105,7 @@ static func _ball1(lb: LevelBuilder) -> void:
 	lb.cushion(79, 0, 2.0, 1.3)                       # M1: needs a jump
 	lb.cushion(55.4, 0, 2.4, 2.3)                     # M2: gap needs jump + water burst
 	lb.parasite(Parasite.Kind.SMALL, "tut", 57.3, 0, 2.4, 2.3)
-	lb.bloom(53.4, 0, 2.3)
+	lb.bloom(54.3, 0, 2.3)
 
 	# --- Meadow: rolling hills.
 	lb.hill(36, -9, 9.0, 1.6)
@@ -318,7 +318,7 @@ static func _ball3(lb: LevelBuilder) -> void:
 		lb.leaf_xf(xf, 3.0, 1.9)
 		spiral.append(xf)
 	# C1 (canopy bloom), C3 (mote) branch from the giant stem; C1b/C2 from stem S2.
-	var c1 := C.p(cos(deg_to_rad(150)) * 0.9, 16.9, sin(deg_to_rad(150)) * 0.9, Site.yaw_out(cos(deg_to_rad(150)), sin(deg_to_rad(150))))
+	var c1 := C.p(cos(deg_to_rad(120)) * 0.9, 16.9, sin(deg_to_rad(120)) * 0.9, Site.yaw_out(cos(deg_to_rad(120)), sin(deg_to_rad(120))))
 	lb.leaf_xf(c1, 4.5, 3.2)
 	var c3 := C.p(cos(deg_to_rad(20)) * 0.9, 16.6, sin(deg_to_rad(20)) * 0.9, Site.yaw_out(cos(deg_to_rad(20)), sin(deg_to_rad(20))))
 	lb.leaf_xf(c3, 5.0, 3.0)
@@ -349,7 +349,7 @@ static func _ball3(lb: LevelBuilder) -> void:
 			mi.material_override = root_mat
 			node.add_child(mi)
 	lb.parasite_xf(Parasite.Kind.MEDIUM, "canopy", leaf_mid(c2, 3.0, 0.5), 2.2)
-	lb.parasite_xf(Parasite.Kind.SMALL, "canopy", leaf_mid(f1.global_transform, 2.0, 0.0), 1.2)
+	lb.parasite_xf(Parasite.Kind.SMALL, "canopy", leaf_mid(f1._pivot_xf, 2.0, 0.0), 1.2)
 	lb.mote_xf("canopy", leaf_mid(c2, 1.8, -0.7), 0.8)
 	lb.mote_xf("canopy", leaf_mid(c3, 4.0, 0.0), 0.8)
 	lb.mote_xf("canopy", leaf_mid(spiral[4], 2.2, 0.0), 0.6)
@@ -375,10 +375,10 @@ static func _ball3(lb: LevelBuilder) -> void:
 	# --- Roots + hidden cave.
 	lb.cave(-46, 8, 0)
 	lb.parasite(Parasite.Kind.MEDIUM, "roots", -32, -12, 10.0)
-	lb.parasite(Parasite.Kind.SMALL, "roots", -52, 24, 9.0)
+	lb.parasite(Parasite.Kind.SMALL, "roots", -62, 42, 8.0)
 	lb.mote("roots", -28, 6)
 	lb.mote("roots", -56, -16)
-	lb.bloom(-33, 12)
+	lb.bloom(-27, 22)
 
 	# --- Far jungle.
 	lb.parasite(Parasite.Kind.LARGE, "far", -10, 160, 12.0)
@@ -393,7 +393,7 @@ static func _ball3(lb: LevelBuilder) -> void:
 
 	# --- Dense jungle: towering stems with leaves, tall blades, ferns. Clearings kept open.
 	var keep := [[MossBall.dir_ll(28, -30), 16.0], [drop_dir, 9.0], [_vortex_dir(2, 1), 9.0], [MossBall.dir_ll(-46, 8), 18.0],
-			[MossBall.dir_ll(5, 70), 4.0], [MossBall.dir_ll(-33, 12), 4.0], [MossBall.dir_ll(-5, 148), 4.0]]
+			[MossBall.dir_ll(5, 70), 4.0], [MossBall.dir_ll(-27, 22), 4.0], [MossBall.dir_ll(-5, 148), 4.0]]
 	var rng := RandomNumberGenerator.new()
 	rng.seed = 33
 	var made := 0

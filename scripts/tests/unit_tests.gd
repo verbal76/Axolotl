@@ -14,7 +14,7 @@ func run(runner) -> void:
 	p.use_bot_input = true
 	await t.seconds(0.5)
 	var only: String = Settings.test_args.get("only", "")
-	for name_ in ["_test_sphere_walk", "_test_jump_and_burst", "_test_coyote_and_buffer", "_test_swipe_direction_and_stages", "_test_hard_landing", "_test_food", "_test_darter_and_burrower", "_test_food_repopulates", "_test_motes", "_test_checkpoint_and_regen", "_test_crumble", "_test_restoration_continuity", "_test_vortex", "_test_current", "_test_canopy", "_test_upgrades", "_test_ui", "_test_all_clear"]:
+	for name_ in ["_test_placements", "_test_sphere_walk", "_test_jump_and_burst", "_test_coyote_and_buffer", "_test_swipe_direction_and_stages", "_test_hard_landing", "_test_food", "_test_darter_and_burrower", "_test_food_repopulates", "_test_motes", "_test_checkpoint_and_regen", "_test_crumble", "_test_restoration_continuity", "_test_vortex", "_test_current", "_test_canopy", "_test_upgrades", "_test_ui", "_test_all_clear"]:
 		if only == "" or name_.contains(only):
 			await call(name_)
 
@@ -73,6 +73,46 @@ func first_alive(ball_i: int, kind: int, zone := "") -> Parasite:
 
 
 # --- tests -------------------------------------------------------------------------------
+
+func _surface_height(b: MossBall, dir: Vector3, h_hint: float) -> float:
+	var top := b.surface_point(dir, h_hint + 3.0)
+	var q := PhysicsRayQueryParameters3D.create(top, b.global_position, 1 | 2)
+	var hit := g.get_world_3d().direct_space_state.intersect_ray(q)
+	return -99.0 if hit.is_empty() else (hit.position - b.global_position).length() - b.radius
+
+
+func _test_placements() -> void:
+	# Every authored actor must land on the surface it was designed for (not on a cave roof,
+	# inside a dome, or under a structure).
+	var bad := []
+	var n := 0
+	for b in g.balls:
+		var caves := []
+		for h in b.get_meta("builder").bot_hints:
+			if h.has("cave"):
+				caves.append(b.up_at(h["door"]))
+		for par in b.parasites:
+			n += 1
+			var hh := _surface_height(b, par.spawn_dir, par.spawn_h)
+			if hh < par.spawn_h - 0.8 or hh > par.spawn_h + 2.3:
+				bad.append("ball%d parasite %s h %.1f expected %.1f" % [b.index + 1, par.zone_id, hh, par.spawn_h])
+		for m in b.motes:
+			n += 1
+			var hh := _surface_height(b, m._dir, m.h_hint)
+			if hh < m.h_hint - 0.8 or hh > m.h_hint + 2.3:
+				bad.append("ball%d mote %s h %.1f expected %.1f" % [b.index + 1, m.zone_id, hh, m.h_hint])
+		for bl in b.blooms:
+			n += 1
+			var hh := _surface_height(b, bl.dir, bl.h_hint)
+			if absf(hh - bl.h_hint) > 0.8:
+				bad.append("ball%d bloom h %.1f expected %.1f" % [b.index + 1, hh, bl.h_hint])
+		for hole in b.food_spots:
+			n += 1
+			for c in caves:
+				if (hole["dir"] as Vector3).angle_to(c) < deg_to_rad(12):
+					bad.append("ball%d burrow hole inside cave" % (b.index + 1))
+	t.check("actors_placed_on_intended_surfaces", bad.is_empty(), "%d checked; %s" % [n, "; ".join(bad)])
+
 
 func _test_sphere_walk() -> void:
 	# Walk continuously "forward" and go all the way around moss ball #1.
@@ -389,7 +429,7 @@ func _test_motes() -> void:
 	var b := g.balls[0]
 	var m: Mote = null
 	for mm in b.motes:
-		if mm.zone_id == "meadow" and mm.is_available():
+		if mm.h_hint < 0.1 and mm.is_available() and m == null:
 			m = mm
 	var up := b.up_at(m.global_position)
 	var fwd := MossBall.frame_at(up, 0).z * -1.0
@@ -400,7 +440,9 @@ func _test_motes() -> void:
 	t.check("mote_not_auto_collected", m.is_available(), m.state)
 	# Near miss: the lunge's water pushes it away.
 	var side := fwd.cross(up)
-	place_at(0, m.anchor + m.anchor_up * 0.3 + (m.global_position - m.anchor) * 0.0 - fwd * 1.8 + side * 2.2, fwd)
+	m.set_physics_process(false)   # hold it still so only the lunge's water moves it
+	m.vel = Vector3.ZERO
+	place_at(0, m.anchor + m.anchor_up * 0.3 + (m.global_position - m.anchor) * 0.0 - fwd * 1.8 + side * 1.6, fwd)
 	await t.frames(2)
 	await press("lunge")
 	var v0 := m.vel
@@ -409,6 +451,7 @@ func _test_motes() -> void:
 		await t.frames(1)
 		dv = maxf(dv, (m.vel - v0).length())
 		v0 = m.vel
+	m.set_physics_process(true)
 	t.check("mote_pushed_by_near_miss", m.is_available() and dv > 0.6, "velocity change %.2f" % dv)
 	await t.seconds(1.5)
 	# Aim and lunge: captured, dives into the moss, restores the patch.

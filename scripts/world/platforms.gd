@@ -17,7 +17,7 @@ class Crumble extends StaticBody3D:
 	func build(p_ball: MossBall, xf: Transform3D, size: Vector3, p_zone: String) -> void:
 		ball = p_ball
 		zone_id = p_zone
-		transform = xf
+		global_transform = xf
 		_home = xf
 		collision_layer = 2
 		collision_mask = 0
@@ -53,13 +53,13 @@ class Crumble extends StaticBody3D:
 		_t += dt
 		match _state:
 			"shaking":
-				position = _home.origin + Vector3(randf() - 0.5, 0, randf() - 0.5) * 0.06
+				global_position = _home.origin + Vector3(randf() - 0.5, 0, randf() - 0.5) * 0.06
 				if _t > 0.8:
 					_state = "gone"
 					_t = 0.0
 					_shape.disabled = true
 					_mesh.visible = false
-					position = _home.origin
+					global_position = _home.origin
 					var up := ball.up_at(global_position)
 					for i in 10:
 						WaterFX.inst._spawn_puff(global_position + Vector3(randf() - 0.5, randf() - 0.5, randf() - 0.5) * 0.8,

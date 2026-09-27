@@ -21,7 +21,7 @@ func _ready() -> void:
 func _run() -> void:
 	await frames(3)
 	var suites := {"unit": "res://scripts/tests/unit_tests.gd", "playthrough": "res://scripts/tests/playthrough_bot.gd",
-			"shots": "res://scripts/tests/shots.gd"}
+			"shots": "res://scripts/tests/shots.gd", "perf": "res://scripts/tests/perf.gd"}
 	var script: GDScript = load(suites.get(Settings.test_mode, "")) if suites.has(Settings.test_mode) else null
 	if script == null or not script.can_instantiate():
 		check("load_suite_" + Settings.test_mode, false, "suite failed to load")
@@ -61,7 +61,8 @@ func shot(name_: String) -> void:
 	var img := get_viewport().get_texture().get_image()
 	var path := out_dir.path_join(name_ + ".png")
 	img.save_png(path)
-	log_line("screenshot " + path)
+	log_line("screenshot %s  draw calls %d, primitives %d, objects %d" % [path, Performance.get_monitor(Performance.RENDER_TOTAL_DRAW_CALLS_IN_FRAME),
+			Performance.get_monitor(Performance.RENDER_TOTAL_PRIMITIVES_IN_FRAME), Performance.get_monitor(Performance.RENDER_TOTAL_OBJECTS_IN_FRAME)])
 
 
 func finish() -> void:

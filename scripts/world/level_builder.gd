@@ -245,6 +245,7 @@ func strands(xf: Transform3D, width: float, depth: float, height: float, count: 
 	mmi.multimesh = mm
 	mmi.material_override = strand_mat
 	mmi.cast_shadow = GeometryInstance3D.SHADOW_CASTING_SETTING_OFF
+	mmi.top_level = true   # instance transforms are in world space
 	root.add_child(mmi)
 
 
@@ -316,6 +317,7 @@ func cave(lat: float, lon: float, heading: float, radius := 8.0) -> void:
 	var mmi := MultiMeshInstance3D.new()
 	mmi.multimesh = mm
 	mmi.material_override = spore_mat
+	mmi.top_level = true
 	root.add_child(mmi)
 	bot_hints.append({"cave": true, "entry": at(lat, lon, heading, 0, 0, -radius - 2.5).origin, "door": at(lat, lon, heading, 0, 0, -radius + 1.0).origin,
 			"ledges": [l1, l2, l3], "upgrade": up_xf.origin})

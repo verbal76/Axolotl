@@ -66,29 +66,18 @@ func _ready() -> void:
 	fil_mat.emission_enabled = true
 	fil_mat.emission = Color(0.45, 0.95, 0.65)
 	fil_mat.emission_energy_multiplier = 2.0
+	var parts := []
 	for i in 7:
-		var c := MeshInstance3D.new()
-		var cm := CapsuleMesh.new()
-		cm.radius = 0.008
-		cm.height = randf_range(0.12, 0.22)
-		cm.radial_segments = 4
-		cm.rings = 1
-		c.mesh = cm
-		c.material_override = fil_mat
 		var d := Vector3(randf() - 0.5, randf() - 0.5, randf() - 0.5).normalized()
-		c.position = d * cm.height * 0.5
-		c.basis = Basis(Quaternion(Vector3.UP, d))
-		_cilia.add_child(c)
-		var bud := MeshInstance3D.new()
-		var bs := SphereMesh.new()
-		bs.radius = 0.018
-		bs.height = 0.036
-		bs.radial_segments = 6
-		bs.rings = 3
-		bud.mesh = bs
-		bud.material_override = core_mat
-		bud.position = d * cm.height
-		_cilia.add_child(bud)
+		var h := randf_range(0.12, 0.22)
+		parts.append([MeshLib.capsule(0.008, h), Transform3D(Basis(Quaternion(Vector3.UP, d)), d * h * 0.5)])
+		parts.append([MeshLib.sphere(0.018, 6, 3), Transform3D(Basis(), d * h)])
+	var fil := MeshInstance3D.new()
+	fil.mesh = MeshLib.merge(parts)
+	fil.material_override = fil_mat
+	_cilia.add_child(fil)
+	for mi in [_core, _halo, fil]:
+		mi.visibility_range_end = 70.0
 
 
 func is_available() -> bool:

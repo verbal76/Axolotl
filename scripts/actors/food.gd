@@ -74,6 +74,7 @@ func _ball_mesh(r: float, m: Material, p: Node3D, pos: Vector3, scl: Vector3) ->
 	mi.material_override = m
 	mi.position = pos
 	mi.scale = scl
+	mi.visibility_range_end = 35.0
 	p.add_child(mi)
 	return mi
 
@@ -237,11 +238,9 @@ func _update_darter(dt: float, pl: Axolotl) -> void:
 
 func _update_burrower(dt: float, pl: Axolotl) -> void:
 	if _hole_pos == Vector3.ZERO:
+		# Burrow holes are in the moss itself (never on top of plants above them).
 		var dir: Vector3 = hole["dir"]
-		var top := ball.surface_point(dir, hole.get("h", 0.0) + 3.0)
-		var q := PhysicsRayQueryParameters3D.create(top, ball.global_position, 1 | 2)
-		var hit := get_world_3d().direct_space_state.intersect_ray(q)
-		_hole_pos = hit.position if not hit.is_empty() else ball.surface_point(dir)
+		_hole_pos = ball.surface_point(dir, hole.get("h", 0.0))
 		_hole_up = ball.up_at(_hole_pos)
 		global_transform = Transform3D(MossBall.frame_at(_hole_up, randf() * 360.0), _hole_pos - _hole_up * 0.5)
 	var d := pl.global_position.distance_to(_hole_pos)
