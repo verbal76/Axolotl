@@ -1,0 +1,83 @@
+class_name QualityScaler
+extends Node
+## Quiet thermal/performance scaling. Targets 60 FPS; when sustained frame rate drops, it
+## steps down secondary visual cost only (resolution scale, particles, vegetation density,
+## glow, secondary lights). Controls, camera, character and restoration readability are
+## never touched. Recovers slowly with hysteresis. No messages are ever shown.
+
+var level := 0
+var mote_lights := 3
+var _acc := 0.0
+var _frames := 0
+var _low_windows := 0
+var _high_windows := 0
+var _cooldown := 0.0
+var history: Array = []
+
+const LEVELS := [
+	{"scale": 1.0, "specks": 420, "veg": 1.0, "glow": true, "lights": 3},
+	{"scale": 0.9, "specks": 300, "veg": 0.8, "glow": true, "lights": 2},
+	{"scale": 0.8, "specks": 200, "veg": 0.6, "glow": false, "lights": 1},
+	{"scale": 0.7, "specks": 120, "veg": 0.45, "glow": false, "lights": 1},
+]
+
+
+func _ready() -> void:
+	# Mobile screens are dense; start slightly below native resolution for the 3D pass.
+	if OS.has_feature("mobile"):
+		get_viewport().scaling_3d_mode = Viewport.SCALING_3D_MODE_BILINEAR
+	_apply()
+
+
+func _process(dt: float) -> void:
+	if get_tree().paused:
+		return
+	_acc += dt
+	_frames += 1
+	_cooldown = maxf(0.0, _cooldown - dt)
+	if _acc < 2.0:
+		return
+	var fps := _frames / _acc
+	history.append(fps)
+	if history.size() > 120:
+		history.pop_front()
+	_acc = 0.0
+	_frames = 0
+	if fps < 54.0:
+		_low_windows += 1
+		_high_windows = 0
+	elif fps > 59.0:
+		_high_windows += 1
+		_low_windows = 0
+	else:
+		_low_windows = 0
+		_high_windows = 0
+	if _low_windows >= 2 and level < LEVELS.size() - 1 and _cooldown <= 0.0:
+		level += 1
+		_low_windows = 0
+		_cooldown = 6.0
+		_apply()
+	elif _high_windows >= 15 and level > 0 and _cooldown <= 0.0:
+		level -= 1
+		_high_windows = 0
+		_cooldown = 20.0
+		_apply()
+
+
+func force_level(l: int) -> void:
+	level = clampi(l, 0, LEVELS.size() - 1)
+	_apply()
+
+
+func _apply() -> void:
+	var q: Dictionary = LEVELS[level]
+	get_viewport().scaling_3d_scale = q["scale"] * (0.85 if OS.has_feature("mobile") else 1.0)
+	if WaterFX.inst:
+		WaterFX.inst.set_speck_density(q["specks"])
+	var g := Game.inst
+	if g:
+		for b in g.balls:
+			b.set_vegetation_density(q["veg"])
+		if g.env:
+			g.env.glow_enabled = q["glow"]
+	mote_lights = q["lights"]
