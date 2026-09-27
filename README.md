@@ -7,7 +7,12 @@ household aquarium. A tiny axolotl lives on three giant moss balls and keeps the
 are eating his moss, so he deals with them, catches Regeneration Motes, eats, explores, and — without
 anyone explaining it — slowly cleans up the whole tank.
 
-* Engine: **Godot 4.7.2** (Mobile renderer, GDScript). No plugins, no network use, no accounts.
+* Engine: **Godot 4.7.2** (Mobile renderer, GDScript). No plugins, no accounts.
+* Game version **v0.1.0**, shown on the title screen. Its single source is `scripts/core/game_version.gd`, and
+  it is independent of APK builds, OTAs and commits (see [docs/VERSIONING.md](docs/VERSIONING.md)).
+* Two Android builds:
+  * **Axolotl**, the normal build. It is fully offline and has no network permission.
+  * **Axolotl Dev**. It installs alongside the normal build and receives signed over-the-air game updates from the dev channel, so it needs no reinstall per change (see [docs/OTA.md](docs/OTA.md)).
 * Art and audio are **100% original and procedural**: meshes are built in code at load time,
   textures come from `tools/gen_textures.py`, and all music and sound comes from the synthesizer in
   `tools/gen_audio.py` (both are committed outputs, so the build doesn't need Python).
@@ -35,8 +40,12 @@ godot --headless --path . --import
 godot --headless --path . --export-debug "Android" build/android/axolotl-debug.apk
 adb install -r build/android/axolotl-debug.apk
 ```
-The preset exports a signed **debug** arm64 APK (`com.verbal76.axolotl`), landscape only, with the
-VIBRATE permission and no INTERNET permission.
+The `Android` preset exports a signed **debug** arm64 APK (`com.verbal76.axolotl`), landscape only, with the
+VIBRATE permission and no INTERNET permission. The OTA client is inert in this build.
+
+The `Android Dev` preset (`com.verbal76.axolotl.dev`, "Axolotl Dev") adds INTERNET and the `ota_dev`
+feature, which turns on the OTA client. Install it once and update it over the air afterwards; see
+[docs/OTA.md](docs/OTA.md).
 
 ### iOS
 ```bash
@@ -53,12 +62,25 @@ cd build/ios && xcodebuild -project Axolotl.xcodeproj -scheme Axolotl -sdk iphon
 ```
 
 ### Continuous integration
-`.github/workflows/build.yml` runs on pull requests (and pushes to `main`):
-1. **verify** — compiles every script, runs the mechanics test suite and the beginning-to-end
-   playthrough bot headless, and uploads their results.
-2. **android** — exports the debug APK and uploads it as the `axolotl-android-debug-apk` artifact.
-3. **ios** — exports the Xcode project on macOS, builds it for the iOS Simulator (unsigned), and
+`.github/workflows/build.yml` runs on pull requests (and pushes to `main`). It is the **native build**:
+1. **verify**:
+   - compiles every script;
+   - runs the mechanics suite and the beginning-to-end playthrough bot headless;
+   - runs the version-drift regression and the native-runtime lock check;
+   - uploads the results.
+2. **android** exports both APKs:
+   - Android build (versionCode) = the run number;
+   - both are signed with the stable dev keystore when the `ANDROID_DEV_KEYSTORE_B64` secret is set;
+   - it checks that the normal APK has no INTERNET permission and the dev APK has it;
+   - it uploads `axolotl-android-v<game>-b<build>` and `axolotl-android-dev-v<game>-b<build>` with a `build-info.json`.
+3. **ios** exports the Xcode project on macOS, builds it for the iOS Simulator (unsigned), and
    uploads the `.app` as `axolotl-ios-simulator-app`.
+
+`.github/workflows/ota-publish.yml` is the **OTA publish**. It runs on pushes to the development branch.
+- It runs the tests, exports the game-layer PCK and signs its manifest.
+- It publishes an immutable release and moves the `dev` channel pointer.
+- It does not build an APK.
+- It writes a publication receipt with the source SHA, runtime, OTA id and PCK hash.
 
 ### Automated verification (local)
 ```bash
@@ -66,6 +88,9 @@ godot --headless --path . --fixed-fps 60 --max-fps 0 -- --test=unit          # m
 godot --headless --path . --fixed-fps 60 --max-fps 0 -- --test=playthrough   # full playthrough bot
 godot --path . --fixed-fps 60 -- --test=shots --out=/tmp/shots               # rendered screenshots
 godot --headless --path . -s tools/check_scripts.gd                          # compile check
+GODOT=godot tools/version_drift_check.sh                                     # product-version drift
+GODOT=godot tools/ota_e2e_local.sh                                           # full OTA loop (needs Linux templates)
+python3 tools/ota_runtime.py --check                                         # native layer unchanged?
 ```
 Add `--only=<name>` to the unit run to run a single test.
 
@@ -251,12 +276,15 @@ The bot's early runs uncovered real bugs, all fixed:
   glow and secondary Mote lights if the frame rate stays below 54 for about 4 s, and recovers slowly.
 
 ## Known limitations
-- **No on-device testing.** Touch feel, haptics, safe-area insets, thermal behaviour and real frame
-  rates on phones are implemented but have not been exercised on hardware. The first thing to do
-  is install the CI APK or Simulator build and play it.
+- **Little on-device testing.** The owner has played an early APK once, and that session produced the platform-winding,
+  swipe-arc and terrain feedback. Haptics, safe areas, thermal behaviour and real frame rates are
+  still unmeasured on hardware.
+- **The OTA loop is proven on an exported desktop build, not yet on a phone.** `tools/ota_e2e_local.sh`
+  covers download, verify, restart, second OTA, corrupt-package rejection, rollback, baseline mode and
+  unhealthy-OTA fallback. On Android, installing the Dev APK and restarting it is still to be done.
 - The iOS preset uses a placeholder team ID (`AXOLOTL000`); set your own for device builds. The CI
   iOS build is an unsigned **Simulator** build.
-- The Android build is a debug APK signed with a generated debug keystore (no release signing).
+- Both Android builds are debug APKs. They are signed with the stable dev keystore from secrets, or with a throwaway key if the secret is missing. There is no release signing.
 - Art is deliberately simple procedural geometry (primitives, instanced blades, shader-driven moss).
   Animation is procedural rather than hand-keyed.
 - Music and sound are procedurally synthesized placeholders of reasonable quality, not composed and mixed audio.

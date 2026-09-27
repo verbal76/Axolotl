@@ -1,0 +1,14 @@
+{
+  "runtime_revision": 1,
+  "godot_version": "4.7.2",
+  "fingerprint": "54c3a41d9343384ad8008df6135ca64ce5865053f8e3276dfb8664fb5a2beec5",
+  "files": [
+    "project.godot",
+    "export_presets.cfg",
+    "scripts/boot/boot.gd",
+    "scripts/boot/diagnostics_overlay.gd",
+    "scripts/boot/ota_config.gd",
+    "scripts/boot/ota_core.gd",
+    "scripts/boot/ota_updater.gd"
+  ]
+}

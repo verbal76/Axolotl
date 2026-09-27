@@ -60,6 +60,8 @@ func _ready() -> void:
 	v.add_child(restart)
 	var title := UiStyle.button("Return to Title", func(): Game.inst.return_to_title())
 	v.add_child(title)
+	# Version, build, OTA and source identities (and OTA recovery in dev builds).
+	v.add_child(UiStyle.button("About / Diagnostics", func(): Boot.show_diagnostics()))
 	_session_rows = [restart, title]
 	resume.name = "Resume"
 	visible = false

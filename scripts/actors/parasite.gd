@@ -21,6 +21,8 @@ var spawn_h := 0.0
 
 var state := "init"   # init graze chase windup attack recover knocked flung dying drifting gone
 var state_t := 0.0
+## Simulated time for cosmetic motion (never wall-clock: segment positions feed hit tests).
+var _clock := 0.0
 var heading := Vector3.FORWARD
 var up := Vector3.UP
 var vel := Vector3.ZERO
@@ -357,7 +359,8 @@ func _snap_ground() -> void:
 	standing_on = hit.collider
 
 
-func _update_segments(_dt: float) -> void:
+func _update_segments(dt: float) -> void:
+	_clock += dt
 	var head := global_position
 	if _trail.is_empty() or _trail[0].distance_to(head) > spacing * 0.35:
 		_trail.push_front(head)
@@ -371,7 +374,7 @@ func _update_segments(_dt: float) -> void:
 	var rear_lift := 0.0
 	if state == "windup":
 		rear_lift = minf(1.0, state_t / windup_time)
-	var wiggle := sin(Time.get_ticks_msec() * 0.008) * 0.04
+	var wiggle := sin(_clock * 8.0) * 0.04
 	for i in seg_count:
 		var dist := spacing * i
 		var p := _sample_trail(dist)

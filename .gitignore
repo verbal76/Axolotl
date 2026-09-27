@@ -2,3 +2,5 @@
 build/
 *.tmp
 .claude/
+# Generated at native build time (APK identity); never committed.
+scripts/generated/

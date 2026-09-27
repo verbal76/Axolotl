@@ -149,9 +149,20 @@ func save() -> void:
 	cf.set_value("hud", "haptics", haptics)
 	cf.set_value("audio", "music", music_volume)
 	cf.set_value("audio", "sfx", sfx_volume)
+	for k in save_meta():
+		cf.set_value("meta", k, save_meta()[k])
 	cf.save(SETTINGS_PATH)
 	_apply_audio()
 	settings_changed.emit()
+
+
+## Identity written alongside persisted data. Compatibility decisions use save_schema only;
+## the rest is there to reconstruct which build wrote the file.
+func save_meta() -> Dictionary:
+	var id: Dictionary = Boot.identity()
+	return {"save_schema": SaveSchema.SAVE_SCHEMA, "game_version": GameVersion.GAME_VERSION,
+			"native_build": id["native_build"], "build_flavor": id["build_flavor"],
+			"ota_id": id["ota_id"], "source_sha": id["source_sha"]}
 
 
 func _apply_audio() -> void:

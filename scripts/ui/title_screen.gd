@@ -5,6 +5,7 @@ extends CanvasLayer
 
 var _root: Control
 var _play: Button
+var version_label: Label
 
 
 func _ready() -> void:
@@ -35,6 +36,19 @@ func _ready() -> void:
 	_play = UiStyle.button("Play", _on_play)
 	box.add_child(_play)
 	box.add_child(UiStyle.button("Settings", _on_settings))
+	# Product version only; build/OTA/SHA identities live in Diagnostics.
+	var ver := Label.new()
+	ver.name = "VersionLabel"
+	ver.text = GameVersion.display()
+	ver.add_theme_font_size_override("font_size", 22)
+	ver.add_theme_color_override("font_color", Color(0.85, 0.95, 0.92, 0.7))
+	ver.set_anchors_preset(Control.PRESET_BOTTOM_RIGHT)
+	ver.grow_horizontal = Control.GROW_DIRECTION_BEGIN
+	ver.grow_vertical = Control.GROW_DIRECTION_BEGIN
+	ver.offset_right = -28
+	ver.offset_bottom = -20
+	_root.add_child(ver)
+	version_label = ver
 	visible = false
 
 

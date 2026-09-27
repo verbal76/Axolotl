@@ -14,7 +14,7 @@ func run(runner) -> void:
 	p.use_bot_input = true
 	await t.seconds(0.5)
 	var only: String = Settings.test_args.get("only", "")
-	for name_ in ["_test_mesh_winding", "_test_placements", "_test_tutorial_route", "_test_sphere_walk", "_test_jump_and_burst", "_test_coyote_and_buffer", "_test_swipe_direction_and_stages", "_test_hard_landing", "_test_food", "_test_darter_and_burrower", "_test_food_repopulates", "_test_motes", "_test_checkpoint_and_regen", "_test_crumble", "_test_restoration_continuity", "_test_vortex", "_test_current", "_test_canopy", "_test_upgrades", "_test_ui", "_test_all_clear"]:
+	for name_ in ["_test_ota_and_version", "_test_mesh_winding", "_test_placements", "_test_tutorial_route", "_test_sphere_walk", "_test_jump_and_burst", "_test_coyote_and_buffer", "_test_swipe_direction_and_stages", "_test_hard_landing", "_test_food", "_test_darter_and_burrower", "_test_food_repopulates", "_test_motes", "_test_checkpoint_and_regen", "_test_crumble", "_test_restoration_continuity", "_test_vortex", "_test_current", "_test_canopy", "_test_upgrades", "_test_ui", "_test_all_clear"]:
 		if only == "" or name_.contains(only):
 			await call(name_)
 
@@ -79,6 +79,10 @@ func _surface_height(b: MossBall, dir: Vector3, h_hint: float) -> float:
 	var q := PhysicsRayQueryParameters3D.create(top, b.global_position, 1 | 2)
 	var hit := g.get_world_3d().direct_space_state.intersect_ray(q)
 	return -99.0 if hit.is_empty() else (hit.position - b.global_position).length() - b.radius
+
+
+func _test_ota_and_version() -> void:
+	await preload("res://scripts/tests/ota_tests.gd").new(t).run()
 
 
 ## Godot culls back faces and treats clockwise-from-outside as front, so every solid

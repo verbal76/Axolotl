@@ -35,6 +35,10 @@ jobs:
         run: |
           godot --headless --path . --fixed-fps 60 --max-fps 0 -- --test=playthrough --out=$PWD/test_out 2>&1 | tee playthrough.log
           grep -E "\[TEST\] SUMMARY [0-9]+ passed, 0 failed" playthrough.log
+      - name: Version-drift regression (all consumers follow the canonical GAME_VERSION)
+        run: GODOT=godot tools/version_drift_check.sh
+      - name: Native-runtime lock is current
+        run: python3 tools/ota_runtime.py --check
       - uses: actions/upload-artifact@v4
         if: always()
         with:
@@ -42,7 +46,7 @@ jobs:
           path: test_out/
 
   android:
-    name: Android debug APK
+    name: Android APKs (normal offline + dev OTA)
     runs-on: ubuntu-latest
     timeout-minutes: 45
     steps:
@@ -58,10 +62,19 @@ jobs:
           curl -sSL -o tpl.tpz "$GODOT_BASE/Godot_v${GODOT_VERSION}-stable_export_templates.tpz"
           mkdir -p ~/.local/share/godot/export_templates/${GODOT_VERSION}.stable
           unzip -q tpl.tpz -d tpl && mv tpl/templates/* ~/.local/share/godot/export_templates/${GODOT_VERSION}.stable/
-      - name: Configure Android SDK + debug keystore
+      - name: Signing keystore (stable from secret, so new APKs install over old ones)
+        env:
+          ANDROID_DEV_KEYSTORE_B64: ${{ secrets.ANDROID_DEV_KEYSTORE_B64 }}
         run: |
-          keytool -keyalg RSA -genkeypair -alias androiddebugkey -keypass android -keystore $HOME/debug.keystore \
-            -storepass android -dname "CN=Android Debug,O=Android,C=US" -validity 9999
+          if [ -n "$ANDROID_DEV_KEYSTORE_B64" ]; then
+            echo "$ANDROID_DEV_KEYSTORE_B64" | base64 -d > $HOME/debug.keystore
+            echo "Using the stable dev keystore from secrets."
+          else
+            echo "::warning::ANDROID_DEV_KEYSTORE_B64 secret not set: signing with a throwaway key. This APK will NOT install over a previously installed one (uninstall first)."
+            keytool -keyalg RSA -genkeypair -alias androiddebugkey -keypass android -keystore $HOME/debug.keystore \
+              -storepass android -dname "CN=Android Debug,O=Android,C=US" -validity 9999
+          fi
+          keytool -list -v -keystore $HOME/debug.keystore -storepass android | grep -m1 "SHA256:" || true
           mkdir -p ~/.config/godot
           for f in editor_settings-4.tres editor_settings-4.7.tres; do
             cat > ~/.config/godot/$f <<CFG
@@ -76,22 +89,64 @@ jobs:
           CFG
             sed -i 's/^          //' ~/.config/godot/$f
           done
-      - name: Export APK
+      - name: Read canonical identities (CI never defines the game version)
+        id: ident
+        run: |
+          godot --headless --path . --import || true
+          godot --headless --path . -s tools/print_identity.gd | grep IDENTITY_JSON | sed 's/^IDENTITY_JSON //' > identity.json
+          cat identity.json
+          echo "game_version=$(jq -r .game_version identity.json)" >> $GITHUB_OUTPUT
+          echo "runtime_id=$(jq -r .runtime_id identity.json)" >> $GITHUB_OUTPUT
+          test "$(jq -r .godot_version identity.json)" = "$GODOT_VERSION"
+      - name: Export APKs
         env:
           GODOT_ANDROID_KEYSTORE_DEBUG_PATH: /home/runner/debug.keystore
           GODOT_ANDROID_KEYSTORE_DEBUG_USER: androiddebugkey
           GODOT_ANDROID_KEYSTORE_DEBUG_PASSWORD: android
+          GV: ${{ steps.ident.outputs.game_version }}
         run: |
-          godot --headless --path . --import || true
+          # ANDROID BUILD (versionCode) = this workflow's run number: monotonic, never the game version.
+          BUILD=${{ github.run_number }}
+          sed -i "s/^version\/code=.*/version\/code=$BUILD/" export_presets.cfg
+          RUN="${{ github.run_id }}"
+          RUN_URL="${{ github.server_url }}/${{ github.repository }}/actions/runs/${{ github.run_id }}"
           mkdir -p build/android
-          godot --headless --path . --export-debug "Android" build/android/axolotl-debug.apk
+          python3 tools/write_native_build_info.py "Android" normal "$BUILD" "$GITHUB_SHA" "$RUN" "$RUN_URL"
+          godot --headless --path . --export-debug "Android" "build/android/axolotl-v$GV-b$BUILD.apk"
+          python3 tools/write_native_build_info.py "Android Dev" dev "$BUILD" "$GITHUB_SHA" "$RUN" "$RUN_URL"
+          godot --headless --path . --export-debug "Android Dev" "build/android/axolotl-dev-v$GV-b$BUILD.apk"
           ls -la build/android
-          test -s build/android/axolotl-debug.apk
-          "$ANDROID_HOME"/build-tools/*/aapt dump badging build/android/axolotl-debug.apk | head -20 || true
+          AAPT=$(ls "$ANDROID_HOME"/build-tools/*/aapt | tail -1)
+          for apk in build/android/*.apk; do
+            test -s "$apk"
+            echo "== $apk"
+            "$AAPT" dump badging "$apk" | grep -E "^package:|uses-permission|application-label:|application-icon-160|launchable" || true
+          done
+          # The normal build must stay offline; the dev build is the only one with network access.
+          if "$AAPT" dump badging "build/android/axolotl-v$GV-b$BUILD.apk" | grep -q "android.permission.INTERNET"; then
+            echo "::error::the normal (offline) APK requests INTERNET"; exit 1
+          fi
+          if ! "$AAPT" dump badging "build/android/axolotl-dev-v$GV-b$BUILD.apk" | grep -q "android.permission.INTERNET"; then
+            echo "::error::the dev APK cannot reach the OTA channel (no INTERNET permission)"; exit 1
+          fi
+          jq -n --arg gv "$GV" --arg b "$BUILD" --arg sha "$GITHUB_SHA" --arg run "$RUN" --arg url "$RUN_URL" \
+            --arg rt "${{ steps.ident.outputs.runtime_id }}" \
+            '{game_version:$gv, android_build:($b|tonumber), source_sha:$sha, build_run:$run, build_run_url:$url, runtime_id:$rt,
+              apks:{normal:{package:"com.verbal76.axolotl", ota:false}, dev:{package:"com.verbal76.axolotl.dev", ota:true, channel:"dev"}}}' \
+            > build/android/build-info.json
+          cat build/android/build-info.json
       - uses: actions/upload-artifact@v4
         with:
-          name: axolotl-android-debug-apk
-          path: build/android/axolotl-debug.apk
+          name: axolotl-android-v${{ steps.ident.outputs.game_version }}-b${{ github.run_number }}
+          path: |
+            build/android/axolotl-v*.apk
+            build/android/build-info.json
+      - uses: actions/upload-artifact@v4
+        with:
+          name: axolotl-android-dev-v${{ steps.ident.outputs.game_version }}-b${{ github.run_number }}
+          path: |
+            build/android/axolotl-dev-v*.apk
+            build/android/build-info.json
 
   ios:
     name: iOS simulator build (unsigned)

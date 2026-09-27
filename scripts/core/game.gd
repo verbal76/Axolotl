@@ -154,6 +154,7 @@ func _enter_title() -> void:
 	hud.visible_controls(false)
 	title.show_title()
 	cam.cinematic = true
+	Boot.report_ready()
 
 
 func start_play(immediate := false) -> void:
@@ -166,6 +167,7 @@ func start_play(immediate := false) -> void:
 		cam.snap_behind()
 	Settings.skip_title = false
 	_show_prompt("move")
+	Boot.report_ready()
 
 
 func restart_experience() -> void:
