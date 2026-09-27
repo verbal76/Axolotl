@@ -117,18 +117,22 @@ jobs:
           godot --headless --path . --export-debug "Android Dev" "build/android/axolotl-dev-v$GV-b$BUILD.apk"
           ls -la build/android
           AAPT=$(ls "$ANDROID_HOME"/build-tools/*/aapt | tail -1)
+          AAPT2=$(ls "$ANDROID_HOME"/build-tools/*/aapt2 | tail -1)
           for apk in build/android/*.apk; do
             test -s "$apk"
             echo "== $apk"
-            "$AAPT" dump badging "$apk" | grep -E "^package:|uses-permission|application-label:|application-icon-160|launchable" || true
+            "$AAPT" dump badging "$apk" 2>/dev/null | grep -E "^package:|application-label:|application-icon-160|launchable" || true
+            "$AAPT2" dump xmltree --file AndroidManifest.xml "$apk" > "$apk.manifest.txt"
+            grep -oE 'android.permission\.[A-Z_]+' "$apk.manifest.txt" | sort -u | sed 's/^/  permission: /'
           done
           # The normal build must stay offline; the dev build is the only one with network access.
-          if "$AAPT" dump badging "build/android/axolotl-v$GV-b$BUILD.apk" | grep -q "android.permission.INTERNET"; then
+          if grep -q "android.permission.INTERNET" "build/android/axolotl-v$GV-b$BUILD.apk.manifest.txt"; then
             echo "::error::the normal (offline) APK requests INTERNET"; exit 1
           fi
-          if ! "$AAPT" dump badging "build/android/axolotl-dev-v$GV-b$BUILD.apk" | grep -q "android.permission.INTERNET"; then
+          if ! grep -q "android.permission.INTERNET" "build/android/axolotl-dev-v$GV-b$BUILD.apk.manifest.txt"; then
             echo "::error::the dev APK cannot reach the OTA channel (no INTERNET permission)"; exit 1
           fi
+          rm -f build/android/*.manifest.txt build/android/*.idsig
           jq -n --arg gv "$GV" --arg b "$BUILD" --arg sha "$GITHUB_SHA" --arg run "$RUN" --arg url "$RUN_URL" \
             --arg rt "${{ steps.ident.outputs.runtime_id }}" \
             '{game_version:$gv, android_build:($b|tonumber), source_sha:$sha, build_run:$run, build_run_url:$url, runtime_id:$rt,
