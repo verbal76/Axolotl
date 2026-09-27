@@ -14,7 +14,7 @@ func run(runner) -> void:
 	p.use_bot_input = true
 	await t.seconds(0.5)
 	var only: String = Settings.test_args.get("only", "")
-	for name_ in ["_test_placements", "_test_sphere_walk", "_test_jump_and_burst", "_test_coyote_and_buffer", "_test_swipe_direction_and_stages", "_test_hard_landing", "_test_food", "_test_darter_and_burrower", "_test_food_repopulates", "_test_motes", "_test_checkpoint_and_regen", "_test_crumble", "_test_restoration_continuity", "_test_vortex", "_test_current", "_test_canopy", "_test_upgrades", "_test_ui", "_test_all_clear"]:
+	for name_ in ["_test_placements", "_test_tutorial_route", "_test_sphere_walk", "_test_jump_and_burst", "_test_coyote_and_buffer", "_test_swipe_direction_and_stages", "_test_hard_landing", "_test_food", "_test_darter_and_burrower", "_test_food_repopulates", "_test_motes", "_test_checkpoint_and_regen", "_test_crumble", "_test_restoration_continuity", "_test_vortex", "_test_current", "_test_canopy", "_test_upgrades", "_test_ui", "_test_all_clear"]:
 		if only == "" or name_.contains(only):
 			await call(name_)
 
@@ -112,6 +112,73 @@ func _test_placements() -> void:
 				if (hole["dir"] as Vector3).angle_to(c) < deg_to_rad(12):
 					bad.append("ball%d burrow hole inside cave" % (b.index + 1))
 	t.check("actors_placed_on_intended_surfaces", bad.is_empty(), "%d checked; %s" % [n, "; ".join(bad)])
+
+
+func _test_tutorial_route() -> void:
+	# The opening terrain must teach: walk -> jump onto M1 -> jump + water burst across to M2.
+	var b := g.balls[0]
+	var results := []
+	for start_lat in [89.5, 86.0, 84.5]:
+		place(0, start_lat, 0, 0.2, 180)
+		p.invuln_t = 999
+		await wait_grounded()
+		var toward := b.surface_point(MossBall.dir_ll(70, 0)) - p.global_position
+		# Walk toward M1 and jump just before the wall.
+		for i in 120:
+			stick_toward(toward)
+			await t.frames(1)
+			if b.up_at(p.global_position).angle_to(MossBall.dir_ll(79, 0)) < deg_to_rad(8.5):
+				break
+		await press("jump")
+		for i in 50:
+			stick_toward(toward)
+			await t.frames(1)
+		p.bot_input = Vector2.ZERO
+		await wait_grounded()
+		var on_m1 := height() > 1.0
+		# Across the gap: jump from the far edge, burst at the apex.
+		for i in 90:
+			stick_toward(toward)
+			await t.frames(1)
+			if Levels._latlon(b.up_at(p.global_position)).x <= 75.6 or height() < 1.0:
+				break
+		t.log_line("start %.1f: at edge lat %.2f h %.2f grounded %s" % [start_lat, Levels._latlon(b.up_at(p.global_position)).x, height(), p.grounded])
+		await press("jump")
+		for i in 18:
+			stick_toward(toward)
+			await t.frames(1)
+		await press("jump")
+		for i in 60:
+			stick_toward(toward)
+			await t.frames(1)
+			if p.grounded and i > 10:
+				break
+		p.bot_input = Vector2.ZERO
+		await wait_grounded()
+		var on_m2 := height() > 2.6
+		t.log_line("   landed lat %.2f h %.2f" % [Levels._latlon(b.up_at(p.global_position)).x, height()])
+		results.append([start_lat, on_m1, on_m2])
+	var ok := results.all(func(r): return r[1] and r[2])
+	t.check("tutorial_jump_then_burst_route", ok, str(results))
+	# Without the water burst, the gap to M2 is too wide: the burst is genuinely taught.
+	place(0, 78.0, 0, 1.5, 180)
+	await wait_grounded()
+	var toward2 := b.surface_point(MossBall.dir_ll(60, 0)) - p.global_position
+	for i in 90:
+		stick_toward(toward2)
+		await t.frames(1)
+		if Levels._latlon(b.up_at(p.global_position)).x <= 74.6:
+			break
+	await press("jump")
+	for i in 70:
+		stick_toward(toward2)
+		await t.frames(1)
+		if p.grounded and i > 10:
+			break
+	p.bot_input = Vector2.ZERO
+	await wait_grounded()
+	t.check("tutorial_gap_needs_burst", height() < 2.0, "plain jump landed at h %.2f" % height())
+	p.invuln_t = 0.0
 
 
 func _test_sphere_walk() -> void:

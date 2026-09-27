@@ -23,6 +23,23 @@ func run(runner) -> void:
 	g = t.g
 	p = g.player
 	_shots = DisplayServer.get_name() != "headless"
+	if Settings.test_args.get("start", "") == "b2to1":
+		g.start_play(true)
+		var bb := g.balls[1]
+		p.place(bb, bb.surface_point(MossBall.dir_ll(66, 74), 0.3), Vector3.FORWARD)
+		g.audio.set_ball(1, false)
+		g.balls[0].vortex_out.connected = true
+		await wait(1.0)
+		for h in bb.get_meta("builder").bot_hints:
+			if h.has("cave"):
+				var door: Vector3 = h["door"]
+				var inward := (door - (h["entry"] as Vector3)).normalized()
+				var centre := door + inward * 7.0
+				t.log_line("cave dbg: dist to centre %.2f door dist %.2f cave_of %s" % [p.global_position.distance_to(centre), p.global_position.distance_to(door), str(not _cave_of(p.global_position).is_empty())])
+		await enter_vortex(g.balls[0].vortex_out, true)
+		t.check("debug_reached_ball1", p.ball == g.balls[0], "")
+		_report()
+		return
 	if Settings.test_args.get("start", "") == "b2vortex":
 		# Debug scenario: from moss ball #2's cave entrance to the vortex toward #3.
 		g.start_play(true)
@@ -38,6 +55,7 @@ func run(runner) -> void:
 		t.check("debug_reached_ball3", p.ball == g.balls[2], "")
 		_report()
 		return
+	g.all_clear.connect(func(): _all_clear_at = sim_time; mark("ALL CLEAR shown"))
 	# Start from the title screen like a player would.
 	g._enter_title()
 	await wait(2.0)
@@ -77,15 +95,14 @@ func run(runner) -> void:
 	mark("300% restored" if g.balls.all(func(bb): return bb.completed) else "finished (incomplete)")
 	await t.shot("pt_40_all_restored")
 	# Quiet period, then ALL CLEAR, then free roam continues.
-	var shown := false
+	var done_at := sim_time
 	for i in 240:
-		await wait(0.5)
-		if g.hud.all_clear_label.modulate.a > 0.05:
-			shown = true
-			mark("ALL CLEAR shown")
-			await t.shot("pt_50_all_clear")
+		if _all_clear_at >= 0.0:
 			break
-	t.check("all_clear_shown", shown, "")
+		await wait(0.5)
+	if g.hud.all_clear_label.modulate.a > 0.05:
+		await t.shot("pt_50_all_clear")
+	t.check("all_clear_shown", _all_clear_at >= 0.0, "at %.1fs" % _all_clear_at)
 	await wander(20.0)
 	t.check("free_roam_continues", p.controls_enabled and p.state == "normal" and g.state == "play", "")
 	await t.shot("pt_60_free_roam")
@@ -123,6 +140,7 @@ func wait(s: float) -> void:
 		await tick()
 
 
+var _all_clear_at := -1.0
 var activity := ""
 var goto_info := ""
 var _perf_n := 0
@@ -207,7 +225,28 @@ func _avoid_mouths(dir: Vector3, allow: Vortex) -> Vector3:
 
 
 ## Walk to a position on the current ball. Handles small obstacles with hops and sidesteps.
+func _cave_of(pos: Vector3) -> Dictionary:
+	for h in p.ball.get_meta("builder").bot_hints:
+		if h.has("cave"):
+			var door: Vector3 = h["door"]
+			var centre := p.ball.surface_point(p.ball.up_at(h["entry"]).slerp(p.ball.up_at(door), 1.0))
+			# Dome centre is 1 unit + radius behind the door along the entry->door line.
+			var inward := (door - (h["entry"] as Vector3)).normalized()
+			centre = door + inward * 7.0
+			if pos.distance_to(centre) < 7.6:
+				return h
+	return {}
+
+
 func goto(target: Variant, radius := 0.9, timeout := 45.0, allow_vortex: Vortex = null, fight := true) -> bool:
+	# Leave a cave through its door when the destination is outside it.
+	var tgt0: Vector3 = target.call() if target is Callable else target
+	var inside := _cave_of(p.global_position)
+	if not inside.is_empty() and _cave_of(tgt0).is_empty() and not _in_cave_escape:
+		_in_cave_escape = true
+		await goto(inside["door"], 0.8, 15.0, null, false)
+		await goto(inside["entry"], 0.8, 10.0, null, false)
+		_in_cave_escape = false
 	var el := 0.0
 	var check_t := 0.0
 	var last := p.global_position
@@ -232,6 +271,15 @@ func goto(target: Variant, radius := 0.9, timeout := 45.0, allow_vortex: Vortex 
 		if p.health <= 1 and p.max_health > 1:
 			await eat_nearby(8.0)
 		var dir := flat.normalized()
+		if not _in_cave_escape and not _cave_of(p.global_position).is_empty() and _cave_of(tgt).is_empty():
+			var cave := _cave_of(p.global_position)
+			_in_cave_escape = true
+			await goto(cave["door"], 0.8, 15.0, null, false)
+			await goto(cave["entry"], 0.8, 10.0, null, false)
+			_in_cave_escape = false
+			continue
+		if not _in_cave_escape:
+			dir = _avoid_domes(dir, tgt)
 		dir = _wall_follow(dir)
 		dir = _avoid_mouths(dir, allow_vortex)
 		var mag := 1.0 if flat.length() > 2.0 else clampf(flat.length() / 2.0, 0.35, 1.0)
@@ -278,6 +326,28 @@ func detour(dir: Vector3, side: float, angle_deg: float, time: float) -> void:
 			await press("jump")
 
 
+var _in_cave_escape := false
+
+
+## Steer around cave domes (unless the destination is inside one).
+func _avoid_domes(dir: Vector3, tgt: Vector3) -> Vector3:
+	if not _cave_of(tgt).is_empty():
+		return dir
+	for h in p.ball.get_meta("builder").bot_hints:
+		if not h.has("cave"):
+			continue
+		var door: Vector3 = h["door"]
+		var centre := door + (door - (h["entry"] as Vector3)).normalized() * 7.0
+		var away := p.global_position - centre
+		away -= p.up * away.dot(p.up)
+		var dist := away.length()
+		if dist < 11.5:
+			var tang := away.normalized().cross(p.up)
+			if tang.dot(dir) < 0.0:
+				tang = -tang
+			var k := clampf((11.5 - dist) / 3.0, 0.0, 1.0)
+			dir = (dir * (1.0 - k) + (tang * 0.8 + away.normalized() * 0.6) * k).normalized()
+	return dir
 var _follow_side := 0.0
 var _follow_clear := 0.0
 
@@ -435,6 +505,8 @@ func fight_parasite(par: Parasite, timeout := 25.0) -> bool:
 				await tick()
 			el += 22.0 / 60.0
 			continue
+		if Settings.test_args.has("trace_fight") and int(el * 10) % 10 == 0:
+			t.log_line("approach t=%.1f dist %.2f dh %.2f par %s" % [sim_time, dist, height_of(cp), par.state])
 		if dist > 1.5 or absf(height_of(cp)) > 1.0:
 			if absf(height_of(cp)) > 1.0 and dist < 2.5:
 				await hop_toward(cp, true)
@@ -445,6 +517,8 @@ func fight_parasite(par: Parasite, timeout := 25.0) -> bool:
 					await tick()
 			el += 0.2
 			continue
+		if Settings.test_args.has("trace_fight"):
+			t.log_line("fight t=%.1f dist %.2f dh %.2f par %s hp %d pgrounded %s" % [sim_time, dist, height_of(cp), par.state, par.hp, p.grounded])
 		# Turn away so the parasite is behind, then swipe.
 		for k in 5:
 			set_stick(stick_for(-flat, 0.35))
@@ -539,15 +613,41 @@ func capture_mote(m: Mote) -> bool:
 func tutorial() -> void:
 	var b := g.balls[0]
 	mark("tutorial start")
-	# 1-3: walk, jump onto M1, jump + water burst across to M2.
-	await goto(b.surface_point(MossBall.dir_ll(84.0, 0)), 0.7, 20.0, null, false)
-	var m1 := b.surface_point(MossBall.dir_ll(79, 0), 1.3)
-	var m2 := b.surface_point(MossBall.dir_ll(56.5, 0), 2.3)
+	# 1-3: walk, jump onto M1, jump + water burst across to M2 — with a run-up, like a player.
+	var toward := b.surface_point(MossBall.dir_ll(60, 0))
 	for attempt in 5:
-		if await hop_chain([m1], 3):
-			if await hop_toward(m2, true, 0.1):
+		await goto(b.surface_point(MossBall.dir_ll(86.0, 0)), 0.7, 20.0, null, false)
+		for i in 120:
+			set_stick(stick_for(tangent_to(toward)))
+			await tick()
+			if b.up_at(p.global_position).angle_to(MossBall.dir_ll(79, 0)) < deg_to_rad(8.5):
 				break
-		await goto(b.surface_point(MossBall.dir_ll(84.0, 0)), 0.7, 20.0, null, false)
+		await press("jump")
+		for i in 50:
+			set_stick(stick_for(tangent_to(toward)))
+			await tick()
+		await wait_grounded(2.0)
+		if height_of(b.surface_point(b.up_at(p.global_position))) > -1.0:
+			continue   # didn't make it onto M1
+		for i in 90:
+			set_stick(stick_for(tangent_to(toward)))
+			await tick()
+			if Levels._latlon(b.up_at(p.global_position)).x <= 75.6:
+				break
+		await press("jump")
+		for i in 18:
+			set_stick(stick_for(tangent_to(toward)))
+			await tick()
+		await press("jump")
+		for i in 60:
+			set_stick(stick_for(tangent_to(b.surface_point(MossBall.dir_ll(57.5, 0)))))
+			await tick()
+			if p.grounded and i > 10:
+				break
+		set_stick(Vector2.ZERO)
+		await wait_grounded(2.0)
+		if height_of(b.surface_point(b.up_at(p.global_position))) < -2.0:
+			break
 	mark("reached parasite platform")
 	# 4-5: tail swipe the small parasite -> colour returns.
 	var par: Parasite = b.parasites[0]
@@ -567,7 +667,7 @@ func tutorial() -> void:
 		if g.checkpoint == bloom:
 			break
 		# Fell off the platform: climb back up.
-		await hop_toward(b.surface_point(MossBall.dir_ll(56.5, 0), 2.3), true, 0.1)
+		await hop_toward(b.surface_point(MossBall.dir_ll(57.5, 0), 2.9), true, 0.1)
 	t.check("tutorial_bloom_checkpoint", g.checkpoint == bloom, "")
 	mark("tutorial complete")
 	t.check("tutorial_under_60s", sim_time < 60.0, "%.1fs" % sim_time)

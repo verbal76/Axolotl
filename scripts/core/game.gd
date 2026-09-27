@@ -54,7 +54,11 @@ func _init() -> void:
 
 
 func _ready() -> void:
-	randomize()
+	# Automated verification runs are seeded so a given build always plays out the same way.
+	if Settings.test_mode != "":
+		seed(int(Settings.test_args.get("seed", "4242")))
+	else:
+		randomize()
 	var we := WorldEnvironment.new()
 	env = Environment.new()
 	env.background_mode = Environment.BG_COLOR
@@ -458,10 +462,12 @@ func _check_vortex_entry() -> void:
 				if flat.length() > 4.5:
 					_vortex_block = null
 				continue
-			# An open whirlpool gently draws nearby water (and axolotls) toward its centre.
-			if flat.length() < 4.5:
-				var k := 1.0 - flat.length() / 4.5
-				player.ext_vel = flat.normalized() * 2.2 * k
+			# An open whirlpool gently draws an axolotl that is swimming toward it (never one
+			# that is just busy nearby).
+			var toward := player.velocity.dot(flat.normalized())
+			if flat.length() < 3.8 and toward > 1.5:
+				var k := 1.0 - flat.length() / 3.8
+				player.ext_vel = flat.normalized() * 2.0 * k
 			if flat.length() < 2.0 and absf(to.dot(player.up)) < 2.5:
 				_start_cinematic("travel", {"v": v, "reverse": at_b})
 				return

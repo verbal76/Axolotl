@@ -103,9 +103,9 @@ static func _ball1(lb: LevelBuilder) -> void:
 
 	# --- Tutorial: move -> jump -> water burst -> tail swipe -> restore -> bloom.
 	lb.cushion(79, 0, 2.0, 1.3)                       # M1: needs a jump
-	lb.cushion(55.4, 0, 2.4, 2.3)                     # M2: gap needs jump + water burst
-	lb.parasite(Parasite.Kind.SMALL, "tut", 57.3, 0, 2.4, 2.3)
-	lb.bloom(54.3, 0, 2.3)
+	lb.cushion(57.5, 0, 2.4, 2.9)                     # M2: higher + a gap that needs jump + water burst
+	lb.parasite(Parasite.Kind.SMALL, "tut", 59.0, 0, 2.4, 2.9)
+	lb.bloom(55.6, 0, 2.9)
 
 	# --- Meadow: rolling hills.
 	lb.hill(36, -9, 9.0, 1.6)

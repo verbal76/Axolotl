@@ -312,8 +312,15 @@ func _update_crawl(dt: float, pl: Axolotl) -> void:
 		dir = (back - up * back.dot(up))
 	if dir.length() > 0.01:
 		_face(dir.normalized(), dt * 5.0)
-	global_position += heading * spd * dt + _pushed * dt
+	var step := heading * spd * dt + _pushed * dt
 	_pushed = _pushed.move_toward(Vector3.ZERO, dt * 6.0)
+	# Parasites grip the moss: they never crawl off a ledge on their own.
+	if step.length() > 0.0001 and not _ground_ahead(global_position + step * 4.0):
+		_graze_target = global_position - heading * 1.0
+		_graze_t = 1.0
+		heading = -heading
+		step = Vector3.ZERO
+	global_position += step
 	_snap_ground()
 
 
@@ -327,6 +334,12 @@ func _face(dir: Vector3, t: float) -> void:
 		return
 	heading = heading.slerp(d.normalized(), clampf(t, 0.0, 1.0)).normalized() if heading.dot(d.normalized()) > -0.99 else d.normalized()
 	heading = (heading - up * heading.dot(up)).normalized()
+
+
+func _ground_ahead(p: Vector3) -> bool:
+	var u := ball.up_at(p)
+	var q := PhysicsRayQueryParameters3D.create(p + u * 1.0, p - u * 0.9, 1 | 2)
+	return not get_world_3d().direct_space_state.intersect_ray(q).is_empty()
 
 
 func _snap_ground() -> void:
