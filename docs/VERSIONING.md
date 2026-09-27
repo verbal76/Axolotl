@@ -1,11 +1,13 @@
 # Identities and versioning
 
-Axolotl has several independent identities. Diagnostics shows them together, but no counter
+Mote has several independent identities. Diagnostics shows them together, but no counter
 stands in for another, and none is derived from another.
 
 | Identity | Answers | Authority | Example |
 |---|---|---|---|
-| **Game version** (product) | What version of Axolotl is this? | `GAME_VERSION` in `scripts/core/game_version.gd`, the only copy | `0.1.0` |
+| **Product** | What game is this? | `PRODUCT_NAME` in `scripts/core/game_version.gd` (title shows it upper-case) | `Mote` |
+| **Character** | Who is the protagonist? | `CHARACTER_NAME` in the same file | `Gill` |
+| **Game version** (product) | What version of Mote is this? | `GAME_VERSION` in `scripts/core/game_version.gd`, the only copy | `0.1.0` |
 | **Source** | Which exact commit produced the running code? | git SHA of the APK build, or of the active OTA | `5190d30c…` |
 | **Native version** | Which native shell release is installed? | `version/name` in the export preset (Android versionName) | `0.1.0` |
 | **Android build** | Which packaged APK is installed? | `version/code`, set by CI to the Build & Verify run number | `27` |

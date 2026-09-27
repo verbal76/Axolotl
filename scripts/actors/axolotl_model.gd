@@ -68,7 +68,6 @@ var health := 3
 var max_health := 3
 var _flash := 0.0
 var _fall_flicker := 0.0
-var _gill_grow: Array[float] = [1, 1, 1, 0, 0, 0]
 
 var _t := 0.0
 var _wave := 0.0            # body-wave phase (advances with movement)
@@ -513,24 +512,22 @@ func fall_flicker() -> void:
 	_fall_flicker = 1.2
 
 
-## Gill i: active (i < health) glows and stands proud; lost (i < max_health) goes pale and
-## droops; dormant (not yet unlocked) is a small pale bud until a cave upgrade grows it.
+## Gill i: active (i < health) glows in colour; any other gill (lost, or not yet restored
+## by a cave upgrade) is dull and faded with a slight droop. All six are always visible.
 func _update_gills(dt: float, back: float, flap: float, flare: float) -> void:
 	_flash = maxf(0.0, _flash - dt)
 	_fall_flicker = maxf(0.0, _fall_flicker - dt)
 	for i in gills.size():
 		var side: float = GILL_SLOTS[i][0]
 		var k: int = GILL_SLOTS[i][1]
-		var unlocked := i < max_health
-		_gill_grow[i] = move_toward(_gill_grow[i], 1.0 if unlocked else 0.0, dt * 1.5)
-		var grow := _gill_grow[i]
 		var active := i < health
-		var droop := 0.0 if active else (0.55 if unlocked else 0.2)
+		var droop := 0.0 if active else 0.3
 		var sway := sin(_t * 2.3 + i * 1.3) * (0.1 + flap) + sin(_t * 15.0 + i) * flap * 0.35
 		var base := _gill_base(side, k)
 		var rot := base + Vector3(back * 0.9 + droop * 0.6 + sway * 0.4, side * sway * 0.3, side * (droop * 0.5 - flare * 0.35 + back * 0.15))
 		gills[i].rotation = gills[i].rotation.lerp(rot, minf(1.0, dt * 12.0))
-		gills[i].scale = Vector3.ONE * lerpf(0.72, 1.0, grow) * (0.9 if (unlocked and not active) else 1.0)
+		# All six gills are always there at full size; health shows only as glow vs dull.
+		gills[i].scale = Vector3.ONE
 		var m := gill_mats[i]
 		if active:
 			var e := 0.34 + sin(_t * 2.0 + i) * 0.07
@@ -544,14 +541,11 @@ func _update_gills(dt: float, back: float, flap: float, flare: float) -> void:
 			m.set_shader_parameter("glow", e)
 			m.set_shader_parameter("desat", 0.0)
 			m.set_shader_parameter("flutter", 1.0 + flap)
-		elif unlocked:
-			m.set_shader_parameter("glow", 0.0)
-			m.set_shader_parameter("desat", 0.85)
-			m.set_shader_parameter("flutter", 0.4)
 		else:
+			# Lost (or not yet grown by a cave upgrade): dull and faded.
 			m.set_shader_parameter("glow", 0.0)
-			m.set_shader_parameter("desat", 0.7)
-			m.set_shader_parameter("flutter", 0.3)
+			m.set_shader_parameter("desat", 0.88)
+			m.set_shader_parameter("flutter", 0.35)
 
 
 # --- Animation ------------------------------------------------------------------------------

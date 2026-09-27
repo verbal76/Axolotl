@@ -16,6 +16,8 @@ func _init() -> void:
 	var c := cfg.get_script_constant_map()
 	var platform: String = args.get("platform", "android")
 	print("IDENTITY_JSON " + JSON.stringify({
+		"product": g["PRODUCT_NAME"],
+		"character": g["CHARACTER_NAME"],
 		"game_version": g["GAME_VERSION"],
 		"save_schema": s["SAVE_SCHEMA"],
 		"min_save_schema": s["MIN_SAVE_SCHEMA"],

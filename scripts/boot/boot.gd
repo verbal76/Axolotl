@@ -139,6 +139,8 @@ func identity() -> Dictionary:
 	var native_sha: String = native_info.get("source_sha", "unknown")
 	var native_run: String = native_info.get("build_run", "local")
 	return {
+		"product": _game_const("res://scripts/core/game_version.gd", "PRODUCT_NAME", "unknown"),
+		"character": _game_const("res://scripts/core/game_version.gd", "CHARACTER_NAME", "unknown"),
 		"game_version": _game_const("res://scripts/core/game_version.gd", "GAME_VERSION", "unknown"),
 		"native_version": native_info.get("native_version", "unknown"),
 		"native_build": str(native_info.get("native_build", "local")),
@@ -164,9 +166,11 @@ func diagnostics_text() -> String:
 	var id := identity()
 	var build_label := "Android Build" if OS.get_name() == "Android" else "Native Build"
 	var L: Array[String] = []
-	L.append("AXOLOTL DIAGNOSTICS")
+	L.append("%s DIAGNOSTICS" % str(id["product"]).to_upper())
 	L.append("")
+	L.append("Product: %s" % id["product"])
 	L.append("Game Version: %s" % id["game_version"])
+	L.append("Character: %s" % id["character"])
 	L.append("")
 	L.append("Native")
 	L.append("  Version: %s" % id["native_version"])

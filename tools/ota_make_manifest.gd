@@ -30,6 +30,7 @@ func _init() -> void:
 		"source_sha": a["sha"],
 		"runtime_id": cfg.runtime_id(a.get("platform", "android")),
 		"minimum_bootstrap_version": cfg.get_script_constant_map()["BOOTSTRAP_VERSION"],
+		"product": g["PRODUCT_NAME"],
 		"game_version": g["GAME_VERSION"],
 		"save_schema": s["SAVE_SCHEMA"],
 		"min_save_schema": s["MIN_SAVE_SCHEMA"],

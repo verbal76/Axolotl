@@ -127,6 +127,11 @@ func alpha() -> float:
 	return _alpha
 
 
+## Prompts belong to play: never on the title or when the controls are hidden.
+func prompts_shown() -> bool:
+	return _controls_visible
+
+
 func _process(dt: float) -> void:
 	_alpha = move_toward(_alpha, _target_alpha, dt * 3.0)
 	for k in _pressed.keys():
@@ -287,7 +292,8 @@ class HudCanvas extends Control:
 			_draw_stick(a)
 			for action in hud.button_info():
 				_draw_button(action, a)
-		_draw_prompts(pa)
+		if hud.prompts_shown():
+			_draw_prompts(pa)
 
 	func _draw_stick(a: float) -> void:
 		var info := hud.stick_info()

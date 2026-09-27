@@ -1,6 +1,6 @@
-# Axolotl development OTA channel
+# Mote development OTA channel
 
-Install one **Axolotl Dev** APK once. After that, compatible game changes reach it
+Install one **Mote Dev** APK once. After that, compatible game changes reach it
 over the air (OTA). You push a commit, CI tests it and publishes a signed Godot PCK, and the phone
 downloads it and runs it after the next restart. You only build a new APK when the installed
 **runtime** changes.
@@ -83,7 +83,7 @@ The APK's bundled game is never modified and is always the final fallback.
 
 The signature is RSA-3072 PKCS#1 v1.5 over SHA-256 of the exact manifest bytes (`openssl dgst -sha256 -sign`).
 - The public key is embedded in `scripts/boot/ota_config.gd`, which ships in the APK.
-- The private key exists only in the `OTA_SIGNING_KEY` Actions secret. Before signing, CI checks that the secret matches the embedded public key.
+- The private key exists only in the `MOTE_OTA_SIGNING_KEY` Actions secret. Before signing, CI checks that the secret matches the embedded public key.
 
 ### Workflow `ota-publish.yml`
 
@@ -101,16 +101,20 @@ It runs on every push to `claude/axolotl-aquarium-platformer-3y0qyy`, or manuall
 10. moves the channel pointer, but only forward, and confirms that the public URL serves it;
 11. writes the **receipt**: source SHA, runtime, OTA id, PCK hash and size, manifest URL, channel pointer, and `published` / `pointer_moved`. It appears in the job summary and as an `ota-receipt-*` artifact.
 
-If `OTA_SIGNING_KEY` is missing, the job stays green but the receipt says `"published": false`.
+If `MOTE_OTA_SIGNING_KEY` is missing, the job stays green but the receipt says `"published": false`.
 
 ## One-time setup
 
-1. Add two repository secrets (**Settings → Secrets and variables → Actions → New repository secret**):
-   - `OTA_SIGNING_KEY`: the private PEM that matches the public key in `ota_config.gd`.
-   - `ANDROID_DEV_KEYSTORE_B64`: the base64 of the dev keystore (alias `androiddebugkey`, password `android`). With a stable keystore, later APKs install over earlier ones.
-2. Push, or re-run **Build & Verify**, and download the `axolotl-android-dev-v…` artifact.
-3. Install **Axolotl Dev** once. It installs alongside the normal offline **Axolotl**.
-4. Re-run **OTA publish (dev channel)** (or push). Open Axolotl Dev, then **Pause → About / Diagnostics**. When "Latest on channel" shows the OTA, close the app from recents and reopen it.
+1. Add five repository secrets (**Settings → Secrets and variables → Actions → New repository secret**):
+   - `MOTE_OTA_SIGNING_KEY`: the private PEM that matches the public key in `ota_config.gd`.
+   - `MOTE_ANDROID_DEV_KEYSTORE_B64`: the Mote Dev keystore (PKCS12), base64 on one line. With a stable keystore, later APKs install over earlier ones.
+   - `MOTE_ANDROID_DEV_KEYSTORE_PASSWORD`, `MOTE_ANDROID_DEV_KEY_ALIAS` (`mote_dev`), `MOTE_ANDROID_DEV_KEY_PASSWORD`.
+     PKCS12 keystores, and Godot's signing step, use a single password, so the key password must equal the keystore password. CI checks this.
+   - CI reports only whether each secret is present, never its value.
+   - The first generic secrets (`OTA_SIGNING_KEY`, `ANDROID_DEV_KEYSTORE_B64`) and their key/keystore are retired and no longer read.
+2. Push, or re-run **Build & Verify**, and download the `mote-android-dev-v…` artifact.
+3. Install **Mote Dev** once. It installs alongside the normal offline **Mote**.
+4. Re-run **OTA publish (dev channel)** (or push). Open Mote Dev, then **Pause → About / Diagnostics**. When "Latest on channel" shows the OTA, close the app from recents and reopen it.
 
 ## Recovery
 

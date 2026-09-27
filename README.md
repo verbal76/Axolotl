@@ -1,4 +1,8 @@
-# Axolotl
+# Mote
+
+Product name **Mote**, protagonist **Gill** (owner-ruled). The repository, package IDs
+(`com.verbal76.axolotl`, `com.verbal76.axolotl.dev`) and internal code identifiers such as `AxolotlModel`
+keep their original technical names on purpose.
 
 *Moss balls 4 life.*
 
@@ -11,8 +15,8 @@ anyone explaining it — slowly cleans up the whole tank.
 * Game version **v0.1.0**, shown on the title screen. Its single source is `scripts/core/game_version.gd`, and
   it is independent of APK builds, OTAs and commits (see [docs/VERSIONING.md](docs/VERSIONING.md)).
 * Two Android builds:
-  * **Axolotl**, the normal build. It is fully offline and has no network permission.
-  * **Axolotl Dev**. It installs alongside the normal build and receives signed over-the-air game updates from the dev channel, so it needs no reinstall per change (see [docs/OTA.md](docs/OTA.md)).
+  * **Mote**, the normal build. It is fully offline and has no network permission.
+  * **Mote Dev**. It installs alongside the normal build and receives signed over-the-air game updates from the dev channel, so it needs no reinstall per change (see [docs/OTA.md](docs/OTA.md)).
 * Art and audio are **100% original and procedural**: meshes are built in code at load time,
   textures come from `tools/gen_textures.py`, and all music and sound comes from the synthesizer in
   `tools/gen_audio.py` (both are committed outputs, so the build doesn't need Python).
@@ -43,7 +47,7 @@ adb install -r build/android/axolotl-debug.apk
 The `Android` preset exports a signed **debug** arm64 APK (`com.verbal76.axolotl`), landscape only, with the
 VIBRATE permission and no INTERNET permission. The OTA client is inert in this build.
 
-The `Android Dev` preset (`com.verbal76.axolotl.dev`, "Axolotl Dev") adds INTERNET and the `ota_dev`
+The `Android Dev` preset (`com.verbal76.axolotl.dev`, label "Mote Dev") adds INTERNET and the `ota_dev`
 feature, which turns on the OTA client. Install it once and update it over the air afterwards; see
 [docs/OTA.md](docs/OTA.md).
 
@@ -70,9 +74,10 @@ cd build/ios && xcodebuild -project Axolotl.xcodeproj -scheme Axolotl -sdk iphon
    - uploads the results.
 2. **android** exports both APKs:
    - Android build (versionCode) = the run number;
-   - both are signed with the stable dev keystore when the `ANDROID_DEV_KEYSTORE_B64` secret is set;
+   - both are signed with the stable Mote Dev keystore (alias `mote_dev`) when the `MOTE_ANDROID_DEV_KEYSTORE_*` secrets are set;
+   - it checks the installed labels ("Mote" / "Mote Dev") and that the package IDs are unchanged, and prints the signing-certificate SHA-256;
    - it checks that the normal APK has no INTERNET permission and the dev APK has it;
-   - it uploads `axolotl-android-v<game>-b<build>` and `axolotl-android-dev-v<game>-b<build>` with a `build-info.json`.
+   - it uploads `mote-android-v<game>-b<build>` and `mote-android-dev-v<game>-b<build>` with a `build-info.json`.
 3. **ios** exports the Xcode project on macOS, builds it for the iOS Simulator (unsigned), and
    uploads the `.app` as `axolotl-ios-simulator-app`.
 
@@ -125,7 +130,7 @@ a push-off jump, coyote time (0.12 s), jump buffering (0.15 s), and the directio
 assisted over-the-shoulder camera eases its "up" toward local gravity and carries its yaw across the
 sphere, so it never flips at the poles. It also pulls in when obstructed and can be swiped manually.
 
-**The axolotl** — modelled on the owner's reference art: a big round smiling head with glossy eyes and
+**Gill** (the axolotl protagonist) — modelled on the owner's reference art: a big round smiling head with glossy eyes and
 freckles, six feathery pink gills, and chubby four-fingered hands.
 - **Body:** one smooth skinned body on an 11-bone spine. As he moves, a snake-like S-wave travels down it, stronger toward the tail.
 - **Legs:** they ride that wave and step in the diagonal salamander gait, timed to the body bends.
@@ -217,12 +222,13 @@ tools/                      texture + audio generators, script checker
 
 ## Screenshots
 Rendered by the engine in this project's automated screenshot tour (software GPU, 1280×720, downscaled).
-The first two rows show the current character and terrain. The rest predate the character redesign and
+The first three rows show the current title, character and terrain. The rest predate the character redesign and
 smooth hills, so they show the earlier, simpler axolotl.
 
 | | |
 |---|---|
-| ![The axolotl (front)](docs/screenshots/axolotl_front.jpg) | ![The axolotl (three-quarter)](docs/screenshots/axolotl_three_quarter.jpg) |
+| ![Title: MOTE](docs/screenshots/title_mote.jpg) | ![Gill's six gills at 2 health: two glowing, four dull](docs/screenshots/gills_health_2_of_4.jpg) |
+| ![Gill (front)](docs/screenshots/axolotl_front.jpg) | ![Gill (three-quarter)](docs/screenshots/axolotl_three_quarter.jpg) |
 | ![Walking: S-curve body wave](docs/screenshots/axolotl_walk_s_curve.jpg) | ![Rolling hills](docs/screenshots/rolling_hills.jpg) |
 | ![Murky start](docs/screenshots/start_murky.jpg) | ![Tutorial](docs/screenshots/tutorial.jpg) |
 | ![Regeneration Mote](docs/screenshots/regeneration_mote.jpg) | ![Vortex surf](docs/screenshots/vortex_surf.jpg) |

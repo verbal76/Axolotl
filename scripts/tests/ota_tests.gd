@@ -71,6 +71,7 @@ func run() -> void:
 	_test_rollback_and_baseline()
 	_test_real_pack_mount()
 	await _test_version_identity()
+	await _test_product_identity()
 
 
 func _test_manifest_validation() -> void:
@@ -257,6 +258,95 @@ func _test_version_identity() -> void:
 	t.check("source_and_run_follow_active_ota", during["source_sha"] == "f".repeat(40) and during["build_run"] == "424242", "%s %s" % [during["source_sha"], during["build_run"]])
 	t.check("save_schema_independent", during["save_schema"] == SaveSchema.SAVE_SCHEMA and typeof(during["save_schema"]) == TYPE_INT, str(during["save_schema"]))
 	await t.frames(1)
+
+
+# --- product / character identity, packaging ----------------------------------------------
+
+func _presets() -> Dictionary:
+	var cf := ConfigFile.new()
+	cf.load("res://export_presets.cfg")
+	var out := {}
+	for sec in cf.get_sections():
+		if sec.ends_with(".options"):
+			continue
+		out[cf.get_value(sec, "name")] = {"base": sec, "opt": sec + ".options", "cf": cf}
+	return out
+
+
+func _opt(presets: Dictionary, name: String, key: String) -> Variant:
+	var e: Dictionary = presets[name]
+	var cf: ConfigFile = e["cf"]
+	for sec in [e["opt"], e["base"]]:
+		if cf.has_section_key(sec, key):
+			return cf.get_value(sec, key)
+	return null
+
+
+func _test_product_identity() -> void:
+	# Owner-ruled names, held in one place.
+	t.check("product_names_owner_ruled", GameVersion.PRODUCT_NAME == "Mote" and GameVersion.CHARACTER_NAME == "Gill", "%s / %s" % [GameVersion.PRODUCT_NAME, GameVersion.CHARACTER_NAME])
+	var was: bool = g.hud._controls_visible
+	g.hud.visible_controls(false)
+	var hidden: bool = g.hud.prompts_shown()
+	g.hud.visible_controls(true)
+	t.check("prompts_hidden_with_controls_eg_on_title", not hidden and g.hud.prompts_shown(), "")
+	g.hud.visible_controls(was)
+	t.check("title_shows_MOTE_from_canonical", g.title.title_label.text == GameVersion.title() and GameVersion.title() == "MOTE", g.title.title_label.text)
+	var diag: String = Boot.diagnostics_text()
+	t.check("diagnostics_product_and_character", diag.contains("Product: Mote\n") and diag.contains("Character: Gill\n") and diag.begins_with("MOTE DIAGNOSTICS"), diag.get_slice("\n", 0))
+	var id: Dictionary = Boot.identity()
+	t.check("identity_product_separate", id["product"] == "Mote" and id["character"] == "Gill" and id["product"] != id["game_version"], "")
+	# Packaging: labels follow the product name; package identities and build split unchanged.
+	var pr := _presets()
+	t.check("android_presets_present", pr.has("Android") and pr.has("Android Dev"), str(pr.keys()))
+	t.check("app_label_normal_is_Mote", _opt(pr, "Android", "package/name") == GameVersion.PRODUCT_NAME, str(_opt(pr, "Android", "package/name")))
+	t.check("app_label_dev_is_Mote_Dev", _opt(pr, "Android Dev", "package/name") == GameVersion.PRODUCT_NAME + " Dev", str(_opt(pr, "Android Dev", "package/name")))
+	t.check("package_ids_unchanged", _opt(pr, "Android", "package/unique_name") == "com.verbal76.axolotl" and _opt(pr, "Android Dev", "package/unique_name") == "com.verbal76.axolotl.dev", "")
+	t.check("normal_build_offline_no_ota", _opt(pr, "Android", "permissions/internet") == false and str(_opt(pr, "Android", "custom_features")) == "", "")
+	t.check("dev_build_internet_and_ota", _opt(pr, "Android Dev", "permissions/internet") == true and str(_opt(pr, "Android Dev", "custom_features")).contains("ota_dev"), "")
+	var icons_ok := true
+	for preset in ["Android", "Android Dev"]:
+		for key in ["launcher_icons/main_192x192", "launcher_icons/adaptive_foreground_432x432", "launcher_icons/adaptive_background_432x432"]:
+			var path := str(_opt(pr, preset, key))
+			icons_ok = icons_ok and path.begins_with("res://assets/icon/") and FileAccess.file_exists(path)
+	t.check("launcher_icons_configured", icons_ok, "")
+	# No new exposition around the name, and the game's Motes keep their name.
+	var bad := []
+	for f in _all_files("res://scripts") + _all_files("res://scenes"):
+		var src := FileAccess.get_file_as_string(f)
+		for phrase in ["Gill's", "Meet Gill", "Help Gill", "Adventure"]:
+			if src.contains(phrase) and not f.ends_with("ota_tests.gd"):
+				bad.append("%s: %s" % [f, phrase])
+		if f != "res://scripts/core/game_version.gd" and not f.ends_with("ota_tests.gd") and src.contains('"Gill'):
+			bad.append("%s: extra copy of the character name" % f)
+	t.check("no_new_exposition_or_name_copies", bad.is_empty(), ", ".join(bad))
+	t.check("regeneration_motes_keep_their_name", ResourceLoader.exists("res://scripts/actors/mote.gd") and g.balls[0].motes.size() > 0 and g.balls[0].motes[0] is Mote, "")
+	# Gill's six gills: all present at full size; health = colour/glow vs dull and faded.
+	var m: AxolotlModel = g.player.model
+	var saved := [g.player.health, g.player.max_health]
+	m.set_health(2, 4, false)
+	await t.frames(20)
+	var all_full := m.gills.size() == 6
+	for gl in m.gills:
+		all_full = all_full and gl.scale.is_equal_approx(Vector3.ONE)
+	var lit := true
+	for i in 6:
+		var glow: float = m.gill_mats[i].get_shader_parameter("glow")
+		var desat: float = m.gill_mats[i].get_shader_parameter("desat")
+		lit = lit and ((glow > 0.05 and desat < 0.01) if i < 2 else (glow == 0.0 and desat > 0.8))
+	t.check("six_gills_always_full_size", all_full, "")
+	t.check("gills_glow_when_active_dull_when_lost", lit, "")
+	m.set_health(saved[0], saved[1], false)
+
+
+func _all_files(dir: String) -> Array:
+	var out := []
+	for f in DirAccess.get_files_at(dir):
+		if f.ends_with(".gd") or f.ends_with(".tscn") or f.ends_with(".tres"):
+			out.append(dir.path_join(f))
+	for d in DirAccess.get_directories_at(dir):
+		out.append_array(_all_files(dir.path_join(d)))
+	return out
 
 
 func _literal_copies(dir: String, v: String) -> Array[String]:

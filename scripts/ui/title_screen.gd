@@ -1,11 +1,13 @@
 class_name TitleScreen
 extends CanvasLayer
-## Minimal live-environment title: the murky starting aquarium with the axolotl at home.
+## Minimal live-environment title: the murky starting aquarium with Gill at home.
+## MOTE, the game version, Play, Settings. Nothing else.
 ## Title, Play, Settings. No lore, no exposition.
 
 var _root: Control
 var _play: Button
 var version_label: Label
+var title_label: Label
 
 
 func _ready() -> void:
@@ -24,7 +26,8 @@ func _ready() -> void:
 	box.offset_top = -170
 	_root.add_child(box)
 	var title := Label.new()
-	title.text = "Axolotl"
+	title.text = GameVersion.title()
+	title_label = title
 	title.add_theme_font_size_override("font_size", 96)
 	title.add_theme_color_override("font_color", Color(0.98, 0.82, 0.86))
 	title.add_theme_color_override("font_outline_color", Color(0.05, 0.18, 0.16, 0.8))
