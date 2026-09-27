@@ -8,14 +8,14 @@ stands in for another, and none is derived from another.
 | **Product** | What game is this? | `PRODUCT_NAME` in `scripts/core/game_version.gd` (title shows it upper-case) | `Mote` |
 | **Character** | Who is the protagonist? | `CHARACTER_NAME` in the same file | `Gill` |
 | **Game version** (product) | What version of Mote is this? | `GAME_VERSION` in `scripts/core/game_version.gd`, the only copy | `0.1.0` |
-| **Source** | Which exact commit produced the running code? | git SHA of the APK build, or of the active OTA | `5190d30c…` |
+| **Source** | Which exact commit produced the running code? | git SHA of the APK build (the branch commit, never a PR merge ref), or of the active OTA | `5190d30c…` |
 | **Native version** | Which native shell release is installed? | `version/name` in the export preset (Android versionName) | `0.1.0` |
 | **Android build** | Which packaged APK is installed? | `version/code`, set by CI to the Build & Verify run number | `27` |
 | **Build flavor** | Offline player build or OTA dev build? | Export preset: `Android` (normal) or `Android Dev` (dev) | `dev` |
 | **OTA** | Which remote game payload is active *right now*? | the OTA state after boot selection (`Boot.core.active`) | `dev-000042` |
 | **Automation** | Which CI run built or published it? | GitHub Actions run id (in native build info and the OTA manifest) | `17234…` |
 | **Save schema** | Which persisted-data format is this? | `SAVE_SCHEMA` in `scripts/core/save_schema.gd` | `1` |
-| **Runtime** | Which OTAs can this APK run? | `ota_config.gd` + `ota/runtime_lock.json` | `android-godot-4.7.2-r1` |
+| **Runtime** | Which OTAs can this APK run? | `ota_config.gd` + `ota/runtime_lock.json` | `android-godot-4.7.2-r2` |
 
 Values that don't exist for a build are shown as `local`, `unknown` or `none`, never invented.
 For example, a local editor run has no Android build and no CI run.
@@ -43,7 +43,7 @@ and changes only with native releases. It currently shares the starting value `0
 - **Title screen:** `TitleScreen.version_label` shows `GameVersion.display()`, e.g. `v0.1.0`, and nothing else.
 - **Diagnostics:** `Boot.identity()` / `Boot.diagnostics_text()` load `GAME_VERSION` from whatever is mounted, so an active OTA reports its own version.
 - **Save metadata:** `Settings.save_meta()` writes game_version, save_schema, native_build, flavor, ota_id and source_sha into `settings.cfg [meta]`.
-- **CI:** `tools/print_identity.gd` reads it through Godot. APK artifacts are named `axolotl-v<game>-b<build>` and `build-info.json` records it. CI never types a version.
+- **CI:** `tools/print_identity.gd` reads it through Godot. APKs are named `mote-v<game>-b<build>.apk` / `mote-dev-v<game>-b<build>.apk` and `build-info.json` records it. CI never types a version.
 - **OTA manifests:** `tools/ota_make_manifest.gd` reads it. `tools/ota_inspect_pack.gd` fails publication unless the version *inside the pack* equals the manifest's version and the canonical value.
 
 ## Changing the game version

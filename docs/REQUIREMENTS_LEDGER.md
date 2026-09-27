@@ -105,7 +105,7 @@ Test names refer to `scripts/tests/unit_tests.gd`, `scripts/tests/ota_tests.gd` 
 | O-04 | Immutable, versioned manifest; mutable channel pointer | I+V | `ota_make_manifest.gd`, `ota-publish.yml` | unit tests, e2e |
 | O-05 | Exact source SHA in the manifest | I+V | manifest `source_sha` | e2e step 11 |
 | O-06 | Runtime-ID compatibility gate | I+V | `ota_config.gd`, `tools/ota_runtime.py`, `ota/runtime_lock.json` (now r2) | `ota_runtime_mismatch_needs_native_update`; gate caught today's native change |
-| O-07 | Publisher workflow: tests, PCK, hash, signed manifest, release, pointer, receipt | I+NYV | `.github/workflows/ota-publish.yml` | ran on CI and correctly reported "not published" without the key; real publish BLOCKED on secrets |
+| O-07 | Publisher workflow: tests, PCK, hash, signed manifest, release, pointer, receipt | I+V | `.github/workflows/ota-publish.yml` | `dev-000008` from `d235cb2` (run 36334069998): receipt `published: true`, `pointer_moved: true`; re-downloaded objects re-verified in CI and again independently (signature, PCK SHA-256 and size, `ota_inspect_pack` INSPECT OK) |
 | O-08 | Full PCK first, no deltas | I+V | | e2e |
 | O-09 | Download to a temp file, then verify size, SHA-256 and signature | I+V | `ota_updater.gd`, `ota_core.gd` | `ota_hash_mismatch_rejected`, `ota_truncated_download_rejected`, e2e step 15 |
 | O-10 | Download now, activate on the next clean restart | I+V | `ota_core.gd` | `ota_stage_marks_pending`, `ota_boot_loads_pending`, e2e |
@@ -116,11 +116,11 @@ Test names refer to `scripts/tests/unit_tests.gd`, `scripts/tests/ota_tests.gd` 
 | O-15 | Save-schema compatibility gate | I+V | `ota_core.gd` `save_compat` | `ota_newer_save_blocks_older_ota` |
 | O-16 | `dev` channel only (channels are pointers) | I+V | `ota_config.gd` | `ota_channel_mismatch_rejected` |
 | O-17 | Diagnostics fields and controls | I+V (text, actions) / I+NYV (touch buttons) | `boot.gd`, `diagnostics_overlay.gd` | `diagnostics_*` tests; buttons not exercised |
-| O-18 | Stable HTTPS publication (GitHub Releases) | BLOCKED | `ota-publish.yml` | needs `MOTE_OTA_SIGNING_KEY` |
+| O-18 | Stable HTTPS publication (GitHub Releases) | I+V | `ota-publish.yml` | `ota-dev-000008` release and `ota-channel-dev/latest.json` served publicly |
 | O-19 | One real Android end-to-end proof | BLOCKED | | needs the new Dev APK and the owner's phone |
 | O-20 | Docs: OTA-safe vs APK-required changes | I+V | `docs/OTA.md` | |
 | O-21 | Tests: manifest, runtime mismatch, hash, state transitions, rollback | I+V | `ota_tests.gd` | 29 OTA checks |
-| O-22 | Every push to the dev branch publishes an OTA | I+NYV | `ota-publish.yml` trigger | blocked on the secret |
+| O-22 | Every push to the dev branch publishes an OTA | I+V | `ota-publish.yml` trigger | push of `d235cb2` published `dev-000008`; each later push publishes the next id |
 
 ## V — game version and identities
 
@@ -131,7 +131,7 @@ Test names refer to `scripts/tests/unit_tests.gd`, `scripts/tests/ota_tests.gd` 
 | V-03 | Title shows `v<version>` from the canonical value | I+V | `title_screen.gd` | `title_shows_canonical_version`, drift |
 | V-04 | Diagnostics game version | I+V | `boot.gd` | `diagnostics_identity_game_version`, `diagnostics_text_game_version` |
 | V-05 | CI reads the version and generates build metadata | I+V | `tools/print_identity.gd`, `build.yml` `build-info.json` | CI ident step; drift |
-| V-06 | OTA metadata records the version, checked inside the pack | I+V (local) | `ota_make_manifest.gd`, `ota_inspect_pack.gd` | drift, e2e; CI publish BLOCKED |
+| V-06 | OTA metadata records the version, checked inside the pack | I+V | `ota_make_manifest.gd`, `ota_inspect_pack.gd` | drift, e2e; CI publish of `dev-000008` INSPECT OK (pack 0.1.0 = manifest = canonical) |
 | V-07 | Save metadata carries identity | I+V | `settings.gd` `save_meta` | `save_meta_game_version_and_schema` |
 | V-08 | versionCode = CI run number; versionName = native version | I+V | `build.yml` | CI badging `versionCode='9' versionName='0.1.0'` |
 | V-09 | Identity separation (SHA, run, OTA, build, schema) | I+V | `boot.gd` `identity()` | `ota_identity_independent_of_game_version`, `native_identity_survives_ota_activation`, `source_and_run_follow_active_ota`, `save_schema_independent` |
@@ -146,7 +146,7 @@ Test names refer to `scripts/tests/unit_tests.gd`, `scripts/tests/ota_tests.gd` 
 | N-01 | Product "Mote"; title "MOTE" from the canonical source | I+V | `game_version.gd` `PRODUCT_NAME`, `title_screen.gd` | `title_shows_MOTE_from_canonical`; `docs/screenshots/title_mote.jpg` | replaces the "Axolotl" working title |
 | N-02 | Protagonist "Gill" on player-facing and diagnostic surfaces | I+V | `CHARACTER_NAME`; diagnostics | `diagnostics_product_and_character` | |
 | N-03 | No new exposition ("Meet Gill", "Gill's Adventure") | I+V | | `no_new_exposition_or_name_copies` | |
-| N-04 | App labels "Mote" / "Mote Dev" | I+V (config) / I+NYV (APK) | `export_presets.cfg` | `app_label_*`; CI badging assertion pending the next Android run | replaces "Axolotl" / "Axolotl Dev" |
+| N-04 | App labels "Mote" / "Mote Dev" | I+V | `export_presets.cfg` | CI badging on the signed APKs: `Mote` (com.verbal76.axolotl, no INTERNET) and `Mote Dev` (com.verbal76.axolotl.dev, INTERNET) | replaces "Axolotl" / "Axolotl Dev" |
 | N-05 | Package, bundle, signing and OTA identities unchanged | I+V | | `package_ids_unchanged` | |
 | N-06 | Regeneration Motes keep their name | I+V | `mote.gd` | `regeneration_motes_keep_their_name` | |
 | N-07 | No blind refactor of technical identifiers | I+V | `AxolotlModel`, `axolotl.gd`, repo name and package IDs kept | code review | |
@@ -161,19 +161,19 @@ Test names refer to `scripts/tests/unit_tests.gd`, `scripts/tests/ota_tests.gd` 
 | C-03 | Workflows use `MOTE_*` secret names | I+V | `build.yml`, `ota-publish.yml` | grep shows no generic names | `OTA_SIGNING_KEY`, `ANDROID_DEV_KEYSTORE_B64` |
 | C-04 | No private material tracked; `.gitignore` guards | I+V | `.gitignore` | tracked-file and diff scans | |
 | C-05 | Owner receives exact values and locations | I+V | secrets file sent | | |
-| C-06 | CI shows secret names only, verifies signatures and the APK certificate | I+NYV | workflows | awaiting the owner's secrets | |
+| C-06 | CI shows secret names only, verifies signatures and the APK certificate | I+V | workflows | logs show presence and structure only; apksigner certificate equals the pinned A8:4F:…:E2:C3; the derived OTA public key equals the embedded key and pin `a003a45c…0cf2` | |
 | C-07 | Old key retired cleanly; runtime bumped to r2 | I+V | `ota/runtime_lock.json` | `ota_runtime.py --check` | |
 
 ## A — CI and the end-of-day APK
 
 | ID | Requirement | Status | Evidence |
 |---|---|---|---|
-| A-01 | CI functional and green | PARTIAL | verify and iOS green on `3d906a9`; Android fixed in `683b273`; signed paths await secrets |
-| A-02 | New Mote Dev APK built from the final reconciled source | BLOCKED | needs the `MOTE_ANDROID_DEV_*` secrets (stable signing) |
-| A-03 | APK identity report (SHA-256, versionCode, …) | BLOCKED | follows A-02 |
-| A-04 | First OTA after that APK comes from today's source | BLOCKED | needs `MOTE_OTA_SIGNING_KEY` |
+| A-01 | CI functional and green | I+V | Build & Verify (tests, Android, iOS) and OTA publish all green on `d235cb2`; the final commit's runs are listed in the PR |
+| A-02 | New Mote Dev APK built from the final reconciled source | I+V | signed with the Mote Dev keystore (MOTE_STABLE_KEY=true), certificate pin enforced; built from the branch head commit (not the PR merge ref) |
+| A-03 | APK identity report (SHA-256, versionCode, …) | I+V | from the Android job log of the final commit (see the PR description) |
+| A-04 | First OTA after that APK comes from today's source | I+V | the OTA published by the final commit's push carries the same source SHA and runtime `android-godot-4.7.2-r2` |
 | A-05 | Physical-device verification | BLOCKED | owner's phone |
-| A-06 | Normal offline APK as a second artifact | BLOCKED | same CI run as A-02 |
+| A-06 | Normal offline APK as a second artifact | I+V | same run: `mote-android-v0.1.0-b<build>` (no INTERNET, same certificate) |
 
 ## Precedence notes
 

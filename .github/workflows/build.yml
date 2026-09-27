@@ -8,6 +8,8 @@ on:
 
 env:
   GODOT_VERSION: 4.7.2
+  # Build the branch commit itself, not the synthetic PR merge ref, so every identity names a real commit.
+  SOURCE_SHA: ${{ github.event.pull_request.head.sha || github.sha }}
   # Public verification pins (not secrets): the Mote Dev signing certificate and OTA public key.
   MOTE_DEV_CERT_SHA256: A8:4F:BA:D5:61:B9:F5:E2:4E:BB:45:E2:95:17:94:F6:17:28:19:56:CF:DB:CA:FF:3A:CF:DB:9E:63:E2:C2:E3
   MOTE_OTA_PUBKEY_DER_SHA256: a003a45ce422325ef1de52958bd9d4d2a06b912ae119c6c7a7f9e40ff2720cf2
@@ -20,6 +22,8 @@ jobs:
     timeout-minutes: 60
     steps:
       - uses: actions/checkout@v4
+        with:
+          ref: ${{ env.SOURCE_SHA }}
       - name: Install Godot
         run: |
           curl -sSL -o godot.zip "$GODOT_BASE/Godot_v${GODOT_VERSION}-stable_linux.x86_64.zip"
@@ -54,6 +58,8 @@ jobs:
     timeout-minutes: 45
     steps:
       - uses: actions/checkout@v4
+        with:
+          ref: ${{ env.SOURCE_SHA }}
       - uses: actions/setup-java@v4
         with:
           distribution: temurin
@@ -128,10 +134,12 @@ jobs:
           sed -i "s/^version\/code=.*/version\/code=$BUILD/" export_presets.cfg
           RUN="${{ github.run_id }}"
           RUN_URL="${{ github.server_url }}/${{ github.repository }}/actions/runs/${{ github.run_id }}"
+          test "$(git rev-parse HEAD)" = "$SOURCE_SHA"
+          echo "source commit: $SOURCE_SHA"
           mkdir -p build/android
-          python3 tools/write_native_build_info.py "Android" normal "$BUILD" "$GITHUB_SHA" "$RUN" "$RUN_URL"
+          python3 tools/write_native_build_info.py "Android" normal "$BUILD" "$SOURCE_SHA" "$RUN" "$RUN_URL"
           godot --headless --path . --export-debug "Android" "build/android/mote-v$GV-b$BUILD.apk"
-          python3 tools/write_native_build_info.py "Android Dev" dev "$BUILD" "$GITHUB_SHA" "$RUN" "$RUN_URL"
+          python3 tools/write_native_build_info.py "Android Dev" dev "$BUILD" "$SOURCE_SHA" "$RUN" "$RUN_URL"
           godot --headless --path . --export-debug "Android Dev" "build/android/mote-dev-v$GV-b$BUILD.apk"
           ls -la build/android
           AAPT=$(ls "$ANDROID_HOME"/build-tools/*/aapt | tail -1)
@@ -176,7 +184,7 @@ jobs:
           echo "embedded OTA public key SHA-256 matches the pin"
           rm -f pub.pem
           rm -f build/android/*.manifest.txt build/android/*.idsig
-          jq -n --arg gv "$GV" --arg b "$BUILD" --arg sha "$GITHUB_SHA" --arg run "$RUN" --arg url "$RUN_URL" \
+          jq -n --arg gv "$GV" --arg b "$BUILD" --arg sha "$SOURCE_SHA" --arg run "$RUN" --arg url "$RUN_URL" \
             --arg rt "${{ steps.ident.outputs.runtime_id }}" \
             '{game_version:$gv, android_build:($b|tonumber), source_sha:$sha, build_run:$run, build_run_url:$url, runtime_id:$rt,
               apks:{normal:{package:"com.verbal76.axolotl", ota:false}, dev:{package:"com.verbal76.axolotl.dev", ota:true, channel:"dev"}}}' \
@@ -201,6 +209,8 @@ jobs:
     timeout-minutes: 60
     steps:
       - uses: actions/checkout@v4
+        with:
+          ref: ${{ env.SOURCE_SHA }}
       - name: Install Godot + export templates
         run: |
           curl -sSL -o godot.zip "$GODOT_BASE/Godot_v${GODOT_VERSION}-stable_macos.universal.zip"
