@@ -470,6 +470,9 @@ func tutorial() -> void:
 func clear_ball(bi: int, target: float, skip_zones: Array) -> void:
 	var b := g.balls[bi]
 	var lb: LevelBuilder = b.get_meta("builder")
+	if p.ball != b:
+		failures.append("clear_ball %d skipped: not on that ball" % (bi + 1))
+		return
 	mark("clearing ball %d" % (bi + 1))
 	var routines_done := {}
 	var passes := 0
@@ -662,6 +665,10 @@ func cave(b: MossBall, h: Dictionary) -> void:
 			await wait(0.5)
 			if u.taken:
 				mark("upgrade collected: max health %d" % p.max_health)
+				# Leave the cave the way we came in.
+				await wait_grounded(3.0)
+				await goto(door, 0.8, 20.0)
+				await goto(entry, 0.8, 20.0)
 				return
 	failures.append("cave upgrade not reached on ball %d" % (b.index + 1))
 

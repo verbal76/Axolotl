@@ -39,6 +39,7 @@ var _tut_framed := false
 var _mote_lights: Array[OmniLight3D] = []
 var _food_timer := 0.0
 var _vortex_block: Vortex = null
+var _pending_connect: Array = []
 var _moved := 0.0
 var _last_pos := Vector3.ZERO
 var _camera_moved := false
@@ -434,10 +435,10 @@ func _check_vortex_connections() -> void:
 		if not v.connected and v.ball_a.restoration >= Vortex.CONNECT_AT - 0.0001:
 			v.connected = true
 			stats["connects"].append(v.ball_a.index)
-			if cinematic == "" and player.state == "normal":
-				_start_cinematic("connect", {"v": v})
-			else:
-				Sfx.play("vortex_connect", null, -4.0)
+			_pending_connect.append(v)
+	# The connection shot waits for any running cinematic (e.g. regeneration) to finish.
+	if not _pending_connect.is_empty() and cinematic == "" and player.state == "normal":
+		_start_cinematic("connect", {"v": _pending_connect.pop_front()})
 
 
 func _check_vortex_entry() -> void:

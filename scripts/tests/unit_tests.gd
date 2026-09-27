@@ -221,8 +221,14 @@ func _test_swipe_direction_and_stages() -> void:
 	var large := first_alive(0, Parasite.Kind.LARGE)
 	var stages := []
 	for i in 3:
-		await t.seconds(1.6)
-		await _swipe_at(large, true)
+		var before := large.hp
+		for attempt in 6:
+			await t.seconds(1.6)
+			while large.state == "flung":
+				await t.frames(5)
+			await _swipe_at(large, true)
+			if large.hp < before:
+				break
 		stages.append(snappedf(large._gray_target, 0.01))
 	t.check("large_three_stage_desaturation", stages == [0.33, 0.67, 1.0] and not large.is_alive(), str(stages))
 	# Head-to-rear order: the head segment has the lowest seg_t.
@@ -639,8 +645,13 @@ func _test_canopy() -> void:
 	var braced := false
 	# Walk off the canopy tip and fall all the way down.
 	p.invuln_t = 999
+	var left := false
 	for i in 60 * 5:
-		stick_toward(-c2.basis.z)
+		if not left:
+			stick_toward(-c2.basis.z)
+			if not p.grounded and i > 5:
+				left = true
+				p.bot_input = Vector2.ZERO
 		await t.frames(1)
 		if p.fall_danger:
 			braced = true
@@ -661,7 +672,10 @@ func _test_canopy() -> void:
 	place_at(2, Levels.leaf_mid(c2, 2.0, 0.0).origin + b.up_at(c2.origin) * 0.3, -c2.basis.z)
 	await wait_grounded()
 	for i in 60 * 5:
-		stick_toward(-c2.basis.z)
+		if p.grounded:
+			stick_toward(-c2.basis.z)
+		else:
+			p.bot_input = Vector2.ZERO
 		await t.frames(1)
 		if kinds.size() > 0 and kinds[kinds.size() - 1] != "soft":
 			break
