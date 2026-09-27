@@ -125,15 +125,21 @@ a push-off jump, coyote time (0.12 s), jump buffering (0.15 s), and the directio
 assisted over-the-shoulder camera eases its "up" toward local gravity and carries its yaw across the
 sphere, so it never flips at the poles. It also pulls in when obstructed and can be swiped manually.
 
-**The axolotl** — a procedural model with a four-legged diagonal scuttle, an undulating tail and
-reactive gills. Personality animations: perk up, happy wiggle when life returns nearby, head/gill
+**The axolotl** — modelled on the owner's reference art: a big round smiling head with glossy eyes and
+freckles, six feathery pink gills, and chubby four-fingered hands.
+- **Body:** one smooth skinned body on an 11-bone spine. As he moves, a snake-like S-wave travels down it, stronger toward the tail.
+- **Legs:** they ride that wave and step in the diagonal salamander gait, timed to the body bends.
+- **Air:** he tucks his legs back and undulates like a swimming axolotl, and a burst whips the whole body.
+
+Personality animations: perk up, happy wiggle when life returns nearby, head/gill
 shake after hits, looking at things, mouth open when zooming, and bracing on a dangerous fall. There
 are four superhero-landing variants (fist plant, gill shake, awkward tip-and-play-it-off,
 look-at-camera wink) that share one hitbox.
 
-**Health** — six dorsal bioluminescent fronds: 3 active, 3 dormant. Damage extinguishes one with a
-flinch, a pulse on the others, and brief invulnerability. At one segment the last frond pulses
-irregularly; there's no vignette, alarm or limp. Food 1 heals +1, food 2 heals +2, food 3 heals
+**Health** — shown on his six feathery external gills, three per side off the back of the head.
+- 3 start active (vivid glowing pink) and 3 dormant (pale).
+- Damage turns one pale and droopy, with a flinch, a pulse on the others, and brief invulnerability.
+- At one gill the last one pulses irregularly. There's no vignette, alarm or limp. Food 1 heals +1, food 2 heals +2, food 3 heals
 everything, and you can eat at full health. Three cave upgrades take you from 3 to 6.
 
 **Food** — the drifter rides currents; the darter senses you, hops, then pauses; the burrower peeks
@@ -211,9 +217,13 @@ tools/                      texture + audio generators, script checker
 
 ## Screenshots
 Rendered by the engine in this project's automated screenshot tour (software GPU, 1280×720, downscaled).
+The first two rows show the current character and terrain. The rest predate the character redesign and
+smooth hills, so they show the earlier, simpler axolotl.
 
 | | |
 |---|---|
+| ![The axolotl (front)](docs/screenshots/axolotl_front.jpg) | ![The axolotl (three-quarter)](docs/screenshots/axolotl_three_quarter.jpg) |
+| ![Walking: S-curve body wave](docs/screenshots/axolotl_walk_s_curve.jpg) | ![Rolling hills](docs/screenshots/rolling_hills.jpg) |
 | ![Murky start](docs/screenshots/start_murky.jpg) | ![Tutorial](docs/screenshots/tutorial.jpg) |
 | ![Regeneration Mote](docs/screenshots/regeneration_mote.jpg) | ![Vortex surf](docs/screenshots/vortex_surf.jpg) |
 | ![Jungle canopy](docs/screenshots/jungle_canopy.jpg) | ![All clear](docs/screenshots/all_clear_restored.jpg) |
@@ -225,10 +235,12 @@ below comes from running the real game in Godot 4.7.2: headless for logic, and o
 (llvmpipe) for screenshots. The CI builds prove the Android APK exports and the iOS app compiles, but
 neither was installed or run on a device or simulator.
 
-**Mechanics suite** (`--test=unit`, 71 checks, all passing locally and in CI). These drive the real
+**Mechanics suite** (`--test=unit`, 119 checks, all passing locally and in CI). These drive the real
 controller through the same input actions the touch HUD and gamepad use:
 - All 118 authored actors land on their intended surface.
 - Moss cushions, stems and cave domes face the right way, so no platform renders hollow or see-through.
+- The rolling hills are smooth and gentle: max slope 0.39, crest heights as authored, and collision within 7 mm of the drawn surface. He walks up and over a hill without leaving the ground.
+- OTA client, and version/identity separation: 40 checks, listed in [docs/OTA.md](docs/OTA.md) and [docs/VERSIONING.md](docs/VERSIONING.md).
 - Tutorial route: every start point makes jump → M1 → jump+burst → M2, and a plain jump cannot cross the gap.
 - A full lap around a moss ball with no camera flips and no unintended airborne frames.
 - Jump apex, the water burst (exactly once, follows direction, no third action), landing resets it, coyote time, jump buffering.

@@ -34,28 +34,12 @@ func pocket(lat: float, lon: float, radius_deg: float) -> void:
 
 # --- Terrain -----------------------------------------------------------------------------
 
-## Rolling moss hill: a partly buried sphere (gentle slopes, cheap sphere collision).
-func hill(lat: float, lon: float, rs: float, h: float) -> StaticBody3D:
-	var dir := d(lat, lon)
-	var body := StaticBody3D.new()
-	body.collision_layer = 1
-	root.add_child(body)
-	body.global_position = ball.surface_point(dir, h - rs)
-	var cs := CollisionShape3D.new()
-	var sh := SphereShape3D.new()
-	sh.radius = rs
-	cs.shape = sh
-	body.add_child(cs)
-	var mi := MeshInstance3D.new()
-	var sm := SphereMesh.new()
-	sm.radius = rs
-	sm.height = rs * 2.0
-	sm.radial_segments = 32
-	sm.rings = 16
-	mi.mesh = sm
-	mi.material_override = ball.moss_material
-	body.add_child(mi)
-	return body
+## Rolling moss hill: a smooth bump in the ball's own surface (see MossBall.add_hill).
+## Authored like the old buried spheres: a sphere of radius `rs` showing `h` above ground;
+## the bump keeps that height and spreads wider so the slopes roll gently.
+func hill(lat: float, lon: float, rs: float, h: float) -> void:
+	var footprint := sqrt(maxf(rs * rs - (rs - h) * (rs - h), 0.01))
+	ball.add_hill(d(lat, lon), footprint * 1.5 / ball.radius, h)
 
 
 ## Moss cushion: rounded, steep-sided platform. Returns the body; `top` height in meta.
@@ -175,7 +159,7 @@ func parasite(kind: int, zone_id: String, lat: float, lon: float, home_deg := 9.
 
 func parasite_xf(kind: int, zone_id: String, xf: Transform3D, home_deg := 3.0) -> Parasite:
 	var dir := ball.up_at(xf.origin)
-	var h := (xf.origin - ball.global_position).length() - ball.radius
+	var h := ball.altitude(xf.origin)
 	return parasite(kind, zone_id, rad_to_deg(asin(clampf(dir.y, -1, 1))), rad_to_deg(atan2(dir.x, dir.z)), home_deg, h)
 
 
@@ -189,7 +173,7 @@ func mote(zone_id: String, lat: float, lon: float, h := 0.0, wander := 2.2) -> M
 
 func mote_xf(zone_id: String, xf: Transform3D, wander := 1.2) -> Mote:
 	var dir := ball.up_at(xf.origin)
-	var h := (xf.origin - ball.global_position).length() - ball.radius
+	var h := ball.altitude(xf.origin)
 	var m := Mote.new()
 	m.setup(ball, zone_id, dir, h, wander)
 	ball.add_child(m)
@@ -208,7 +192,7 @@ func bloom(lat: float, lon: float, h := 0.0) -> Bloom:
 
 func bloom_xf(xf: Transform3D) -> Bloom:
 	var dir := ball.up_at(xf.origin)
-	var h := (xf.origin - ball.global_position).length() - ball.radius
+	var h := ball.altitude(xf.origin)
 	var b := Bloom.new()
 	b.setup(ball, dir, h)
 	ball.add_child(b)
@@ -240,7 +224,7 @@ func strands(xf: Transform3D, width: float, depth: float, height: float, count: 
 		var p := xf * local
 		var up := ball.up_at(p)
 		var b := MossBall.frame_at(up, rng.randf() * 360.0).scaled(Vector3(1.0, height * rng.randf_range(0.75, 1.15), 1.0))
-		mm.set_instance_transform(i, Transform3D(b, ball.global_position + up * ball.radius - up * 0.1))
+		mm.set_instance_transform(i, Transform3D(b, ball.surface_point(up, -0.1)))
 	var mmi := MultiMeshInstance3D.new()
 	mmi.multimesh = mm
 	mmi.material_override = strand_mat

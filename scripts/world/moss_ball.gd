@@ -56,6 +56,10 @@ var current_strength := 0.0
 var moss_material: ShaderMaterial
 var static_body: StaticBody3D
 var _veg_parent: Node3D
+var _surface: MeshInstance3D
+
+# Smooth rolling terrain: bell-shaped bumps in the moss surface. [dir, angular radius, height]
+var hills: Array = []
 
 
 func setup(p_index: int, p_radius: float, p_palette: Dictionary) -> void:
@@ -84,6 +88,7 @@ func setup(p_index: int, p_radius: float, p_palette: Dictionary) -> void:
 	mi.material_override = moss_material
 	mi.name = "MossSurface"
 	add_child(mi)
+	_surface = mi
 	_veg_parent = Node3D.new()
 	_veg_parent.name = "Vegetation"
 	add_child(_veg_parent)
@@ -141,8 +146,124 @@ static func dir_ll(lat: float, lon: float) -> Vector3:
 	return Vector3(cos(la) * sin(lo), sin(la), cos(la) * cos(lo))
 
 
+## `h` is always measured above the actual ground (terrain included).
 func surface_point(dir: Vector3, h := 0.0) -> Vector3:
-	return global_position + dir.normalized() * (radius + h)
+	var d := dir.normalized()
+	return global_position + d * (radius + terrain_height(d) + h)
+
+
+# --- Terrain -------------------------------------------------------------------------------
+
+## Registers a rolling hill. Register every hill before placing anything on the ball.
+func add_hill(dir: Vector3, angular_radius: float, height: float) -> void:
+	hills.append([dir.normalized(), angular_radius, height])
+
+
+## Ground height above the base sphere: a sum of cosine bells, flat at the crest and at the
+## foot, so hills blend into each other and into the ball without creases.
+func terrain_height(dir: Vector3) -> float:
+	var h := 0.0
+	for hl in hills:
+		var c: float = (hl[0] as Vector3).dot(dir)
+		var ang: float = hl[1]
+		if c <= cos(ang):
+			continue
+		var x := acos(minf(c, 1.0)) / ang
+		h += float(hl[2]) * (0.5 + 0.5 * cos(PI * x))
+	return h
+
+
+func ground_radius(dir: Vector3) -> float:
+	return radius + terrain_height(dir.normalized())
+
+
+## Height of a world position above the ground directly below it (terrain included).
+func altitude(world_pos: Vector3) -> float:
+	var off := world_pos - global_position
+	return off.length() - ground_radius(off)
+
+
+func _ground_normal(d: Vector3) -> Vector3:
+	var e1 := d.cross(Vector3.UP if absf(d.y) < 0.9 else Vector3.RIGHT).normalized()
+	var e2 := d.cross(e1)
+	var eps := 0.004
+	var a := (d + e1 * eps).normalized()
+	var b := (d - e1 * eps).normalized()
+	var c := (d + e2 * eps).normalized()
+	var e := (d - e2 * eps).normalized()
+	var n := (a * ground_radius(a) - b * ground_radius(b)).cross(c * ground_radius(c) - e * ground_radius(e)).normalized()
+	return n if n.dot(d) > 0.0 else -n
+
+
+## Rebuilds the visible moss surface and adds hill collision once the level is laid out.
+## The base sphere collider stays; each hill gets a matching collision patch on top.
+func finalize_terrain() -> void:
+	if hills.is_empty():
+		return
+	var seg := 176
+	var rings := 88
+	var verts := PackedVector3Array()
+	var norms := PackedVector3Array()
+	var uvs := PackedVector2Array()
+	for r in rings + 1:
+		var th := PI * r / rings
+		for sg in seg + 1:
+			var ph := TAU * sg / seg
+			var d := Vector3(sin(th) * cos(ph), cos(th), sin(th) * sin(ph))
+			var th_h := terrain_height(d)
+			verts.append(d * (radius + th_h))
+			norms.append(_ground_normal(d) if th_h > 0.0001 else d)
+			uvs.append(Vector2(float(sg) / seg, float(r) / rings))
+	var idx := PackedInt32Array()
+	for r in rings:
+		for sg in seg:
+			var i00 := r * (seg + 1) + sg
+			var i01 := i00 + 1
+			var i10 := i00 + seg + 1
+			var i11 := i10 + 1
+			# Clockwise seen from outside (Godot front faces).
+			idx.append_array([i00, i11, i01, i00, i10, i11])
+	var arr := []
+	arr.resize(Mesh.ARRAY_MAX)
+	arr[Mesh.ARRAY_VERTEX] = verts
+	arr[Mesh.ARRAY_NORMAL] = norms
+	arr[Mesh.ARRAY_TEX_UV] = uvs
+	arr[Mesh.ARRAY_INDEX] = idx
+	var am := ArrayMesh.new()
+	am.add_surface_from_arrays(Mesh.PRIMITIVE_TRIANGLES, arr)
+	_surface.mesh = am
+	for hl in hills:
+		_hill_collider(hl[0], hl[1])
+
+
+## Polar grid over one hill's footprint following the full terrain (so overlaps agree).
+func _hill_collider(center: Vector3, ang: float) -> void:
+	var k_rings := 14
+	var segs := 40
+	var e1 := center.cross(Vector3.UP if absf(center.y) < 0.9 else Vector3.RIGHT).normalized()
+	var e2 := center.cross(e1)
+	var grid: Array = []
+	for k in k_rings + 1:
+		var r := ang * 1.03 * float(k) / k_rings
+		var row := PackedVector3Array()
+		for sg in segs:
+			var ph := TAU * sg / segs
+			var d := (center * cos(r) + (e1 * cos(ph) + e2 * sin(ph)) * sin(r)).normalized()
+			row.append(d * ground_radius(d))
+		grid.append(row)
+	var faces := PackedVector3Array()
+	for k in k_rings:
+		var a: PackedVector3Array = grid[k]
+		var b: PackedVector3Array = grid[k + 1]
+		for sg in segs:
+			var s1 := (sg + 1) % segs
+			faces.append_array([a[sg], b[sg], b[s1], a[sg], b[s1], a[s1]])
+	var shape := ConcavePolygonShape3D.new()
+	shape.set_faces(faces)
+	shape.backface_collision = true
+	var cs := CollisionShape3D.new()
+	cs.shape = shape
+	static_body.add_child(cs)
 
 
 func up_at(world_pos: Vector3) -> Vector3:
@@ -174,7 +295,7 @@ func site_xform(lat: float, lon: float, heading: float, local := Vector3.ZERO) -
 	var fwd := -b.z
 	fwd = (fwd - nd * fwd.dot(nd)).normalized()
 	nb = Basis(fwd.cross(nd), nd, -fwd)
-	return Transform3D(nb, global_position + nd * (radius + local.y))
+	return Transform3D(nb, global_position + nd * (radius + terrain_height(nd) + local.y))
 
 
 func xform_on_dir(dir: Vector3, h := 0.0, heading := 0.0) -> Transform3D:
@@ -285,7 +406,7 @@ func current_at(world_pos: Vector3) -> Vector3:
 		return Vector3.ZERO
 	var up := up_at(world_pos)
 	var band := 1.0 - smoothstep(0.45, 0.8, absf(up.dot(current_axis)))
-	var alt := (world_pos - global_position).length() - radius
+	var alt := altitude(world_pos)
 	var exposure := clampf(0.55 + alt * 0.2, 0.3, 1.3)
 	return current_axis.cross(up).normalized() * current_strength * band * exposure
 
@@ -322,7 +443,7 @@ func scatter(mesh: Mesh, mat: Material, count: int, seed_v: int, scale_min: floa
 		var b := frame_at(d, rng.randf() * 360.0)
 		var s := rng.randf_range(scale_min, scale_max)
 		b = b.scaled(Vector3(s, s, s))
-		buckets[best].append(Transform3D(b, d * (radius - sink)))
+		buckets[best].append(Transform3D(b, d * (radius + terrain_height(d) - sink)))
 		placed += 1
 	var out := []
 	for i in buckets.size():

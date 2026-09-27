@@ -29,6 +29,7 @@ static func build_ball(i: int, game: Node) -> MossBall:
 		0: _ball1(lb)
 		1: _ball2(lb)
 		2: _ball3(lb)
+	b.finalize_terrain()
 	b.set_meta("builder", lb)
 	return b
 
@@ -93,6 +94,13 @@ static func _ball1(lb: LevelBuilder) -> void:
 	b.food_weights = [0.6, 0.25, 0.15]
 	b.food_target = 7
 	b.start_dir = MossBall.dir_ll(89.5, 0)
+	# Rolling hills (registered before anything is placed on the ground).
+	lb.hill(36, -9, 9.0, 1.6)
+	lb.hill(21, 11, 7.0, 1.3)
+	lb.hill(31, 22, 8.0, 1.8)
+	lb.hill(-52, 22, 10.0, 2.0)
+	lb.hill(-72, -12, 8.0, 1.5)
+	lb.hill(-28, 150, 9.0, 1.8)
 
 	lb.zone("tut", 72, 0, 22)
 	lb.zone("meadow", 28, 0, 30)
@@ -108,11 +116,8 @@ static func _ball1(lb: LevelBuilder) -> void:
 	lb.bloom(55.6, 0, 2.9)
 
 	# --- Meadow: rolling hills.
-	lb.hill(36, -9, 9.0, 1.6)
-	lb.hill(21, 11, 7.0, 1.3)
-	lb.hill(31, 22, 8.0, 1.8)
-	lb.mote("meadow", 35, -10, 1.6)
-	lb.mote("meadow", 19, 14, 1.2)
+	lb.mote("meadow", 35, -10)
+	lb.mote("meadow", 19, 14)
 	lb.parasite(Parasite.Kind.SMALL, "meadow", 27, -3, 8.0)
 	lb.parasite(Parasite.Kind.SMALL, "meadow", 16, 6, 8.0)
 
@@ -124,8 +129,6 @@ static func _ball1(lb: LevelBuilder) -> void:
 	lb.bloom(-1, 88)
 
 	# --- South pole: a large parasite among hills.
-	lb.hill(-52, 22, 10.0, 2.0)
-	lb.hill(-72, -12, 8.0, 1.5)
 	lb.parasite(Parasite.Kind.LARGE, "south", -62, 8, 12.0)
 	lb.mote("south", -48, 34)
 	lb.mote("south", -74, -24)
@@ -139,7 +142,6 @@ static func _ball1(lb: LevelBuilder) -> void:
 	lb.bloom(-2, -74)
 
 	# --- Underside.
-	lb.hill(-28, 150, 9.0, 1.8)
 	lb.parasite(Parasite.Kind.SMALL, "under", -24, 172, 10.0)
 	lb.mote("under", -18, 160)
 	lb.mote("under", -42, -162)
@@ -165,6 +167,8 @@ static func _ball2(lb: LevelBuilder) -> void:
 	var b := lb.ball
 	b.current_axis = Vector3.UP
 	b.current_strength = 3.0
+	lb.hill(2, 58, 8.0, 2.2)
+	lb.hill(-18, 168, 9.0, 1.8)
 	b.food_weights = [0.45, 0.35, 0.2]
 	b.food_target = 8
 	# Re-create materials now that the current is known.
@@ -206,8 +210,7 @@ static func _ball2(lb: LevelBuilder) -> void:
 	lb.bloom(55, 30)
 
 	# East ridge: large parasite in strong current (knockback carries it downstream).
-	lb.hill(2, 58, 8.0, 2.2)
-	lb.parasite(Parasite.Kind.LARGE, "east", 2, 58, 11.0, 2.2)
+	lb.parasite(Parasite.Kind.LARGE, "east", 2, 58, 11.0)
 	lb.parasite(Parasite.Kind.SMALL, "east", -9, 72, 9.0)
 	lb.mote("east", 11, 70)
 	lb.mote("east", -11, 48)
@@ -220,7 +223,6 @@ static func _ball2(lb: LevelBuilder) -> void:
 	lb.bloom(-42, 2)
 
 	# Far side.
-	lb.hill(-18, 168, 9.0, 1.8)
 	lb.parasite(Parasite.Kind.LARGE, "far", -8, 158, 12.0)
 	lb.parasite(Parasite.Kind.MEDIUM, "far", 6, 176, 10.0)
 	lb.mote("far", -22, 148)

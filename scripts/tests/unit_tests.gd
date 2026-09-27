@@ -14,7 +14,7 @@ func run(runner) -> void:
 	p.use_bot_input = true
 	await t.seconds(0.5)
 	var only: String = Settings.test_args.get("only", "")
-	for name_ in ["_test_ota_and_version", "_test_mesh_winding", "_test_placements", "_test_tutorial_route", "_test_sphere_walk", "_test_jump_and_burst", "_test_coyote_and_buffer", "_test_swipe_direction_and_stages", "_test_hard_landing", "_test_food", "_test_darter_and_burrower", "_test_food_repopulates", "_test_motes", "_test_checkpoint_and_regen", "_test_crumble", "_test_restoration_continuity", "_test_vortex", "_test_current", "_test_canopy", "_test_upgrades", "_test_ui", "_test_all_clear"]:
+	for name_ in ["_test_ota_and_version", "_test_mesh_winding", "_test_terrain", "_test_placements", "_test_tutorial_route", "_test_sphere_walk", "_test_jump_and_burst", "_test_coyote_and_buffer", "_test_swipe_direction_and_stages", "_test_hard_landing", "_test_food", "_test_darter_and_burrower", "_test_food_repopulates", "_test_motes", "_test_checkpoint_and_regen", "_test_crumble", "_test_restoration_continuity", "_test_vortex", "_test_current", "_test_canopy", "_test_upgrades", "_test_ui", "_test_all_clear"]:
 		if only == "" or name_.contains(only):
 			await call(name_)
 
@@ -53,7 +53,7 @@ func stick_toward(world_dir: Vector3) -> void:
 
 
 func height() -> float:
-	return (p.global_position - p.ball.global_position).length() - p.ball.radius
+	return p.ball.altitude(p.global_position)
 
 
 func wait_grounded(timeout := 4.0) -> bool:
@@ -78,7 +78,7 @@ func _surface_height(b: MossBall, dir: Vector3, h_hint: float) -> float:
 	var top := b.surface_point(dir, h_hint + 3.0)
 	var q := PhysicsRayQueryParameters3D.create(top, b.global_position, 1 | 2)
 	var hit := g.get_world_3d().direct_space_state.intersect_ray(q)
-	return -99.0 if hit.is_empty() else (hit.position - b.global_position).length() - b.radius
+	return -99.0 if hit.is_empty() else b.altitude(hit.position)
 
 
 func _test_ota_and_version() -> void:
@@ -109,6 +109,69 @@ func _test_mesh_winding() -> void:
 	var dome: ArrayMesh = MeshLib.dome_shell(8.0, 0.9, 0.9, 2.6, 1.8)[0]
 	var dome_bad := _front_faces_out(dome, func(c: Vector3) -> Vector3: return Vector3.ZERO if Vector3(c.x, c.y / 0.9, c.z).length() > 7.55 else c * 2.0)
 	t.check("cave_dome_faces_correct_side", dome_bad == 0, "%d wrong faces" % dome_bad)
+
+
+## Rolling hills: smooth, walkable, and the collision matches what is drawn.
+func _test_terrain() -> void:
+	var b := g.balls[0]
+	t.check("terrain_has_hills", b.hills.size() >= 5, "%d hills" % b.hills.size())
+	# Smooth profile across the biggest meadow hill: no steps, gentle slopes, flat crest.
+	var hl: Array = b.hills[2]
+	var c: Vector3 = hl[0]
+	var ang: float = hl[1]
+	var axis := c.cross(Vector3.UP).normalized()
+	var max_slope := 0.0
+	var max_step := 0.0
+	var prev := -1.0
+	var n := 120
+	for i in n + 1:
+		var a := lerpf(-ang * 1.2, ang * 1.2, float(i) / n)
+		var hgt := b.terrain_height(c.rotated(axis, a))
+		if prev >= 0.0:
+			var run := (ang * 2.4 / n) * b.radius
+			max_slope = maxf(max_slope, absf(hgt - prev) / run)
+			max_step = maxf(max_step, absf(hgt - prev))
+		prev = hgt
+	t.check("terrain_hills_smooth_and_gentle", max_slope < 0.5 and max_step < 0.06, "max slope %.2f, max step %.3f" % [max_slope, max_step])
+	t.check("terrain_hill_height_kept", absf(b.terrain_height(c) - float(hl[2])) < 0.15, "crest %.2f authored %.2f" % [b.terrain_height(c), hl[2]])
+	# Collision follows the drawn surface everywhere on the hill.
+	var worst := 0.0
+	for k in 40:
+		var d := c.rotated(axis, ang * (k % 10) * 0.1).rotated(c, TAU * floorf(k / 10.0) / 4.0 + 0.3)
+		var q := PhysicsRayQueryParameters3D.create(b.surface_point(d, 3.0), b.global_position, 1)
+		var hit := g.get_world_3d().direct_space_state.intersect_ray(q)
+		worst = maxf(worst, 9.0 if hit.is_empty() else absf(b.altitude(hit.position)))
+	t.check("terrain_collision_matches_surface", worst < 0.08, "worst gap %.3f" % worst)
+	# The drawn surface faces outward.
+	var mesh: ArrayMesh = b.get_node("MossSurface").mesh
+	var arr := mesh.surface_get_arrays(0)
+	var v: PackedVector3Array = arr[Mesh.ARRAY_VERTEX]
+	var idx: PackedInt32Array = arr[Mesh.ARRAY_INDEX]
+	var inward := 0
+	for i in range(0, idx.size(), 3):
+		var nrm := (v[idx[i + 2]] - v[idx[i]]).cross(v[idx[i + 1]] - v[idx[i]])
+		if nrm.length_squared() > 1e-10 and nrm.dot(v[idx[i]]) <= 0.0:
+			inward += 1
+	t.check("terrain_surface_faces_outward", inward == 0, "%d inward faces" % inward)
+	# He can walk up and over a hill (and stays on the ground doing it).
+	var start := c.rotated(axis, -ang * 1.25)
+	place(0, rad_to_deg(asin(start.y)), rad_to_deg(atan2(start.x, start.z)))
+	await wait_grounded(2.0)
+	var crest_seen := 0.0
+	var air := 0
+	var frames := 0
+	for i in 240:
+		stick_toward(b.surface_point(c.rotated(axis, ang * 1.4)) - p.global_position)
+		await t.frames(1)
+		frames += 1
+		if not p.grounded:
+			air += 1
+		crest_seen = maxf(crest_seen, b.terrain_height(b.up_at(p.global_position)))
+		# Done once over the crest and back off the far foot.
+		if crest_seen > float(hl[2]) * 0.9 and b.up_at(p.global_position).angle_to(c) > ang * 1.05:
+			break
+	p.bot_input = Vector2.ZERO
+	t.check("terrain_walk_over_hill", crest_seen > float(hl[2]) * 0.9 and air < frames * 0.15, "crest reached %.2f of %.2f, airborne %d/%d frames" % [crest_seen, hl[2], air, frames])
 
 
 func _test_placements() -> void:

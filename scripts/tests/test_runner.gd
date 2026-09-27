@@ -21,7 +21,7 @@ func _ready() -> void:
 func _run() -> void:
 	await frames(3)
 	var suites := {"unit": "res://scripts/tests/unit_tests.gd", "playthrough": "res://scripts/tests/playthrough_bot.gd",
-			"shots": "res://scripts/tests/shots.gd", "perf": "res://scripts/tests/perf.gd"}
+			"shots": "res://scripts/tests/shots.gd", "perf": "res://scripts/tests/perf.gd", "model": "res://scripts/tests/model_preview.gd"}
 	var script: GDScript = load(suites.get(Settings.test_mode, "")) if suites.has(Settings.test_mode) else null
 	if script == null or not script.can_instantiate():
 		check("load_suite_" + Settings.test_mode, false, "suite failed to load")

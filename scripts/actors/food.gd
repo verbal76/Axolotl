@@ -162,7 +162,7 @@ func _ground_height(up: Vector3) -> float:
 	var q := PhysicsRayQueryParameters3D.create(global_position + up * 0.5, global_position - up * 6.0, 1 | 2)
 	var hit := get_world_3d().direct_space_state.intersect_ray(q)
 	if hit.is_empty():
-		return (global_position - ball.global_position).length() - ball.radius
+		return ball.altitude(global_position)
 	return global_position.distance_to(hit.position)
 
 

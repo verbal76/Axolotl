@@ -71,6 +71,17 @@ func run(runner) -> void:
 			if m.h_hint > 3.5:
 				t.log_line("tower mote h_hint %.1f anchor-height %.2f pos-height %.2f state %s" % [m.h_hint, (m.anchor - b.global_position).length() - b.radius,
 						(m.global_position - b.global_position).length() - b.radius, m.state])
+	if only == "terrain":
+		# Rolling meadow hills from the player's camera, and the south hills.
+		var b := g.balls[0]
+		for v in [[18, 0, 36, -9, "a"], [26, 20, 31, 22, "b"], [-40, 30, -52, 22, "c"]]:
+			var from := MossBall.dir_ll(v[0], v[1])
+			var to := MossBall.dir_ll(v[2], v[3])
+			g.player.place(b, b.surface_point(from, 0.1), b.surface_point(to) - b.surface_point(from))
+			g.cam.snap_behind()
+			g.cam.pitch = 0.18
+			await t.seconds(1.5)
+			await t.shot("terrain_%s" % v[4])
 	if only == "" or only == "moments":
 		await _moments(g)
 	if only == "" or only == "restored":
@@ -110,14 +121,14 @@ func _moments(g: Game) -> void:
 	await t.seconds(1.0)
 	await t.shot("10_prompt_jump")
 	g._hide_prompt("jump", false)
-	# Dorsal health fronds close up (4 active of 6 unlocked... 3 + one upgrade, one lost).
+	# Health gills close up (3 of 4 unlocked active: 3 + one upgrade, one lost).
 	p.max_health = 4
 	p.health = 3
 	p.model.set_health(3, 4, false)
 	g.cam.distance = 2.2
 	g.cam.pitch = 0.7
 	await t.seconds(1.0)
-	await t.shot("11_dorsal_fronds")
+	await t.shot("11_health_gills")
 	g.cam.distance = 4.4
 	# Parasite colour drain: a large parasite after one and two hits.
 	var large: Parasite = null
