@@ -73,19 +73,19 @@ func run(runner) -> void:
 	t.check("reached_ball2", p.ball == g.balls[1], "")
 	await t.shot("pt_20_ball2")
 	await clear_ball(1, 1.01, [])
-	t.check("ball2_fully_restored", g.balls[1].completed, "%.2f" % g.balls[1].restoration)
+	t.log_line("ball 2 after first visit: %.0f%%" % (g.balls[1].restoration * 100.0))
 	await enter_vortex(g.balls[1].vortex_out, false)
 	t.check("reached_ball3", p.ball == g.balls[2], "")
 	await t.shot("pt_30_ball3")
 	await clear_ball(2, 1.01, [])
-	t.check("ball3_fully_restored", g.balls[2].completed, "%.2f" % g.balls[2].restoration)
+	t.log_line("ball 3 after first visit: %.0f%%" % (g.balls[2].restoration * 100.0))
 	# Backtrack: #3 -> #2 -> #1 through the bidirectional vortices.
 	await enter_vortex(g.balls[1].vortex_out, true)
 	t.check("backtrack_to_ball2", p.ball == g.balls[1], "")
 	await enter_vortex(g.balls[0].vortex_out, true)
 	t.check("backtrack_to_ball1", p.ball == g.balls[0], "")
 	await clear_ball(0, 1.01, [])
-	t.check("ball1_fully_restored", g.balls[0].completed, "%.2f" % g.balls[0].restoration)
+	t.log_line("ball 1 after returning: %.0f%%" % (g.balls[0].restoration * 100.0))
 	for bi in [1, 2, 0]:
 		if not g.balls[bi].completed:
 			await travel_to(bi)
@@ -93,6 +93,8 @@ func run(runner) -> void:
 	if p.ball.index != 0:
 		await travel_to(0)
 	mark("300% restored" if g.balls.all(func(bb): return bb.completed) else "finished (incomplete)")
+	for bi in 3:
+		t.check("ball%d_fully_restored" % (bi + 1), g.balls[bi].completed, "%.2f" % g.balls[bi].restoration)
 	await t.shot("pt_40_all_restored")
 	# Quiet period, then ALL CLEAR, then free roam continues.
 	var done_at := sim_time

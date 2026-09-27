@@ -184,6 +184,80 @@ shaders/                    moss health field, vegetation, parasites, glass, gra
 tools/                      texture + audio generators, script checker
 ```
 
+## Screenshots
+Rendered by the engine in this project's automated screenshot tour (software GPU, 1280×720, downscaled).
+
+| | |
+|---|---|
+| ![Murky start](docs/screenshots/start_murky.jpg) | ![Tutorial](docs/screenshots/tutorial.jpg) |
+| ![Regeneration Mote](docs/screenshots/regeneration_mote.jpg) | ![Vortex surf](docs/screenshots/vortex_surf.jpg) |
+| ![Jungle canopy](docs/screenshots/jungle_canopy.jpg) | ![All clear](docs/screenshots/all_clear_restored.jpg) |
+
 ## Verification results
-See the pull request description for the latest verified results (unit suite, playthrough bot,
-CI builds), measured performance, and known limitations.
+
+How it was verified: **no physical phone or tablet was available** in the build environment. Everything
+below comes from running the real game in Godot 4.7.2: headless for logic, and on a software Vulkan GPU
+(llvmpipe) for screenshots. The CI builds prove the Android APK exports and the iOS app compiles, but
+neither was installed or run on a device or simulator.
+
+**Mechanics suite** (`--test=unit`, 68 checks, all passing locally and in CI). These drive the real
+controller through the same input actions the touch HUD and gamepad use:
+- All 118 authored actors land on their intended surface.
+- Tutorial route: every start point makes jump → M1 → jump+burst → M2, and a plain jump cannot cross the gap.
+- A full lap around a moss ball with no camera flips and no unintended airborne frames.
+- Jump apex, the water burst (exactly once, follows direction, no third action), landing resets it, coyote time, jump buffering.
+- The swipe misses in front and hits behind; 1/2/3-hit colour drain in the right stages, draining head to rear; dead parasites drift, then hand off to debris.
+- Hard landing kills small parasites and does one stage plus knockback to medium ones. The extreme canopy drop costs 1 health, never the last one, and deals 2 stages, with a visible telegraph. The flexible leaf cushions the fall and gives a modest rebound.
+- Food heals +1, +2 and full, and works at full health. The darter darts, the burrower retreats and re-emerges, and food repopulates out of view.
+- Motes aren't auto-collected, are pushed by a near miss, need the lunge, and restore the patch.
+- Blooms activate; regeneration returns you to the last bloom with full health and keeps restoration.
+- Brittle moss crumbles and regrows.
+- The aquarium and vortex change continuously (largest per-frame step 0.0002 and 0.0013), with no tiers.
+- The vortex stays closed below 70%, connects at 70% with its camera shot, and works in both directions.
+- The current changes walking and jumping distance and carries knocked parasites downstream.
+- Three cave upgrades take health to 6.
+- Pause, Reduced HUD, touch/controller switching and haptics toggle all work.
+- 300% restoration shows ALL CLEAR only after the quiet period, and free roam continues.
+
+**Beginning-to-end playthrough** (`--test=playthrough`). A bot plays from the title screen using
+only the same analog stick and button actions a player produces. It never teleports the axolotl
+or edits game state. Latest local run (seeded), all 12 checks passing:
+- Tutorial completed in 12.7 s of game time; the bloom checkpoint activated.
+- Moss Ball #1 restored to 79%. Its vortex opened with the connection shot; travel to #2.
+- Moss Ball #2 fully restored (mesa via current-swayed plants, brittle tower, cave); travel to #3.
+- Moss Ball #3 fully restored (spiral climb, canopy, **extreme canopy drop**, cave).
+- Backtracked #3 → #2 → #1 and finished #1. **300% restored, ALL CLEAR shown, then free roam.**
+- 30 parasites killed, 34 Motes captured, 3 upgrades, 0 deaths in that run. Other runs hit deaths and
+  regenerated correctly.
+
+The bot's early runs uncovered real bugs, all fixed:
+- World-space placement errors on moss balls #2 and #3.
+- A canopy leaf with no headroom above the spiral climb.
+- Actors inside the cave dome footprint.
+- A too-tight tutorial burst gap.
+- The parasites' ability to walk off platforms.
+- Vortex suction pulling in an axolotl that was just nearby.
+
+## Performance observations (measured here; not measured on a phone)
+- **CPU:** the whole engine, including all gameplay scripts, averages **~1.1–1.2 ms per frame** headless
+  on this x86 container, with the worst frame around 13–29 ms during level loading or the bot's heavy
+  raycasting (about 0.5 ms average on the CI runner). The player controller costs about 0.25 ms and
+  parasites up to about 0.4 ms. This leaves a large budget at 60 FPS even allowing for phones being 3–6× slower.
+- **Rendering:** 190–350 draw calls and about 170k–390k triangles per frame across the key views, after
+  merging multi-part meshes and adding distance culling (down from 300–820 draw calls).
+- **GPU cost on mobile is untested.** The frame rate on real Android and iPhone hardware still needs
+  measuring. The quality scaler steps down resolution scale, particle count, vegetation density,
+  glow and secondary Mote lights if the frame rate stays below 54 for about 4 s, and recovers slowly.
+
+## Known limitations
+- **No on-device testing.** Touch feel, haptics, safe-area insets, thermal behaviour and real frame
+  rates on phones are implemented but have not been exercised on hardware. The first thing to do
+  is install the CI APK or Simulator build and play it.
+- The iOS preset uses a placeholder team ID (`AXOLOTL000`); set your own for device builds. The CI
+  iOS build is an unsigned **Simulator** build.
+- The Android build is a debug APK signed with a generated debug keystore (no release signing).
+- Art is deliberately simple procedural geometry (primitives, instanced blades, shader-driven moss).
+  Animation is procedural rather than hand-keyed.
+- Music and sound are procedurally synthesized placeholders of reasonable quality, not composed and mixed audio.
+- The playthrough bot is a verification tool, not a human. Its route times, especially the
+  12.7 s tutorial with a perfect run-up, are not estimates of human play time.

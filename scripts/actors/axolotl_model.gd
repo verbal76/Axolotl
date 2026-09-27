@@ -217,7 +217,11 @@ func _build() -> void:
 	# Six bioluminescent dorsal health fronds along the upper back.
 	for i in 6:
 		var f := Node3D.new()
-		f.position = Vector3(0, 0.13 - absf(i - 2.5) * 0.004, -0.2 + i * 0.095)
+		# Zig-zag crest: alternate sides and splay outward so each frond reads separately
+		# from the over-the-shoulder camera.
+		var zig := -1.0 if i % 2 == 0 else 1.0
+		f.position = Vector3(zig * 0.055, 0.125 - absf(i - 2.5) * 0.006, -0.23 + i * 0.1)
+		f.set_meta("splay", zig * 0.55)
 		body_root.add_child(f)
 		var fm := StandardMaterial3D.new()
 		fm.albedo_color = FROND_ON
@@ -226,8 +230,8 @@ func _build() -> void:
 		fm.emission_energy_multiplier = 2.0
 		fm.roughness = 0.4
 		frond_mats.append(fm)
-		var leaf := _sphere(0.1, fm, f, Vector3(0, 0.06, 0.012), Vector3(0.26, 0.7, 0.42))
-		leaf.rotation = Vector3(-0.35, 0, 0)
+		var leaf := _sphere(0.1, fm, f, Vector3(0, 0.085, 0.015), Vector3(0.3, 0.95, 0.38))
+		leaf.rotation = Vector3(-0.4, 0, 0)
 		_sphere(0.02, fm, f, Vector3(0, 0.0, 0), Vector3(1, 0.8, 1))
 		fronds.append(f)
 
@@ -290,7 +294,7 @@ func _update_fronds(dt: float) -> void:
 		var f := fronds[i]
 		var g := _frond_grow[i]
 		var sway := sin(_t * 2.2 + i * 0.7) * 0.12 - speed * 0.25
-		f.rotation = Vector3(sway - (1.0 - g) * 0.6, 0, 0)
+		f.rotation = Vector3(sway - (1.0 - g) * 0.6, 0, float(f.get_meta("splay", 0.0)))
 		f.scale = Vector3.ONE * lerpf(0.55, 1.0, g) * (1.0 - dissolve)
 		var m := frond_mats[i]
 		if i < health:

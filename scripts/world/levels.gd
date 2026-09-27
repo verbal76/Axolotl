@@ -192,8 +192,8 @@ static func _ball2(lb: LevelBuilder) -> void:
 	for sd in sway_defs:
 		lb.sway_xf(lb.at(S[0], S[1], S[2], 0, 0, sd[0]), sd[1], 2.3, 1.7, 0.2, sd[2], sd[3])
 	lb.parasite_xf(Parasite.Kind.MEDIUM, "mesa", lb.at(S[0], S[1], S[2], 0.8, 6.3, -0.5), 3.5)
-	lb.mote_xf("mesa", lb.at(S[0], S[1], S[2], -1.2, 6.3, 1.0), 1.0)
-	lb.mote_xf("mesa", lb.at(S[0], S[1], S[2], 1.4, 6.3, -1.6), 1.0)
+	lb.mote_xf("mesa", lb.at(S[0], S[1], S[2], -1.0, 6.3, 0.8), 0.55)
+	lb.mote_xf("mesa", lb.at(S[0], S[1], S[2], 1.1, 6.3, -1.2), 0.55)
 	lb.bloom_xf(lb.at(S[0], S[1], S[2], 0, 0, 14.0))
 	lb.bot_hints.append({"mesa": true, "site": S, "sway": sway_defs})
 
@@ -350,8 +350,8 @@ static func _ball3(lb: LevelBuilder) -> void:
 			node.add_child(mi)
 	lb.parasite_xf(Parasite.Kind.MEDIUM, "canopy", leaf_mid(c2, 3.0, 0.5), 2.2)
 	lb.parasite_xf(Parasite.Kind.SMALL, "canopy", leaf_mid(f1._pivot_xf, 2.0, 0.0), 1.2)
-	lb.mote_xf("canopy", leaf_mid(c2, 1.8, -0.7), 0.8)
-	lb.mote_xf("canopy", leaf_mid(c3, 4.0, 0.0), 0.8)
+	lb.mote_xf("canopy", leaf_mid(c2, 1.8, -0.5), 0.5)
+	lb.mote_xf("canopy", leaf_mid(c3, 3.6, 0.0), 0.5)
 	lb.mote_xf("canopy", leaf_mid(spiral[4], 2.2, 0.0), 0.6)
 	lb.bloom_xf(leaf_mid(c1, 2.6, 0.0))
 	lb.bloom_xf(C.p(-2.6, 0, -3.2))
