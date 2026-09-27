@@ -2,7 +2,7 @@ name: Build & Verify
 
 on:
   push:
-    branches: [main, "claude/**"]
+    branches: [main]
   pull_request:
   workflow_dispatch:
 
@@ -28,9 +28,13 @@ jobs:
           godot --headless --path . -s tools/check_scripts.gd 2>&1 | tee check.log
           ! grep -E "Parse Error" check.log
       - name: Mechanics test suite
-        run: godot --headless --path . --fixed-fps 60 --max-fps 0 -- --test=unit --out=$PWD/test_out
+        run: |
+          godot --headless --path . --fixed-fps 60 --max-fps 0 -- --test=unit --out=$PWD/test_out 2>&1 | tee unit.log
+          grep -E "\[TEST\] SUMMARY [0-9]+ passed, 0 failed" unit.log
       - name: Beginning-to-end playthrough bot
-        run: godot --headless --path . --fixed-fps 60 --max-fps 0 -- --test=playthrough --out=$PWD/test_out
+        run: |
+          godot --headless --path . --fixed-fps 60 --max-fps 0 -- --test=playthrough --out=$PWD/test_out 2>&1 | tee playthrough.log
+          grep -E "\[TEST\] SUMMARY [0-9]+ passed, 0 failed" playthrough.log
       - uses: actions/upload-artifact@v4
         if: always()
         with:

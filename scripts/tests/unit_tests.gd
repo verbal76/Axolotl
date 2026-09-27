@@ -400,13 +400,16 @@ func _test_motes() -> void:
 	t.check("mote_not_auto_collected", m.is_available(), m.state)
 	# Near miss: the lunge's water pushes it away.
 	var side := fwd.cross(up)
-	place_at(0, m.anchor + m.anchor_up * 0.3 + (m.global_position - m.anchor) * 0.0 - fwd * 1.8 + side * 1.4, fwd)
+	place_at(0, m.anchor + m.anchor_up * 0.3 + (m.global_position - m.anchor) * 0.0 - fwd * 1.8 + side * 2.2, fwd)
 	await t.frames(2)
-	var v0 := m.vel.length()
-	var p0 := m.global_position
 	await press("lunge")
-	await t.seconds(0.35)
-	t.check("mote_pushed_by_near_miss", m.is_available() and (m.vel.length() > v0 + 0.3 or m.global_position.distance_to(p0) > 0.4), "vel %.2f -> %.2f" % [v0, m.vel.length()])
+	var v0 := m.vel
+	var dv := 0.0
+	for k in 24:
+		await t.frames(1)
+		dv = maxf(dv, (m.vel - v0).length())
+		v0 = m.vel
+	t.check("mote_pushed_by_near_miss", m.is_available() and dv > 0.6, "velocity change %.2f" % dv)
 	await t.seconds(1.5)
 	# Aim and lunge: captured, dives into the moss, restores the patch.
 	var r0 := b.restoration

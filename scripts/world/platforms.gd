@@ -54,7 +54,7 @@ class Crumble extends StaticBody3D:
 		match _state:
 			"shaking":
 				position = _home.origin + Vector3(randf() - 0.5, 0, randf() - 0.5) * 0.06
-				if _t > 0.55:
+				if _t > 0.8:
 					_state = "gone"
 					_t = 0.0
 					_shape.disabled = true

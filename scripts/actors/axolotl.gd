@@ -61,6 +61,7 @@ var fall_danger := false
 var move_input := Vector2.ZERO
 var bot_input := Vector2.ZERO    # used by the automated test bot
 var use_bot_input := false
+var ext_vel := Vector3.ZERO      # external water pull (e.g. an open vortex's suction)
 var _last_land_variant := -1
 var _landing_speed := 0.0
 var _jumped_this_frame := false
@@ -230,7 +231,7 @@ func _physics_process(dt: float) -> void:
 		if wish.length() > 0.2:
 			facing = wish.normalized()
 
-	var cur := ball.current_at(global_position) * (0.45 if grounded else 1.0)
+	var cur := ball.current_at(global_position) * (0.45 if grounded else 1.0) + ext_vel
 	velocity = vh + up * vup + cur
 	var was_grounded := grounded
 	var pre_vup := vup

@@ -442,6 +442,7 @@ func _check_vortex_connections() -> void:
 
 
 func _check_vortex_entry() -> void:
+	player.ext_vel = Vector3.ZERO
 	if player.state != "normal":
 		return
 	for v in vortices:
@@ -451,12 +452,17 @@ func _check_vortex_entry() -> void:
 			var mb: MossBall = v.ball_b if at_b else v.ball_a
 			if mb != player.ball:
 				continue
-			var dist: float = v.mouth_pos(at_b).distance_to(player.body_center())
+			var to: Vector3 = v.mouth_pos(at_b) - player.body_center()
+			var flat := to - player.up * to.dot(player.up)
 			if _vortex_block == v:
-				if dist > 4.0:
+				if flat.length() > 4.5:
 					_vortex_block = null
 				continue
-			if dist < 1.7:
+			# An open whirlpool gently draws nearby water (and axolotls) toward its centre.
+			if flat.length() < 4.5:
+				var k := 1.0 - flat.length() / 4.5
+				player.ext_vel = flat.normalized() * 2.2 * k
+			if flat.length() < 2.0 and absf(to.dot(player.up)) < 2.5:
 				_start_cinematic("travel", {"v": v, "reverse": at_b})
 				return
 

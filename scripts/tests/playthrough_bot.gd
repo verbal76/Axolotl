@@ -100,9 +100,19 @@ func wait(s: float) -> void:
 		await tick()
 
 
+var activity := ""
+var _hb := 0.0
+
+
 func tick() -> void:
 	await t.frames(1)
 	sim_time += 1.0 / 60.0
+	_hb += 1.0 / 60.0
+	if _hb >= 20.0:
+		_hb = 0.0
+		t.log_line("heartbeat %.0fs ball %d h %.1f act '%s' R %.2f %.2f %.2f hp %d cine '%s' state %s" % [sim_time, p.ball.index + 1,
+				(p.global_position - p.ball.global_position).length() - p.ball.radius, activity, g.balls[0].restoration,
+				g.balls[1].restoration, g.balls[2].restoration, p.health, g.cinematic, p.state])
 
 
 func set_stick(v: Vector2) -> void:
@@ -269,20 +279,31 @@ func wait_grounded(timeout := 3.0) -> bool:
 
 
 ## Hop along a chain of platform tops. Each entry is a Vector3 or a Callable returning one.
-func hop_chain(tops: Array, retries := 4, start_back: Variant = null) -> bool:
+func hop_chain(tops: Array, retries := 4, start_back: Variant = null, no_settle: Array = []) -> bool:
 	var i := 0
 	var tries := 0
+	var total_fails := 0
 	while i < tops.size():
 		var tgt = tops[i]
+		# Don't jump at brittle moss that has crumbled; wait for it to regrow.
+		var tp: Vector3 = tgt.call() if tgt is Callable else tgt
+		for c in p.ball.crumbles:
+			if c.global_position.distance_to(tp) < 1.5:
+				for k in 60 * 6:
+					if c._state == "solid":
+						break
+					await tick()
 		var ok := await hop_toward(tgt, true)
 		if ok:
-			# Centre on the platform before the next hop.
-			await settle_on(tgt)
+			# Centre on the platform before the next hop (never linger on brittle moss).
+			if not i in no_settle:
+				await settle_on(tgt)
 			i += 1
 			tries = 0
 		else:
 			tries += 1
-			if tries > retries:
+			total_fails += 1
+			if tries > retries or total_fails > retries * 3:
 				failures.append("hop chain failed at step %d on ball %d" % [i, p.ball.index])
 				return false
 			await wait_grounded(2.0)
@@ -382,7 +403,7 @@ func eat_nearby(timeout := 10.0) -> bool:
 
 
 ## Approach something small and catch it with the lunge (jumping first if it's higher).
-func lunge_at(target: Callable, timeout := 20.0) -> bool:
+func lunge_at(target: Callable, timeout := 20.0, stay := false) -> bool:
 	var el := 0.0
 	var h0 := p.health
 	var start_motes: int = g.stats["motes"]
@@ -392,7 +413,10 @@ func lunge_at(target: Callable, timeout := 20.0) -> bool:
 		var flat := tangent_to(tgt)
 		var dist := flat.length()
 		if dist > 2.2:
-			set_stick(stick_for(flat))
+			if stay:
+				set_stick(stick_for(flat, 0.15))
+			else:
+				set_stick(stick_for(flat))
 			await tick()
 			el += 1.0 / 60.0
 			continue
@@ -511,21 +535,14 @@ func _collect_tasks(b: MossBall, lb: LevelBuilder, skip_zones: Array, done: Dict
 			if not (done.has("canopy") == false and par.zone_id == "canopy") and not (par.zone_id == "mesa" and not done.has("mesa")):
 				tasks.append({"kind": "kill", "ref": par, "pos": func(): return par.global_position})
 	for m in b.motes:
-		if m.is_available() and not m.zone_id in skip_zones:
-			var elevated: bool = m.h_hint > 2.5
-			if elevated and not done.has("fallback_%s" % m.zone_id):
-				continue
+		# Elevated Motes (towers, mesa, canopy) are handled by their climbing routines.
+		if m.is_available() and not m.zone_id in skip_zones and m.h_hint <= 2.5:
 			tasks.append({"kind": "mote", "ref": m, "pos": func(): return m.global_position})
-	# After the special routines ran, anything elevated left over is retried generically.
-	for k in ["tower", "mesa", "canopy"]:
-		if done.has(k):
-			for m in b.motes:
-				if m.is_available() and m.h_hint > 2.5 and not m.zone_id in skip_zones:
-					tasks.append({"kind": "mote", "ref": m, "pos": func(): return m.global_position})
 	return tasks
 
 
 func _do_task(b: MossBall, task: Dictionary, done: Dictionary) -> void:
+	activity = "%s %s" % [task["kind"], (task["ref"].zone_id if task.has("ref") else "")]
 	match task["kind"]:
 		"kill":
 			var par: Parasite = task["ref"]
@@ -556,11 +573,20 @@ func tower(b: MossBall, h: Dictionary) -> void:
 	mark("tower on ball %d" % (b.index + 1))
 	await goto(start, 0.6, 40.0)
 	var chain := [top.call(0.0, 1.4), top.call(-2.6, 2.8), top.call(-5.1, 3.1), top.call(-7.1, 3.6), top.call(-10.0, 4.2)]
-	var ok := await hop_chain(chain, 5, start)
-	if ok:
+	for attempt in 3:
+		var ok := await hop_chain(chain, 4, start, [2, 3])
+		if ok:
+			for m in b.motes:
+				if m.h_hint > 3.5 and m.is_available() and m.global_position.distance_to(p.global_position) < 5.0:
+					await lunge_at(func(): return m.global_position, 15.0, true)
+		var done := true
 		for m in b.motes:
-			if m.h_hint > 3.5 and m.is_available() and m.global_position.distance_to(p.global_position) < 5.0:
-				await lunge_at(func(): return m.global_position, 15.0)
+			if m.h_hint > 3.5 and m.zone_id == (b.crumbles[0].zone_id if b.crumbles.size() > 0 else "") and m.is_available():
+				done = false
+		if done:
+			break
+		await wait(4.0)   # let the brittle moss regrow
+		await goto(start, 0.6, 40.0)
 
 
 func mesa(b: MossBall, h: Dictionary) -> void:
