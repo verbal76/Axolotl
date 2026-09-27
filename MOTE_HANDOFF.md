@@ -1,8 +1,9 @@
 # Mote — development handoff
 
 This is the authoritative handoff for continuing **Mote** in a new coding session. It records the
-state after the **OTA delivery rectification** (runtime r4), cross-checked against the repository,
-CI and the published OTA. The earlier b18 / r3 / dev-000012 state is kept below as history.
+state after the **one-app release** (Mote b22, runtime r5, OTA dev-000014), cross-checked against
+the repository, CI, the APK's own content and the published OTA. Earlier states (b18/r3, b21/r4) are
+kept below as history.
 
 > **MOTE AUTHORIZED REPOSITORY: `verbal76/Axolotl`**
 > Work only in this repository. The previous coding environment also exposed an unrelated
@@ -14,20 +15,19 @@ CI and the published OTA. The earlier b18 / r3 / dev-000012 state is kept below 
 | Identity | Value |
 |---|---|
 | Repository / branch | `verbal76/Axolotl`, `claude/axolotl-aquarium-platformer-3y0qyy` (draft PR #1 into `main`) |
-| **Handoff document commit** | The commit that updates this file (`[skip ci]`, documentation only). It is newer than every commit below. |
-| **Native + OTA source** | `a72ae3b0514ac8bff14a8cc2e507bd3af23831dd` (`a72ae3b`): OTA rectification, runtime r4 |
-| **Last gameplay source** | `227d0abab6cadd8cd90536f92fc8dbddf4b29fc3` (`227d0ab`). The game layer at `a72ae3b` is identical to it. |
-| **Native APK baseline** | **Mote b21** (`mote-v0.1.0-b21.apk`, `com.verbal76.axolotl`), built from `a72ae3b`; Mote Dev b21 companion |
-| **Current OTA** | **`dev-000013`**, built from `a72ae3b`, runtime r4 |
-| Runtime | `android-godot-4.7.2-r4` |
+| **Handoff document commit** | The commit that updates this file (`[skip ci]`, documentation only). It is newer than the release commit. |
+| **Release commit** (APK + OTA source) | `104605727ab2bc48f6b0b6e2d56a0fd44127c5be` (`1046057`) |
+| **The one Android app** | **Mote**, `com.verbal76.axolotl`. The separate Mote Dev app is **retired** (owner, 2026-09-27). |
+| **Current APK** | **`mote-v0.1.0-b22.apk`** (artifact `mote-android-v0.1.0-b22`), Android build 22, bundled baseline `1046057` |
+| **Current OTA / channel pointer** | **`dev-000014`**, built from `1046057` (the APK's own game: a b22 install reports "Up to date") |
+| Runtime | `android-godot-4.7.2-r5` |
 | Game version / save schema | `0.1.0` / `1` |
-| Requirement authority | `docs/REQUIREMENTS_LEDGER.md` (sections G, F, O, V, N, C, A, **R**) |
-| History | b18 (`854ea84`, r3), dev-000010..dev-000012 (r3). Superseded (§8), releases kept as evidence. |
+| Requirement authority | `docs/REQUIREMENTS_LEDGER.md` (sections G, F, O, V, N, C, A, R, **S**) |
+| History | b18 (`854ea84`, r3); b21 (`a72ae3b`, r4); dev-000010..dev-000013 (r3/r4). Superseded (§8); releases kept as evidence. |
 
-> **PHYSICAL PHONE VERIFICATION OF b21 + dev-000013: NOT YET DONE.**
-> Nothing has been verified on a physical device. Do not treat CI results as device results.
-> The owner's phone currently runs the **normal b18** app (`Flavor: normal`, `OTA Enabled: no`,
-> source `854ea84`), reported by the owner. That is why it never received dev-000011/12.
+> **PHYSICAL PHONE VERIFICATION OF b22: NOT YET DONE.** The owner is uninstalling the old Mote
+> install(s) and installing b22 fresh. Earlier owner evidence: Mote **Dev** b21 discovered, downloaded and
+> verified dev-000013 (Diagnostics, 18:58 UTC). Do not treat CI results as device results.
 
 **Every push to the branch publishes a dev OTA unless the commit message contains `[skip ci]`**
 (see §12). A documentation-only push without it would publish a new OTA whose game content is
@@ -43,10 +43,10 @@ unchanged.
 | Protagonist | **Gill**, an axolotl: `CHARACTER_NAME` in the same file. The collectible **Regeneration Motes** keep their name. |
 | Game version | **0.1.0**: `GAME_VERSION`, the single canonical literal in `scripts/core/game_version.gd` |
 | Native version | `0.1.0` (`version/name` in `export_presets.cfg`); a separate identity that happens to share the starting value |
-| Android build | versionCode = the Build & Verify workflow's `run_number` (baseline: **21**) |
+| Android build | versionCode = the Build & Verify workflow's `run_number` (current: **22**) |
 | Save schema | `SAVE_SCHEMA = 1`, `MIN_SAVE_SCHEMA = 1` in `scripts/core/save_schema.gd` |
-| Normal package | `com.verbal76.axolotl`, label **Mote**: the app the owner plays; OTA-capable since r4 |
-| Dev package | `com.verbal76.axolotl.dev`, label **Mote Dev**: optional side-by-side test install, same channel |
+| Package | `com.verbal76.axolotl`, label **Mote**: the one Android app; OTA-capable since r4 |
+| Retired | `com.verbal76.axolotl.dev` "Mote Dev" (no longer built, tested or installed) |
 
 These identities are separate, and none is derived from another (full policy in `docs/VERSIONING.md`):
 
@@ -115,10 +115,13 @@ This is the design the owner asked for, including later decisions that replaced 
   thermal/performance scaling.
 - **Assets:** all original and procedural.
 - **Launcher icon:** the owner's axolotl artwork (`assets/icon/icon_source.png`).
-- **Builds (owner ruling, supersedes the offline-only normal build):** Mote is **offline-capable, not
-  offline-only**. The installed Mote app bundles the complete game, needs no connection to launch,
-  play, save or finish, and checks for signed, compatible OTAs whenever a connection happens to be
-  available, never waiting for one. A Mote Dev package remains as an optional test install.
+- **Builds (owner rulings):** Mote is **offline-capable, not offline-only**. The installed Mote app
+  bundles the complete current game, needs no connection to launch, play, save or finish, and checks
+  for signed, compatible OTAs whenever a connection happens to be available, never waiting for one.
+  **One Android app and one APK:** the Mote Dev app is retired; the `dev` OTA channel stays.
+- **Startup (owner):** launching must never look dead, and should be as fast as safely possible:
+  the engine splash shows the Mote artwork, the first game frame is the Mote loading screen, the
+  world is built in named stages behind it, and shaders are baked into the APK.
 
 ## 3. Current implementation — code map
 
@@ -147,8 +150,9 @@ Everything below is Godot **4.7.2**, Mobile renderer, GDScript.
 | Performance scaling | `scripts/core/quality_scaler.gd` |
 | Version and save schema | `scripts/core/game_version.gd`, `scripts/core/save_schema.gd` |
 | **Native OTA bootstrap** (ships in the APK) | `scripts/boot/boot.gd` (first autoload), `ota_core.gd`, `ota_updater.gd`, `ota_config.gd` (public key, channel, runtime revision), `diagnostics_overlay.gd` |
+| Startup | `scripts/core/startup_trace.gd` (milestones, pause-menu summary, `--startup-probe`), `scripts/ui/loading_screen.gd`, `Game._ready` (staged build), `assets/icon/splash.png` (boot splash, from `tools/make_icons.gd`) |
 | Tests | `scripts/tests/test_runner.gd`, `unit_tests.gd`, `ota_tests.gd`, `ota_http_stub.gd` (local HTTP server for the update client), `playthrough_bot.gd`, `shots.gd`, `model_preview.gd`, `perf.gd` |
-| Tools | `tools/ota_runtime.py`, `ota_make_manifest.gd`, `ota_inspect_pack.gd`, `ota_e2e_local.sh`, `version_drift_check.sh`, `print_identity.gd`, `write_native_build_info.py`, `make_icons.gd`, `check_scripts.gd`, `gen_textures.py`, `gen_audio.py` |
+| Tools | `tools/pck_files.py` (list a pack, `--require-baked`, `--diff`), `tools/ota_runtime.py`, `ota_make_manifest.gd`, `ota_inspect_pack.gd`, `ota_e2e_local.sh`, `version_drift_check.sh`, `print_identity.gd`, `write_native_build_info.py`, `make_icons.gd`, `check_scripts.gd`, `gen_textures.py`, `gen_audio.py` |
 | Icons | `assets/icon/`, generated by `tools/make_icons.gd` from `icon_source.png` |
 | Docs | `docs/REQUIREMENTS_LEDGER.md`, `docs/OTA.md`, `docs/VERSIONING.md`, `README.md`, `docs/screenshots/` |
 
@@ -167,21 +171,25 @@ own command line. It kills the shell.
 
 ## 4. Current verified state (automated)
 
-Evidence on `a72ae3b` (native + OTA source; game layer = `227d0ab`):
+Evidence on the release commit `1046057`:
 
 | Check | Result |
 |---|---|
-| Unit suite (mechanics, OTA client/server, version, naming, packaging, gill, terrain, food) | **160 passed, 0 failed** (local and CI) |
+| Unit suite (mechanics, startup, OTA client/server, packaging, version, naming, gill, terrain, food) | **167 passed, 0 failed** (local; CI gate green) |
 | Playthrough bot, seeds 4242 and 7 | **12/12** each |
 | Version drift check | passed |
-| OTA local end-to-end (`tools/ota_e2e_local.sh`) | ALL PASSED (31 checks, incl. hanging channel and a full offline playthrough by the exported game) |
-| Runtime gate | `r4 unchanged (godot 4.7.2): OTA-compatible` |
-| Build & Verify #21, [run 36341864999](https://github.com/verbal76/Axolotl/actions/runs/36341864999) | success: tests and playthrough, Android APKs b21, iOS simulator build |
-| OTA publish #13, [run 36341861522](https://github.com/verbal76/Axolotl/actions/runs/36341861522) | success: `dev-000013`, pointer moved |
+| OTA local end-to-end (`tools/ota_e2e_local.sh`) | ALL PASSED (42 checks, incl. startup order with no network / a hanging server, and a full offline playthrough by the exported game) |
+| Runtime gate | `r5 unchanged (godot 4.7.2): OTA-compatible` |
+| Build & Verify #22, [run 36352308882](https://github.com/verbal76/Axolotl/actions/runs/36352308882) | success: tests, playthrough, drift, gate; APK b22 exported with shaders baked and verified (§10); iOS simulator build |
+| OTA publish #14, [run 36352306690](https://github.com/verbal76/Axolotl/actions/runs/36352306690) | success: `dev-000014`, baked, published, pointer moved |
 
-Pre-rectification audit (ledger R-02): dev-000012 was proved to contain all work after b18. Every
-compiled script in the published pack is byte-identical to a local export of `227d0ab`, and the
-food/lunge tests pass when run from the published pack itself. Nothing was missing.
+Startup (desktop, Vulkan Mobile renderer on a software GPU; relative, not phone times): first Mote
+frame 7.0 s → 0.7 s cold; usable title 7.0 s → 6.4 s cold. Root cause (measured): a synchronous world
+build and 66 + 25 GPU pipeline compilations before the first frame, behind a plain-colour splash; b18
+was identical; the OTA bootstrap costs 0.17 ms (no package) or ~20 ms (verification).
+
+Reconciliation audit (history, ledger, handoff, docs, markers): no missing gameplay; the gaps found
+were delivery, documentation and consistency issues, fixed in `1046057` (ledger S-13).
 
 ## 5. Food and lunge (the final work before handoff; commit `4aa86a3`)
 
@@ -254,122 +262,114 @@ Old prompts, old tests and old commits are **not** authority over these later ow
 | Runtime r3, APK b18, OTAs dev-000010..dev-000012 | r4, b21, dev-000013 onward. r3 and r4 reject each other's OTAs. |
 | `ota_dev` export feature; OTA packs exported with the `Android Dev` preset | `ota` feature on both Android presets; packs exported with `Android` |
 | Threaded HTTPRequest in the update client | Non-threaded (the threaded one ignores its timeout on a server that never answers) |
+| The Mote Dev app (`com.verbal76.axolotl.dev`, preset "Android Dev", artifact `mote-android-dev-*`) | One Mote app and one APK (ledger S-01). The `dev` **channel** is not retired. |
+| Runtime r4, APK b21, OTA dev-000013 as current | r5, b22, dev-000014 |
+| Plain-colour boot splash; whole world built before the first frame | Mote boot splash; loading screen first; staged build (S-03, S-06) |
 
-## 9. OTA architecture (runtime r4)
+## 9. OTA architecture (runtime r5)
 
-| | **Mote** | **Mote Dev** |
-|---|---|---|
-| Package | `com.verbal76.axolotl` | `com.verbal76.axolotl.dev` |
-| Export preset | `Android` (custom feature `ota`) | `Android Dev` (custom feature `ota`) |
-| INTERNET permission | yes | yes |
-| Bundled game | complete (current gameplay) | complete (current gameplay) |
-| OTA | `dev` channel | `dev` channel |
-| Signing | the Mote certificate (pinned) | the same certificate |
+| | **Mote** (the one Android app) |
+|---|---|
+| Package / label | `com.verbal76.axolotl` / Mote |
+| Export preset | `Android` (custom feature `ota`, `shader_baker/enabled`) |
+| INTERNET permission | yes |
+| Bundled game | complete, current at the APK's commit |
+| OTA | `dev` channel |
+| Signing | the pinned Mote certificate |
 
-The two apps install side by side. iOS has no OTA client (unsigned simulator build).
+iOS has no OTA client (unsigned simulator build). The Mote Dev app is retired.
 
 **Offline first.** `Boot._init` mounts only a package already on the device and verified (or none:
-the bundled game). No network call happens before the game starts. After the game reports ready and
-runs for 3 s (boot health), `Boot.auto_check()` starts a background check. It checks again on
-resume if ≥ 15 minutes have passed since the last automatic attempt, and every 60 minutes while
-running (`auto_check_due()`). A verified update is downloaded, staged as PENDING and runs on the
-next start. Every failure (no network, DNS, GitHub down, timeout, bad pointer/manifest/signature/
-runtime/hash, interrupted download) keeps the current game. The HTTP client is polled from the
-main loop and never blocks it. It is not threaded, because Godot 4.7.2's threaded HTTPRequest
-ignores its timeout when a server accepts a connection but never answers.
+the bundled game). No network call happens before the game is usable. The first game frame is the
+Mote loading screen; the world is then built in stages. After the game is ready and healthy (3 s),
+`Boot.auto_check()` checks in the background; again on resume (≥ 15 min since the last automatic
+attempt) and hourly. A verified update is staged as PENDING and runs on the next start. Every failure
+keeps the current game. The HTTP client is non-threaded (Godot 4.7.2's threaded HTTPRequest ignores its
+timeout when a server never answers) and never blocks the main loop.
+
+**Fresh APK, current channel.** An OTA built from the same commit as the APK's bundled game is
+reported "Up to date" and not downloaded (`OtaUpdater.bundled_source_sha`); newer OTAs download as usual.
 
 **How OTA works** (full detail in `docs/OTA.md`):
 
 - **Mounting:** the `Boot` autoload runs first and, in `_init`, mounts a verified Godot PCK before
   any other script or scene loads.
-- **Verification:** each PCK must pass a signed manifest (RSA PKCS#1 v1.5, SHA-256), the runtime and
-  bootstrap checks, and the size and SHA-256 checks.
+- **Verification (every boot, no caching):** signed manifest (RSA PKCS#1 v1.5, SHA-256), runtime and
+  bootstrap checks, size and SHA-256 of the package. Measured cost ~20 ms desktop.
 - **Runtime generations:** an OTA for an older runtime is "incompatible runtime" (a leftover package
   is dropped after an APK upgrade); for a newer one, "native update required".
 - **Package state:** transactional (current / previous / pending / ready / bad).
-- **Recovery:** a boot-health check with rollback after 2 unhealthy starts, plus manual rollback,
-  bundled-baseline boot and re-enable.
+- **Recovery:** boot-health rollback after 2 unhealthy starts, manual rollback, bundled-baseline boot
+  and re-enable.
 - **Hosting:** GitHub Releases. Each OTA gets an immutable prerelease tag `ota-dev-%06d`. The mutable
   pointer `ota-channel-dev/latest.json` only moves forward.
-- **Channels:** both packages follow `dev`. A later stable channel is a second pointer. The native
-  build info may name `ota_channel`, and the default is `CHANNEL` in `ota_config.gd`.
+- **Channels:** `dev`. A later stable channel is a second pointer; native build info may name
+  `ota_channel` (default `CHANNEL` in `ota_config.gd`).
 
 **Change rules:**
 
 - **OTA-compatible (game layer):** gameplay/UI GDScript (including new scripts and new `class_name`s),
   scenes, shaders, textures, audio, level data, `GameVersion`, `SaveSchema`.
-- **Needs a runtime bump and a new APK (native layer):**
-  - the Godot version;
-  - `project.godot` (autoloads, settings, icon);
-  - `export_presets.cfg` (permissions, package, icons, signing);
-  - anything under `scripts/boot/` (bootstrap, verifier, channel, public key);
-  - native libraries or plugins.
+- **Needs a runtime bump and a new APK (native layer):** the Godot version; `project.godot`
+  (autoloads, settings, boot splash, icon); `export_presets.cfg` (permissions, package, icons,
+  signing, shader baker); anything under `scripts/boot/`; native libraries or plugins.
 
 `python3 tools/ota_runtime.py --check` compares the guarded files against `ota/runtime_lock.json`,
-and the OTA workflow refuses to publish when they differ. To make a native change: bump with
-`--bump`, commit, then build and install the new APK.
+and the OTA workflow refuses to publish when they differ. To make a native change: `--bump`, commit,
+then build and install the new APK. (`--relock` only while the revision was never distributed.)
 
-## 10. Current APK baseline
+## 10. Current APK
 
 | | |
 |---|---|
-| File | **`mote-v0.1.0-b21.apk`** (artifact **`mote-android-v0.1.0-b21`**) |
+| File | **`mote-v0.1.0-b22.apk`** |
+| Artifact | **`mote-android-v0.1.0-b22`**: [download](https://github.com/verbal76/Axolotl/actions/runs/36352308882/artifacts/10942084891) (signed in to GitHub; zip with the APK and `build-info.json`) |
 | Package / label | `com.verbal76.axolotl` / **Mote** |
-| Build / versionCode | 21 (versionName 0.1.0) |
-| Build source | `a72ae3b0514ac8bff14a8cc2e507bd3af23831dd` |
-| Bundled gameplay | identical to `227d0ab` (the dev-000012 gameplay) |
-| Runtime | `android-godot-4.7.2-r4` |
+| Android build / versionCode | 22 (versionName 0.1.0) |
+| Build source = bundled baseline | `104605727ab2bc48f6b0b6e2d56a0fd44127c5be` |
+| Runtime | `android-godot-4.7.2-r5` |
 | Permissions | INTERNET, VIBRATE |
-| Game version | 0.1.0 |
-| APK SHA-256 | `801c889b61b0d4a55722d3a2243ab91f28868482be3890c2231f998f3c6c6d0d` |
-| Signing certificate SHA-256 | `A8:4F:BA:D5:61:B9:F5:E2:4E:BB:45:E2:95:17:94:F6:17:28:19:56:CF:DB:CA:FF:3A:CF:DB:9E:63:E2:C2:E3` (pin enforced in CI) |
-| Built by | Build & Verify #21, [run 36341864999](https://github.com/verbal76/Axolotl/actions/runs/36341864999) |
+| Game version / save schema | 0.1.0 / 1 |
+| APK SHA-256 | `7305593ef86355c00340cf3389b9b71d34ff7a6bf9ae4925ddc1f8fbb0aa6924` |
+| Signing certificate SHA-256 | `A8:4F:BA:D5:61:B9:F5:E2:4E:BB:45:E2:95:17:94:F6:17:28:19:56:CF:DB:CA:FF:3A:CF:DB:9E:63:E2:C2:E3` (pin enforced) |
+| OTA public key (DER SHA-256) | `a003a45ce422325ef1de52958bd9d4d2a06b912ae119c6c7a7f9e40ff2720cf2` (pin enforced) |
+| Baked shaders | 38 caches inside the APK (6 scene/material, the rest engine core) |
+| Built by | Build & Verify #22, [run 36352308882](https://github.com/verbal76/Axolotl/actions/runs/36352308882) |
 
-- **Mote Dev companion:** `mote-dev-v0.1.0-b21.apk` (artifact `mote-android-dev-v0.1.0-b21`),
-  `com.verbal76.axolotl.dev`, SHA-256 `4cc9bdc4ca007d90a508c7dc968e1989b358de93ecdf392a2ca73567f6bad86b`, same certificate. Optional.
-- **Installing:** install b21 **over** the existing Mote app. **Do not uninstall first.** It is the
-  same package, the same certificate and a higher versionCode, so Android keeps the save data.
-  Play Protect's "unknown developer" prompt is expected; tap **Install anyway**.
-- **History:** b18 (`854ea84`, r3) was the previous baseline. Its normal app had no OTA client.
+CI verified all of the above from the APK itself, including running the APK's own bundled game
+(`--print-identity`): source `1046057`, build 22, flavour normal, OTA on dev, runtime r5, save schema 1.
+
+**Installing:** a fresh install (the owner is uninstalling the old apps first). Later Mote APKs signed
+with the same key install **over** b22 and keep its saves. Play Protect's "unknown developer" prompt
+is expected; tap **Install anyway**.
 
 ## 11. Current OTA
 
 | | |
 |---|---|
-| OTA id / channel | **`dev-000013`** / `dev` |
-| Source | `a72ae3b0514ac8bff14a8cc2e507bd3af23831dd` (game layer = `227d0ab`) |
-| Runtime / bootstrap | `android-godot-4.7.2-r4` / 1 |
+| OTA id / channel | **`dev-000014`** / `dev` |
+| Source | `104605727ab2bc48f6b0b6e2d56a0fd44127c5be` (the same commit b22 bundles) |
+| Runtime / bootstrap | `android-godot-4.7.2-r5` / 1 |
 | Game version / save schema | 0.1.0 / 1 (min 1) |
-| Payload | `axolotl-dev-000013.pck`, 3,387,632 bytes |
-| Payload SHA-256 | `a2f0cd0d56272807df9df046e5a9c142e6c479028e9babccb0850fbabc29cd75` |
-| OTA public-key SHA-256 (DER) | `a003a45ce422325ef1de52958bd9d4d2a06b912ae119c6c7a7f9e40ff2720cf2` (unchanged) |
-| Manifest | `https://github.com/verbal76/Axolotl/releases/download/ota-dev-000013/manifest.json` |
-| Pointer | `https://github.com/verbal76/Axolotl/releases/download/ota-channel-dev/latest.json` → `dev-000013` |
-| Compatible APK | b21 (r4). b18 (r3) rejects it: "native update required". |
-| Published by | OTA publish #13, [run 36341861522](https://github.com/verbal76/Axolotl/actions/runs/36341861522) |
+| Payload | `axolotl-dev-000014.pck`, 4,852,728 bytes (38 baked shader caches) |
+| Payload SHA-256 | `223ae3de4016cc28e80e352a51bfe6d9c54a704dce3c3b0df97ab8ea52dc6531` |
+| Pointer | `https://github.com/verbal76/Axolotl/releases/download/ota-channel-dev/latest.json` → `dev-000014` |
+| Published by | OTA publish #14, [run 36352306690](https://github.com/verbal76/Axolotl/actions/runs/36352306690) |
 
-**Independent verification.** The objects were downloaded from the public URLs. The check confirmed:
+Independently verified from the public URLs: signature against the pinned key, hash, size, baked
+shaders (`tools/pck_files.py --require-baked`), inspector (INSPECT OK). Live check with the real update
+client: a b22 install (bundled `1046057`) reports "up to date (latest dev-000014 is the game bundled in
+this app)"; any other bundle is offered dev-000014.
 
-- the manifest signature verifies against the pinned key embedded in the APK;
-- the payload hash and size match the manifest;
-- `tools/ota_inspect_pack.gd` reports INSPECT OK;
-- the pack matches a local export of `a72ae3b` (only Godot's per-machine `uid_cache.bin` and a random scene node id differ);
-- its gameplay files are byte-identical to dev-000012;
-- an r3 client rejects it, and an r4 client rejects dev-000012.
-
-It carries the same gameplay as the bundled game. Its purpose is to prove the new APK's
-discovery → download → verification → activation → rollback path.
-
-**dev-000012** (`227d0ab`, r3, PCK `83f6de50…ae277db`) remains published as historical evidence.
-
-> **PUBLISHED:** yes. **DOWNLOADED ON THE PHONE:** NOT YET VERIFIED. **ACTIVE ON THE OWNER'S DEVICE:** NOT YET VERIFIED.
+Older OTAs stay published as evidence: dev-000010..dev-000012 (r3), dev-000013 (r4). An r5 app
+rejects them ("incompatible runtime"); an r3/r4 app rejects dev-000014 ("native update required").
 
 ## 12. CI architecture
 
 | Workflow | File | Triggers | Does |
 |---|---|---|---|
-| Build & Verify | `.github/workflows/build.yml` | `pull_request`, push to `main`, manual | Script check, unit suite, playthrough bot, version drift, runtime gate; signed Android APKs (Mote and Mote Dev) with badging, permission (both must have INTERNET), certificate and OTA-key checks; unsigned iOS simulator build |
-| OTA publish (dev channel) | `.github/workflows/ota-publish.yml` | push to `claude/axolotl-aquarium-platformer-3y0qyy`, manual | Runtime gate, tests, PCK export (`Android` preset), manifest, signing, inspection, immutable release, re-download and verify, pointer move, receipt artifact `ota-receipt-*` |
+| Build & Verify | `.github/workflows/build.yml` | `pull_request`, push to `main`, manual | Script check, unit suite, playthrough bot, version drift, runtime gate; the one Mote APK exported with shaders baked (software Vulkan under xvfb), then verified from the APK itself: package/label/versionCode, INTERNET, certificate pin, OTA-key pin, baked caches, splash, and the bundled game's own identity (`--print-identity`); unsigned iOS simulator build |
+| OTA publish (dev channel) | `.github/workflows/ota-publish.yml` | push to `claude/axolotl-aquarium-platformer-3y0qyy`, manual | Runtime gate, tests, PCK export (`Android` preset, shaders baked; fails without them), manifest, signing, inspection, immutable release, re-download and verify, pointer move, receipt artifact `ota-receipt-*` |
 
 Every push to the branch runs both workflows (the second through the PR). A commit message
 containing `[skip ci]` skips both.
@@ -378,7 +378,7 @@ containing `[skip ci]` skips both.
 "unnecessary complexity" without proving it is obsolete.
 
 - **`683b273`, aapt2 permission inspection.** `aapt dump badging` did not list the permissions. CI
-  now reads them from the manifest xmltree and asserts: normal has no INTERNET, dev has INTERNET.
+  now reads them from the manifest xmltree (and asserts the Mote APK has INTERNET).
 - **`18c64df`, aapt exit-status tolerance.** `B=$(aapt …)` aborted the step under `bash -e`, so it
   now ends in `|| true`. The label and package are still asserted afterwards.
 - **`1ae4e69`, OTA PEM normalization.** Pasted keys arrive with spaces, CRLF or re-wrapped lines.
@@ -389,6 +389,10 @@ containing `[skip ci]` skips both.
   the pin. Only structural facts are logged, never key material.
 - **`a72ae3b`, identity.json outside the project.** CI wrote `identity.json` into the project root,
   so it was packed into APKs and PCKs (found in dev-000012). It is now written to `$RUNNER_TEMP`.
+- **`e60b075`, shader baking only under the target renderer.** A headless export bakes nothing, so
+  CI exports on software Vulkan (lavapipe) under xvfb and fails if the log shows no baking.
+- **`1046057`, the release APK verifies itself.** CI unzips the APK's assets and runs them
+  (`--print-identity`), so the bundled baseline is proven from the artifact, not from the source tree.
 - **`31ae69d`, real branch SHA.** `pull_request` runs check out GitHub's synthetic merge commit. The
   workflow now checks out and records `SOURCE_SHA` = the PR head commit, and asserts it before export.
 
@@ -399,7 +403,7 @@ Workflow-level pins (public values, not secrets): `MOTE_DEV_CERT_SHA256` and `MO
 | Secret | Purpose |
 |---|---|
 | `MOTE_OTA_SIGNING_KEY` | Private RSA key that signs OTA manifests. It must match the public key in `scripts/boot/ota_config.gd`. |
-| `MOTE_ANDROID_DEV_KEYSTORE_B64` | Base64 PKCS12 keystore that signs both APKs, so updates install over each other |
+| `MOTE_ANDROID_DEV_KEYSTORE_B64` | Base64 PKCS12 keystore that signs the Mote APK, so later APKs install over it. (The `DEV` in these names predates the retirement of the Mote Dev app; renaming would mean re-entering secrets.) |
 | `MOTE_ANDROID_DEV_KEYSTORE_PASSWORD` | Keystore password |
 | `MOTE_ANDROID_DEV_KEY_ALIAS` | Key alias inside the keystore |
 | `MOTE_ANDROID_DEV_KEY_PASSWORD` | Key password. It must equal the keystore password (PKCS12), and CI checks this. |
@@ -412,27 +416,20 @@ Workflow-level pins (public values, not secrets): `MOTE_DEV_CERT_SHA256` and `MO
 
 ## 14. Requirement status
 
-`docs/REQUIREMENTS_LEDGER.md` is the detailed authority. It has 143 rows in these sections:
+`docs/REQUIREMENTS_LEDGER.md` is the detailed authority: 158 rows (G, F, O, V, N, C, A, R, S).
+The reconciliation audit (ledger S-13) classified every recorded requirement plus items found only in
+commits/docs:
 
-- G: original specification
-- F: owner feedback
-- O: OTA
-- V: version and identities
-- N: naming
-- C: credentials
-- A: CI and APK
-- R: OTA delivery rectification
-
-Ledger status codes map to the categories below:
-
-- **Implemented + verified (`I+V`):** nearly all rows. "Verified" means automated evidence ran; it
-  never means device evidence.
-- **Implemented, not yet automated-verified:** listed in §15.
-- **Physical device not yet verified:** everything. O-19, A-05 and R-19 are **BLOCKED** until the
-  owner tests on the phone. R-01 and R-14 are BLOCKED for their device part. F-07's launcher
-  appearance is BLOCKED on the device.
-- **Not implemented:** no requested feature. The only gap is a real iOS team ID.
-- **Superseded:** G-13, G-28, G-57 (see §8).
+- **IMPLEMENTED + VERIFIED:** the large majority (all mechanics, OTA, versioning, naming, credentials,
+  CI/APK, startup and consolidation rows).
+- **IMPLEMENTED + NEEDS PHONE VERIFICATION:** camera swipe feel (G-12), water/vegetation look (G-23),
+  telegraphs (G-26), landing variants (G-31), music/bedroom audio (G-41), haptics felt (G-54),
+  thermal (G-55), safe areas on a notch (G-56), launcher icon (F-07), lunge feel (F-09), recovery
+  gesture and Diagnostics buttons (O-13, O-17, R-06), real OTA end-to-end (O-19, R-01, R-14, R-19,
+  S-14), splash/loading appearance and startup time (S-03, S-06).
+- **INTENTIONALLY SUPERSEDED:** G-13, G-28, G-57, R-11, R-16, R-17.
+- **OPEN:** only S-15, the iOS team ID (owner input; iOS is a simulator build and not a target now).
+- **CONTRADICTORY:** none.
 
 ## 15. Automated verification gaps
 
@@ -447,81 +444,20 @@ These are implemented but lack automated evidence. They are **not** unimplemente
 - **G-56:** safe areas (no notched device or test)
 - **O-17 / R-06:** Diagnostics touch buttons (text and actions are tested; the buttons are not)
 
-## 16. Physical-device acceptance (owner; nothing verified yet)
+## 16. Physical-device acceptance (owner; nothing verified yet on b22)
 
-Target: **Mote b21** (`mote-v0.1.0-b21.apk` from artifact `mote-android-v0.1.0-b21`) + **dev-000013**.
+1. Uninstall every old Axolotl / Mote / Mote Dev app. Install `mote-v0.1.0-b22.apk` (Play Protect: **Install anyway**). The launcher shows the axolotl artwork labelled **Mote**.
+2. **Cold launch, airplane mode ON:** the Mote splash (artwork) appears almost at once, then the loading screen (MOTE, artwork, stage names), then the title. It never shows a long featureless black screen.
+3. **Pause → About / Diagnostics** (offline):
+   - Native: Android Build 22, Flavor normal, Runtime `android-godot-4.7.2-r5`, bundled baseline `104605727ab2…`.
+   - OTA: Enabled yes, Channel dev, Active bundled baseline, Status "Offline: update channel not reachable; playing the current game" (or "Not checked yet" in the first seconds).
+   - Startup section lists the launch milestones; the pause menu shows "Last launch: Mote on screen after X s, ready after Y s". Please report both numbers (first launch and a second launch).
+   - Save Schema 1.
+4. Play a little (food/lunge, swipe, gills), then close and reopen: progress/settings kept.
+5. **Airplane mode OFF**, restart: Status **Up to date**, Latest on channel **dev-000014**, Runtime compatibility "latest OTA compatible", Last check "up to date (latest dev-000014 is the game bundled in this app, 104605727ab2)". Nothing is downloaded.
+6. **OTA download/activate/rollback on the phone** needs an OTA newer than b22's own game. The next push without `[skip ci]` provides one; then: it downloads by itself ("ready: restart to run it"), restart → Active dev-0000NN, **Roll back** → restart → bundled baseline, **Boot bundled baseline** / **Re-enable OTA** behave as labelled, saves kept throughout.
 
-**A. Install/upgrade.** Keep the existing Mote app; **do not uninstall** (saves are kept). Open the
-APK and choose **Update** (Play Protect: **Install anyway**). Mote Dev, if installed, can stay or be removed.
-
-**B–C. Offline start.** Turn on airplane mode. Launch Mote. It starts straight to the title and plays.
-Open **Pause → About / Diagnostics**. Expected before OTA:
-
-```
-Native
-  Version: 0.1.0
-  Android Build: 21
-  Flavor: normal
-  Godot: 4.7.2
-  Runtime: android-godot-4.7.2-r4
-  Bundled baseline source: a72ae3b0514ac8bff14a8cc2e507bd3af23831dd
-OTA
-  Enabled: yes
-  Channel: dev
-  Status: Offline: update channel not reachable; playing the current game   (or "Not checked yet" in the first seconds)
-  Bundled baseline: a72ae3b0514ac8bff14a8cc2e507bd3af23831dd (Android Build 21)
-  Active: bundled baseline
-  Latest on channel: not checked yet
-  Pending (runs after restart): none
-Source
-  Git SHA (running code): a72ae3b0514ac8bff14a8cc2e507bd3af23831dd
-Persistence
-  Save Schema: 1
-```
-
-Play for a minute (food/lunge, swipe) to confirm the bundled game is current (F-09 behaviour present).
-
-**D–F. Reconnect.** Turn airplane mode off. Close Mote from Recents and reopen it: every start checks
-once, a few seconds after the game is up. (Returning to a running app re-checks only if 15 minutes have
-passed since the last automatic attempt, and a running app re-checks hourly.) Gameplay never pauses for it. A toast says
-"dev-000013 ready: restart to run it". Diagnostics shows `Latest on channel: dev-000013`,
-`Status: Update downloaded: dev-000013 runs after the app restarts`, and `Pending: dev-000013 (game 0.1.0, a72ae3b0514a)`.
-
-**G–H. Manual check.** Tap **Check for update**: "up to date (latest dev-000013)", because it is already downloaded.
-(**Download update** is enabled only when a check has found something not yet downloaded.)
-
-**I–J. Activate.** Close the app from Recents and reopen it. Expected after OTA:
-
-```
-OTA
-  Enabled: yes
-  Channel: dev
-  Status: Up to date   (after the automatic check; "Not checked yet" before it)
-  Bundled baseline: a72ae3b0514ac8bff14a8cc2e507bd3af23831dd (Android Build 21)
-  Active: dev-000013 (source a72ae3b0514ac8bff14a8cc2e507bd3af23831dd)
-  Latest on channel: dev-000013 (checked …)
-  Runtime compatibility: this app runs android-godot-4.7.2-r4; latest OTA compatible
-  Current: dev-000013 (game 0.1.0, a72ae3b0514a)
-Native
-  Android Build: 21   (unchanged)
-Automation
-  Build run (running code): 36341861522   (the OTA's run)
-  Native build run: 36341864999
-```
-
-**K. Play.** The game still plays normally.
-
-**L. Roll back.** Diagnostics → **Roll back**, then close from Recents and reopen. With no previous
-OTA, the bundled game runs (`Active: bundled baseline`). dev-000013 is now listed under
-`Rejected OTAs` and is not downloaded again. A later OTA (dev-000014+) is.
-
-**M. Bundled baseline.** Diagnostics → **Boot bundled baseline**, restart: `Status: OTA disabled…`,
-`Active: bundled baseline`, and no automatic checks.
-
-**N. Re-enable.** **Re-enable OTA**, restart. It returns to CURRENT, if there is one (after L there
-is none, so it stays on the bundled game until the next OTA). To exercise N with an active OTA, do M and N before L.
-
-Record the owner's results in the ledger (O-19, A-05, R-01, R-14, R-19, F-07, F-09) only with the owner's evidence.
+Record results in the ledger (O-19, A-05, R-01, R-14, R-19, S-03, S-06, S-14, F-07, F-09) only with the owner's evidence.
 
 ## 17. Repository isolation
 
@@ -530,12 +466,11 @@ repository. Do not name, open or use any other game repository in Mote developme
 
 ## 18. Current stopping point
 
-- **Rectification complete in software:** the Mote app itself is OTA-capable and offline-first
-  (runtime r4). b21 is built and identity-checked; dev-000013 is published and independently verified;
-  CI is green on `a72ae3b`.
-- **Next task:** the owner's **phone acceptance of Mote b21 + dev-000013** (§16).
-- **After that:** continue from the owner's feedback or from explicitly requested new work. Game-layer
-  changes reach b21 by OTA on push. Native changes need `ota_runtime.py --bump` and a new APK.
+- **Released:** one Mote APK (b22, r5) with everything approved bundled, OTA on `dev`, channel pointer
+  reconciled to dev-000014 (the APK's own game). CI green on `1046057`.
+- **Next task:** the owner's fresh install and phone checks (§16), including the startup numbers.
+- **After that:** continue from the owner's feedback. Game-layer changes reach b22 by OTA on push
+  (that push is also the first OTA a b22 phone downloads). Native changes need `--bump` and a new APK.
 
 ---
 
@@ -555,19 +490,18 @@ You are continuing an existing game called **Mote** (protagonist **Gill**).
 3. Read `docs/REQUIREMENTS_LEDGER.md`.
 4. Inspect the current source.
 5. Compare HEAD against the represented source:
-   - last gameplay commit `227d0ab` (game layer unchanged at `a72ae3b`);
-   - native + OTA source `a72ae3b` (runtime r4);
+   - release commit `1046057` (APK b22 and OTA dev-000014, runtime r5);
    - the handoff commit is documentation only.
 6. Report any drift.
-7. Report the current native baseline (Mote b21).
-8. Report the current OTA (`dev-000013`, or newer if the channel pointer has moved).
+7. Report the current APK (Mote b22; the Mote Dev app is retired).
+8. Report the current OTA (`dev-000014`, or newer if the channel pointer has moved).
 9. Report the physical-device verification state (none unless the owner has supplied evidence).
 10. Continue from the documented stopping point (§18).
 
 **Preserve:**
 
 - offline-first play: nothing may wait for, or require, the network;
-- the OTA client in the Mote app (and Mote Dev);
+- the OTA client in the one Mote app, and the startup work (splash, loading screen first, staged build, baked shaders);
 - version authority (`GAME_VERSION`);
 - the signing architecture and OTA signing;
 - runtime compatibility;
