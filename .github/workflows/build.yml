@@ -140,10 +140,21 @@ jobs:
           test "$(git rev-parse HEAD)" = "$SOURCE_SHA"
           echo "source commit: $SOURCE_SHA"
           mkdir -p build/android
+          # The shader baker (shader_baker/enabled in both presets) precompiles shaders into the APK
+          # so the phone does not compile them on first launch. It only runs when the exporting
+          # editor uses the target renderer, so export on software Vulkan (Mobile) under a virtual
+          # display, and fail if no shaders were baked.
+          sudo apt-get update -q > /dev/null && sudo apt-get install -y -q mesa-vulkan-drivers xvfb > /dev/null
+          export_baked() {
+            xvfb-run -a -s "-screen 0 1280x720x24" godot --path . --rendering-driver vulkan --rendering-method mobile \
+              --export-debug "$1" "$2" 2>&1 | tee "$2.export.log" | grep -E "Baking shaders|ERROR" || true
+            grep -q "Started Baking shaders" "$2.export.log" || { echo "::error::$2: shaders were not baked"; exit 1; }
+            rm -f "$2.export.log"
+          }
           python3 tools/write_native_build_info.py "Android" normal "$BUILD" "$SOURCE_SHA" "$RUN" "$RUN_URL"
-          godot --headless --path . --export-debug "Android" "build/android/mote-v$GV-b$BUILD.apk"
+          export_baked "Android" "build/android/mote-v$GV-b$BUILD.apk"
           python3 tools/write_native_build_info.py "Android Dev" dev "$BUILD" "$SOURCE_SHA" "$RUN" "$RUN_URL"
-          godot --headless --path . --export-debug "Android Dev" "build/android/mote-dev-v$GV-b$BUILD.apk"
+          export_baked "Android Dev" "build/android/mote-dev-v$GV-b$BUILD.apk"
           ls -la build/android
           AAPT=$(ls "$ANDROID_HOME"/build-tools/*/aapt | tail -1)
           AAPT2=$(ls "$ANDROID_HOME"/build-tools/*/aapt2 | tail -1)

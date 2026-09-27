@@ -141,7 +141,11 @@ jobs:
           SEQ: ${{ steps.src.outputs.seq }}
         run: |
           mkdir -p out
-          godot --headless --path . --export-pack "$PRESET" "out/axolotl-$ID.pck"
+          # Bake shaders into the pack (see build.yml): software Vulkan (Mobile) under a virtual display.
+          sudo apt-get update -q > /dev/null && sudo apt-get install -y -q mesa-vulkan-drivers xvfb > /dev/null
+          xvfb-run -a -s "-screen 0 1280x720x24" godot --path . --rendering-driver vulkan --rendering-method mobile \
+            --export-pack "$PRESET" "out/axolotl-$ID.pck" 2>&1 | tee export.log | grep -E "Baking shaders|ERROR" || true
+          grep -q "Started Baking shaders" export.log || { echo "::error::shaders were not baked into the OTA pack"; exit 1; }
           test -s "out/axolotl-$ID.pck"
           URL="${{ github.server_url }}/${{ github.repository }}/releases/download/$TAG/axolotl-$ID.pck"
           godot --headless --path . -s tools/ota_make_manifest.gd -- pck="out/axolotl-$ID.pck" out=out/manifest.json \
