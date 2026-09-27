@@ -81,7 +81,7 @@ cd build/ios && xcodebuild -project Axolotl.xcodeproj -scheme Axolotl -sdk iphon
    - it runs the APK's own bundled game (`--print-identity`) and requires it to report this commit, this build, the normal flavour, OTA on `dev` and the current runtime;
    - it uploads `mote-android-v<game>-b<build>` (the APK and `build-info.json`).
 3. **ios** exports the Xcode project on macOS, builds it for the iOS Simulator (unsigned), and
-   uploads the `.app` as `axolotl-ios-simulator-app`.
+   uploads the `.app` as `mote-ios-simulator-app`.
 
 `.github/workflows/ota-publish.yml` is the **OTA publish**. It runs on pushes to the development branch.
 - It runs the tests, exports the game-layer PCK and signs its manifest.
@@ -206,7 +206,7 @@ quiet, a restrained **ALL CLEAR** fades in and out. You keep control and can roa
 and surf vortices; leave via Pause.
 
 **Mobile** — landscape only, safe-area and notch aware HUD layout, touch and controller switching,
-optional restrained haptics, fully offline. Quiet performance scaling steps down resolution scale,
+optional restrained haptics, fully playable offline (offline-capable, not offline-only: updates arrive over the air when a connection happens to be available). Quiet performance scaling steps down resolution scale,
 particle count, vegetation density, glow and secondary lights when the frame rate sags, and recovers
 slowly. It never touches controls, camera or gameplay effects.
 
@@ -243,12 +243,13 @@ below comes from running the real game in Godot 4.7.2: headless for logic, and o
 (llvmpipe) for screenshots. The CI builds prove the Android APK exports and the iOS app compiles, but
 neither was installed or run on a device or simulator.
 
-**Mechanics suite** (`--test=unit`, 119 checks, all passing locally and in CI). These drive the real
+**Mechanics suite** (`--test=unit`, 167 checks, all passing locally and in CI). These drive the real
 controller through the same input actions the touch HUD and gamepad use:
 - All 118 authored actors land on their intended surface.
 - Moss cushions, stems and cave domes face the right way, so no platform renders hollow or see-through.
 - The rolling hills are smooth and gentle: max slope 0.39, crest heights as authored, and collision within 7 mm of the drawn surface. He walks up and over a hill without leaving the ground.
-- OTA client, and version/identity separation: 40 checks, listed in [docs/OTA.md](docs/OTA.md) and [docs/VERSIONING.md](docs/VERSIONING.md).
+- Startup: the Mote loading screen is the first frame, the world is built in named stages, and no OTA check runs before the game is usable (6 checks).
+- OTA client (including the real update client against a local HTTP server), packaging, and version/identity separation: 77 checks, listed in [docs/OTA.md](docs/OTA.md) and [docs/VERSIONING.md](docs/VERSIONING.md).
 - Tutorial route: every start point makes jump → M1 → jump+burst → M2, and a plain jump cannot cross the gap.
 - A full lap around a moss ball with no camera flips and no unintended airborne frames.
 - Jump apex, the water burst (exactly once, follows direction, no third action), landing resets it, coyote time, jump buffering.
@@ -301,10 +302,10 @@ The bot's early runs uncovered real bugs, all fixed:
   still unmeasured on hardware.
 - **The OTA loop is proven on an exported desktop build, not yet on a phone.** `tools/ota_e2e_local.sh`
   covers download, verify, restart, second OTA, corrupt-package rejection, rollback, baseline mode and
-  unhealthy-OTA fallback. On Android, installing the Dev APK and restarting it is still to be done.
+  unhealthy-OTA fallback. On Android, the owner's phone (Mote Dev b21) discovered, downloaded and verified dev-000013; activation, rollback and baseline mode on the phone are still to be done with the current Mote APK.
 - The iOS preset uses a placeholder team ID (`AXOLOTL000`); set your own for device builds. The CI
   iOS build is an unsigned **Simulator** build.
-- Both Android builds are debug APKs. They are signed with the stable dev keystore from secrets, or with a throwaway key if the secret is missing. There is no release signing.
+- The Mote APK is a debug-signed build, signed with the stable Mote keystore from secrets (the pinned certificate), or with a throwaway key if the secret is missing. There is no Play-store release signing.
 - Art is deliberately simple procedural geometry (primitives, instanced blades, shader-driven moss).
   Animation is procedural rather than hand-keyed.
 - Music and sound are procedurally synthesized placeholders of reasonable quality, not composed and mixed audio.

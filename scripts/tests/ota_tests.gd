@@ -517,7 +517,8 @@ func _test_product_identity() -> void:
 		for phrase in ["Gill's", "Meet Gill", "Help Gill", "Adventure"]:
 			if src.contains(phrase) and not f.ends_with("ota_tests.gd"):
 				bad.append("%s: %s" % [f, phrase])
-		if f != "res://scripts/core/game_version.gd" and not f.ends_with("ota_tests.gd") and src.contains('"Gill'):
+		# Any string literal naming the character outside the canonical source is a copy.
+		if f != "res://scripts/core/game_version.gd" and not f.ends_with("ota_tests.gd") and _name_in_string.search(src) != null:
 			bad.append("%s: extra copy of the character name" % f)
 	t.check("no_new_exposition_or_name_copies", bad.is_empty(), ", ".join(bad))
 	t.check("regeneration_motes_keep_their_name", ResourceLoader.exists("res://scripts/actors/mote.gd") and g.balls[0].motes.size() > 0 and g.balls[0].motes[0] is Mote, "")
@@ -537,6 +538,9 @@ func _test_product_identity() -> void:
 	t.check("six_gills_always_full_size", all_full, "")
 	t.check("gills_glow_when_active_dull_when_lost", lit, "")
 	m.set_health(saved[0], saved[1], false)
+
+
+var _name_in_string := RegEx.create_from_string('"[^"\\n]*\\bGill\\b[^"\\n]*"')
 
 
 func _all_files(dir: String) -> Array:

@@ -44,7 +44,7 @@ openssl genpkey -algorithm RSA -pkeyopt rsa_keygen_bits:2048 -out "$W/key.pem" 2
 openssl pkey -in "$W/key.pem" -pubout -out "$W/pub.pem"
 
 LINUX_PRESET='
-[preset.3]
+[preset.2]
 
 name="Linux OTA test"
 platform="Linux"
@@ -58,7 +58,7 @@ export_path="build/linux/axolotl.x86_64"
 encrypt_pck=false
 encrypt_directory=false
 
-[preset.3.options]
+[preset.2.options]
 
 binary_format/embed_pck=true
 binary_format/architecture="x86_64"
@@ -68,7 +68,9 @@ make_copy() { # make_copy <name> -> path; repo copy with the Linux OTA test pres
 	local d="$W/copies/$1"
 	mkdir -p "$d"
 	tar -C "$SRC" --exclude=./.git --exclude=./build -cf - . | tar -xf - -C "$d"
-	printf '%s' "$LINUX_PRESET" >> "$d/export_presets.cfg"
+	# Godot reads presets 0, 1, 2... until one is missing: append as the next index.
+	local n; n=$(grep -cE '^\[preset\.[0-9]+\]$' "$d/export_presets.cfg")
+	printf '%s' "$LINUX_PRESET" | sed "s/preset\.2/preset.$n/g" >> "$d/export_presets.cfg"
 	python3 - "$d" "$W/pub.pem" <<'PY'
 import re, sys, pathlib
 d = pathlib.Path(sys.argv[1]); pub = pathlib.Path(sys.argv[2]).read_text().strip()

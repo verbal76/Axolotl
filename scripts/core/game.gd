@@ -149,7 +149,7 @@ func _build_world() -> void:
 		b.zone_completed.connect(_on_zone_completed)
 		balls.append(b)
 		StartupTrace.mark("moss ball %d built" % (i + 1))
-	await _stage("Waking Gill")
+	await _stage("Placing the axolotl and the vortices")
 	for pair in [[0, 1], [1, 2]]:
 		var v := Vortex.new()
 		v.setup(balls[pair[0]], balls[pair[1]], Levels._vortex_dir(pair[0], pair[1]), Levels._vortex_dir(pair[1], pair[0]))
@@ -182,7 +182,7 @@ func _build_world() -> void:
 		add_child(l)
 		_mote_lights.append(l)
 
-	StartupTrace.mark("vortices, Gill, camera, lights")
+	StartupTrace.mark("vortices, axolotl, camera, lights")
 	for b in balls:
 		_initial_food(b)
 	StartupTrace.mark("food placed")

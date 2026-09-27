@@ -40,7 +40,7 @@ echo "-- CI identity reader"
 grep -q "\"game_version\":\"$NEW\"" "$W/id.log"
 
 echo "-- exported pack + generated, signed manifest"
-"$GODOT" --headless --path "$W" --export-pack "Android Dev" "$W/game.pck" > /dev/null 2>&1
+"$GODOT" --headless --path "$W" --export-pack "Android" "$W/game.pck" > /dev/null 2>&1
 "$GODOT" --headless --path "$W" -s tools/ota_make_manifest.gd -- pck="$W/game.pck" out="$W/manifest.json" \
     seq=1 sha=0123456789abcdef0123456789abcdef01234567 url=https://example.invalid/drift.pck 2>/dev/null | grep MANIFEST
 openssl dgst -sha256 -sign "$W/drift_key.pem" -out "$W/sig.bin" "$W/manifest.json"

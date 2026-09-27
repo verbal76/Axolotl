@@ -2,7 +2,7 @@ class_name Axolotl
 extends CharacterBody3D
 ## The player. Sphere-centred gravity locomotion with camera-relative input, a push-off
 ## jump, a once-per-airborne directional water burst, tail swipe, feeding lunge, hard and
-## extreme landings, and diegetic dorsal health.
+## extreme landings, and health shown by the six gills.
 
 signal health_changed(health: int, max_health: int)
 signal died
