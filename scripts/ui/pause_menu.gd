@@ -6,6 +6,7 @@ extends CanvasLayer
 var _root: Control
 var _panel: PanelContainer
 var _status: Label
+var _startup: Label
 var _reduced: CheckButton
 var _haptics: CheckButton
 var _music: HSlider
@@ -62,6 +63,12 @@ func _ready() -> void:
 	v.add_child(title)
 	# Version, build, OTA and source identities (and OTA recovery in dev builds).
 	v.add_child(UiStyle.button("About / Diagnostics", func(): Boot.show_diagnostics()))
+	# How long this launch took (the full timeline is in Diagnostics on newer apps).
+	_startup = Label.new()
+	_startup.add_theme_font_size_override("font_size", 18)
+	_startup.add_theme_color_override("font_color", Color(0.85, 0.95, 0.92, 0.6))
+	_startup.autowrap_mode = TextServer.AUTOWRAP_WORD_SMART
+	v.add_child(_startup)
 	_session_rows = [restart, title]
 	resume.name = "Resume"
 	visible = false
@@ -131,6 +138,7 @@ func _refresh() -> void:
 	_music.set_value_no_signal(Settings.music_volume)
 	_sfx.set_value_no_signal(Settings.sfx_volume)
 	_status.text = Settings.controller_status()
+	_startup.text = StartupTrace.summary()
 
 
 func _unhandled_input(event: InputEvent) -> void:

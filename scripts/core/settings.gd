@@ -24,6 +24,7 @@ var _pad_connected := false
 
 
 func _enter_tree() -> void:
+	StartupTrace.mark("autoload Settings")
 	_setup_input_map()
 	_load()
 	for a in OS.get_cmdline_user_args():

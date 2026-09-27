@@ -8,6 +8,7 @@ static var inst: Game
 
 signal restoration_event(ball_index: int)
 signal all_clear
+signal startup_finished
 
 var env: Environment
 var aquarium: Aquarium
@@ -45,6 +46,12 @@ var _last_pos := Vector3.ZERO
 var _camera_moved := false
 var _title_t := 0.0
 var _regen_from := Vector3.ZERO
+## Mote's loading screen, on top until the first usable frame has been drawn.
+var loading: LoadingScreen
+## True once the whole world is built and the first usable frame has been handed over.
+var ready_done := false
+## The stages the loading screen showed this launch.
+var loading_stages: Array[String] = []
 var stats := {"kills": 0, "motes": 0, "eaten": [0, 0, 0], "upgrades": 0, "deaths": 0, "extreme_landings": 0, "hard_landings": 0,
 		"travels": [], "connects": []}
 
@@ -53,7 +60,54 @@ func _init() -> void:
 	inst = self
 
 
+## Startup is staged so the first frame is Mote's loading screen, not a dark splash: the world
+## is then built one stage per frame (nothing plays meanwhile; the game subtree is disabled so
+## seeded runs stay deterministic), and the loading screen stays on top until the first frame
+## of the real world, whose GPU pipelines are compiled behind it, has been drawn.
 func _ready() -> void:
+	StartupTrace.mark("main scene: Game._ready begins")
+	process_mode = Node.PROCESS_MODE_DISABLED
+	visible = false
+	loading = LoadingScreen.new()
+	add_child(loading)
+	await _drawn()
+	StartupTrace.mark("first frame drawn: Mote loading screen visible")
+	await _build_world()
+	process_mode = Node.PROCESS_MODE_INHERIT
+	if Settings.skip_title or Settings.test_mode != "":
+		start_play(true)
+	else:
+		_enter_title()
+	StartupTrace.mark("world ready (%s); first world frame requested" % state)
+	await _drawn()
+	StartupTrace.mark("first frame drawn: %s usable" % state)
+	loading_stages = loading.stages.duplicate()
+	loading.finish()
+	ready_done = true
+	startup_finished.emit()
+	if Settings.test_mode != "":
+		var t: Node = load("res://scripts/tests/test_runner.gd").new()
+		add_child(t)
+	if OS.get_cmdline_user_args().has("--startup-probe"):
+		_startup_probe()
+
+
+## Waits until the frame now being prepared has been drawn (headless runs draw nothing, so a
+## processed frame stands in for it there).
+func _drawn() -> void:
+	if DisplayServer.get_name() == "headless":
+		await get_tree().process_frame
+	else:
+		await RenderingServer.frame_post_draw
+
+
+func _stage(text: String) -> void:
+	loading.set_stage(text)
+	await _drawn()
+
+
+func _build_world() -> void:
+	await _stage("Filling the aquarium")
 	# Automated verification runs are seeded so a given build always plays out the same way.
 	if Settings.test_mode != "":
 		seed(int(Settings.test_args.get("seed", "4242")))
@@ -82,15 +136,20 @@ func _ready() -> void:
 	audio = AudioDirector.new()
 	add_child(audio)
 
+	StartupTrace.mark("environment + audio nodes")
 	aquarium = Aquarium.new()
 	add_child(aquarium)
 	aquarium.build(env)
+	StartupTrace.mark("aquarium built")
 
 	for i in 3:
+		await _stage("Growing moss ball %d of 3" % (i + 1))
 		var b := Levels.build_ball(i, self)
 		b.event_restored.connect(_on_event_restored)
 		b.zone_completed.connect(_on_zone_completed)
 		balls.append(b)
+		StartupTrace.mark("moss ball %d built" % (i + 1))
+	await _stage("Waking Gill")
 	for pair in [[0, 1], [1, 2]]:
 		var v := Vortex.new()
 		v.setup(balls[pair[0]], balls[pair[1]], Levels._vortex_dir(pair[0], pair[1]), Levels._vortex_dir(pair[1], pair[0]))
@@ -108,7 +167,8 @@ func _ready() -> void:
 	add_child(cam)
 	cam.target = player
 	player.cam = cam
-	cam.current = true
+	# The camera goes live only in the last stage: until then nothing 3D is drawn, so the
+	# loading screen keeps updating while GPU pipelines compile in the background.
 	cam.snap_behind()
 	_last_pos = player.global_position
 
@@ -122,8 +182,11 @@ func _ready() -> void:
 		add_child(l)
 		_mote_lights.append(l)
 
+	StartupTrace.mark("vortices, Gill, camera, lights")
 	for b in balls:
 		_initial_food(b)
+	StartupTrace.mark("food placed")
+	await _stage("Setting up the tank")
 
 	hud = Hud.new()
 	add_child(hud)
@@ -136,14 +199,27 @@ func _ready() -> void:
 
 	audio.set_ball(0, false)
 	aquarium.apply(0.0)
+	StartupTrace.mark("HUD, menus, title built")
+	await _stage("Preparing graphics (the first launch takes longest)")
+	visible = true
+	cam.current = true
 
-	if Settings.skip_title or Settings.test_mode != "":
-		start_play(true)
-	else:
-		_enter_title()
-	if Settings.test_mode != "":
-		var t: Node = load("res://scripts/tests/test_runner.gd").new()
-		add_child(t)
+
+## Measurement harness (desktop or device): report the timeline once the first usable frame has
+## been drawn, then quit. Never used in normal play.
+func _startup_probe() -> void:
+	get_tree().process_frame.connect(func() -> void: StartupTrace.mark("probe: first process_frame (before _process)"), CONNECT_ONE_SHOT)
+	get_tree().physics_frame.connect(func() -> void: StartupTrace.mark("probe: first physics_frame"), CONNECT_ONE_SHOT)
+	RenderingServer.frame_pre_draw.connect(func() -> void: StartupTrace.mark("probe: first frame_pre_draw (scripts done)"), CONNECT_ONE_SHOT)
+	while not StartupTrace.has("first frame drawn: %s usable" % state):
+		await get_tree().process_frame
+	var pc := {}
+	for k in ["PIPELINE_COMPILATIONS_CANVAS", "PIPELINE_COMPILATIONS_MESH", "PIPELINE_COMPILATIONS_SURFACE", "PIPELINE_COMPILATIONS_DRAW", "PIPELINE_COMPILATIONS_SPECIALIZATION"]:
+		if ClassDB.class_has_integer_constant("Performance", k):
+			pc[k.trim_prefix("PIPELINE_COMPILATIONS_").to_lower()] = Performance.get_monitor(ClassDB.class_get_integer_constant("Performance", k))
+	print("[STARTUP] pipeline compilations so far: ", pc)
+	print("[STARTUP] timeline\n" + StartupTrace.timeline_text(Boot.get("boot_marks") if "boot_marks" in Boot else []))
+	get_tree().quit()
 
 
 # --- Flow --------------------------------------------------------------------------------

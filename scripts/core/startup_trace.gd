@@ -1,0 +1,84 @@
+class_name StartupTrace
+extends RefCounted
+## Startup milestones, from process start to the first usable screen, for Diagnostics, the
+## Android log ("[STARTUP]") and the startup probe/tests. Times are milliseconds on the engine
+## clock (Time.get_ticks_usec, zero when the engine starts); the gap between the process starting
+## and the engine clock starting is read from /proc on Linux and Android.
+
+## [label, usec on the engine clock]
+static var marks: Array = []
+## Engine clock zero, measured from process start (ms); -1 when the platform cannot say.
+static var process_offset_ms := -1.0
+
+
+static func mark(label: String) -> void:
+	if marks.is_empty():
+		process_offset_ms = _engine_start_after_process_ms()
+	var t := Time.get_ticks_usec()
+	marks.append([label, t])
+	print("[STARTUP] %9.1f ms  %s" % [t / 1000.0, label])
+
+
+## Marks `label` when the frame currently being prepared has been drawn.
+static func mark_next_frame(label: String) -> void:
+	RenderingServer.frame_post_draw.connect(func() -> void: mark(label), CONNECT_ONE_SHOT)
+
+
+## Engine-clock milliseconds of the first mark named `label`, or -1.
+static func ms(label: String) -> float:
+	for m in marks:
+		if m[0] == label:
+			return m[1] / 1000.0
+	return -1.0
+
+
+static func has(label: String) -> bool:
+	return ms(label) >= 0.0
+
+
+## Every milestone, native (from the bootstrap, when it records them) and game layer, in order.
+static func timeline(native: Array = []) -> Array:
+	var all := native.duplicate()
+	all.append_array(marks)
+	all.sort_custom(func(a, b) -> bool: return a[1] < b[1])
+	return all
+
+
+## One line for the pause menu: when Mote first showed something, and when it was usable,
+## counted from the app process starting (or from the engine starting where that is unknown).
+static func summary() -> String:
+	var shown := ms("first frame drawn: Mote loading screen visible")
+	var usable := maxf(ms("first frame drawn: title usable"), ms("first frame drawn: play usable"))
+	if shown < 0.0 or usable < 0.0:
+		return ""
+	var base := maxf(process_offset_ms, 0.0)
+	return "Last launch: Mote on screen after %.1f s, ready after %.1f s (%s)" % [(base + shown) / 1000.0,
+			(base + usable) / 1000.0, "from app start" if process_offset_ms >= 0.0 else "from engine start"]
+
+
+static func timeline_text(native: Array = []) -> String:
+	var L: Array[String] = []
+	if process_offset_ms >= 0.0:
+		L.append("  %9.0f ms  process started (Android/native startup before the engine clock)" % -process_offset_ms)
+	for m in timeline(native):
+		L.append("  %9.1f ms  %s" % [m[1] / 1000.0, m[0]])
+	return "\n".join(L)
+
+
+## Process age minus engine clock: how long after the process started the engine clock began.
+static func _engine_start_after_process_ms() -> float:
+	var stat := _read_line("/proc/self/stat")
+	var up := _read_line("/proc/uptime")
+	if stat == "" or up == "" or not stat.contains(")"):
+		return -1.0
+	# Fields after "(comm)": index 0 is field 3 (state); starttime is field 22 (clock ticks, 100/s).
+	var f := stat.substr(stat.rfind(")") + 2).split(" ")
+	if f.size() < 20:
+		return -1.0
+	var age_ms := (float(up.split(" ")[0]) - float(f[19]) / 100.0) * 1000.0
+	return maxf(0.0, age_ms - Time.get_ticks_usec() / 1000.0)
+
+
+static func _read_line(path: String) -> String:
+	var fa := FileAccess.open(path, FileAccess.READ)
+	return fa.get_line() if fa != null else ""

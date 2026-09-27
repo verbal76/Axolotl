@@ -31,6 +31,14 @@ fail() { echo "E2E FAIL $*"; FAILS=$((FAILS + 1)); }
 expect() { # expect <label> <log> <pattern>
 	if grep -qE "$3" "$2"; then pass "$1"; else fail "$1 (missing /$3/ in $(basename "$2"))"; fi
 }
+before() { # before <label> <log> <first pattern> <second pattern>: both present, first earlier
+	local a b
+	a=$(grep -nE "$3" "$2" | head -1 | cut -d: -f1); b=$(grep -nE "$4" "$2" | head -1 | cut -d: -f1)
+	if [ -n "$a" ] && [ -n "$b" ] && [ "$a" -lt "$b" ]; then pass "$1"; else fail "$1 (/$3/ line ${a:-none}, /$4/ line ${b:-none})"; fi
+}
+USABLE="first frame drawn: (title|play) usable"
+SETTINGS="$HOME/.local/share/godot/app_userdata/Mote/settings.cfg"
+save_hash() { sha256sum "$SETTINGS" 2>/dev/null | cut -d' ' -f1; }
 
 openssl genpkey -algorithm RSA -pkeyopt rsa_keygen_bits:2048 -out "$W/key.pem" 2>/dev/null
 openssl pkey -in "$W/key.pem" -pubout -out "$W/pub.pem"
@@ -106,7 +114,7 @@ run_game() { # run_game <label> [extra args...]
 	local label=$1; shift
 	timeout "${RUN_TIMEOUT:-40}" "$W/axolotl.x86_64" --headless -- --ota-root="$DEVICE" \
 		--ota-pointer="$BASEURL/ota-channel-dev/latest.json" --ota-quit-after-check "$@" > "$W/run_$label.log" 2>&1
-	echo "--- run $label"; grep -E "^\[OTA\]|E2E GAME MARKER" "$W/run_$label.log" | sed 's/"native_[a-z_]*":"[^"]*",//g' | cut -c1-260
+	echo "--- run $label"; grep -E "^\[OTA\]|E2E GAME MARKER|usable" "$W/run_$label.log" | sed 's/"native_[a-z_]*":"[^"]*",//g' | cut -c1-260
 }
 
 echo "== building installed shell (baseline)"
@@ -124,6 +132,9 @@ expect "2 baseline boots with no channel" "$W/run_01_baseline_no_channel.log" "n
 expect "2 game reaches boot health offline" "$W/run_01_baseline_no_channel.log" "boot healthy: bundled baseline"
 expect "2 automatic check runs after start" "$W/run_01_baseline_no_channel.log" "automatic check \(start\)"
 expect "2 unreachable channel keeps current" "$W/run_01_baseline_no_channel.log" "channel unreachable|invalid channel pointer"
+before "startup: Mote loading screen is the first frame" "$W/run_01_baseline_no_channel.log" "loading screen visible" "moss ball 1 built"
+before "startup: usable before any update check (no network)" "$W/run_01_baseline_no_channel.log" "$USABLE" "automatic OTA check starts|automatic check"
+before "startup: usable before the check fails (no network)" "$W/run_01_baseline_no_channel.log" "$USABLE" "channel unreachable"
 
 # A channel server that accepts connections and never answers (a stalled network).
 HPORT=$((PORT + 1))
@@ -142,6 +153,10 @@ expect "2 hanging channel: check times out, current kept" "$W/run_01b_hanging_ch
 H=$(grep -n "boot healthy" "$W/run_01b_hanging_channel.log" | head -1 | cut -d: -f1)
 U=$(grep -n "channel unreachable" "$W/run_01b_hanging_channel.log" | head -1 | cut -d: -f1)
 if [ -n "$H" ] && [ -n "$U" ] && [ "$H" -lt "$U" ]; then pass "2 startup never waited for the network"; else fail "2 startup order (healthy line $H, timeout line $U)"; fi
+before "startup: usable before the hanging check times out" "$W/run_01b_hanging_channel.log" "$USABLE" "channel unreachable"
+# The server hangs for the full 15 s timeout; the game must have been usable long before that.
+UMS=$(grep -m1 -E "$USABLE" "$W/run_01b_hanging_channel.log" | awk '{print int($2)}')
+if [ -n "$UMS" ] && [ "$UMS" -lt 10000 ]; then pass "startup: usable at ${UMS} ms while the channel hangs"; else fail "startup: usable at ${UMS:-never} ms with a hanging channel"; fi
 
 # The whole game, start to ALL CLEAR, with the OTA client on and its channel unreachable.
 echo "--- offline playthrough (seed 4242, channel unreachable)"
@@ -153,6 +168,7 @@ expect "15 offline: full playthrough completes" "$W/run_offline_playthrough.log"
 expect "15 offline: OTA check failed quietly during play" "$W/run_offline_playthrough.log" "channel unreachable"
 
 O1=$(make_copy ota1); mark_game "$O1" 1; publish "$O1" 1
+SAVE0=$(save_hash)
 run_game 02_download_ota1
 expect "5-7 discovers, downloads, verifies OTA 1" "$W/run_02_download_ota1.log" "dev-000001 ready: restart to run it"
 run_game 03_boot_ota1
@@ -161,12 +177,15 @@ expect "10 visible game change from the PCK" "$W/run_03_boot_ota1.log" "E2E GAME
 expect "11 diagnostics: exact OTA id + source SHA" "$W/run_03_boot_ota1.log" "\"ota_id\":\"dev-000001\".*\"source_sha\":\"0000000000000000000000000000000000000001\""
 expect "11 product version unchanged by OTA" "$W/run_03_boot_ota1.log" "\"game_version\":\"$(sed -nE 's/^const GAME_VERSION := "([0-9.]+)"$/\1/p' "$SRC/scripts/core/game_version.gd")\""
 expect "boot health reached -> CURRENT" "$W/run_03_boot_ota1.log" "boot healthy: dev-000001"
+expect "startup: pending OTA activation reaches a usable frame" "$W/run_03_boot_ota1.log" "$USABLE"
+if [ -n "$SAVE0" ] && [ "$(save_hash)" = "$SAVE0" ]; then pass "startup: saves untouched by startup, download and activation"; else fail "startup: settings.cfg changed (${SAVE0:-missing} -> $(save_hash))"; fi
 
 O2=$(make_copy ota2); mark_game "$O2" 2; publish "$O2" 2
 run_game 04_download_ota2
 expect "13 OTA 2 obtained without reinstall" "$W/run_04_download_ota2.log" "dev-000002 ready: restart to run it"
 run_game 05_boot_ota2
 expect "14 restart shows OTA 2" "$W/run_05_boot_ota2.log" "E2E GAME MARKER OTA 2"
+expect "startup: active OTA reaches a usable frame" "$W/run_05_boot_ota2.log" "$USABLE"
 
 O3=$(make_copy ota3); mark_game "$O3" 3; publish "$O3" 3 corrupt
 run_game 06_corrupt_ota3
@@ -175,6 +194,7 @@ expect "15 previous game still running" "$W/run_06_corrupt_ota3.log" "E2E GAME M
 [ -e "$DEVICE/packages/.incoming-dev-000003.pck" ] && fail "15 temp file left behind" || pass "15 incomplete/corrupt temp file removed"
 run_game 07_after_corrupt
 expect "15 next start still OTA 2" "$W/run_07_after_corrupt.log" "loaded dev-000002 \(current\)"
+expect "startup: after a rejected OTA the game still reaches a usable frame" "$W/run_07_after_corrupt.log" "$USABLE"
 
 run_game 08_rollback --ota-action=rollback
 expect "16 rollback accepted" "$W/run_08_rollback.log" "action rollback: ok"
@@ -187,6 +207,7 @@ run_game 10_disable --ota-action=disable
 run_game 11_baseline
 expect "recovery: boot bundled baseline" "$W/run_11_baseline.log" "OTA disabled by user: running bundled baseline"
 if grep -q "E2E GAME MARKER" "$W/run_11_baseline.log"; then fail "baseline still ran OTA code"; else pass "baseline runs APK game code"; fi
+expect "startup: bundled baseline reaches a usable frame" "$W/run_11_baseline.log" "$USABLE"
 run_game 12_enable --ota-action=enable
 run_game 13_reenabled
 expect "recovery: re-enable returns to CURRENT" "$W/run_13_reenabled.log" "E2E GAME MARKER OTA 1"
@@ -202,6 +223,7 @@ expect "unhealthy OTA 4 actually started" "$W/run_15_ota4_start1.log" "E2E GAME 
 run_game 17_ota4_abandoned
 expect "unhealthy OTA abandoned after repeated starts" "$W/run_17_ota4_abandoned.log" "dev-000004: never reached boot health"
 expect "falls back to last healthy OTA" "$W/run_17_ota4_abandoned.log" "E2E GAME MARKER OTA 1"
+expect "startup: after abandoning an unhealthy OTA the game reaches a usable frame" "$W/run_17_ota4_abandoned.log" "$USABLE"
 
 echo
 echo "device state:"; python3 -c "import json,sys;s=json.load(open(sys.argv[1]));print(' current', s['current'].get('ota_id'),' previous', s['previous'].get('ota_id'),' pending', s['pending'].get('ota_id'),' bad', s['bad'],' rollbacks', s['rollback_count'])" "$DEVICE/state.json"

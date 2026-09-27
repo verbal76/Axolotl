@@ -1,8 +1,9 @@
 extends SceneTree
 ## Crops the icon artwork (assets/icon/icon_source.png, a rounded-square render on black) into
 ## the launcher/app icons, and traces the axolotl in it into the themed-icon (monochrome) layer.
-## Re-run after replacing the artwork:
-##   godot --headless --path . -s tools/make_icons.gd
+## Also writes the boot splash (the engine's first image on launch). Re-run after replacing the
+## artwork:
+##   godot --headless --path . -s tools/make_icons.gd [-- only=splash]
 
 const SRC := "res://assets/icon/icon_source.png"
 
@@ -14,6 +15,11 @@ func _init() -> void:
 	# Inset past the rounded corners so no black shows; the face stays centred.
 	var inset := int(n * 0.105)
 	var sq := img.get_region(Rect2i(inset, inset, n - inset * 2, n - inset * 2))
+	_splash(sq).save_png(ProjectSettings.globalize_path("res://assets/icon/splash.png"))
+	if OS.get_cmdline_user_args().has("only=splash"):
+		print("splash written")
+		quit()
+		return
 	_save(sq, 1024, "res://assets/icon/icon_1024.png")
 	_save(sq, 192, "res://assets/icon/icon_192.png")
 	# Adaptive icon: the artwork is the background layer; launchers mask it to their shape
@@ -25,6 +31,25 @@ func _init() -> void:
 	_monochrome(sq).save_png(ProjectSettings.globalize_path("res://assets/icon/icon_adaptive_monochrome_432.png"))
 	print("icons written from ", n, "px source, inset ", inset)
 	quit()
+
+
+## Boot splash: the artwork as a rounded tile on transparency. The engine draws it centred on
+## boot_splash/bg_color (the loading screen's colour) until the game's first frame.
+func _splash(art: Image) -> Image:
+	const S := 320
+	var im := art.duplicate() as Image
+	im.resize(S, S, Image.INTERPOLATE_LANCZOS)
+	var r := S * 0.16
+	for y in S:
+		for x in S:
+			var dx := maxf(0.0, maxf(r - x, x - (S - 1 - r)))
+			var dy := maxf(0.0, maxf(r - y, y - (S - 1 - r)))
+			var a := clampf(r + 0.5 - sqrt(dx * dx + dy * dy), 0.0, 1.0) if dx > 0.0 and dy > 0.0 else 1.0
+			if a < 1.0:
+				var c := im.get_pixel(x, y)
+				c.a *= a
+				im.set_pixel(x, y, c)
+	return im
 
 
 func _save(src: Image, size: int, path: String) -> void:

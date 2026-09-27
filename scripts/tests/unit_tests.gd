@@ -14,9 +14,43 @@ func run(runner) -> void:
 	p.use_bot_input = true
 	await t.seconds(0.5)
 	var only: String = Settings.test_args.get("only", "")
-	for name_ in ["_test_ota_and_version", "_test_mesh_winding", "_test_terrain", "_test_placements", "_test_tutorial_route", "_test_sphere_walk", "_test_jump_and_burst", "_test_coyote_and_buffer", "_test_swipe_direction_and_stages", "_test_hard_landing", "_test_food", "_test_food_reach", "_test_darter_and_burrower", "_test_food_repopulates", "_test_motes", "_test_checkpoint_and_regen", "_test_crumble", "_test_restoration_continuity", "_test_vortex", "_test_current", "_test_canopy", "_test_upgrades", "_test_ui", "_test_all_clear"]:
+	for name_ in ["_test_startup", "_test_ota_and_version", "_test_mesh_winding", "_test_terrain", "_test_placements", "_test_tutorial_route", "_test_sphere_walk", "_test_jump_and_burst", "_test_coyote_and_buffer", "_test_swipe_direction_and_stages", "_test_hard_landing", "_test_food", "_test_food_reach", "_test_darter_and_burrower", "_test_food_repopulates", "_test_motes", "_test_checkpoint_and_regen", "_test_crumble", "_test_restoration_continuity", "_test_vortex", "_test_current", "_test_canopy", "_test_upgrades", "_test_ui", "_test_all_clear"]:
 		if only == "" or name_.contains(only):
 			await call(name_)
+
+
+# --- startup ------------------------------------------------------------------------------
+
+## The measured milestones of THIS process's startup (no sleeps): Mote's loading screen was the
+## first frame, before any world building; the world then came up in stages; nothing waited on
+## the network; the first usable frame came last and the loading screen handed over.
+func _test_startup() -> void:
+	var at := func(label: String) -> float: return StartupTrace.ms(label)
+	var shown: float = at.call("first frame drawn: Mote loading screen visible")
+	var usable: float = at.call("first frame drawn: play usable")
+	var order := [at.call("autoload Settings"), at.call("main scene: Game._ready begins"), shown,
+			at.call("aquarium built"), at.call("moss ball 1 built"), at.call("moss ball 3 built"),
+			at.call("HUD, menus, title built"), usable]
+	var in_order := not order.has(-1.0)
+	for i in range(1, order.size()):
+		in_order = in_order and order[i] >= order[i - 1]
+	t.check("startup_milestones_in_order", in_order, str(order))
+	t.check("startup_loading_screen_is_first_frame", shown >= 0.0 and shown < at.call("aquarium built"), "loading screen %.1f ms, aquarium %.1f ms" % [shown, at.call("aquarium built")])
+	var ls: Array = g.loading_stages
+	var honest := not ls.is_empty() and ls.has("Growing moss ball 1 of 3") and ls.has("Growing moss ball 3 of 3")
+	for s in ls:
+		honest = honest and not str(s).contains("%")
+	t.check("startup_stages_named_no_percentages", honest, ", ".join(ls))
+	t.check("startup_hands_over_to_game", g.ready_done and (not is_instance_valid(g.loading) or g.loading._fade >= 0.0), "")
+	# The native bootstrap did no network work before the game was usable: its only startup work
+	# is choosing a stored package, and an automatic check needs boot health first.
+	var net_before := false
+	# (boot_marks exists from runtime r5 on; the game layer also runs on r4 bootstraps.)
+	for m in StartupTrace.timeline(Boot.get("boot_marks") if "boot_marks" in Boot else []):
+		if str(m[0]).contains("automatic OTA check") and m[1] / 1000.0 < usable:
+			net_before = true
+	t.check("startup_no_ota_check_before_usable", usable >= 0.0 and not net_before and not Boot.auto_check("start"), "")
+	t.check("startup_summary_for_pause_menu", StartupTrace.summary().begins_with("Last launch: Mote on screen after"), StartupTrace.summary())
 
 
 # --- helpers -----------------------------------------------------------------------------
