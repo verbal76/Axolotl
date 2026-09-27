@@ -53,6 +53,7 @@ var swipe_cd := 0.0
 var lunge_t := -1.0
 var lunge_cd := 0.0
 var lunge_hit := false
+var _lunge_food: Food = null      # what the lunge is homing in on, if anything
 var invuln_t := 0.0
 var hurt_lock := 0.0
 var land_lock := 0.0
@@ -122,6 +123,10 @@ func _r() -> float:
 	return (global_position - ball.global_position).length()
 
 
+func _lunge_target_valid() -> bool:
+	return _lunge_food != null and is_instance_valid(_lunge_food) and _lunge_food.is_catchable()
+
+
 func head_position() -> Vector3:
 	return global_position + up * 0.25 + facing * 0.55
 
@@ -178,11 +183,17 @@ func _physics_process(dt: float) -> void:
 	var accel := (ACCEL if wish.length() > 0.05 else DECEL) if grounded else AIR_ACCEL
 	if lunge_t >= 0.0:
 		lunge_t += dt / LUNGE_TIME
+		if _lunge_target_valid():
+			var flat := _lunge_food.catch_point() - global_position
+			flat -= up * flat.dot(up)
+			if flat.length() > 0.2:
+				facing = _slerp_tangent(facing, flat.normalized(), minf(1.0, 25.0 * dt))
 		vh = facing * LUNGE_SPEED * (1.0 - lunge_t * 0.5)
 		if not lunge_hit:
 			lunge_hit = Game.inst.lunge_contact(self)
 		if lunge_t >= 1.0:
 			lunge_t = -1.0
+			_lunge_food = null
 			if not lunge_hit:
 				Game.inst.lunge_miss(self)
 	else:
@@ -195,6 +206,11 @@ func _physics_process(dt: float) -> void:
 	else:
 		air_time = 0.0
 		vup = minf(vup, 0.0) - 1.5
+	# The lunge rises or dips so the mouth meets food floating above or below it.
+	if lunge_t >= 0.0 and not lunge_hit and _lunge_target_valid():
+		var dh := (_lunge_food.catch_point() - head_position()).dot(up)
+		if absf(dh) > 0.1:
+			vup = clampf(dh / 0.12, -8.0, 10.0)
 
 	# Jump / water burst / buffering.
 	if want_jump:
@@ -239,6 +255,7 @@ func _physics_process(dt: float) -> void:
 		lunged.emit()
 		if wish.length() > 0.2:
 			facing = wish.normalized()
+		_lunge_food = Game.inst.lunge_target(self, facing)
 
 	var cur := ball.current_at(global_position) * (0.45 if grounded else 1.0) + ext_vel
 	velocity = vh + up * vup + cur

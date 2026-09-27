@@ -256,6 +256,13 @@ func _update_all_clear(dt: float) -> void:
 const SWIPE_REACH := 1.95
 ## The sweep covers 270 degrees: everything except a 90-degree cone straight ahead.
 const SWIPE_FRONT_DOT := 0.7071
+## The feeding lunge homes in on food within this range and cone, and catches it within the radius.
+## It rises at most LUNGE_AIM_ABOVE, kept below the jump's height: the lunge never out-jumps the jump.
+const LUNGE_CATCH_RADIUS := 0.95
+const LUNGE_AIM_RANGE := 3.5
+const LUNGE_AIM_ABOVE := 1.5
+const LUNGE_AIM_BELOW := 1.5
+const LUNGE_AIM_CONE := deg_to_rad(65.0)
 ## Aim assist turns the body at most this far so the nearest parasite sits inside the arc.
 const SWIPE_AIM_MAX := deg_to_rad(60.0)
 const SWIPE_AIM_TARGET := deg_to_rad(80.0)
@@ -336,16 +343,38 @@ func pressure_wave(p: Axolotl, pos: Vector3, radius: float, stages: int) -> void
 		stats["hard_landings"] += 1
 
 
+## Food the lunge homes in on: the nearest catchable food roughly ahead (within LUNGE_AIM_CONE of
+## [param dir]), up to LUNGE_AIM_RANGE away along the ground and a little above or below.
+func lunge_target(p: Axolotl, dir: Vector3) -> Food:
+	var best: Food = null
+	var bd := INF
+	var chest := p.body_center()
+	for f: Food in p.ball.foods:
+		if not is_instance_valid(f) or not f.is_catchable():
+			continue
+		var d := f.catch_point() - chest
+		var vert := d.dot(p.up)
+		var flat := d - p.up * vert
+		if flat.length() > LUNGE_AIM_RANGE or vert > LUNGE_AIM_ABOVE or vert < -LUNGE_AIM_BELOW:
+			continue
+		if flat.length() > 0.3 and dir.angle_to(flat) > LUNGE_AIM_CONE:
+			continue
+		if d.length() < bd:
+			bd = d.length()
+			best = f
+	return best
+
+
 func lunge_contact(p: Axolotl) -> bool:
 	var head := p.head_position()
+	var chest := p.body_center()
+	var tip := head + p.facing * 0.2
 	for f in p.ball.foods.duplicate():
 		if not is_instance_valid(f) or not f.is_catchable():
 			continue
-		if f.catch_point().distance_to(head) < 0.75:
+		if _seg_dist(f.catch_point(), chest, tip) < LUNGE_CATCH_RADIUS:
 			_eat(p, f)
 			return true
-	var chest := p.body_center()
-	var tip := head + p.facing * 0.2
 	for m in p.ball.motes:
 		if m.is_available() and _seg_dist(m.global_position, chest, tip) < 0.9:
 			m.capture()

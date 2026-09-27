@@ -14,7 +14,7 @@ func run(runner) -> void:
 	p.use_bot_input = true
 	await t.seconds(0.5)
 	var only: String = Settings.test_args.get("only", "")
-	for name_ in ["_test_ota_and_version", "_test_mesh_winding", "_test_terrain", "_test_placements", "_test_tutorial_route", "_test_sphere_walk", "_test_jump_and_burst", "_test_coyote_and_buffer", "_test_swipe_direction_and_stages", "_test_hard_landing", "_test_food", "_test_darter_and_burrower", "_test_food_repopulates", "_test_motes", "_test_checkpoint_and_regen", "_test_crumble", "_test_restoration_continuity", "_test_vortex", "_test_current", "_test_canopy", "_test_upgrades", "_test_ui", "_test_all_clear"]:
+	for name_ in ["_test_ota_and_version", "_test_mesh_winding", "_test_terrain", "_test_placements", "_test_tutorial_route", "_test_sphere_walk", "_test_jump_and_burst", "_test_coyote_and_buffer", "_test_swipe_direction_and_stages", "_test_hard_landing", "_test_food", "_test_food_reach", "_test_darter_and_burrower", "_test_food_repopulates", "_test_motes", "_test_checkpoint_and_regen", "_test_crumble", "_test_restoration_continuity", "_test_vortex", "_test_current", "_test_canopy", "_test_upgrades", "_test_ui", "_test_all_clear"]:
 		if only == "" or name_.contains(only):
 			await call(name_)
 
@@ -541,6 +541,52 @@ func _test_food() -> void:
 	p.max_health = 3
 	await _eat_test(Food.Type.BURROWER, 1, 3, "burrower_restores_all")
 	await _eat_test(Food.Type.DRIFTER, 3, 3, "eat_at_full_health")
+	p.invuln_t = 0.0
+
+
+func _test_food_reach() -> void:
+	# Drifters and darters hover at about head height.
+	var hovers := []
+	for i in 40:
+		var probe := Food.new()
+		probe.setup(p.ball, Food.Type.DRIFTER if i % 2 == 0 else Food.Type.DARTER, Vector3.ZERO, Vector3.UP, 20.0)
+		hovers.append(probe._hover)
+		probe.free()
+	var jump_apex := Axolotl.JUMP_V * Axolotl.JUMP_V / (2.0 * Axolotl.GRAVITY)
+	t.check("lunge_reach_stays_below_jump", Game.LUNGE_AIM_ABOVE < jump_apex - 0.2, "lunge %.2f jump %.2f" % [Game.LUNGE_AIM_ABOVE, jump_apex])
+	t.check("food_hovers_at_head_height", hovers.min() >= Food.HOVER_MIN and hovers.max() <= Food.HOVER_MAX and Food.HOVER_MAX <= 0.9, "%.2f..%.2f" % [hovers.min(), hovers.max()])
+	# Food floating well above the head and off to one side: the lunge turns and rises to it.
+	place(0, -12, -130, 0.1, 90)
+	p.invuln_t = 999
+	await wait_grounded()
+	p.health = 1
+	p.model.set_health(p.health, p.max_health, false)
+	var f := _spawn_food(Food.Type.DRIFTER)
+	f.set_physics_process(false)   # hold it still: only the lunge's aim is being tested
+	var side := p.facing.rotated(p.up, deg_to_rad(35.0))
+	f.global_position = p.body_center() + side * 1.8 + p.up * 1.4
+	await t.frames(2)
+	await press("lunge")
+	await t.seconds(0.5)
+	var too_high := _spawn_food(Food.Type.DRIFTER)
+	too_high.set_physics_process(false)
+	too_high.global_position = p.body_center() + p.facing * 1.5 + p.up * (Game.LUNGE_AIM_ABOVE + 0.6)
+	t.check("lunge_ignores_food_out_of_reach", Game.inst.lunge_target(p, p.facing) != too_high, "")
+	p.ball.foods.erase(too_high)
+	too_high.queue_free()
+	t.check("lunge_rises_and_turns_to_high_food", not is_instance_valid(f) and p.health == 2, "health %d" % p.health)
+	# The lunge's own wake no longer blows nearby food away.
+	await wait_grounded()
+	var g := _spawn_food(Food.Type.DRIFTER)
+	g.global_position = p.body_center() - p.facing * 1.6
+	var g0 := g.global_position
+	await press("lunge")
+	await t.seconds(0.8)
+	var moved := g.global_position.distance_to(g0) if is_instance_valid(g) else -1.0
+	t.check("lunge_wake_leaves_food_in_place", is_instance_valid(g) and moved < 0.5, "moved %.2f" % moved)
+	if is_instance_valid(g):
+		p.ball.foods.erase(g)
+		g.queue_free()
 	p.invuln_t = 0.0
 
 

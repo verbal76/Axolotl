@@ -6,6 +6,9 @@ extends Node3D
 
 enum Type { DRIFTER, DARTER, BURROWER }
 
+const HOVER_MIN := 0.3
+const HOVER_MAX := 0.9
+
 var type: int = Type.DRIFTER
 var ball: MossBall
 var region_dir := Vector3.UP
@@ -20,6 +23,7 @@ var _dart_dir := Vector3.ZERO
 var _vis: Node3D
 var _parts: Array[Node3D] = []
 var _hover := 1.0
+var _calm_t := 0.0         # ignores water pushes while the axolotl's own lunge is stirring it
 var _hole_pos := Vector3.ZERO
 var _hole_up := Vector3.UP
 
@@ -30,7 +34,8 @@ func setup(p_ball: MossBall, p_type: int, pos: Vector3, p_region_dir: Vector3, p
 	region_dir = p_region_dir.normalized()
 	region_radius = deg_to_rad(p_region_deg)
 	position = pos
-	_hover = randf_range(0.6, 1.8)
+	# Hovers at about head height so a lunge can reach it.
+	_hover = randf_range(HOVER_MIN, HOVER_MAX)
 
 
 func setup_burrower(p_ball: MossBall, p_hole: Dictionary) -> void:
@@ -152,6 +157,7 @@ func _physics_process(dt: float) -> void:
 		return
 	_t += dt
 	_cd = maxf(0.0, _cd - dt)
+	_calm_t = 0.7 if g.player.lunge_t >= 0.0 else maxf(0.0, _calm_t - dt)
 	match type:
 		Type.DRIFTER: _update_drifter(dt)
 		Type.DARTER: _update_darter(dt, g.player)
@@ -184,7 +190,8 @@ func _update_drifter(dt: float) -> void:
 	else:
 		vel += up * (_hover - h) * 0.8 * dt
 	vel += ball.current_at(global_position) * 0.5 * dt
-	vel += WaterFX.inst.push_at(global_position) * 4.0 * dt
+	if _calm_t <= 0.0:
+		vel += WaterFX.inst.push_at(global_position) * 4.0 * dt
 	vel += Vector3(sin(_t * 2.1), sin(_t * 1.3), cos(_t * 1.7)) * 0.15 * dt
 	_keep_in_region(up, dt, 0.4)
 	vel = vel.limit_length(2.5)
@@ -206,7 +213,8 @@ func _update_darter(dt: float, pl: Axolotl) -> void:
 				state = "idle"
 		"idle":
 			vel += up * (_hover - h) * 1.0 * dt
-			vel += WaterFX.inst.push_at(global_position) * 2.0 * dt
+			if _calm_t <= 0.0:
+				vel += WaterFX.inst.push_at(global_position) * 2.0 * dt
 			vel *= 1.0 - 1.5 * dt
 			var pl_speed := pl.velocity.length()
 			if d < 3.3 and _cd <= 0.0 and (pl_speed > 1.0 or pl.lunge_t >= 0.0):

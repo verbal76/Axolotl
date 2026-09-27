@@ -94,6 +94,7 @@ Test names refer to `scripts/tests/unit_tests.gd`, `scripts/tests/ota_tests.gd` 
 | F-06 | Always six gills; health goes from glowing colour to dull and faded when lost | I+V | `axolotl_model.gd` | `six_gills_always_full_size`, `gills_glow_when_active_dull_when_lost` | |
 | F-08 | Title stays restrained: no leftover controls or prompts on it | I+V | `hud.gd` `prompts_shown()` | `prompts_hidden_with_controls_eg_on_title`; `docs/screenshots/title_mote.jpg` | |
 | F-07 | Install icon from the owner's artwork, everywhere | I+V (APK contents) / BLOCKED (launcher) | `assets/icon/*`, `tools/make_icons.gd`, both Android presets, `config/icon` | `launcher_icons_configured`, `app_icon_is_owner_artwork`; icons extracted from an exported APK: legacy + adaptive = the artwork, themed (monochrome) = the axolotl traced from it (was Godot's robot); placeholder `icon.svg` removed; not yet seen on the owner's launcher | |
+| F-09 | Floating food is catchable (owner: "always above me"; chose lower hover + aimed lunge, darters included) | I+V (automated) | `food.gd` hover 0.3–0.9 m and wake calm; `game.gd` `lunge_target`, catch radius 0.95; `axolotl.gd` lunge homing | `food_hovers_at_head_height`, `lunge_rises_and_turns_to_high_food` (fails with the aim disabled), `lunge_ignores_food_out_of_reach`, `lunge_reach_stays_below_jump`, `lunge_wake_leaves_food_in_place`; feel on the phone not yet verified | drifter hover 0.6–1.8 m |
 
 ## O — development OTA channel
 
