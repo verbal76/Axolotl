@@ -592,10 +592,10 @@ func lunge_at(target: Callable, timeout := 20.0, stay := false) -> bool:
 		if g.stats["motes"] > start_motes or eaten > start_eat:
 			return true
 		await wait_grounded(1.5)
-		# Back off a little if we overshot.
+		# Back off a little if we overshot (gently when perched: don't walk off the edge).
 		if tangent_to(target.call()).length() < 0.6:
 			for k in 20:
-				set_stick(stick_for(-tangent_to(target.call())))
+				set_stick(stick_for(-tangent_to(target.call()), 0.3) if stay else stick_for(-tangent_to(target.call())))
 				await tick()
 	return false
 
@@ -815,14 +815,21 @@ func mesa(b: MossBall, h: Dictionary) -> void:
 		await goto(start, 0.8, 40.0)
 		if await hop_chain(chain, 2, start):
 			break
-	mark("on mesa top: %s" % str(height_of(b.surface_point(b.up_at(p.global_position))) < -5.0))
+	var on_top := func() -> bool: return height_of(b.surface_point(b.up_at(p.global_position))) < -5.0
+	mark("on mesa top: %s" % str(on_top.call()))
 	for par in b.parasites:
 		if par.zone_id == "mesa" and par.is_alive():
 			await fight_parasite(par, 20.0)
-	for attempt in 3:
+	for attempt in 4:
 		for m in b.motes:
 			if m.zone_id == "mesa" and m.is_available():
-				await lunge_at(func(): return m.global_position, 15.0, true)
+				if not on_top.call():
+					# Knocked or backed off the mesa: ride the living platforms back up first.
+					t.log_line("mesa: off the top before mote attempt %d; climbing back" % attempt)
+					await goto(start, 0.8, 40.0)
+					await hop_chain(chain, 2, start)
+				var ok := await lunge_at(func(): return m.global_position, 15.0, true)
+				t.log_line("mesa mote attempt %d: %s (on top %s, mote h %.2f above him)" % [attempt, "caught" if ok else "missed", on_top.call(), height_of(m.global_position)])
 
 
 func canopy(b: MossBall, h: Dictionary) -> void:
