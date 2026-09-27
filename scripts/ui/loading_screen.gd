@@ -9,9 +9,9 @@ extends CanvasLayer
 
 const BG := Color(0.04, 0.1, 0.1, 1.0)
 const ART := preload("res://assets/icon/splash.png")
-## The splash is drawn at its 320 px size on the phone's screen; on a 1080-pixel-tall screen
-## that is this many pixels of the 720-tall game view.
-const ART_SIZE := 213.0
+## The engine draws the boot splash at its own 320 px on the physical screen; the artwork here is
+## sized to the same physical size on any screen, so the hand-over does not jump.
+const SPLASH_PX := 320.0
 
 var status_label: Label
 ## Every stage shown, in order (for the startup tests).
@@ -29,15 +29,18 @@ func _ready() -> void:
 	bg.set_anchors_preset(Control.PRESET_FULL_RECT)
 	bg.mouse_filter = Control.MOUSE_FILTER_STOP
 	add_child(bg)
+	var win := DisplayServer.window_get_size()
+	var art_size := SPLASH_PX * get_viewport().get_visible_rect().size.y / float(win.y) if win.y > 0 else 213.0
+	art_size = clampf(art_size, 150.0, 360.0)
 	var art := TextureRect.new()
 	art.texture = ART
 	art.expand_mode = TextureRect.EXPAND_IGNORE_SIZE
 	art.stretch_mode = TextureRect.STRETCH_KEEP_ASPECT_CENTERED
 	art.set_anchors_preset(Control.PRESET_CENTER)
-	art.offset_left = -ART_SIZE / 2.0
-	art.offset_right = ART_SIZE / 2.0
-	art.offset_top = -ART_SIZE / 2.0
-	art.offset_bottom = ART_SIZE / 2.0
+	art.offset_left = -art_size / 2.0
+	art.offset_right = art_size / 2.0
+	art.offset_top = -art_size / 2.0
+	art.offset_bottom = art_size / 2.0
 	bg.add_child(art)
 	var title := Label.new()
 	title.text = GameVersion.title()
@@ -47,13 +50,13 @@ func _ready() -> void:
 	title.add_theme_color_override("font_color", Color(0.98, 0.82, 0.86))
 	title.add_theme_color_override("font_outline_color", Color(0.05, 0.18, 0.16, 0.8))
 	title.add_theme_constant_override("outline_size", 8)
-	_around_art(title, -ART_SIZE / 2.0 - 130.0, -ART_SIZE / 2.0 - 16.0)
+	_around_art(title, -art_size / 2.0 - 130.0, -art_size / 2.0 - 16.0)
 	bg.add_child(title)
 	status_label = Label.new()
 	status_label.horizontal_alignment = HORIZONTAL_ALIGNMENT_CENTER
 	status_label.add_theme_font_size_override("font_size", 24)
 	status_label.add_theme_color_override("font_color", Color(0.85, 0.95, 0.92, 0.75))
-	_around_art(status_label, ART_SIZE / 2.0 + 22.0, ART_SIZE / 2.0 + 60.0)
+	_around_art(status_label, art_size / 2.0 + 22.0, art_size / 2.0 + 60.0)
 	bg.add_child(status_label)
 	set_stage("Starting")
 
