@@ -1,4 +1,4 @@
-# Mote — requirement ledger (cumulative, 2026-09-27)
+# Mote — requirement ledger (cumulative, 2026-09-27, updated for runtime r4)
 
 This ledger covers every substantive owner requirement given today. Later explicit owner decisions supersede
 earlier ones only where the owner changed them.
@@ -77,7 +77,7 @@ Test names refer to `scripts/tests/unit_tests.gd`, `scripts/tests/ota_tests.gd` 
 | G-54 | Optional haptics | I+V (setting) | `settings.gd` | `haptics_toggle`; vibration not felt on a device | |
 | G-55 | 60 FPS target with automatic thermal/performance scaling | I+NYV | `scripts/core/quality_scaler.gd` | desktop only (headless ~0.8–1.2 ms/frame); no phone measurement | |
 | G-56 | Safe-area handling | I+NYV | `hud.gd` safe-area insets | no notched device or test | |
-| G-57 | Normal build fully offline | I+V | `export_presets.cfg` (no INTERNET), OTA gated on the `ota_dev` feature | `normal_build_offline_no_ota`; CI APK manifest check | |
+| G-57 | Normal build fully offline | SUPERSEDED | | | R-01 (offline-capable, not offline-only) |
 | G-58 | Beginning-to-end verification | I+V (desktop) | `playthrough_bot.gd` | 12/12 on seeds 4242 and 7 | |
 | G-59 | Title: live aquarium background, Gill visible, minimal menu | I+V | `scripts/ui/title_screen.gd` | title render (see F/N rows) | |
 | G-60 | Honest delivery notes and limitations | I+V | `README.md` | | |
@@ -115,10 +115,10 @@ Test names refer to `scripts/tests/unit_tests.gd`, `scripts/tests/ota_tests.gd` 
 | O-13 | Recovery (boot baseline) reachable even when game UI is broken | I+V (scripted) / I+NYV (gesture) | overlay in `boot.gd` (F9, five taps top-left) | e2e disable/enable; tap gesture not tried on a device |
 | O-14 | SHA-256 mandatory plus signed manifests | I+V | RSA verify in `ota_core.gd` | `ota_signature_verifies`, `ota_tampered_manifest_rejected`, `ota_wrong_key_rejected` |
 | O-15 | Save-schema compatibility gate | I+V | `ota_core.gd` `save_compat` | `ota_newer_save_blocks_older_ota` |
-| O-16 | `dev` channel only (channels are pointers) | I+V | `ota_config.gd` | `ota_channel_mismatch_rejected` |
+| O-16 | `dev` channel only (channels are pointers) | I+V | `ota_config.gd`; both packages follow `dev` since r4 (R-09) | `ota_channel_mismatch_rejected` |
 | O-17 | Diagnostics fields and controls | I+V (text, actions) / I+NYV (touch buttons) | `boot.gd`, `diagnostics_overlay.gd` | `diagnostics_*` tests; buttons not exercised |
 | O-18 | Stable HTTPS publication (GitHub Releases) | I+V | `ota-publish.yml` | `ota-dev-000008` release and `ota-channel-dev/latest.json` served publicly |
-| O-19 | One real Android end-to-end proof | BLOCKED | | needs b18 installed on the owner's phone and an OTA activated there |
+| O-19 | One real Android end-to-end proof | BLOCKED | | needs Mote b21 installed on the owner's phone and dev-000013 (or later r4 OTA) activated there; see R-19 |
 | O-20 | Docs: OTA-safe vs APK-required changes | I+V | `docs/OTA.md` | |
 | O-21 | Tests: manifest, runtime mismatch, hash, state transitions, rollback | I+V | `ota_tests.gd` | 29 OTA checks |
 | O-22 | Every push to the dev branch publishes an OTA | I+V | `ota-publish.yml` trigger | push of `d235cb2` published `dev-000008`; each later push publishes the next id |
@@ -170,11 +170,40 @@ Test names refer to `scripts/tests/unit_tests.gd`, `scripts/tests/ota_tests.gd` 
 | ID | Requirement | Status | Evidence |
 |---|---|---|---|
 | A-01 | CI functional and green | I+V | Build & Verify (tests + playthrough, Android, iOS) and OTA publish green on every pushed commit from `d235cb2` on; the final commit's runs are listed in the PR description |
-| A-02 | New Mote Dev APK built from the final native source | I+V | current native baseline **b18** (`mote-dev-v0.1.0-b18.apk`, source `854ea84`, runtime r3, SHA-256 `8066cbb1…9504f6b`), signed with the Mote Dev key (certificate pin enforced), built from the branch commit, not the PR merge ref |
+| A-02 | New APK built from the final native source | I+V | current native baseline **b21** (`mote-v0.1.0-b21.apk`, Mote, source `a72ae3b`, runtime r4, SHA-256 `801c889b…3c6c6d0d`; Mote Dev companion `mote-dev-v0.1.0-b21.apk`, `4cc9bdc4…f6bad86b`), signed with the Mote key (certificate pin enforced), built from the branch commit. Earlier baseline b18 (`854ea84`, r3) is superseded |
 | A-03 | APK identity report (SHA-256, versionCode, …) | I+V | from the b18 Android job log (Build & Verify run 36335461294) |
-| A-04 | Later game changes reach that APK by OTA | I+V | commits after `854ea84` touch only the game layer (`ota_runtime.py --check`: r3 unchanged); each push publishes a signed runtime-r3 OTA that b18 accepts. Activation on the phone: see O-19 |
-| A-05 | Physical-device verification | BLOCKED | owner's phone |
-| A-06 | Normal offline APK as a second artifact | I+V | same run: `mote-android-v0.1.0-b<build>` (no INTERNET, same certificate) |
+| A-04 | Later game changes reach that APK by OTA | I+V | game-layer commits after `a72ae3b` keep r4 (`ota_runtime.py --check`); each push publishes a signed runtime-r4 OTA that b21 accepts (first: dev-000013). Activation on the phone: see O-19, R-19 |
+| A-05 | Physical-device verification | BLOCKED | owner's phone (procedure: MOTE_HANDOFF.md §16) |
+| A-06 | Normal APK as a second artifact | I+V | same run: `mote-android-v0.1.0-b<build>`. Since r4 it is the primary, OTA-capable app (R-01); it was offline-only (no INTERNET) through b20 |
+
+## R — OTA delivery rectification (owner ruling, 2026-09-27)
+
+Owner ruling: **Mote is offline-capable, not offline-only.** No connection is needed to play; the installed
+Mote app checks for signed, compatible OTAs whenever a connection happens to be available, and never waits
+for one. Cause: the owner's phone ran the normal b18 APK (`Flavor: normal`, `OTA Enabled: no`), which had
+no OTA client and no INTERNET permission, so dev-000011/dev-000012 could never reach it.
+
+| ID | Requirement | Status | Implementation | Evidence |
+|---|---|---|---|---|
+| R-01 | The Mote app the owner plays receives OTAs and stays fully playable offline | I+V (build) / BLOCKED (device) | `export_presets.cfg` (Android: `ota` feature + INTERNET), `ota_config.gd` `FEATURE := "ota"` | `normal_build_ota_capable`, `dev_build_ota_capable`, `ios_build_has_no_ota`; CI badging b21: both APKs have INTERNET |
+| R-02 | Pre-rectification audit: dev-000012 contains all work after b18 | I+V | | every change `854ea84..227d0ab` classified: food/lunge in `axolotl.gd`, `food.gd`, `game.gd` present (A); ledger (C); tests present (C). Published PCK vs local export of `227d0ab`: all compiled scripts byte-identical (only `main.scn` random node id, `uid_cache.bin` and a stray CI `identity.json` differ); INSPECT OK; run from the published PCK itself: food/lunge tests 5/5, unit 133/141 (the 8 read raw `.gd`/`export_presets.cfg`/icon sources that exports omit), playthrough 12/12 on seeds 4242 and 7. Missing: none |
+| R-03 | Complete game bundled; start never waits for the network | I+V | `boot.gd` mounts only verified local packages in `_init`; checks start after boot health | e2e: boots and reaches health with no channel and with a hanging channel ("startup never waited for the network"); `ota_offline_gameplay_continues` |
+| R-04 | Automatic check: at start, on resume, periodically; no hammering | I+V | `Boot.auto_check()`, `auto_check_due()` (start; resume ≥ 15 min; periodic 60 min; failures count) | `ota_auto_check_policy`, `ota_auto_check_waits_for_health_and_ota`; e2e "automatic check runs after start" |
+| R-05 | Every OTA failure is non-fatal and keeps the known-good game | I+V | `ota_updater.gd` statuses; not threaded (Godot 4.7.2 threaded HTTPRequest ignores `timeout` on a server that never answers) | `ota_offline_check_nonfatal`, `ota_hanging_server_does_not_block`, `ota_client_rejects_bad_signature`, `ota_client_rejects_bad_hash`, `ota_client_ignores_older_runtime`, `ota_client_newer_runtime_needs_new_app`, `ota_interrupted_download_keeps_known_good`, `ota_download_retry_after_interruption`; e2e offline playthrough 12/12 with the channel unreachable |
+| R-06 | Manual controls: check, download, activate, restart, roll back, bundled baseline, re-enable | I+V (actions) / I+NYV (touch buttons) | `diagnostics_overlay.gd` (Activate/Roll back enabled only when they apply) | e2e rollback/disable/enable; buttons not exercised on a device |
+| R-07 | Diagnostics: bundled / active / latest / pending / channel / enabled / runtime compatibility / last check / status | I+V | `boot.gd` `diagnostics_text()`, `ota_status()` | `ota_diagnostics_bundled_active_latest` (bundled vs active vs latest, pending, up to date, disabled, not checked yet) |
+| R-08 | Old and new runtimes never accept each other's OTAs | I+V | runtime r4; `OtaCore.runtime_mismatch()` ("incompatible runtime" vs "native update required"); older-runtime leftovers dropped at boot | `ota_r4_app_rejects_r3_ota`, `ota_r3_app_rejects_r4_ota`, `ota_older_runtime_package_dropped_after_app_upgrade`; independent: r3 client rejects dev-000013, r4 client rejects dev-000012 |
+| R-09 | Keep the dev channel; room for a stable channel later | I+V | both packages follow `dev`; native build info may name `ota_channel` (default `ota_config.gd` `CHANNEL`) | `ota_channel_mismatch_rejected`; CI build-info `channel: dev` |
+| R-10 | Replacement APK bundles the current verified gameplay | I+V | game layer at `a72ae3b` identical to `227d0ab` (`git diff` outside boot/tests/tools/docs/CI/presets: empty) | dev-000013 gameplay files byte-identical to dev-000012 |
+| R-11 | Package plan: IDs unchanged; Mote Dev kept as optional test install | I+V | `com.verbal76.axolotl` "Mote", `com.verbal76.axolotl.dev` "Mote Dev" | `package_ids_unchanged`; CI badging b21 |
+| R-12 | Versioning: GAME_VERSION stays 0.1.0; Android build advances | I+V | | b21 `versionCode='21' versionName='0.1.0'`; drift check passed |
+| R-13 | Security: same APK certificate pin and OTA key pin; no secrets exposed | I+V | | CI b21: both APKs signed by `A8:4F:…:E2:C3`; embedded key = pin `a003a45c…0cf2`; dev-000013 signature verified independently |
+| R-14 | Save schema 1 preserved; upgrade in place keeps saves | I+V (config) / BLOCKED (device) | same package + certificate + higher versionCode | `save_schema_independent`; in-place upgrade not yet done on the phone |
+| R-15 | Regression coverage for the new architecture | I+V | `ota_tests.gd`, `ota_http_stub.gd`, `tools/ota_e2e_local.sh` | unit 160/0, playthrough 12/12 ×2, e2e ALL PASSED (31 checks) locally; CI Build & Verify #21 green |
+| R-16 | New signed Mote APK | I+V | Build & Verify #21, run 36341864999 | `mote-v0.1.0-b21.apk`, SHA-256 `801c889b61b0d4a55722d3a2243ab91f28868482be3890c2231f998f3c6c6d0d` |
+| R-17 | Matching test OTA on the new runtime | I+V | OTA publish #13, run 36341861522 | dev-000013, r4, source `a72ae3b`, PCK `a2f0cd0d…bc29cd75` 3,387,632 bytes; pointer → dev-000013; signature, key pin, hash, size, version, inspector all verified from public URLs |
+| R-18 | dev-000012 preserved as historical evidence | I+V | release `ota-dev-000012` untouched | still served; r3 |
+| R-19 | Phone acceptance A–N (MOTE_HANDOFF.md §16) | BLOCKED | | owner's phone |
 
 ## Precedence notes
 
@@ -183,3 +212,5 @@ Test names refer to `scripts/tests/unit_tests.gd`, `scripts/tests/ota_tests.gd` 
   question, then confirming "should have 6 … glowing … dull and faded"), and explicitly asked for a 270° swipe.
   Under the precedence rule (explicit later owner decision wins), these are recorded as SUPERSEDED, not reverted.
   If the owner wants them reverted, that is a one-line decision.
+- G-57 ("normal build fully offline") is superseded by the owner's later ruling R-01: offline-capable, not
+  offline-only. The normal Mote app now carries the OTA client; nothing requires a connection to play.
