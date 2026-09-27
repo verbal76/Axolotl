@@ -152,7 +152,8 @@ jobs:
           # Player-facing labels and the (unchanged) package identities.
           for pair in "mote-v$GV-b$BUILD.apk|com.verbal76.axolotl|Mote" "mote-dev-v$GV-b$BUILD.apk|com.verbal76.axolotl.dev|Mote Dev"; do
             IFS='|' read -r f pkg label <<< "$pair"
-            B=$("$AAPT" dump badging "build/android/$f" 2>/dev/null)
+            # aapt exits non-zero on this manifest's android:required attribute but still prints badging.
+            B=$("$AAPT" dump badging "build/android/$f" 2>/dev/null || true)
             echo "$B" | grep -q "^package: name='$pkg'" || { echo "::error::$f package id is not $pkg"; exit 1; }
             echo "$B" | grep -q "^application-label:'$label'$" || { echo "::error::$f label is not '$label'"; exit 1; }
             echo "$f: package $pkg, label '$label'"
