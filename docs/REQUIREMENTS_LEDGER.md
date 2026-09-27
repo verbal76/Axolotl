@@ -93,7 +93,7 @@ Test names refer to `scripts/tests/unit_tests.gd`, `scripts/tests/ota_tests.gd` 
 | F-05 | The six gills are the health display (owner answer) | I+V | `axolotl_model.gd` `_update_gills` | `gills_glow_when_active_dull_when_lost` | |
 | F-06 | Always six gills; health goes from glowing colour to dull and faded when lost | I+V | `axolotl_model.gd` | `six_gills_always_full_size`, `gills_glow_when_active_dull_when_lost` | |
 | F-08 | Title stays restrained: no leftover controls or prompts on it | I+V | `hud.gd` `prompts_shown()` | `prompts_hidden_with_controls_eg_on_title`; `docs/screenshots/title_mote.jpg` | |
-| F-07 | Install icon from the owner's artwork | I+V (config) | `assets/icon/*`, `tools/make_icons.gd`, both Android presets | `launcher_icons_configured`; CI badging lists the adaptive icon; not seen on a launcher | |
+| F-07 | Install icon from the owner's artwork, everywhere | I+V (APK contents) / BLOCKED (launcher) | `assets/icon/*`, `tools/make_icons.gd`, both Android presets, `config/icon` | `launcher_icons_configured`, `app_icon_is_owner_artwork`; icons extracted from an exported APK: legacy + adaptive = the artwork, themed (monochrome) = the axolotl traced from it (was Godot's robot); placeholder `icon.svg` removed; not yet seen on the owner's launcher | |
 
 ## O — development OTA channel
 
@@ -104,7 +104,7 @@ Test names refer to `scripts/tests/unit_tests.gd`, `scripts/tests/ota_tests.gd` 
 | O-03 | `user://ota` storage with an atomic state file | I+V | `ota_core.gd` | unit OTA tests |
 | O-04 | Immutable, versioned manifest; mutable channel pointer | I+V | `ota_make_manifest.gd`, `ota-publish.yml` | unit tests, e2e |
 | O-05 | Exact source SHA in the manifest | I+V | manifest `source_sha` | e2e step 11 |
-| O-06 | Runtime-ID compatibility gate | I+V | `ota_config.gd`, `tools/ota_runtime.py`, `ota/runtime_lock.json` (now r2) | `ota_runtime_mismatch_needs_native_update`; gate caught today's native change |
+| O-06 | Runtime-ID compatibility gate | I+V | `ota_config.gd`, `tools/ota_runtime.py`, `ota/runtime_lock.json` (now r3) | `ota_runtime_mismatch_needs_native_update`; gate caught today's native change |
 | O-07 | Publisher workflow: tests, PCK, hash, signed manifest, release, pointer, receipt | I+V | `.github/workflows/ota-publish.yml` | `dev-000008` from `d235cb2` (run 36334069998): receipt `published: true`, `pointer_moved: true`; re-downloaded objects re-verified in CI and again independently (signature, PCK SHA-256 and size, `ota_inspect_pack` INSPECT OK) |
 | O-08 | Full PCK first, no deltas | I+V | | e2e |
 | O-09 | Download to a temp file, then verify size, SHA-256 and signature | I+V | `ota_updater.gd`, `ota_core.gd` | `ota_hash_mismatch_rejected`, `ota_truncated_download_rejected`, e2e step 15 |
@@ -162,7 +162,7 @@ Test names refer to `scripts/tests/unit_tests.gd`, `scripts/tests/ota_tests.gd` 
 | C-04 | No private material tracked; `.gitignore` guards | I+V | `.gitignore` | tracked-file and diff scans | |
 | C-05 | Owner receives exact values and locations | I+V | secrets file sent | | |
 | C-06 | CI shows secret names only, verifies signatures and the APK certificate | I+V | workflows | logs show presence and structure only; apksigner certificate equals the pinned A8:4F:…:E2:C3; the derived OTA public key equals the embedded key and pin `a003a45c…0cf2` | |
-| C-07 | Old key retired cleanly; runtime bumped to r2 | I+V | `ota/runtime_lock.json` | `ota_runtime.py --check` | |
+| C-07 | Old key retired cleanly; runtime bumped to r2 (r3 later for the themed icon) | I+V | `ota/runtime_lock.json` | `ota_runtime.py --check` | |
 
 ## A — CI and the end-of-day APK
 

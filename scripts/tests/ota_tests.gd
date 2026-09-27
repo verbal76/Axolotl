@@ -306,10 +306,13 @@ func _test_product_identity() -> void:
 	t.check("dev_build_internet_and_ota", _opt(pr, "Android Dev", "permissions/internet") == true and str(_opt(pr, "Android Dev", "custom_features")).contains("ota_dev"), "")
 	var icons_ok := true
 	for preset in ["Android", "Android Dev"]:
-		for key in ["launcher_icons/main_192x192", "launcher_icons/adaptive_foreground_432x432", "launcher_icons/adaptive_background_432x432"]:
+		for key in ["launcher_icons/main_192x192", "launcher_icons/adaptive_foreground_432x432", "launcher_icons/adaptive_background_432x432", "launcher_icons/adaptive_monochrome_432x432"]:
 			var path := str(_opt(pr, preset, key))
 			icons_ok = icons_ok and path.begins_with("res://assets/icon/") and FileAccess.file_exists(path)
 	t.check("launcher_icons_configured", icons_ok, "")
+	# The app icon is the owner's artwork everywhere; the first placeholder icon is gone.
+	var app_icon := str(ProjectSettings.get_setting("application/config/icon", ""))
+	t.check("app_icon_is_owner_artwork", app_icon.begins_with("res://assets/icon/") and not FileAccess.file_exists("res://icon.svg"), app_icon)
 	# No new exposition around the name, and the game's Motes keep their name.
 	var bad := []
 	for f in _all_files("res://scripts") + _all_files("res://scenes"):

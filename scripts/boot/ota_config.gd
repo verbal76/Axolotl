@@ -7,7 +7,7 @@ extends RefCounted
 ## Version of the on-device OTA bootstrap protocol. Manifests may demand a minimum.
 const BOOTSTRAP_VERSION := 1
 ## Bumped whenever the native layer changes incompatibly (see ota/runtime_lock.json).
-const RUNTIME_REVISION := 2
+const RUNTIME_REVISION := 3
 ## The only channel the dev APK follows. Channels are manifest pointers, not packages.
 const CHANNEL := "dev"
 const REPO := "verbal76/Axolotl"

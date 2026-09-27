@@ -34,7 +34,7 @@ change any of them:
 - native `.so` libraries, Android plugins, Gradle, Java or Kotlin (none are used today).
 
 When one of these changes, bump the runtime with `python3 tools/ota_runtime.py --bump` (the
-revision becomes part of the runtime ID, e.g. `android-godot-4.7.2-r2`). Commit, then install
+revision becomes part of the runtime ID, e.g. `android-godot-4.7.2-r3`). Commit, then install
 the new Dev APK. Older APKs reject OTAs built for the new runtime ("native update required").
 
 ## Boot order
@@ -72,7 +72,7 @@ The APK's bundled game is never modified and is always the final fallback.
 ```json
 {
   "schema": 1, "channel": "dev", "ota_id": "dev-000123", "seq": 123,
-  "source_sha": "<40-hex commit SHA>", "runtime_id": "android-godot-4.7.2-r2",
+  "source_sha": "<40-hex commit SHA>", "runtime_id": "android-godot-4.7.2-r3",
   "minimum_bootstrap_version": 1, "game_version": "0.1.0",
   "save_schema": 1, "min_save_schema": 1,
   "pck_url": "https://github.com/verbal76/Axolotl/releases/download/ota-dev-000123/axolotl-dev-000123.pck",

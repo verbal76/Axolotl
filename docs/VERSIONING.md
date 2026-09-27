@@ -15,7 +15,7 @@ stands in for another, and none is derived from another.
 | **OTA** | Which remote game payload is active *right now*? | the OTA state after boot selection (`Boot.core.active`) | `dev-000042` |
 | **Automation** | Which CI run built or published it? | GitHub Actions run id (in native build info and the OTA manifest) | `17234…` |
 | **Save schema** | Which persisted-data format is this? | `SAVE_SCHEMA` in `scripts/core/save_schema.gd` | `1` |
-| **Runtime** | Which OTAs can this APK run? | `ota_config.gd` + `ota/runtime_lock.json` | `android-godot-4.7.2-r2` |
+| **Runtime** | Which OTAs can this APK run? | `ota_config.gd` + `ota/runtime_lock.json` | `android-godot-4.7.2-r3` |
 
 Values that don't exist for a build are shown as `local`, `unknown` or `none`, never invented.
 For example, a local editor run has no Android build and no CI run.
