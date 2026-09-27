@@ -78,7 +78,8 @@ jobs:
           done
           KS="$RUNNER_TEMP/mote_dev.keystore"
           if [ -n "$MOTE_ANDROID_DEV_KEYSTORE_B64" ] && [ -n "$MOTE_ANDROID_DEV_KEYSTORE_PASSWORD" ] && [ -n "$MOTE_ANDROID_DEV_KEY_ALIAS" ]; then
-            printf '%s' "$MOTE_ANDROID_DEV_KEYSTORE_B64" | base64 -d > "$KS"
+            # Tolerate line breaks/spaces introduced when pasting the base64 value.
+            printf '%s' "$MOTE_ANDROID_DEV_KEYSTORE_B64" | tr -d ' \r\n\t' | base64 -d > "$KS"
             # PKCS12 keystores (and Godot's single-password signing) need key password == store password.
             if [ -n "$MOTE_ANDROID_DEV_KEY_PASSWORD" ] && [ "$MOTE_ANDROID_DEV_KEY_PASSWORD" != "$MOTE_ANDROID_DEV_KEYSTORE_PASSWORD" ]; then
               echo "::error::MOTE_ANDROID_DEV_KEY_PASSWORD must equal MOTE_ANDROID_DEV_KEYSTORE_PASSWORD (PKCS12 keystore)"; exit 1

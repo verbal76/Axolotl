@@ -92,7 +92,20 @@ jobs:
           fi
           umask 077
           echo "MOTE_OTA_SIGNING_KEY: present"
-          printf '%s\n' "$MOTE_OTA_SIGNING_KEY" > "$RUNNER_TEMP/ota_key.pem"
+          # Rebuild a canonical PEM from however the key was pasted (phones often turn line breaks
+          # into spaces, add CRLF or extra lines). Only structural facts are printed, never the key.
+          python3 - "$RUNNER_TEMP/ota_key.pem" <<'PY'
+          import os, re, sys, textwrap
+          raw = os.environ["MOTE_OTA_SIGNING_KEY"].replace("\r", "")
+          m = re.search(r"-----BEGIN ([A-Z ]*PRIVATE KEY)-----(.*?)-----END \1-----", raw, re.S)
+          print(f"key text: {raw.count(chr(10)) + 1} lines, BEGIN/END markers found: {bool(m)}")
+          if not m:
+              sys.exit("MOTE_OTA_SIGNING_KEY has no complete '-----BEGIN ... PRIVATE KEY-----' / '-----END ... PRIVATE KEY-----' block")
+          body = re.sub(r"[^A-Za-z0-9+/=]", "", m.group(2))
+          print(f"base64 body: {len(body)} chars, type: {m.group(1)}")
+          pem = f"-----BEGIN {m.group(1)}-----\n" + "\n".join(textwrap.wrap(body, 64)) + f"\n-----END {m.group(1)}-----\n"
+          open(sys.argv[1], "w").write(pem)
+          PY
           openssl pkey -in "$RUNNER_TEMP/ota_key.pem" -pubout > "$RUNNER_TEMP/derived_pub.pem"
           python3 - "$RUNNER_TEMP/derived_pub.pem" <<'PY'
           import re, sys
