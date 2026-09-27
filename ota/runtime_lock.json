@@ -1,7 +1,7 @@
 {
   "runtime_revision": 5,
   "godot_version": "4.7.2",
-  "fingerprint": "92a2a874b677fa84054b1ab0ce76de900798518dfc293307d6f5e47290307e44",
+  "fingerprint": "8d80c5a721cdac64423b8cd3182c97e92a67cb452d7f4562ffaf66240ea3373d",
   "files": [
     "project.godot",
     "export_presets.cfg",
