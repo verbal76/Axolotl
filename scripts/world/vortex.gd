@@ -31,7 +31,12 @@ func setup(a: MossBall, b: MossBall, p_dir_a: Vector3, p_dir_b: Vector3) -> void
 	ball_b = b
 	dir_a = p_dir_a.normalized()
 	dir_b = p_dir_b.normalized()
-	a.vortex_out = self
+	# A ball can have several ways out (the chain and branches); vortex_out stays the original
+	# chain's, so the first link registered wins it.
+	if a.vortex_out == null:
+		a.vortex_out = self
+	a.vortices.append(self)
+	b.vortices.append(self)
 	b.vortex_in = self
 	b.arrival_dir = dir_b
 

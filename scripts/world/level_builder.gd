@@ -69,6 +69,200 @@ func cushion(lat: float, lon: float, radius: float, height: float, xf_override: 
 	return body
 
 
+# --- Terrain vocabulary (Expansion 4; docs/WORLD.md) ------------------------------------------
+# Every piece is natural (irregular, sweeping into the ground), its collision is exactly its drawn
+# triangles, and it records how the bot and the tests can use it.
+
+## A solid body from a mesh built in the frame `xf` (vertices local to it).
+func _terrain_body(xf: Transform3D, res: Array, kind: String, grounded := true) -> StaticBody3D:
+	var body := StaticBody3D.new()
+	body.collision_layer = 1
+	root.add_child(body)
+	body.global_transform = xf
+	var cs := CollisionShape3D.new()
+	var shape := ConcavePolygonShape3D.new()
+	shape.set_faces(res[1])
+	cs.shape = shape
+	body.add_child(cs)
+	var mi := MeshInstance3D.new()
+	mi.mesh = res[0]
+	mi.material_override = ball.moss_material
+	body.add_child(mi)
+	if grounded:
+		body.set_meta("grounded", kind)
+	body.set_meta("terrain_kind", kind)
+	return body
+
+
+## A ridge along the great circle from (lat0, lon0) to (lat1, lon1): a crest `crest_w` wide at
+## `height` above the ground, sides sweeping out to `width`, following the terrain, with walkable
+## ramps at both ends (so the crest is an alternate, higher route). Returns the body; its crest line
+## (world points) is in meta "crest".
+func ridge(lat0: float, lon0: float, lat1: float, lon1: float, height: float, width: float, crest_w: float, seed_v := 1, ramp := 0.3) -> StaticBody3D:
+	var a := d(lat0, lon0)
+	var b := d(lat1, lon1)
+	var mid := a.slerp(b, 0.5)
+	var xf := ball.xform_on_dir(mid)
+	var inv := xf.affine_inverse()
+	var arc := a.angle_to(b) * ball.radius
+	var n := maxi(12, int(arc / 0.7))
+	var noise := FastNoiseLite.new()
+	noise.seed = seed_v
+	noise.frequency = 0.08
+	var dirs: Array[Vector3] = []
+	for i in n:
+		dirs.append(a.slerp(b, float(i) / (n - 1)))
+	var axis := a.cross(b).normalized()
+	var sink := 1.6
+	var prof := MeshLib.ridge_profile(width * 0.5, crest_w, sink)
+	var hf := func(i: int) -> float:
+		var t := float(i) / (n - 1)
+		return height * smoothstep(0.0, ramp, t) * smoothstep(0.0, ramp, 1.0 - t) * (1.0 + 0.1 * noise.get_noise_1d(t * arc))
+	var place := func(i: int, x: float, y: float) -> Vector3:
+		# Sideways across the ridge is a rotation about the path's tangent (stays on the sphere).
+		var dside: Vector3 = dirs[i].rotated((dirs[i].cross(axis)).normalized(), x / ball.radius)
+		var gp := ball.surface_point(dside, 0.0)
+		var up := ball.up_at(gp)
+		var yy: float = y if y < 0.0 else y * float(hf.call(i))
+		return inv * (gp + up * yy)
+	var inside := func(i: int) -> Vector3:
+		return inv * ball.surface_point(dirs[i], float(hf.call(i)) * 0.3 - 0.4)
+	var body := _terrain_body(xf, MeshLib.sweep(n, prof, false, place, inside), "ridge")
+	var crest := []
+	for i in n:
+		crest.append(ball.surface_point(dirs[i], float(hf.call(i)) + 0.05))
+	body.set_meta("crest", crest)
+	body.set_meta("top", height)
+	return body
+
+
+## A natural arch from (lat0, lon0) to (lat1, lon1): a rounded slab `width` wide and `thick`
+## thick rising from the ground at both ends to `clearance` of open water beneath its middle. Its
+## top is walkable (slopes under 52 degrees for spans over about 3 x its height) and Gill passes
+## under it. Returns the body; its top line (world points) is in meta "top_line".
+func arch(lat0: float, lon0: float, lat1: float, lon1: float, clearance: float, width: float, thick: float) -> StaticBody3D:
+	var a := d(lat0, lon0)
+	var b := d(lat1, lon1)
+	var xf := ball.xform_on_dir(a.slerp(b, 0.5))
+	var inv := xf.affine_inverse()
+	var n := 28
+	var centre: Array[Vector3] = []
+	var ups: Array[Vector3] = []
+	for i in n:
+		var t := float(i) / (n - 1)
+		var dd := a.slerp(b, t)
+		var s := sin(t * PI)
+		# Ends: the slab's top meets the ground; middle: `clearance` under its underside.
+		var h := (clearance + thick * 0.5) * s - thick * 0.5 * (1.0 - s)
+		centre.append(ball.surface_point(dd, h))
+		ups.append(ball.up_at(ball.surface_point(dd, 0.0)))
+	var frame := func(i: int) -> Array:
+		var tn: Vector3 = (centre[mini(i + 1, n - 1)] - centre[maxi(i - 1, 0)]).normalized()
+		var u: Vector3 = (ups[i] - tn * ups[i].dot(tn)).normalized()
+		return [tn.cross(u).normalized(), u]
+	var place := func(i: int, x: float, y: float) -> Vector3:
+		var f: Array = frame.call(i)
+		return inv * (centre[i] + (f[0] as Vector3) * x + (f[1] as Vector3) * y)
+	var inside := func(i: int) -> Vector3:
+		return inv * centre[i]
+	var body := _terrain_body(xf, MeshLib.sweep(n, MeshLib.slab_profile(width, thick), true, place, inside), "arch")
+	var line := []
+	for i in n:
+		line.append(centre[i] + (frame.call(i)[1] as Vector3) * (thick * 0.5 + 0.05))
+	body.set_meta("top_line", line)
+	return body
+
+
+## A natural bridge between two raised points (world positions on formations, e.g. ridge crests or
+## shelf tops), bowing up by `bow`. Its ends sink into the supports it joins.
+func bridge(p0: Vector3, p1: Vector3, bow: float, width: float, thick: float) -> StaticBody3D:
+	var midp := (p0 + p1) * 0.5
+	var up0 := ball.up_at(midp)
+	var xf := Transform3D(MossBall.frame_at(up0, 0.0), midp)
+	var inv := xf.affine_inverse()
+	var n := 20
+	var centre: Array[Vector3] = []
+	for i in n:
+		var t := float(i) / (n - 1)
+		centre.append(p0.lerp(p1, t) + up0 * (bow * sin(t * PI) - thick * 0.5))
+	var place := func(i: int, x: float, y: float) -> Vector3:
+		var tn: Vector3 = (centre[mini(i + 1, n - 1)] - centre[maxi(i - 1, 0)]).normalized()
+		var u := (up0 - tn * up0.dot(tn)).normalized()
+		return inv * (centre[i] + tn.cross(u).normalized() * x + u * y)
+	var inside := func(i: int) -> Vector3:
+		return inv * centre[i]
+	var body := _terrain_body(xf, MeshLib.sweep(n, MeshLib.slab_profile(width, thick), true, place, inside), "bridge", false)
+	body.set_meta("floats_by_design", "natural bridge spanning two formations")
+	var line := []
+	for i in n:
+		line.append(centre[i] + up0 * (thick * 0.5 + 0.05))
+	body.set_meta("top_line", line)
+	return body
+
+
+## An overhanging rock shelf: a stem sweeping out of the ground under a wide flat top at `height`
+## (the overhang gives shelter beneath; the top is reached from somewhere higher or by a jump).
+func shelf(lat: float, lon: float, height: float, r_top: float, r_stem: float) -> StaticBody3D:
+	var xf := ball.xform_on_dir(d(lat, lon))
+	var inv := xf.affine_inverse()
+	var ground := func(x: float, z: float) -> float:
+		return (inv * ball.surface_point(ball.up_at(xf * Vector3(x, 0.0, z)), 0.0)).y
+	var body := _terrain_body(xf, MeshLib.shelf(r_top, r_stem, height, 1.6, hash(xf.origin.snapped(Vector3.ONE * 0.01)), ground), "shelf")
+	body.set_meta("top", height)
+	body.set_meta("radius", r_top)
+	return body
+
+
+## Terraces: stepped tiers at one spot, each a mound on the one below. tiers: [[radius, top]]
+## with tops measured from the ground; keep each step a plain jump (top difference up to 1.3 m)
+## and leave a ring of at least 1.2 m on each tier. Returns the tier bodies (lowest first).
+func terrace(lat: float, lon: float, tiers: Array) -> Array:
+	var out := []
+	var base_xf := ball.xform_on_dir(d(lat, lon))
+	var inv0 := base_xf.affine_inverse()
+	# Each tier follows the ball's curve: the same height above the ground everywhere, so every
+	# step up is the same plain jump right to the rim.
+	var ground := func(x: float, z: float) -> float:
+		return (inv0 * ball.surface_point(ball.up_at(base_xf * Vector3(x, 0.0, z)), 0.0)).y
+	var below := 0.0
+	for k in tiers.size():
+		var r: float = tiers[k][0]
+		var top: float = tiers[k][1]
+		var xf := base_xf.translated_local(Vector3(0, below, 0))
+		# Upper tiers carry a column down into the ground, hidden inside the tiers below.
+		var res := MeshLib.mound(r, top - below, below + 1.5, hash(xf.origin.snapped(Vector3.ONE * 0.01)), 28, ground, true)
+		var body := _terrain_body(xf, res, "terrace" if k == 0 else "terrace tier")
+		body.set_meta("top", top)
+		body.set_meta("radius", r)
+		out.append(body)
+		below = top
+	return out
+
+
+## A climbable spiral of leaves round a stem at `xf` (one plain jump per step): `count` leaves,
+## the first `start` m up, then `rise` m and `turn_deg` degrees apart. Returns the leaf transforms.
+func canopy_spiral(xf: Transform3D, count: int, start: float, rise: float, turn_deg: float, stem_h: float, stem_r: float,
+		leaf_len := 3.0, leaf_w := 1.9) -> Array:
+	stem_xf(xf, stem_h, stem_r, stem_r * 0.7)
+	var leaves := []
+	for i in count:
+		var a := deg_to_rad(turn_deg * i)
+		var h := start + i * rise
+		var dir := Vector3(cos(a), 0.0, sin(a))
+		var lx := Transform3D(Basis(Vector3.UP, atan2(dir.x, dir.z) + PI), Vector3(dir.x * (stem_r + 0.1), h, dir.z * (stem_r + 0.1)))
+		var world := xf * lx
+		leaf_xf(world, leaf_len, leaf_w)
+		leaves.append(world)
+	return leaves
+
+
+## Registers a climb for the bot and the reachability audit: from `start` (on the ground) hop
+## along `tops` in order; `zones` are the restoration zones whose elevated motes and parasites it
+## serves; `goal` names what it reaches.
+func route(name_: String, start: Vector3, tops: Array, zones: Array, goal := "") -> void:
+	bot_hints.append({"route": name_, "start": start, "tops": tops, "zones": zones, "goal": goal})
+
+
 func stem_xf(xf: Transform3D, height: float, r0: float, r1: float, collide := true, bend := 0.0) -> Node3D:
 	var node: Node3D
 	if collide:
@@ -246,7 +440,7 @@ func strands(xf: Transform3D, width: float, depth: float, height: float, count: 
 
 ## Interior moss cave: a hollow mossy dome whose low entrance is hidden behind dense strands.
 ## Inside: a short optional climb to one permanent health upgrade.
-func cave(lat: float, lon: float, heading: float, radius := 8.0) -> void:
+func cave(lat: float, lon: float, heading: float, radius := 8.0, reward := "health") -> void:
 	var xf := at(lat, lon, heading, 0, 0, 0)
 	# Each cave is its own formation: size, mouth and lumps vary with a seed from its site, within
 	# ranges that keep the interior climb, the mouth clearance and the ceiling height (MeshLib.cave_mound).
@@ -274,17 +468,18 @@ func cave(lat: float, lon: float, heading: float, radius := 8.0) -> void:
 	body.add_child(mi)
 	# Cave darkening centred inside the dome.
 	var centre := xf.origin + xf.basis.y * 2.2
-	ball.set_field_param("cave", Vector4(centre.x, centre.y, centre.z, radius * 1.05))
-	for m in [ball.moss_material]:
-		m.set_shader_parameter("cave", Vector4(centre.x, centre.y, centre.z, radius * 1.05))
+	ball.add_cave(Vector4(centre.x, centre.y, centre.z, radius * 1.05))
 	# Hidden entrance: dense strands right in front of the door.
 	strands(at(lat, lon, heading, 0, 0, -radius - 0.2), 4.2, 1.6, 2.4, 110, int(lat * 100 + lon))
 	# Interior climb: three ledges, the last needing a water burst.
-	var l1 := cushion(0, 0, 1.0, 1.2, at(lat, lon, heading, -3.0, 0, 2.5))
-	var l2 := cushion(0, 0, 0.85, 2.6, at(lat, lon, heading, -1.0, 0, 4.2))
-	var l3 := cushion(0, 0, 0.9, 3.9, at(lat, lon, heading, 3.2, 0, 1.0))
-	var up_xf := at(lat, lon, heading, 3.2, 3.9, 1.0)
+	# The original caves keep their layout; grottoes may mirror it, so interiors differ.
+	var sx := -1.0 if reward == "pearl" and int(absf(lat * 10.0 + lon)) % 2 == 0 else 1.0
+	var l1 := cushion(0, 0, 1.0, 1.2, at(lat, lon, heading, -3.0 * sx, 0, 2.5))
+	var l2 := cushion(0, 0, 0.85, 2.6, at(lat, lon, heading, -1.0 * sx, 0, 4.2))
+	var l3 := cushion(0, 0, 0.9, 3.9, at(lat, lon, heading, 3.2 * sx, 0, 1.0))
+	var up_xf := at(lat, lon, heading, 3.2 * sx, 3.9, 1.0)
 	var u := Platforms.Upgrade.new()
+	u.kind = reward
 	var dir := ball.up_at(up_xf.origin)
 	u.setup(ball, dir, 3.9)
 	ball.add_child(u)
@@ -321,5 +516,5 @@ func cave(lat: float, lon: float, heading: float, radius := 8.0) -> void:
 	mmi.material_override = spore_mat
 	mmi.top_level = true
 	root.add_child(mmi)
-	bot_hints.append({"cave": true, "body": body, "shape": res[2], "centre": xf.origin, "entry": at(lat, lon, heading, 0, 0, -radius - 2.5).origin, "door": at(lat, lon, heading, 0, 0, -radius + 1.0).origin,
+	bot_hints.append({"cave": true, "reward": u, "body": body, "shape": res[2], "centre": xf.origin, "entry": at(lat, lon, heading, 0, 0, -radius - 2.5).origin, "door": at(lat, lon, heading, 0, 0, -radius + 1.0).origin,
 			"ledges": [l1, l2, l3], "upgrade": up_xf.origin})

@@ -73,6 +73,24 @@ func run(runner) -> void:
 			await t.seconds(2.5)
 			await t.shot("veg_%s_stopped" % v[3])
 		g.player.use_bot_input = false
+	if only == "" or only == "world":
+		# Expansion 4's balls: each climb's start, looking at its first step.
+		for bi in range(3, g.balls.size()):
+			var b := g.balls[bi]
+			var lb: LevelBuilder = b.get_meta("builder")
+			var k := 0
+			for h in lb.bot_hints:
+				if not h.has("route"):
+					continue
+				var st: Vector3 = h["start"]
+				var first: Vector3 = (h["tops"] as Array)[0]
+				var back := st - (first - st).normalized() * 4.0
+				g.player.place(b, b.surface_point(b.up_at(back), 0.2), first - back)
+				g.cam.snap_behind()
+				g.cam.pitch = 0.25
+				await t.seconds(1.2)
+				await t.shot("world_b%d_%d_%s" % [bi + 1, k, str(h["route"]).replace(" ", "_")])
+				k += 1
 	if only == "perf":
 		# Rendering cost at fixed views: frame time (software renderer here, so a proxy for GPU
 		# fill cost, not phone numbers), draw calls, triangles and video memory.
@@ -89,6 +107,23 @@ func run(runner) -> void:
 				g.player.place(g.balls[0], g.balls[0].surface_point(g.balls[0].up_at(h["door"]), 0.2), (h["door"] as Vector3) - (h["entry"] as Vector3))
 				g.cam.snap_behind()
 				await _perf_view("cave_b1")
+		# The new areas (Expansion 4): the first climb on each, looking up it, and ball 7's grotto.
+		for bi in range(3, g.balls.size()):
+			var nb := g.balls[bi]
+			var nlb: LevelBuilder = nb.get_meta("builder")
+			for h in nlb.bot_hints:
+				if h.has("route"):
+					g.player.place(nb, (h["start"] as Vector3) + nb.up_at(h["start"]) * 0.2, (h["tops"][0] as Vector3) - (h["start"] as Vector3))
+					g.cam.snap_behind()
+					await _perf_view("ball%d_%s" % [bi + 1, str(h["route"]).replace(" ", "_")])
+					break
+		var glb: LevelBuilder = g.balls[6].get_meta("builder")
+		for h in glb.bot_hints:
+			if h.has("cave"):
+				g.player.place(g.balls[6], g.balls[6].surface_point(g.balls[6].up_at(h["door"]), 0.2), (h["door"] as Vector3) - (h["entry"] as Vector3))
+				g.cam.snap_behind()
+				await _perf_view("cave_b7")
+				break
 	if only == "b2out":
 		var b := g.balls[1]
 		var v: Vortex = b.vortex_out

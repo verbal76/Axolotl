@@ -192,7 +192,10 @@ static func cushion_mesh(radius: float, height: float, sink: float = 1.2, radial
 ## `ground` (optional): Callable(x, z) -> local height of the real terrain under that point, so the
 ## base follows hills and the ball's curvature instead of a flat plane (the sweep then meets the
 ## ground everywhere; the top stays level).
-static func mound(radius: float, height: float, sink: float, seed_v: int, radial := 28, ground := Callable()) -> Array:
+## `follow_top`: the whole mound follows the terrain (its top parallel to the ground, the same
+## height above it everywhere): terraces on small balls, where a flat top would stand far higher
+## above the ground at its rim than at its middle.
+static func mound(radius: float, height: float, sink: float, seed_v: int, radial := 28, ground := Callable(), follow_top := false) -> Array:
 	var noise := FastNoiseLite.new()
 	noise.seed = seed_v
 	noise.frequency = 0.9
@@ -235,7 +238,9 @@ static func mound(radius: float, height: float, sink: float, seed_v: int, radial
 		var n := absf(noise.get_noise_2d(cos(a) * 1.3, sin(a) * 1.3)) * 0.16
 		var r: float = pr[0] * (1.0 + n * float(pr[2]))
 		var y: float = pr[1]
-		if ground.is_valid() and y < wall_top:
+		if ground.is_valid() and follow_top:
+			y += float(ground.call(d.x * r, d.z * r))
+		elif ground.is_valid() and y < wall_top:
 			# Bend the base onto the terrain: fully at the ground, fading out up the wall.
 			var gy: float = ground.call(d.x * r, d.z * r)
 			y += gy * (1.0 - clampf(y / wall_top, 0.0, 1.0))
@@ -251,6 +256,143 @@ static func mound(radius: float, height: float, sink: float, seed_v: int, radial
 				st.set_uv(Vector2(float(s) / radial, (v as Vector3).y / height))
 				st.add_vertex(v)
 				faces.append(v)
+	st.generate_normals()
+	return [st.commit(), faces]
+
+
+## Sweeps a cross-section along a path (ridges, arches, bridges). `place(i, x, y)` gives the
+## position of profile point (x across, y up) at station i (it follows the terrain or the path);
+## `inside(i)` a point inside the solid at station i, so every triangle is wound to face out.
+## `profile` runs across the section; `closed` joins its last point back to its first (a tube).
+## Returns [ArrayMesh, faces]: the collision is exactly the drawn triangles.
+static func sweep(stations: int, profile: PackedVector2Array, closed: bool, place: Callable, inside: Callable) -> Array:
+	var st := SurfaceTool.new()
+	st.begin(Mesh.PRIMITIVE_TRIANGLES)
+	var faces := PackedVector3Array()
+	var rows := []
+	for i in stations:
+		var row := []
+		for pr in profile:
+			row.append(place.call(i, pr.x, pr.y))
+		rows.append(row)
+	var np := profile.size()
+	var segs := np if closed else np - 1
+	for i in stations - 1:
+		var ref: Vector3 = (inside.call(i) + inside.call(i + 1)) * 0.5
+		for j in segs:
+			var j1 := (j + 1) % np
+			var quad := [rows[i][j], rows[i][j1], rows[i + 1][j1], rows[i + 1][j]]
+			for tri in [[quad[0], quad[1], quad[2]], [quad[0], quad[2], quad[3]]]:
+				var a: Vector3 = tri[0]
+				var bb: Vector3 = tri[1]
+				var c: Vector3 = tri[2]
+				var n := (c - a).cross(bb - a)
+				if n.length_squared() < 1e-12:
+					continue
+				# Front faces (Godot winds them clockwise) point away from the inside.
+				if n.dot((a + bb + c) / 3.0 - ref) < 0.0:
+					var tmp := bb
+					bb = c
+					c = tmp
+				for v in [a, bb, c]:
+					st.set_uv(Vector2(0.0, v.y))
+					st.add_vertex(v)
+					faces.append(v)
+	st.generate_normals()
+	return [st.commit(), faces]
+
+
+## Cross-section of a ridge (x across, y up, at full height 1.0): a flat crest `crest` wide, a
+## rounded rim, sides leaning out, a concave sweep into the ground, and buried skirts.
+static func ridge_profile(half_width: float, crest: float, sink: float) -> PackedVector2Array:
+	var pts := PackedVector2Array()
+	var side := func(sgn: float) -> Array:
+		var out := []
+		out.append(Vector2(sgn * half_width, -sink))
+		# A concave sweep from the ground up into a steep side (gentle at the foot, near vertical
+		# under the rim), then the rounded rim onto the flat crest.
+		for k in 7:
+			var a := float(k) / 6.0
+			out.append(Vector2(sgn * (crest * 0.5 + 0.12 + (half_width - crest * 0.5 - 0.12) * pow(1.0 - a, 2.2)), a * 0.85))
+		out.append(Vector2(sgn * (crest * 0.5 + 0.06), 0.96))
+		out.append(Vector2(sgn * crest * 0.5, 1.0))
+		return out
+	var left: Array = side.call(-1.0)
+	for v in left:
+		pts.append(v)
+	var right: Array = side.call(1.0)
+	right.reverse()
+	for v in right:
+		pts.append(v)
+	return pts
+
+
+## Cross-section of an arch/bridge slab: a closed rounded rectangle `width` x `thick`, flat on top.
+static func slab_profile(width: float, thick: float) -> PackedVector2Array:
+	var pts := PackedVector2Array()
+	var r := minf(thick * 0.45, width * 0.3)
+	var corners := [[Vector2(width * 0.5 - r, thick * 0.5 - r), 0.0], [Vector2(-width * 0.5 + r, thick * 0.5 - r), 90.0],
+			[Vector2(-width * 0.5 + r, -thick * 0.5 + r), 180.0], [Vector2(width * 0.5 - r, -thick * 0.5 + r), 270.0]]
+	for c in corners:
+		for k in 4:
+			var a := deg_to_rad(float(c[1]) + 90.0 * k / 3.0)
+			pts.append((c[0] as Vector2) + Vector2(cos(a), sin(a)) * r)
+	return pts
+
+
+## Overhanging rock shelf ("mushroom" rock): a stem rising from a concave sweep into the ground,
+## flaring out under a wide flat top (the overhang). Walkable top exactly at `height`.
+static func shelf(r_top: float, r_stem: float, height: float, sink: float, seed_v: int, ground := Callable()) -> Array:
+	var noise := FastNoiseLite.new()
+	noise.seed = seed_v
+	noise.frequency = 0.9
+	var lip := minf(0.9, height * 0.3)
+	var under := height - lip
+	var prof: Array = [[r_stem + 0.5, -sink], [r_stem + 0.5, 0.0], [r_stem + 0.2, 0.2], [r_stem + 0.06, 0.5], [r_stem, 0.9],
+			[r_stem, under * 0.55], [r_stem * 1.05, under * 0.75]]
+	for k in range(1, 6):
+		var a := float(k) / 5.0
+		prof.append([lerpf(r_stem * 1.05, r_top, 1.0 - pow(1.0 - a, 2.0)), lerpf(under * 0.75, under, sin(a * PI * 0.5))])
+	prof.append([r_top + 0.1, under + lip * 0.45])
+	prof.append([r_top, under + lip * 0.85])
+	prof.append([r_top - 0.25, height])
+	prof.append([0.0, height + 0.04])
+	var radial := 26
+	var st := SurfaceTool.new()
+	st.begin(Mesh.PRIMITIVE_TRIANGLES)
+	var faces := PackedVector3Array()
+	var pt := func(j: int, s: int) -> Vector3:
+		var a := TAU * s / radial
+		var d := Vector3(cos(a), 0.0, sin(a))
+		var r: float = prof[j][0] * (1.0 + absf(noise.get_noise_2d(cos(a) * 1.3, sin(a) * 1.3)) * 0.14)
+		var y: float = prof[j][1]
+		if ground.is_valid() and y < 1.0:
+			y += float(ground.call(d.x * r, d.z * r)) * (1.0 - clampf(y, 0.0, 1.0))
+		return Vector3(d.x * r, y, d.z * r)
+	for s in radial:
+		for j in prof.size() - 1:
+			var v00: Vector3 = pt.call(j, s)
+			var v01: Vector3 = pt.call(j, s + 1)
+			var v10: Vector3 = pt.call(j + 1, s)
+			var v11: Vector3 = pt.call(j + 1, s + 1)
+			var centre := Vector3(0.0, (v00.y + v10.y) * 0.5, 0.0)
+			for tri in [[v00, v11, v10], [v00, v01, v11]]:
+				var a: Vector3 = tri[0]
+				var bb: Vector3 = tri[1]
+				var c: Vector3 = tri[2]
+				var n := (c - a).cross(bb - a)
+				if n.length_squared() < 1e-12:
+					continue
+				# Outward from the rock's axis (the underside of the overhang faces down-out).
+				var out := (a + bb + c) / 3.0 - centre
+				if n.dot(out) < 0.0:
+					var tmp := bb
+					bb = c
+					c = tmp
+				for v in [a, bb, c]:
+					st.set_uv(Vector2(0.0, v.y))
+					st.add_vertex(v)
+					faces.append(v)
 	st.generate_normals()
 	return [st.commit(), faces]
 

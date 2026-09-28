@@ -47,6 +47,8 @@ var crumbles: Array = []
 var flex_leaves: Array = []
 var upgrades: Array = []
 var vortex_out: Node = null
+## Every vortex that starts or ends on this ball.
+var vortices: Array = []
 var vortex_in: Node = null
 var arrival_dir := Vector3.UP
 var start_dir := Vector3.UP
@@ -101,6 +103,11 @@ func setup(p_index: int, p_radius: float, p_palette: Dictionary) -> void:
 func register_material(m: ShaderMaterial) -> ShaderMaterial:
 	field_materials.append(m)
 	m.set_shader_parameter("ball_center", global_position if is_inside_tree() else position)
+	if not caves.is_empty():
+		var arr := caves.duplicate()
+		while arr.size() < 4:
+			arr.append(Vector4(0, 0, 0, -1))
+		m.set_shader_parameter("caves", arr)
 	_heals_dirty = true
 	return m
 
@@ -360,6 +367,21 @@ func _push_heals() -> void:
 		m.set_shader_parameter("heals", arr)
 		m.set_shader_parameter("heal_count", heals.size())
 		m.set_shader_parameter("ball_center", global_position)
+
+
+## Cave interiors on this ball (darkened in every terrain, vegetation and plant material).
+var caves := PackedVector4Array()
+
+
+func add_cave(c: Vector4) -> void:
+	if caves.size() >= 4:
+		push_warning("more than 4 caves on %s: the extra one is not darkened" % name)
+		return
+	caves.append(c)
+	var arr := caves.duplicate()
+	while arr.size() < 4:
+		arr.append(Vector4(0, 0, 0, -1))
+	set_field_param("caves", arr)
 
 
 func set_veg_param(param: String, value: Variant) -> void:

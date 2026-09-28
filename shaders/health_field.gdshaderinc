@@ -32,10 +32,15 @@ vec3 impulse_push(vec3 wpos, vec3 up) {
 	return push;
 }
 
-// Interior moss cave darkening (xyz = centre, w = radius; w < 0 disables).
-uniform vec4 cave = vec4(0.0, 0.0, 0.0, -1.0);
+// Interior moss cave darkening: up to four caves per ball (xyz = centre, w = radius; w <= 0 unused).
+uniform vec4 caves[4];
 
 float cave_factor(vec3 wpos) {
-	if (cave.w <= 0.0) return 0.0;
-	return 1.0 - smoothstep(cave.w * 0.75, cave.w, length(wpos - cave.xyz));
+	float f = 0.0;
+	for (int i = 0; i < 4; i++) {
+		if (caves[i].w > 0.0) {
+			f = max(f, 1.0 - smoothstep(caves[i].w * 0.75, caves[i].w, length(wpos - caves[i].xyz)));
+		}
+	}
+	return f;
 }

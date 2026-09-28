@@ -14,7 +14,7 @@ func run(runner) -> void:
 	p.use_bot_input = true
 	await t.seconds(0.5)
 	var only: String = Settings.test_args.get("only", "")
-	for name_ in ["_test_startup", "_test_ota_and_version", "_test_mesh_winding", "_test_terrain", "_test_terrain_grounded", "_test_no_floating_platforms", "_test_parasite_locomotion", "_test_placements", "_test_tutorial_route", "_test_sphere_walk", "_test_jump_and_burst", "_test_coyote_and_buffer", "_test_swipe_direction_and_stages", "_test_hard_landing", "_test_food", "_test_food_reach", "_test_darter_and_burrower", "_test_food_repopulates", "_test_motes", "_test_checkpoint_and_regen", "_test_crumble", "_test_restoration_continuity", "_test_vortex", "_test_current", "_test_canopy", "_test_canopy_plain_jumps", "_test_caves", "_test_mounds", "_test_vegetation", "_test_music", "_test_run_clock", "_test_completion_catalog", "_test_run_save_file", "_test_run_timer_live", "_test_run_continue", "_phase_continue_write", "_phase_continue_read", "_test_upgrades", "_test_ui", "_test_all_clear"]:
+	for name_ in ["_test_startup", "_test_ota_and_version", "_test_mesh_winding", "_test_terrain", "_test_terrain_grounded", "_test_no_floating_platforms", "_test_parasite_locomotion", "_test_placements", "_test_tutorial_route", "_test_sphere_walk", "_test_jump_and_burst", "_test_coyote_and_buffer", "_test_swipe_direction_and_stages", "_test_hard_landing", "_test_food", "_test_food_reach", "_test_darter_and_burrower", "_test_food_repopulates", "_test_motes", "_test_checkpoint_and_regen", "_test_crumble", "_test_restoration_continuity", "_test_vortex", "_test_current", "_test_canopy", "_test_canopy_plain_jumps", "_test_caves", "_test_mounds", "_test_vegetation", "_test_vortex_mouths_clear", "_test_route_audit", "_test_new_areas", "_test_music", "_test_run_clock", "_test_completion_catalog", "_test_run_save_file", "_test_run_timer_live", "_test_run_continue", "_phase_continue_write", "_phase_continue_read", "_test_upgrades", "_test_ui", "_test_all_clear"]:
 		# "_phase_*" tests are halves of a relaunch test: they run only when asked for by name
 		# (in a child process started by _test_run_continue).
 		if name_.begins_with("_phase") and only != name_:
@@ -41,7 +41,8 @@ func _test_startup() -> void:
 	t.check("startup_milestones_in_order", in_order, str(order))
 	t.check("startup_loading_screen_is_first_frame", shown >= 0.0 and shown < at.call("aquarium built"), "loading screen %.1f ms, aquarium %.1f ms" % [shown, at.call("aquarium built")])
 	var ls: Array = g.loading_stages
-	var honest := not ls.is_empty() and ls.has("Growing moss ball 1 of 3") and ls.has("Growing moss ball 3 of 3")
+	var nb := Levels.CENTERS.size()
+	var honest := not ls.is_empty() and ls.has("Growing moss ball 1 of %d" % nb) and ls.has("Growing moss ball %d of %d" % [nb, nb])
 	for s in ls:
 		honest = honest and not str(s).contains("%")
 	t.check("startup_stages_named_no_percentages", honest, ", ".join(ls))
@@ -132,7 +133,7 @@ func _test_caves() -> void:
 		agree = agree and verts.size() == faces.size() and verts.size() > 0
 		for k in range(0, verts.size(), 97):
 			agree = agree and verts[k].is_equal_approx(faces[k])
-	t.check("cave_mouths_arched_not_rectangular", caves.size() == 3 and arched, ", ".join(dims))
+	t.check("cave_mouths_arched_not_rectangular", caves.size() == 7 and arched, ", ".join(dims))
 	t.check("cave_mouth_clearance", clear, "the axolotl is 0.6 m wide and about 0.6 m tall")
 	var uniq := {}
 	for d in dims:
@@ -493,12 +494,134 @@ func _test_vegetation() -> void:
 	t.check("veg_leaves_gameplay_rng_alone", a1 == a2, "")
 
 
+# --- world expansion (Expansion 4) -----------------------------------------------------------
+
+## Every vortex mouth has open water round it: no platform, mound, cave or leaf within 4 m.
+func _test_vortex_mouths_clear() -> void:
+	var space := g.get_world_3d().direct_space_state
+	var bad: Array[String] = []
+	for v in g.vortices:
+		for at_b in [false, true]:
+			var bb: MossBall = v.ball_b if at_b else v.ball_a
+			var q := PhysicsShapeQueryParameters3D.new()
+			var sph := SphereShape3D.new()
+			sph.radius = 4.0
+			q.shape = sph
+			q.transform = Transform3D(Basis(), v.mouth_pos(at_b))
+			q.collision_mask = 1 | 2
+			for hit in space.intersect_shape(q, 16):
+				if hit["collider"] != bb.static_body and not hit["collider"] is Axolotl:
+					bad.append("vortex %d-%d on ball %d: %s" % [v.ball_a.index + 1, v.ball_b.index + 1, bb.index + 1, hit["collider"].get_meta("terrain_kind", hit["collider"].get_meta("grounded", "body"))])
+	t.check("vortex_mouths_clear", g.vortices.size() == Levels.LINKS.size() and bad.is_empty(), "%d vortices; %s" % [g.vortices.size(), ", ".join(bad)])
+
+
+## Reachability audit (geometric): every registered climb (terraces, arch, ridge, bridge, spire,
+## shelves) steps only between real standable surfaces, each within a plain jump (or jump + water
+## burst) of the last, with headroom above; its elevated motes are within reach of its top.
+func _test_route_audit() -> void:
+	var space := g.get_world_3d().direct_space_state
+	var n := 0
+	var bad: Array[String] = []
+	var worst_rise := 0.0
+	var worst_gap := 0.0
+	for b in g.balls:
+		for h in (b.get_meta("builder") as LevelBuilder).bot_hints:
+			if not h.has("route"):
+				continue
+			n += 1
+			var pts: Array = [h["start"]] + (h["tops"] as Array)
+			var prev: Vector3 = pts[0]
+			for k in range(1, pts.size()):
+				var tp: Vector3 = pts[k]
+				var up := b.up_at(tp)
+				var q := PhysicsRayQueryParameters3D.create(tp + up * 0.6, tp - up * 1.0, 1 | 2)
+				var hit := space.intersect_ray(q)
+				var floor_ok := not hit.is_empty() and rad_to_deg((hit["normal"] as Vector3).angle_to(up)) < 52.0
+				var qh := PhysicsRayQueryParameters3D.create(tp + up * 0.2, tp + up * 1.4, 1 | 2)
+				var head_ok := space.intersect_ray(qh).is_empty()
+				var rise := (tp - prev).dot(up)
+				var gap := ((tp - prev) - up * (tp - prev).dot(up)).length()
+				worst_rise = maxf(worst_rise, rise)
+				worst_gap = maxf(worst_gap, gap)
+				if not floor_ok or not head_ok or rise > 2.6 or gap > 5.0:
+					bad.append("ball %d %s step %d: floor %s headroom %s rise %.2f gap %.2f" % [b.index + 1, h["route"], k, floor_ok, head_ok, rise, gap])
+				prev = tp
+			var end: Vector3 = pts[pts.size() - 1]
+			for m in b.motes:
+				if m.zone_id in h["zones"] and m.h_hint > 2.5 and m.global_position.distance_to(end) < 6.0:
+					if m.global_position.distance_to(end) > 3.2:
+						bad.append("ball %d %s: mote %.1f m from the top" % [b.index + 1, h["route"], m.global_position.distance_to(end)])
+	for x in bad:
+		t.log_line(x)
+	t.check("routes_reachable_by_design", n >= 9 and bad.is_empty(), "%d climbs; biggest step up %.2f m (jump 1.85, + burst ~2.6), widest gap %.2f m" % [n, worst_rise, worst_gap])
+	# Every elevated mote belongs to a climb that reaches it (none is decoration out of reach).
+	var orphans: Array[String] = []
+	for b in g.balls:
+		var routes := []
+		for h in (b.get_meta("builder") as LevelBuilder).bot_hints:
+			if h.has("route") or h.has("tower") or h.has("mesa") or h.has("canopy"):
+				routes.append(h)
+		for m in b.motes:
+			if m.h_hint <= 2.5:
+				continue
+			var served := false
+			for h in routes:
+				if h.has("route"):
+					var tops: Array = h["tops"]
+					served = served or (m.zone_id in h["zones"] and m.global_position.distance_to(tops[tops.size() - 1]) < 6.0)
+				else:
+					served = true if b.index < 3 else served
+			if not served:
+				orphans.append("ball %d %s" % [b.index + 1, m.zone_id])
+	t.check("elevated_motes_have_routes", orphans.is_empty(), ", ".join(orphans))
+
+
+## The new areas: four more balls, each distinct (size, palette, landmarks), linked as branches;
+## their content is in the completion catalog; their caves are natural and hold pearls.
+func _test_new_areas() -> void:
+	t.check("world_has_seven_balls", g.balls.size() == 7 and g.vortices.size() == 6, "%d balls, %d vortices" % [g.balls.size(), g.vortices.size()])
+	var sizes := {}
+	var kinds := {}
+	for bi in range(3, g.balls.size()):
+		var b := g.balls[bi]
+		sizes[b.radius] = true
+		var ks := {}
+		for c in (b.get_meta("builder") as LevelBuilder).root.get_children():
+			if c.has_meta("terrain_kind"):
+				ks[c.get_meta("terrain_kind")] = true
+		kinds[bi] = ks.keys()
+	t.check("new_balls_distinct", sizes.size() == 4 and str(kinds[3]) != str(kinds[4]) and str(kinds[4]) != str(kinds[5]) and str(kinds[5]) != str(kinds[6]), str(kinds))
+	var pearls := 0
+	for bi in range(3, g.balls.size()):
+		for u in g.balls[bi].upgrades:
+			pearls += 1 if u.kind == "pearl" else 0
+	t.check("new_caves_hold_pearls", pearls == 4, "%d pearls" % pearls)
+	# Blooms (where a continued run resumes) in the new areas have something to stand on right
+	# under their respawn point (ground or a formation's top, never a formation's flank), so the
+	# axolotl respawns standing where he is placed.
+	var perched := []
+	var space := g.get_world_3d().direct_space_state
+	for bi in range(3, 7):
+		var bb: MossBall = g.balls[bi]
+		for bl in bb.blooms:
+			var rp: Vector3 = bl.respawn_point()
+			var u := bb.up_at(rp)
+			var hit := space.intersect_ray(PhysicsRayQueryParameters3D.create(rp + u * 0.3, rp - u * 3.0))
+			var drop: float = (rp - hit["position"]).dot(u) if hit else 99.0
+			var steep: bool = hit and (hit["normal"] as Vector3).dot(u) < cos(p.floor_max_angle)
+			if drop > 0.6 or steep:
+				perched.append("ball %d %s: %.2f m above %s" % [bi + 1, bl.get_meta("completion_id", "?"), drop, "a slope" if steep else "support"])
+	t.check("new_blooms_resume_standing", perched.is_empty(), str(perched))
+	var ids := g.completion.order.filter(func(id): return id.begins_with("b4.") or id.begins_with("b5.") or id.begins_with("b6.") or id.begins_with("b7."))
+	t.check("new_areas_in_completion", ids.size() > 40 and g.completion.has("vortex.b1-b4") and g.completion.has("vortex.b4-b7") and g.completion.has("b7.restored"), "%d new ids" % ids.size())
+
+
 # --- run timer, completion, run save ----------------------------------------------------
 
 ## Pinned: the current game's completion ids (sha256 of the ids in catalog order). A change means
 ## completion content changed: bump Completion.CATALOG_VERSION, update docs/COMPLETION.md, re-pin.
-const CATALOG_IDS_SHA := "a5661d7c57318685ea46a8af0f85f991d064b7db751ce071eb95d5d1fc0ce430"
-const CATALOG_SIZE := 87
+const CATALOG_IDS_SHA := "d1c49999be977476571569650bdfdf6c5fca61acdccb66539ee353b42b060b94"
+const CATALOG_SIZE := 157
 
 
 ## The timer's rules on a bare clock: start, what counts, background, finish, frame rates.
@@ -595,12 +718,12 @@ func _test_completion_catalog() -> void:
 	g.run_save.run()["earned"] = saved
 	# Growth: a later OTA adds content. The denominator grows, the percentage may drop, nothing earned is lost.
 	var grown := Completion.build_from_world(g.balls, g.vortices)
-	grown.add("b4.meadow.mote.0", "restoration", "Mote returned")
-	grown.add("b4.cave.0", "caves", "Hidden cave")
+	grown.add("b9.meadow.mote.0", "restoration", "Mote returned")
+	grown.add("b9.cave.0", "caves", "Hidden cave")
 	var was := cat.percent(all)
 	var now := grown.percent(all)
 	t.check("completion_growth_changes_denominator", grown.size() == cat.size() + 2 and now < was and now > 90.0
-			and grown.earned_known(all).size() == cat.size() and grown.remaining(all) == ["b4.meadow.mote.0", "b4.cave.0"], "%.2f%% -> %.2f%%" % [was, now])
+			and grown.earned_known(all).size() == cat.size() and grown.remaining(all) == ["b9.meadow.mote.0", "b9.cave.0"], "%.2f%% -> %.2f%%" % [was, now])
 	# Every completion-bearing node carries its id.
 	var stamped := true
 	for b in g.balls:
@@ -771,13 +894,28 @@ func _phase_continue_write() -> void:
 	u.taken = true
 	g.upgrade_collected(u)
 	await t.seconds(1.0)
+	# Then on to a new area (Expansion 4's Hollow Grotto): clear a parasite, take a cave's pearl and
+	# find a bloom there, so the run continues on that ball.
+	var b7 := g.balls[6]
+	var par7: Parasite = b7.parasites[0]
+	par7.hit_cd = 0.0
+	par7.hit(par7.hp, par7.global_position)
+	var pearl = b7.upgrades[0]
+	pearl.taken = true
+	g.upgrade_collected(pearl)
+	var bl7: Bloom = b7.blooms[1]
+	place_at(6, bl7.global_position + b7.up_at(bl7.global_position) * 0.3, -MossBall.frame_at(b7.up_at(bl7.global_position), 0.0).z)
+	g.audio.set_ball(6, false)
+	await t.seconds(1.0)
 	g.save_run()
-	var st := {"earned": g.run_save.earned().keys(), "run_s": g.clock.run_s, "r0": b.restoration, "checkpoint": bl.get_meta("completion_id"),
-			"max_hp": p.max_health, "par": par.get_meta("completion_id"), "mote": m.get_meta("completion_id"), "run_id": g.run_save.run()["id"]}
+	var st := {"earned": g.run_save.earned().keys(), "run_s": g.clock.run_s, "r0": b.restoration, "r6": b7.restoration, "checkpoint": bl7.get_meta("completion_id"),
+			"max_hp": p.max_health, "par": par.get_meta("completion_id"), "mote": m.get_meta("completion_id"), "run_id": g.run_save.run()["id"],
+			"par7": par7.get_meta("completion_id"), "pearl": pearl.get_meta("completion_id", "")}
 	var f := FileAccess.open(g.run_save.path + ".expect", FileAccess.WRITE)
 	f.store_string(JSON.stringify(st))
 	f.close()
-	t.check("write_earned_progress", st["earned"].size() >= 4 and b.restoration > 0.0 and g.checkpoint == bl, str(st["earned"]))
+	t.check("write_earned_progress", st["earned"].size() >= 7 and b.restoration > 0.0 and b7.restoration > 0.0 and g.checkpoint == bl7
+			and p.ball == b7 and pearl.kind == "pearl" and st["earned"].has(st["pearl"]), str(st["earned"]))
 
 
 ## Second launch (as after quitting, or after an OTA restart): the same run continues.
@@ -802,8 +940,15 @@ func _phase_continue_read() -> void:
 			mote = x
 	t.check("read_cleared_things_stay_cleared", par != null and not par.is_alive() and not par.visible and mote != null and mote.state == "done" and not mote.visible, "")
 	t.check("read_cave_and_health", g.balls[1].upgrades[0].taken and p.max_health == int(st["max_hp"]), "max hp %d" % p.max_health)
+	var b7 := g.balls[6]
+	var par7: Parasite
+	for x in b7.parasites:
+		if x.get_meta("completion_id") == st["par7"]:
+			par7 = x
+	t.check("read_new_area_progress", par7 != null and not par7.is_alive() and b7.upgrades[0].taken and is_equal_approx(b7.restoration, float(st["r6"]))
+			and is_equal_approx(g.ball_disp[6], b7.restoration), "ball 7 restoration %.3f (saved %.3f)" % [b7.restoration, float(st["r6"])])
 	t.check("read_resumes_at_last_bloom", g.checkpoint != null and g.checkpoint.get_meta("completion_id") == st["checkpoint"]
-			and p.ball == b and p.global_position.distance_to(g.checkpoint.respawn_point()) < 1.0,
+			and p.ball == b7 and p.global_position.distance_to(g.checkpoint.respawn_point()) < 1.0,
 			"checkpoint %s (saved %s), ball %d, %.2f m from its respawn point" % [g.checkpoint.get_meta("completion_id") if g.checkpoint else "none", st["checkpoint"],
 			p.ball.index, p.global_position.distance_to(g.checkpoint.respawn_point()) if g.checkpoint else -1.0])
 	var before := g.clock.run_s
@@ -2024,13 +2169,18 @@ func _test_vortex() -> void:
 	t.check("vortex_still_closed_below_70", not v.connected and b0.restoration < 0.7, "restoration %.2f" % b0.restoration)
 	await _complete_until(b0, 0.7)
 	var saw_cine := false
-	for i in 60 * 8:
+	for i in 60 * 16:
 		await t.frames(1)
 		if g.cinematic == "connect":
 			saw_cine = true
-		if saw_cine and g.cinematic == "":
+		# (Every way out of this ball opens together: the chain and its branch, one shot each.)
+		if saw_cine and g.cinematic == "" and g._pending_connect.is_empty():
 			break
-	t.check("vortex_connects_at_70_with_cinematic", v.connected and saw_cine and g.cinematic == "" and p.controls_enabled, "restoration %.2f" % b0.restoration)
+	var all_open := true
+	for vv in b0.vortices:
+		if vv.ball_a == b0:
+			all_open = all_open and vv.connected
+	t.check("vortex_connects_at_70_with_cinematic", v.connected and all_open and saw_cine and g.cinematic == "" and p.controls_enabled, "restoration %.2f; open %s all %s shot %s cine '%s' pending %d controls %s" % [b0.restoration, v.connected, all_open, saw_cine, g.cinematic, g._pending_connect.size(), p.controls_enabled])
 	# Enter the vortex: travel to moss ball #2.
 	var mouth := v.mouth_pos(false)
 	place_at(0, b0.surface_point(b0.up_at(mouth), 0.1), MossBall.frame_at(b0.up_at(mouth), 0).z)

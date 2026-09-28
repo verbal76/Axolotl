@@ -33,7 +33,7 @@ var cine_data := {}
 var checkpoint: Bloom = null
 var g_target := 0.0
 var g_disp := 0.0
-var ball_disp: Array[float] = [0.0, 0.0, 0.0]
+var ball_disp: Array[float] = []
 var prompts_done := {}
 var prompts_active := {}
 var all_clear_done := false
@@ -157,16 +157,18 @@ func _build_world() -> void:
 	aquarium.build(env)
 	StartupTrace.mark("aquarium built")
 
-	for i in 3:
-		await _stage("Growing moss ball %d of 3" % (i + 1))
+	var n_balls := Levels.CENTERS.size()
+	for i in n_balls:
+		await _stage("Growing moss ball %d of %d" % [i + 1, n_balls])
 		var b := Levels.build_ball(i, self)
 		b.event_restored.connect(_on_event_restored)
 		b.zone_completed.connect(_on_zone_completed)
 		b.restoration_changed.connect(_on_restoration_changed)
 		balls.append(b)
+		ball_disp.append(0.0)
 		StartupTrace.mark("moss ball %d built" % (i + 1))
 	await _stage("Placing the axolotl and the vortices")
-	for pair in [[0, 1], [1, 2]]:
+	for pair in Levels.LINKS:
 		var v := Vortex.new()
 		v.setup(balls[pair[0]], balls[pair[1]], Levels._vortex_dir(pair[0], pair[1]), Levels._vortex_dir(pair[1], pair[0]))
 		add_child(v)
@@ -327,7 +329,8 @@ func _apply_run() -> void:
 			if e.has(u.get_meta("completion_id", "")):
 				u.taken = true
 				u.visible = false
-				player.max_health = mini(6, player.max_health + 1)
+				if u.get("kind") != "pearl":
+					player.max_health = mini(6, player.max_health + 1)
 		for bl in b.blooms:
 			if e.has(bl.get_meta("completion_id", "")):
 				bl.active = true
@@ -741,7 +744,10 @@ func mote_restored(m: Mote) -> void:
 func upgrade_collected(u: Node) -> void:
 	stats["upgrades"] += 1
 	_earn(u.get_meta("completion_id", ""))
-	player.add_max_health()
+	if u.get("kind") == "pearl":
+		player.restore_full()
+	else:
+		player.add_max_health()
 	player.model.happy_t = 0.0
 	WaterFX.inst.sparkle(player.body_center(), Color(0.4, 1.0, 0.9, 1.0), 30, 2.0, 0.08, 1.4)
 	Sfx.play("upgrade", player.global_position)
@@ -760,8 +766,9 @@ func on_water_impulse(pos: Vector3, strength: float) -> void:
 
 func _on_event_restored(ball: MossBall, pos: Vector3) -> void:
 	restoration_event.emit(ball.index)
-	if ball.vortex_out and not ball.vortex_out.connected:
-		ball.vortex_out.pulse()
+	for v in ball.vortices:
+		if v.ball_a == ball and not v.connected:
+			v.pulse()
 	if player.ball == ball and player.global_position.distance_to(pos) < 10.0:
 		player.model.happy_t = 0.0
 	Settings.haptic("mote")

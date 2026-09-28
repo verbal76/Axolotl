@@ -90,10 +90,21 @@ func run(runner) -> void:
 		if not g.balls[bi].completed:
 			await travel_to(bi)
 			await clear_ball(bi, 1.01, [])
+	# Expansion 4: the branches (each opens once the ball it hangs off is 70% restored).
+	for bi in [3, 6, 4, 5]:
+		if bi < g.balls.size():
+			await travel_to(bi)
+			t.check("reached_ball%d" % (bi + 1), p.ball == g.balls[bi], "")
+			await t.shot("pt_7%d_ball%d" % [bi, bi + 1])
+			await clear_ball(bi, 1.01, [])
+	for bi in g.balls.size():
+		if not g.balls[bi].completed:
+			await travel_to(bi)
+			await clear_ball(bi, 1.01, [])
 	if p.ball.index != 0:
 		await travel_to(0)
-	mark("300% restored" if g.balls.all(func(bb): return bb.completed) else "finished (incomplete)")
-	for bi in 3:
+	mark("all balls restored" if g.balls.all(func(bb): return bb.completed) else "finished (incomplete)")
+	for bi in g.balls.size():
 		t.check("ball%d_fully_restored" % (bi + 1), g.balls[bi].completed, "%.2f" % g.balls[bi].restoration)
 	await t.shot("pt_40_all_restored")
 	# Quiet period, then ALL CLEAR, then free roam continues.
@@ -115,8 +126,10 @@ func run(runner) -> void:
 
 func mark(what: String) -> void:
 	timeline.append([sim_time, what])
-	t.log_line("[%6.1fs] %s  (R: %.2f %.2f %.2f, hp %d/%d, deaths %d)" % [sim_time, what, g.balls[0].restoration, g.balls[1].restoration,
-			g.balls[2].restoration, p.health, p.max_health, g.stats["deaths"]])
+	var rs := PackedStringArray()
+	for bb in g.balls:
+		rs.append("%.2f" % bb.restoration)
+	t.log_line("[%6.1fs] %s  (R: %s, hp %d/%d, deaths %d)" % [sim_time, what, " ".join(rs), p.health, p.max_health, g.stats["deaths"]])
 
 
 func _report() -> void:
@@ -696,10 +709,9 @@ func clear_ball(bi: int, target: float, skip_zones: Array) -> void:
 			tasks.sort_custom(func(a, c): return a["pos"].call().distance_to(p.global_position) < c["pos"].call().distance_to(p.global_position))
 			var task: Dictionary = tasks.pop_front()
 			await _do_task(b, task, routines_done)
-	# Caves (optional content, but the bot verifies every upgrade).
+	# Caves (optional content, but the bot verifies every upgrade and pearl).
 	for h in lb.bot_hints:
-		if h.has("cave") and not routines_done.has("cave"):
-			routines_done["cave"] = true
+		if h.has("cave") and not (h["reward"] as Node).get("taken"):
 			await cave(b, h)
 	mark("ball %d at %.0f%%" % [bi + 1, b.restoration * 100.0])
 	for par in b.parasites:
@@ -723,6 +735,9 @@ func _collect_tasks(b: MossBall, lb: LevelBuilder, skip_zones: Array, done: Dict
 			tasks.append({"kind": "mesa", "hint": h, "pos": func(): return b.surface_point(MossBall.dir_ll(h["site"][0], h["site"][1]))})
 		if h.has("canopy") and (not done.has("canopy") or done.has("retry_canopy")):
 			tasks.append({"kind": "canopy", "hint": h, "pos": func(): return (h["spiral"][0] as Transform3D).origin})
+		# Expansion 4 climbs: needed while an elevated mote in their zones is still there.
+		if h.has("route") and int(done.get("route:" + str(h["route"]), 0)) < 3 and _route_pending(b, h):
+			tasks.append({"kind": "route", "hint": h, "pos": func(): return h["start"]})
 	for par in b.parasites:
 		if par.is_alive() and not par.zone_id in skip_zones and par.state != "init":
 			if not (done.has("canopy") == false and par.zone_id == "canopy") and not (par.zone_id == "mesa" and not done.has("mesa")):
@@ -761,6 +776,10 @@ func _do_task(b: MossBall, task: Dictionary, done: Dictionary) -> void:
 			await fight_parasite(par, 25.0)
 		"mote":
 			await capture_mote(task["ref"])
+		"route":
+			var h: Dictionary = task["hint"]
+			done["route:" + str(h["route"])] = int(done.get("route:" + str(h["route"]), 0)) + 1
+			await climb_route(b, h)
 		"tower", "mesa", "canopy":
 			var k: String = task["kind"]
 			done[k] = int(done.get(k, 0)) + 1
@@ -769,6 +788,33 @@ func _do_task(b: MossBall, task: Dictionary, done: Dictionary) -> void:
 				"tower": await tower(b, task["hint"])
 				"mesa": await mesa(b, task["hint"])
 				"canopy": await canopy(b, task["hint"])
+
+
+func _route_pending(b: MossBall, h: Dictionary) -> bool:
+	var tops: Array = h["tops"]
+	var end: Vector3 = tops[tops.size() - 1]
+	for m in b.motes:
+		if m.is_available() and m.zone_id in h["zones"] and m.h_hint > 2.5 and m.global_position.distance_to(end) < 6.0:
+			return true
+	return false
+
+
+## A generic climb (Expansion 4): walk to its start, hop along its tops, catch the elevated
+## motes near the top.
+func climb_route(b: MossBall, h: Dictionary) -> void:
+	mark("climb: %s" % h["route"])
+	var tops: Array = h["tops"]
+	var end: Vector3 = tops[tops.size() - 1]
+	for attempt in 3:
+		await goto(h["start"], 0.8, 45.0)
+		var ok := await hop_chain(tops, 3, h["start"])
+		for m in b.motes:
+			if m.is_available() and m.zone_id in h["zones"] and m.h_hint > 2.5 and m.global_position.distance_to(end) < 6.0:
+				await lunge_at(func(): return m.global_position, 12.0, true)
+		if ok and not _route_pending(b, h):
+			mark("climbed %s" % h["route"])
+			return
+	t.log_line("climb %s: still pending after 3 attempts" % h["route"])
 
 
 func tower(b: MossBall, h: Dictionary) -> void:
@@ -903,7 +949,7 @@ func cave(b: MossBall, h: Dictionary) -> void:
 			tops.append((l as Node3D).global_transform * Vector3(0, float(l.get_meta("top")), 0))
 		await goto(b.surface_point(b.up_at(tops[0])) + (door - b.surface_point(b.up_at(door))) * 0.0, 1.6, 10.0)
 		if await hop_chain(tops, 3):
-			var u = b.upgrades[0]
+			var u = h["reward"]
 			await goto(u._leaf.global_position, 0.3, 5.0)
 			await wait(0.5)
 			if u.taken:
@@ -932,15 +978,32 @@ func enter_vortex(v: Vortex, from_b: bool) -> void:
 	mark("arrived on ball %d" % (p.ball.index + 1))
 
 
+## Travels through the vortex network (a breadth-first path over the links).
 func travel_to(bi: int) -> void:
 	var guard := 0
-	while p.ball.index != bi and guard < 4:
+	while p.ball.index != bi and guard < 8:
 		guard += 1
-		var cur := p.ball.index
-		if bi > cur:
-			await enter_vortex(g.balls[cur].vortex_out, false)
-		else:
-			await enter_vortex(g.balls[cur - 1].vortex_out, true)
+		var prev := {p.ball.index: -1}
+		var queue := [p.ball.index]
+		while not queue.is_empty():
+			var cur: int = queue.pop_front()
+			for link in Levels.LINKS:
+				for k in 2:
+					var a: int = link[k]
+					var c: int = link[1 - k]
+					if a == cur and not prev.has(c):
+						prev[c] = cur
+						queue.append(c)
+		if not prev.has(bi):
+			failures.append("no route to ball %d" % (bi + 1))
+			return
+		var step := bi
+		while prev[step] != p.ball.index:
+			step = prev[step]
+		for v in p.ball.vortices:
+			if (v.ball_a == p.ball and v.ball_b.index == step) or (v.ball_b == p.ball and v.ball_a.index == step):
+				await enter_vortex(v, v.ball_b == p.ball)
+				break
 
 
 func wander(time: float) -> void:

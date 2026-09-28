@@ -248,6 +248,9 @@ class Upgrade extends Node3D:
 	var dir := Vector3.UP
 	var h_hint := 0.0
 	var taken := false
+	## "health" (the original caves: +1 gill) or "pearl" (new grottoes: a discovery that refills
+	## health; the six gills are already reachable from the original caves).
+	var kind := "health"
 	var _t := 0.0
 	var _placed := false
 	var _mat: StandardMaterial3D
@@ -260,9 +263,10 @@ class Upgrade extends Node3D:
 
 	func _ready() -> void:
 		_mat = StandardMaterial3D.new()
-		_mat.albedo_color = Color(0.4, 1.0, 0.9)
+		var col := Color(1.0, 0.86, 0.74) if kind == "pearl" else Color(0.4, 1.0, 0.9)
+		_mat.albedo_color = col
 		_mat.emission_enabled = true
-		_mat.emission = Color(0.35, 1.0, 0.9)
+		_mat.emission = col
 		_mat.emission_energy_multiplier = 3.0
 		_leaf = MeshInstance3D.new()
 		var s := SphereMesh.new()

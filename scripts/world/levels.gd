@@ -1,9 +1,18 @@
 class_name Levels
-## Authored content for the three moss balls. Coordinates are (latitude, longitude) on each
-## ball; structures that need exact metric layout use a local "site" frame.
+## Authored content for the moss balls. Coordinates are (latitude, longitude) on each ball;
+## structures that need exact metric layout use a local "site" frame.
+##
+## The first three balls are the original chain (1 -> 2 -> 3). Expansion 4 adds branches, each
+## reached by its own vortex from a ball already in the world (docs/WORLD.md): 4 Terrace Steps (off
+## ball 1), 5 Reed Canyon (off 2), 6 Canopy Spire (off 3), 7 Hollow Grotto (off 4).
 
-const CENTERS := [Vector3(0, 0, 0), Vector3(130, 15, -35), Vector3(-50, 20, -120)]
-const RADII := [24.0, 28.0, 30.0]
+const CENTERS := [Vector3(0, 0, 0), Vector3(130, 15, -35), Vector3(-50, 20, -120),
+		Vector3(-10, 25, 110), Vector3(150, -20, 60), Vector3(-160, 30, -60), Vector3(-130, 0, 70)]
+const RADII := [24.0, 28.0, 30.0, 18.0, 26.0, 16.0, 22.0]
+const NAMES := ["Mossy Meadow", "Current Hollows", "Giant Stems", "Terrace Steps", "Reed Canyon", "Canopy Spire", "Hollow Grotto"]
+## Vortex links [from, to]: the original chain first, then the branches. A link opens when its
+## "from" ball is 70% restored and then works both ways.
+const LINKS := [[0, 1], [1, 2], [0, 3], [1, 4], [2, 5], [3, 6]]
 
 const PALETTES := [
 	{"moss_healthy_a": Color(0.1, 0.34, 0.08), "moss_healthy_b": Color(0.36, 0.66, 0.2),
@@ -15,6 +24,22 @@ const PALETTES := [
 	{"moss_healthy_a": Color(0.05, 0.24, 0.05), "moss_healthy_b": Color(0.3, 0.56, 0.12),
 		"moss_dead_a": Color(0.32, 0.31, 0.27), "moss_dead_b": Color(0.5, 0.48, 0.42),
 		"stone_a": Color(0.19, 0.14, 0.1), "stone_b": Color(0.38, 0.3, 0.22), "moss_tint": Color(0.5, 0.56, 0.1)},
+	# 4 Terrace Steps: sunny yellow-green moss on ochre sandstone.
+	{"moss_healthy_a": Color(0.2, 0.36, 0.07), "moss_healthy_b": Color(0.58, 0.74, 0.24),
+		"moss_dead_a": Color(0.38, 0.35, 0.29), "moss_dead_b": Color(0.6, 0.55, 0.45),
+		"stone_a": Color(0.4, 0.3, 0.18), "stone_b": Color(0.7, 0.58, 0.4), "moss_tint": Color(0.66, 0.66, 0.2)},
+	# 5 Reed Canyon: deep teal moss on slate.
+	{"moss_healthy_a": Color(0.03, 0.25, 0.2), "moss_healthy_b": Color(0.2, 0.58, 0.46),
+		"moss_dead_a": Color(0.3, 0.32, 0.33), "moss_dead_b": Color(0.48, 0.51, 0.52),
+		"stone_a": Color(0.15, 0.17, 0.21), "stone_b": Color(0.34, 0.38, 0.45), "moss_tint": Color(0.1, 0.45, 0.56)},
+	# 6 Canopy Spire: emerald moss on red-brown rock.
+	{"moss_healthy_a": Color(0.05, 0.3, 0.1), "moss_healthy_b": Color(0.3, 0.7, 0.28),
+		"moss_dead_a": Color(0.35, 0.31, 0.29), "moss_dead_b": Color(0.55, 0.49, 0.45),
+		"stone_a": Color(0.3, 0.13, 0.09), "stone_b": Color(0.56, 0.3, 0.21), "moss_tint": Color(0.56, 0.52, 0.1)},
+	# 7 Hollow Grotto: cool blue-green moss on dark basalt.
+	{"moss_healthy_a": Color(0.04, 0.2, 0.19), "moss_healthy_b": Color(0.24, 0.5, 0.52),
+		"moss_dead_a": Color(0.29, 0.29, 0.31), "moss_dead_b": Color(0.46, 0.46, 0.5),
+		"stone_a": Color(0.11, 0.1, 0.13), "stone_b": Color(0.3, 0.28, 0.35), "moss_tint": Color(0.3, 0.42, 0.62)},
 ]
 
 
@@ -24,14 +49,23 @@ static func build_ball(i: int, game: Node) -> MossBall:
 	b.position = CENTERS[i]
 	b.setup(i, RADII[i], PALETTES[i])
 	var lb := LevelBuilder.new(b, game)
+	b.display_name = NAMES[i]
 	match i:
 		0: _materials(lb, Color(0.14, 0.36, 0.1), Color(0.42, 0.62, 0.22), Color(0.12, 0.4, 0.1), Color(0.45, 0.78, 0.25))
 		1: _materials(lb, Color(0.1, 0.34, 0.16), Color(0.36, 0.6, 0.28), Color(0.08, 0.36, 0.18), Color(0.4, 0.75, 0.35))
 		2: _materials(lb, Color(0.12, 0.3, 0.08), Color(0.4, 0.55, 0.18), Color(0.08, 0.34, 0.08), Color(0.42, 0.72, 0.18))
+		3: _materials(lb, Color(0.3, 0.34, 0.12), Color(0.6, 0.62, 0.28), Color(0.22, 0.42, 0.1), Color(0.6, 0.8, 0.28))
+		4: _materials(lb, Color(0.08, 0.3, 0.26), Color(0.28, 0.56, 0.5), Color(0.05, 0.34, 0.28), Color(0.25, 0.66, 0.55))
+		5: _materials(lb, Color(0.26, 0.2, 0.1), Color(0.5, 0.42, 0.22), Color(0.08, 0.36, 0.12), Color(0.36, 0.78, 0.3))
+		6: _materials(lb, Color(0.12, 0.2, 0.22), Color(0.3, 0.44, 0.46), Color(0.06, 0.26, 0.26), Color(0.3, 0.58, 0.6))
 	match i:
 		0: _ball1(lb)
 		1: _ball2(lb)
 		2: _ball3(lb)
+		3: WorldExpansion.terrace_steps(lb)
+		4: WorldExpansion.reed_canyon(lb)
+		5: WorldExpansion.canopy_spire(lb)
+		6: WorldExpansion.hollow_grotto(lb)
 	b.finalize_terrain()
 	b.set_meta("builder", lb)
 	return b
@@ -73,9 +107,11 @@ static func _veg_keep_clear(lb: LevelBuilder, extra: Array = []) -> Callable:
 		list.append([h["dir"], deg.call(0.9)])
 	for c in b.crumbles:
 		list.append([b.up_at(c._home.origin), deg.call(1.8)])
-	for other in [b.index - 1, b.index + 1]:
-		if other >= 0 and other < 3:
-			list.append([_vortex_dir(b.index, other), 6.0])
+	for link in LINKS:
+		if link[0] == b.index:
+			list.append([_vortex_dir(b.index, link[1]), 6.0])
+		elif link[1] == b.index:
+			list.append([_vortex_dir(b.index, link[0]), 6.0])
 	for h in lb.bot_hints:
 		if h.has("cave"):
 			list.append([b.up_at(h["door"]), deg.call(3.5)])

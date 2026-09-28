@@ -56,20 +56,29 @@ timing model (`RunClock.TIMER_MODEL`).
 You can finish below 100%: finishing needs only the restoration (and the milestones it brings).
 The hidden caves and all the blooms are what's left. Finishing with none of them is **65%**.
 
-## Completion catalog (catalog version 1)
+## Completion catalog (catalog version 2)
+
+Version 2 came with Expansion 4 (four new moss balls, dev-000021). Version 1 had 87 entries on three
+balls; version 2 has 157 on seven. No version 1 id changed.
 
 Each category has a fixed share of 100%. Inside a category every entry counts equally (weight 1).
 
-| Category | Share | Entries now | What earns it |
+| Category | Share | Entries (v1 → v2) | What earns it |
 |---|---|---|---|
-| Moss restored (`restoration`) | 50% | 64 | a parasite cleared (30), a mote returned to the moss (34) |
-| Hidden caves (`caves`) | 20% | 3 | the health upgrade in each ball's hidden cave |
-| Blooms found (`blooms`) | 15% | 14 | touching a bloom (checkpoint) |
-| Milestones (`milestones`) | 15% | 6 | each moss ball fully restored (3), each vortex opened (2), the aquarium all clear (1) |
+| Moss restored (`restoration`) | 50% | 64 → 110 | a parasite cleared (30 → 50), a mote returned to the moss (34 → 60) |
+| Hidden caves (`caves`) | 20% | 3 → 7 | the reward in each hidden cave: the health upgrade (balls 1–3) or a pearl (balls 4, 5 and 7; ball 7 has two caves) |
+| Blooms found (`blooms`) | 15% | 14 → 26 | touching a bloom (checkpoint) |
+| Milestones (`milestones`) | 15% | 6 → 14 | each moss ball fully restored (3 → 7), each vortex opened (2 → 6), the aquarium all clear (1) |
+
+A pearl is a new cave reward: it refills health instead of adding a heart, so the new caves count
+toward completion without making the game easier in the old balls.
 
 Percent = the sum over categories that have entries of share × earned weight ÷ total weight,
 normalised by those categories' shares. It shows as a whole number rounded **down**, so 100% appears
 only when every entry is earned. Earning the same id twice counts once.
+
+**Finishing now needs all seven balls restored** (owner decision for Expansion 4). Finishing with
+no caves and no blooms is still **65%**.
 
 ### Ids
 
@@ -79,11 +88,17 @@ Ids are permanent and come from level-data order, which is deterministic. `b1` i
   - b1: parasites tut 1, meadow 2, east 2, south 1, west 2, under 1; motes meadow 2, east 2, south 2, west 2, under 2.
   - b2: parasites arrive 1, mesa 1, north 2, east 2, south 2, far 2; motes arrive 2, mesa 2, north 2, east 2, south 2, far 2.
   - b3: parasites arrive 1, canopy 2, drop 2, lower 2, roots 2, far 2; motes arrive 2, canopy 3, drop 1, lower 2, roots 2, far 2.
-- Caves: `b1.cave.0`, `b2.cave.0`, `b3.cave.0`.
-- Blooms: `b1.bloom.0`–`b1.bloom.3`, `b2.bloom.0`–`b2.bloom.4`, `b3.bloom.0`–`b3.bloom.4`.
-- Milestones: `b1.restored`, `b2.restored`, `b3.restored`, `vortex.b1-b2`, `vortex.b2-b3`, `ending.all_clear`.
+  - b4 (Terrace Steps): parasites landing 1, terraces 2, arch 1, ridge 1, far 1; motes landing 1, terraces 2, arch 2, ridge 1, far 1.
+  - b5 (Reed Canyon): parasites landing 1, canyon 2, end 1, far 1; motes landing 1, canyon 2, crests 2, end 1, far 1.
+  - b6 (Canopy Spire): parasites landing 1, spire 1, shelves 1, far 1; motes landing 1, spire 2, shelves 2, far 1.
+  - b7 (Hollow Grotto): parasites landing 1, corridors 1, grotto 1, cavelet 1, far 1; motes landing 1, corridors 2, grotto 1, cavelet 1, far 1.
+- Caves: `b1.cave.0`, `b2.cave.0`, `b3.cave.0`, `b4.cave.0`, `b5.cave.0`, `b7.cave.0`, `b7.cave.1`.
+- Blooms: `b1.bloom.0`–`b1.bloom.3`, `b2.bloom.0`–`b2.bloom.4`, `b3.bloom.0`–`b3.bloom.4`, and
+  `b<n>.bloom.0`–`b<n>.bloom.2` for balls 4–7.
+- Milestones: `b1.restored` … `b7.restored`; `vortex.b1-b2`, `vortex.b2-b3`, `vortex.b1-b4`,
+  `vortex.b2-b5`, `vortex.b3-b6`, `vortex.b4-b7`; `ending.all_clear`.
 
-The unit test `completion_ids_unique_and_pinned` pins the count (87) and a SHA-256 of the ids in
+The unit test `completion_ids_unique_and_pinned` pins the count (157) and a SHA-256 of the ids in
 catalog order. Any change to completion content fails it on purpose.
 
 ## Extending the catalog (Expansions 2–6)
