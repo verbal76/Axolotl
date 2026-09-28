@@ -249,7 +249,7 @@ consolidate everything into ONE Mote app and ONE current APK (retire Mote Dev; k
 
 ## MOTE OPEN ITEMS EXPANSION LIST
 
-[ ] 1. Timer + completion foundation
+[x] 1. Timer + completion foundation (dev-000018, verified 2026-09-28)
 [ ] 2. Living terrain / texture and material upgrade
 [ ] 3. Dense reactive vegetation / cornfield movement
 [ ] 4. Additional moss balls + expanded terrain set
@@ -277,7 +277,7 @@ a pause-menu toggle; completion weighted by category.
 | E1-08 | Existing saves migrated conservatively; nothing invented | I+V | Mote saved no progress before this OTA; `settings.cfg` (schema 1) is unchanged; the new run save records "no earlier progress existed" | `run_save_migration_from_no_progress`, `run_save_migrates_partial_data`, `run_save_outside_ota_storage` |
 | E1-09 | Player UI: run time, %, finished, finish time, per-category progress, best; unobtrusive optional HUD timer | I+V / needs phone | Title (Continue / New Run + run line), pause (run panel, Show run timer, New Run with confirmation), HUD timer (top left, faint, off by default), ALL CLEAR shows "Finished in …" | `pause_menu_shows_run`, `title_continue_and_new_run`, `hud_run_timer_toggle`, `finish_time_frozen_after_more_play` |
 | E1-10 | Diagnostics: timer state, run time, finished, frozen time, completion, run save format and origin, catalog version | I+V | `Game.run_diagnostics_text` through `StartupTrace.timeline_text` (the r5 bootstrap's game-layer hook; no native change) | `diagnostics_show_run_timer` |
-| E1-11 | Ships by OTA, no APK | pending publish | Game layer only (no `scripts/boot/`, `project.godot`, `export_presets.cfg` or runtime lock changes) | runtime r5 unchanged |
+| E1-11 | Ships by OTA, no APK | I+V | Game layer only (no `scripts/boot/`, `project.godot`, `export_presets.cfg` or runtime lock changes); runtime r5 unchanged | dev-000018 (OTA publish #18, source `27d6d44`, PCK `2d980e7e…20e66a`, 8,773,516 bytes, baked, save schema 1): signature with the pinned key (a003a45c…), hash, size, inspector verified from public URLs; a b22 client downloads and stages it; the relaunch phases pass run from the pack; Build & Verify #26: Android APK skipped |
 
 ## Precedence notes
 

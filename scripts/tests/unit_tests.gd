@@ -103,10 +103,14 @@ func _test_run_clock() -> void:
 		times.append(k.run_s)
 	t.check("timer_same_across_frame_rates", absf(times[0] - 10.0) < 1e-6 and absf(times[1] - 10.0) < 1e-6 and absf(times[2] - 10.0) < 1e-6, str(times))
 	# Never the wall clock: the timer code reads no clock at all, and the game feeds it frame deltas.
+	# (An exported pack holds compiled scripts only; this source check runs in the project, as CI does.)
 	var src := FileAccess.get_file_as_string("res://scripts/core/run_clock.gd")
-	var clean := not src.contains("Time.") and not src.contains("OS.get_") and not src.contains("unix")
 	var gsrc := FileAccess.get_file_as_string("res://scripts/core/game.gd")
-	t.check("timer_wall_clock_independent", clean and gsrc.contains("clock.tick(dt, state == \"play\")"), "")
+	if src == "" or gsrc == "":
+		t.log_line("timer_wall_clock_independent: script source not in this build (exported pack); checked in the project run")
+	else:
+		var clean := not src.contains("Time.") and not src.contains("OS.get_") and not src.contains("unix")
+		t.check("timer_wall_clock_independent", clean and gsrc.contains("clock.tick(dt, state == \"play\")"), "")
 	t.check("timer_format_long_runs", RunClock.format(0.0) == "0.00" and RunClock.format(65.432) == "1:05.43" and RunClock.format(3723.456) == "1:02:03.45"
 			and RunClock.format(360000.0) == "100:00:00.00", "%s %s %s" % [RunClock.format(65.432), RunClock.format(3723.456), RunClock.format(360000.0)])
 
@@ -220,7 +224,10 @@ func _test_run_save_file() -> void:
 			and old["run"].has("clock") and old["records"]["best_finish_s"] < 0.0, "")
 	# OTAs never touch the run save: the OTA client only uses user://ota.
 	var boot_src := FileAccess.get_file_as_string("res://scripts/boot/ota_core.gd") + FileAccess.get_file_as_string("res://scripts/boot/boot.gd")
-	t.check("run_save_outside_ota_storage", not boot_src.contains("run.json") and RunSave.PATH == "user://run.json", "")
+	if boot_src == "":
+		t.log_line("run_save_outside_ota_storage: script source not in this build (exported pack); checked in the project run")
+	else:
+		t.check("run_save_outside_ota_storage", boot_src.contains("user://ota") and not boot_src.contains("run.json") and RunSave.PATH == "user://run.json", "")
 	RunSave.erase(path)
 	for x in DirAccess.get_files_at(dir):
 		DirAccess.remove_absolute(dir.path_join(x))
@@ -280,12 +287,15 @@ func _test_run_continue() -> void:
 	RunSave.erase(path)
 	# Same engine, same game (a project folder or an exported pack), headless, fixed 60 fps.
 	var base: Array = ["--headless", "--fixed-fps", "60", "--max-fps", "0"]
-	var args := OS.get_cmdline_args()
-	var pack := args.find("--main-pack")
-	if pack >= 0 and pack + 1 < args.size():
-		base += ["--main-pack", args[pack + 1]]
+	# Godot consumes --main-pack, so a run from an exported pack names its file with --pack=<file>.
+	var project := ProjectSettings.globalize_path("res://")
+	if Settings.test_args.has("pack"):
+		base += ["--main-pack", Settings.test_args["pack"]]
+	elif project != "":
+		base += ["--path", project]
 	else:
-		base += ["--path", ProjectSettings.globalize_path("res://")]
+		t.check("relaunch_children_ran", false, "running from an exported pack: pass --pack=<its file> to run the relaunch test")
+		return
 	var outs := []
 	for phase in ["_phase_continue_write", "_phase_continue_read"]:
 		var out := []
