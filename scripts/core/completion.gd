@@ -127,6 +127,25 @@ static func vortex_id(a: int, b: int) -> String:
 	return "vortex.%s-%s" % [ball_tag(a), ball_tag(b)]
 
 
+static func _fixed_ids(nodes: Array) -> Dictionary:
+	var out := {}
+	for nd in nodes:
+		if nd.has_meta("fixed_id"):
+			out[str(nd.get_meta("fixed_id"))] = true
+	return out
+
+
+## A node's id: its explicit one, or the next free number after `prefix`.
+static func _id_for(nd: Object, prefix: String, counters: Dictionary, taken: Dictionary) -> String:
+	if nd.has_meta("fixed_id"):
+		return str(nd.get_meta("fixed_id"))
+	var i: int = counters.get(prefix, 0)
+	while taken.has("%s.%d" % [prefix, i]):
+		i += 1
+	counters[prefix] = i + 1
+	return "%s.%d" % [prefix, i]
+
+
 static func ball_restored_id(index: int) -> String:
 	return "%s.restored" % ball_tag(index)
 
@@ -138,41 +157,42 @@ static func ball_restored_id(index: int) -> String:
 ##   b1.bloom.<n>                                  blooms (checkpoints)
 ##   b5.crab.<n>, b5.eel.<n>, species.<name>       wildlife (Expansion 5)
 ##   b1.restored, vortex.b1-b2, ending.all_clear   milestones
+##
+## World expansion: authored content may carry an explicit id (meta "fixed_id"), and new worlds give
+## every completion-bearing node one, so rebuilding or reordering a world never remaps an id a save
+## has earned (the shipped ids are frozen in CatalogFrozen). Nodes without one get the positional
+## id above, skipping any number an explicit id already holds.
 static func build_from_world(balls: Array, vortices: Array) -> Completion:
 	var cat := Completion.new()
 	for b in balls:
 		var tag := ball_tag(b.index)
+		var taken := _fixed_ids(b.parasites + b.motes + b.upgrades + b.blooms)
 		var n := {}
 		for par in b.parasites:
-			var k := "%s.%s.parasite" % [tag, par.zone_id]
-			var id := "%s.%d" % [k, n.get(k, 0)]
-			n[k] = n.get(k, 0) + 1
+			var id := _id_for(par, "%s.%s.parasite" % [tag, par.zone_id], n, taken)
 			par.set_meta("completion_id", id)
 			cat.add(id, "restoration", "Parasite cleared")
 		for m in b.motes:
-			var k := "%s.%s.mote" % [tag, m.zone_id]
-			var id := "%s.%d" % [k, n.get(k, 0)]
-			n[k] = n.get(k, 0) + 1
+			var id := _id_for(m, "%s.%s.mote" % [tag, m.zone_id], n, taken)
 			m.set_meta("completion_id", id)
 			cat.add(id, "restoration", "Mote returned")
-		for i in b.upgrades.size():
-			var id := "%s.cave.%d" % [tag, i]
-			b.upgrades[i].set_meta("completion_id", id)
+		for u in b.upgrades:
+			var id := _id_for(u, "%s.cave" % tag, n, taken)
+			u.set_meta("completion_id", id)
 			cat.add(id, "caves", "Hidden cave")
-		for i in b.blooms.size():
-			var id := "%s.bloom.%d" % [tag, i]
-			b.blooms[i].set_meta("completion_id", id)
+		for bl in b.blooms:
+			var id := _id_for(bl, "%s.bloom" % tag, n, taken)
+			bl.set_meta("completion_id", id)
 			cat.add(id, "blooms", "Bloom found")
 	# Wildlife (Expansion 5): each species discovered, and each guardian crab and cave eel defeated.
 	for b in balls:
 		var tag := ball_tag(b.index)
+		var threats: Array = b.critters.filter(func(c) -> bool: return c.species in ["crab", "eel"])
+		var taken := _fixed_ids(threats)
 		var n := {}
-		for c in b.critters:
-			if c.species in ["crab", "eel"]:
-				var k := "%s.%s" % [tag, c.species]
-				c.threat_id = "%s.%d" % [k, n.get(k, 0)]
-				n[k] = n.get(k, 0) + 1
-				cat.add(c.threat_id, "wildlife", "Crab guardian defeated" if c.species == "crab" else "Cave eel defeated")
+		for c in threats:
+			c.threat_id = _id_for(c, "%s.%s" % [tag, c.species], n, taken)
+			cat.add(c.threat_id, "wildlife", "Crab guardian defeated" if c.species == "crab" else "Cave eel defeated")
 	for sp in Ecosystem.SPECIES:
 		cat.add("species." + sp, "wildlife", "Species discovered: " + Ecosystem.SPECIES[sp])
 	for b in balls:
