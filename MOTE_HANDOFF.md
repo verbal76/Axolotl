@@ -92,7 +92,7 @@ This is the design the owner asked for, including later decisions that replaced 
 - **Checkpoints:** moss blooms. On death Gill regenerates with no death screen, at full health, and
   progress is kept.
 - **Restoration:** continuous, local and per ball, with no percentages shown. Global aquarium
-  restoration (water, gravel, ooze, algae, bedroom visibility) follows it. Music heals and bedroom
+  restoration (water, gravel, ooze, algae, bedroom visibility) follows it. Music (the owner's two songs, alternating) un-muffles and bedroom
   sounds recede as it progresses.
 - **Vortex:** grows continuously and connects at ~70% with a short cinematic. Travel works both
   ways and Gill surfs it. Backtracking between balls is allowed.
@@ -146,7 +146,7 @@ Everything below is Godot **4.7.2**, Mobile renderer, GDScript.
 | Camera | `scripts/camera/follow_cam.gd` |
 | HUD, pause, title, UI style | `scripts/ui/hud.gd`, `scripts/ui/pause_menu.gd`, `scripts/ui/title_screen.gd`, `scripts/ui/ui_style.gd` |
 | Settings and save metadata | `scripts/core/settings.gd` (writes `[meta]` into `user://settings.cfg`) |
-| Audio | `scripts/core/audio_director.gd`, `scripts/core/sfx.gd`, `assets/audio/` (from `tools/gen_audio.py`) |
+| Audio | `scripts/core/audio_director.gd`, `scripts/core/sfx.gd`, `assets/audio/` (sound effects from `tools/gen_audio.py`; music = the owner's two songs, `music_aquarium_whimsy.ogg` and `music_bubbly_underworld.ogg`, Ogg Vorbis from the owner's WAVs) |
 | Performance scaling | `scripts/core/quality_scaler.gd` |
 | Version and save schema | `scripts/core/game_version.gd`, `scripts/core/save_schema.gd` |
 | **Native OTA bootstrap** (ships in the APK) | `scripts/boot/boot.gd` (first autoload), `ota_core.gd`, `ota_updater.gd`, `ota_config.gd` (public key, channel, runtime revision), `diagnostics_overlay.gd` |

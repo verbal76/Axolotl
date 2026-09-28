@@ -61,7 +61,7 @@ Test names refer to `scripts/tests/unit_tests.gd`, `scripts/tests/ota_tests.gd` 
 | G-38 | Continuous global aquarium restoration (water, gravel, ooze, algae, bedroom) | I+V | `scripts/world/aquarium.gd` | `aquarium_changes_continuously`, `aquarium_fully_clean` | |
 | G-39 | Vortex grows continuously and connects at ~70% with a cinematic | I+V | `scripts/world/vortex.gd`, `game.gd` | `vortex_grows_continuously`, `vortex_closed_below_70`, `vortex_connects_at_70_with_cinematic` | |
 | G-40 | Bidirectional vortex travel; Gill surfs and enjoys it | I+V | `vortex.gd`, travel cinematic, model `surf` pose | `vortex_travel_to_ball2`, `vortex_bidirectional`; `16_vortex_surf` render | |
-| G-41 | Restoration-responsive music; bedroom sounds recede | I+NYV | `scripts/core/audio_director.gd`, `assets/audio/` | not listened to or asserted | |
+| G-41 | Restoration-responsive music; bedroom sounds recede | I+NYV | `scripts/core/audio_director.gd`, `assets/audio/`; music is the owner's two songs (M-01), muffled while the current ball is murky | songs asserted by `music_*` (M-01); the muffling and bedroom sounds not listened to or asserted | |
 | G-42 | Moss Ball #1: classic marimo and tutorial | I+V | `levels.gd` `_ball1` | `tutorial_*`, `tutorial_under_60s` | |
 | G-43 | Moss Ball #2: current changes walking, jumping and parasite knockback | I+V | `moss_ball.gd` `current_at`, `levels.gd` `_ball2` | `current_affects_traversal`, `current_affects_jumps`, `current_carries_knocked_parasite` | |
 | G-44 | Moss Ball #2 mesa reachable only by current-swayed plants | I+V | `platforms.gd` SwayLeaf | playthrough "on mesa top: true" | |
@@ -238,6 +238,13 @@ consolidate everything into ONE Mote app and ONE current APK (retire Mote Dev; k
 | P-04 | Deliver as the first real OTA past b22's bundled game; no new APK | I+V | OTA publish #15 (run 36361312212); Build & Verify #23 skipped the APK job (native layer unchanged) | dev-000015, source `637014d`, r5, PCK `4fc048be…c5bdfe` (4,859,880 bytes), baked; signature, pin, hash, inspector verified from public URLs; a b22 client downloads and stages it |
 | P-05 | CI builds a new APK only when the native layer changes | I+V | `build.yml` `native` job gates `android` | Build & Verify #23: "Android APK" skipped; tests green |
 | P-06 | Moss Ball 3 canopy: the spiral climb can be started from the ground and climbed with plain jumps (owner: "my daughter couldn't get to any of the higher leaves, the double jump isn't enough") | I+V / needs phone | `Levels._ball3` spiral: 16 leaves, 72° apart (5 per turn), first leaf 0.8 m + 1.0 m per step (was 10 leaves, 1.5 m + 1.6 m per step, 60° apart) | Root cause: first leaf ~1.6 m up and 1.6 m steps vs a 1.85 m plain-jump apex, so every step needed a precise jump + burst. Now first leaf 0.89 m, steps 1.00 m, headroom 1.87 m; `canopy_climb_with_plain_jumps` climbs all 16 leaves with one plain jump each; playthrough 12/12 (seeds 4242, 7). Delivered by OTA dev-000016 (source `346a0bc`, PCK `4ac0e085…2a4681`, 4,861,880 bytes, baked; verified from public URLs; a b22 client downloads it); Build & Verify #24 skipped the APK |
+
+## M — Owner's music (owner, 2026-09-28)
+
+| ID | Requirement | Status | Implementation | Evidence |
+|---|---|---|---|---|
+| M-01 | The owner's two songs, *Aquarium Whimsy* (106.7 s) and *Bubbly Underworld* (98.8 s), are the background music: they alternate on the title and every moss ball, replacing the generated layers | I+V / needs phone | `AudioDirector`: one `Music`-bus player, `SONGS`, `next_song` on `finished`; travelling keeps the current song; the lowpass still opens as the current ball heals. Files: `assets/audio/music_aquarium_whimsy.ogg`, `music_bubbly_underworld.ogg` (Ogg Vorbis, 48 kHz stereo, full length, no loop). The 15 generated `music_b*_l*.wav` layers and their generator are removed | `music_owner_songs_load`, `music_generated_layers_removed`, `music_travel_keeps_song`, `music_songs_alternate`, `music_on_the_music_bus`, `music_next_song_starts_when_one_ends` (a real song end hands over to the other) |
+| M-02 | Keep the OTA small (owner chose Ogg Vorbis over WAV) | I+V | Encoded from the owner's WAVs (39 MB) at Vorbis ~q7: 2.71 MB + 2.55 MB, same sample count as the originals | |
 
 ## Precedence notes
 

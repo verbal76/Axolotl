@@ -14,7 +14,7 @@ func run(runner) -> void:
 	p.use_bot_input = true
 	await t.seconds(0.5)
 	var only: String = Settings.test_args.get("only", "")
-	for name_ in ["_test_startup", "_test_ota_and_version", "_test_mesh_winding", "_test_terrain", "_test_terrain_grounded", "_test_no_floating_platforms", "_test_parasite_locomotion", "_test_placements", "_test_tutorial_route", "_test_sphere_walk", "_test_jump_and_burst", "_test_coyote_and_buffer", "_test_swipe_direction_and_stages", "_test_hard_landing", "_test_food", "_test_food_reach", "_test_darter_and_burrower", "_test_food_repopulates", "_test_motes", "_test_checkpoint_and_regen", "_test_crumble", "_test_restoration_continuity", "_test_vortex", "_test_current", "_test_canopy", "_test_canopy_plain_jumps", "_test_upgrades", "_test_ui", "_test_all_clear"]:
+	for name_ in ["_test_startup", "_test_ota_and_version", "_test_mesh_winding", "_test_terrain", "_test_terrain_grounded", "_test_no_floating_platforms", "_test_parasite_locomotion", "_test_placements", "_test_tutorial_route", "_test_sphere_walk", "_test_jump_and_burst", "_test_coyote_and_buffer", "_test_swipe_direction_and_stages", "_test_hard_landing", "_test_food", "_test_food_reach", "_test_darter_and_burrower", "_test_food_repopulates", "_test_motes", "_test_checkpoint_and_regen", "_test_crumble", "_test_restoration_continuity", "_test_vortex", "_test_current", "_test_canopy", "_test_canopy_plain_jumps", "_test_music", "_test_upgrades", "_test_ui", "_test_all_clear"]:
 		if only == "" or name_.contains(only):
 			await call(name_)
 
@@ -51,6 +51,44 @@ func _test_startup() -> void:
 			net_before = true
 	t.check("startup_no_ota_check_before_usable", usable >= 0.0 and not net_before and not Boot.auto_check("start"), "")
 	t.check("startup_summary_for_pause_menu", StartupTrace.summary().begins_with("Last launch: Mote on screen after"), StartupTrace.summary())
+
+
+# --- music -------------------------------------------------------------------------------
+
+## The owner's two songs are the music: both load, play once each (no loop) and alternate, on
+## every moss ball; travelling to another ball keeps the current song going.
+func _test_music() -> void:
+	var a := g.audio
+	var ok := a._songs.size() == 2
+	var lens: Array[String] = []
+	for s in a._songs:
+		ok = ok and s is AudioStreamOggVorbis and not (s as AudioStreamOggVorbis).loop
+		lens.append("%.1f s" % (s.get_length() if s else 0.0))
+	t.check("music_owner_songs_load", ok and a._songs[0].get_length() > 100.0 and a._songs[1].get_length() > 95.0, ", ".join(lens))
+	var legacy := false
+	for f in DirAccess.get_files_at("res://assets/audio"):
+		legacy = legacy or RegEx.create_from_string("^music_b\\d_l\\d").search(f) != null
+	t.check("music_generated_layers_removed", not legacy, "")
+	a.set_ball(0, false)
+	var first := a.current_song()
+	var playing: bool = a._song.playing
+	a.set_ball(2, true)
+	t.check("music_travel_keeps_song", a.current_song() == first and a._song.playing == playing and playing, "")
+	var order: Array[int] = [a.song_index]
+	for i in 3:
+		a.next_song()
+		order.append(a.song_index)
+	t.check("music_songs_alternate", order[0] != order[1] and order[1] != order[2] and order[0] == order[2] and order[1] == order[3], str(order))
+	t.check("music_on_the_music_bus", a._song.bus == "Music", "")
+	# The real handover: near the end of a song, the next one starts by itself.
+	var before: int = a.song_index
+	a._song.seek(a.current_song().get_length() - 0.4)
+	# Audio plays in real time while the test clock runs faster, so wait on the wall clock.
+	var until := Time.get_ticks_msec() + 2500
+	while Time.get_ticks_msec() < until and a.song_index == before:
+		await g.get_tree().process_frame
+	t.check("music_next_song_starts_when_one_ends", a.song_index != before and a._song.playing,
+			"%d -> %d at %.1f s" % [before, a.song_index, a._song.get_playback_position()])
 
 
 # --- helpers -----------------------------------------------------------------------------

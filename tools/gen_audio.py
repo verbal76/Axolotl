@@ -1,8 +1,7 @@
 #!/usr/bin/env python3
-"""Synthesises every sound in the game (original, deterministic) into assets/audio.
+"""Synthesises the game's sound effects and ambience (original, deterministic) into assets/audio.
 
-Music: each moss ball has a loop split into layers that fade in with restoration.
-All layers of a ball share one length so they stay locked together at runtime.
+The music is not generated: it is the owner's two songs (assets/audio/music_*.ogg).
 Loops carry a WAV 'smpl' chunk so Godot imports them as seamlessly looping.
 
 Run from the repository root:  python3 tools/gen_audio.py
@@ -249,139 +248,6 @@ def noise(n):
     return rng.standard_normal(n)
 
 
-# ----------------------------------------------------------------------------- music
-
-def render_layers(bpm, beats, layers_fn, name, reverbs):
-    beat = 60.0 / bpm
-    L = int(round(beats * beat * SR))
-    for i, fn in enumerate(layers_fn):
-        buf = np.zeros(L)
-        fn(buf, beat)
-        buf = reverb(buf, wet=reverbs[i], size=1.0, circular=True)
-        # Short crossfade-free loop: rendering is circular, so the loop point is seamless.
-        write_wav(f"music_{name}_l{i}", buf, loop=True, peak=0.6 if i else 0.75)
-
-
-def ball1():
-    # Classic lush marimo: gentle C major/lydian, marimba lead. 80 BPM, 16 beats.
-    prog = [[48, 52, 55, 59], [45, 48, 52, 55], [41, 45, 48, 52], [43, 47, 50, 52]]
-    mel = [(0, 76, 1), (1, 79, 0.5), (1.5, 77, 0.5), (2, 76, 1), (3, 72, 1),
-           (4, 74, 1.5), (5.5, 72, 0.5), (6, 69, 2),
-           (8, 72, 1), (9, 74, 0.5), (9.5, 76, 0.5), (10, 77, 1), (11, 76, 1),
-           (12, 74, 1), (13, 71, 1), (14, 72, 2)]
-
-    def l0(buf, b):
-        for i, ch in enumerate(prog):
-            place(buf, i * 4 * b, pad([note_f(n) for n in ch], 4 * b + 1.0, bright=0.35), 1.0)
-
-    def l1(buf, b):
-        for i, ch in enumerate(prog):
-            for k, off in enumerate([0, 2.5, 3]):
-                place(buf, (i * 4 + off) * b, pluck_bass(note_f(ch[0] - 12 + (7 if k == 2 else 0)), 1.2), 0.9 if k == 0 else 0.5)
-
-    def l2(buf, b):
-        for st, n, d in mel:
-            place(buf, st * b, marimba(note_f(n), 1.6), 0.8)
-            place(buf, (st + 0.02) * b, marimba(note_f(n - 12), 1.2, 0.5), 0.25)
-
-    def l3(buf, b):
-        for i in range(16):
-            if i % 4 == 0:
-                place(buf, i * b, kick(), 0.8)
-            for h in range(2):
-                place(buf, (i + h * 0.5) * b, shaker(), 0.18 + 0.1 * (h == 1))
-            if i % 4 == 2:
-                place(buf, (i + 0.75) * b, wood(1200), 0.35)
-
-    def l4(buf, b):
-        arp = [0, 2, 1, 3]
-        for i, ch in enumerate(prog):
-            for k in range(8):
-                n = ch[arp[k % 4]] + 24
-                if (k + i) % 3 != 1:
-                    place(buf, (i * 4 + k * 0.5) * b, bell(note_f(n), 1.5), 0.22)
-        for s in [1.25, 5.75, 9.25, 13.75]:
-            place(buf, s * b, drop(900, 1700), 0.3)
-
-    render_layers(80, 16, [l0, l1, l2, l3, l4], "b1", [0.35, 0.2, 0.3, 0.12, 0.45])
-
-
-def ball2():
-    # Current-swept overgrowth: D dorian, flowing flute, harp arpeggios. 88 BPM.
-    prog = [[50, 53, 57, 60, 64], [43, 50, 55, 59, 62], [52, 55, 59, 62], [45, 52, 55, 57, 62]]
-    mel = [(0, 74, 1.5), (1.5, 76, 0.5), (2, 77, 2), (4, 79, 1), (5, 77, 1), (6, 74, 2),
-           (8, 72, 1), (9, 74, 1), (10, 76, 1.5), (11.5, 74, 0.5), (12, 69, 3)]
-
-    def l0(buf, b):
-        for i, ch in enumerate(prog):
-            place(buf, i * 4 * b, pad([note_f(n) for n in ch], 4 * b + 1.2, bright=0.45, attack=1.2), 1.0)
-
-    def l1(buf, b):
-        for i, ch in enumerate(prog):
-            for off in [0, 1.5, 3]:
-                place(buf, (i * 4 + off) * b, pluck_bass(note_f(ch[0] - 12), 1.0), 0.8 if off == 0 else 0.45)
-
-    def l2(buf, b):
-        for st, n, d in mel:
-            place(buf, st * b, flute(note_f(n), d * b + 0.1), 0.55)
-
-    def l3(buf, b):
-        for i in range(16):
-            for q in range(4):
-                place(buf, (i + q * 0.25) * b, shaker(0.07), 0.12 + 0.1 * (q == 2))
-            if i % 2 == 0:
-                place(buf, i * b, kick(), 0.55)
-            if i % 4 == 3:
-                place(buf, (i + 0.5) * b, wood(700), 0.3)
-
-    def l4(buf, b):
-        for i, ch in enumerate(prog):
-            for k in range(8):
-                n = ch[k % len(ch)] + 12
-                place(buf, (i * 4 + k * 0.5) * b, kalimba(note_f(n), 1.0), 0.28)
-
-    render_layers(88, 16, [l0, l1, l2, l3, l4], "b2", [0.4, 0.2, 0.35, 0.12, 0.4])
-
-
-def ball3():
-    # Underwater jungle: A minor pentatonic, kalimba ostinato, log drums, choir. 96 BPM.
-    prog = [[45, 52, 57, 60], [41, 48, 53, 57], [48, 55, 60, 64], [43, 50, 55, 59]]
-    ost = [69, 72, 76, 72, 74, 72, 69, 67]
-    mel = [(0, 81, 1), (1, 79, 1), (2, 76, 2), (4, 79, 1), (5, 81, 1), (6, 84, 2),
-           (8, 83, 1), (9, 81, 1), (10, 79, 1.5), (11.5, 76, 0.5), (12, 76, 1), (13, 74, 1), (14, 69, 2)]
-
-    def l0(buf, b):
-        place(buf, 0, pad([note_f(33), note_f(40)], 16 * b + 1.0, bright=0.2, attack=2.0), 0.6)
-        for i, ch in enumerate(prog):
-            place(buf, i * 4 * b, pad([note_f(n) for n in ch], 4 * b + 1.0, bright=0.3), 0.8)
-
-    def l1(buf, b):
-        for i in range(32):
-            place(buf, i * 0.5 * b, kalimba(note_f(ost[i % 8]), 1.0), 0.45)
-
-    def l2(buf, b):
-        pat = [0, 0.75, 1.5, 2, 2.75, 3.5]
-        for bar in range(4):
-            for k, p in enumerate(pat):
-                place(buf, (bar * 4 + p) * b, log_drum(160 if k % 3 else 110), 0.6)
-            for q in range(8):
-                place(buf, (bar * 4 + q * 0.5) * b, shaker(0.06), 0.1)
-            place(buf, (bar * 4 + 1) * b, wood(1500), 0.25)
-            place(buf, (bar * 4 + 3.25) * b, wood(1100), 0.2)
-
-    def l3(buf, b):
-        for st, n, d in mel:
-            place(buf, st * b, marimba(note_f(n), 1.5), 0.7)
-
-    def l4(buf, b):
-        for i, ch in enumerate(prog):
-            place(buf, i * 4 * b, choir([note_f(n + 12) for n in ch[1:]], 4 * b + 0.8), 0.7)
-        for s in [2.5, 6.25, 10.5, 14.25]:
-            place(buf, s * b, drop(600, 1500, 0.15), 0.25)
-
-    render_layers(96, 16, [l0, l1, l2, l3, l4], "b3", [0.35, 0.25, 0.12, 0.3, 0.5])
-
-
 # ----------------------------------------------------------------------------- sfx
 
 def sweep_noise(dur, f0, f1, q=1.6):
@@ -570,9 +436,6 @@ def main():
     sfx()
     ambience()
     outside()
-    ball1()
-    ball2()
-    ball3()
     print("audio written to", os.path.abspath(OUT))
 
 

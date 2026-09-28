@@ -19,9 +19,11 @@ anyone explaining it — slowly cleans up the whole tank.
   whenever a connection happens to be available, and never waits for one (see [docs/OTA.md](docs/OTA.md)).
 * One Android app, **Mote** (`com.verbal76.axolotl`): the complete current game is bundled in the APK,
   and it follows the `dev` OTA channel. (The separate Mote Dev app is retired.)
-* Art and audio are **100% original and procedural**: meshes are built in code at load time,
-  textures come from `tools/gen_textures.py`, and all music and sound comes from the synthesizer in
-  `tools/gen_audio.py` (both are committed outputs, so the build doesn't need Python).
+* Art and sound effects are **original and procedural**: meshes are built in code at load time,
+  textures come from `tools/gen_textures.py`, and sound effects and ambience come from the synthesizer
+  in `tools/gen_audio.py` (both are committed outputs, so the build doesn't need Python). The music is
+  the owner's two songs, *Aquarium Whimsy* and *Bubbly Underworld* (`assets/audio/music_*.ogg`),
+  which alternate on the title and every moss ball.
 * A straightforward first completion (300% restored) takes roughly 8–12 minutes.
 
 ---
@@ -184,7 +186,7 @@ gills streaming, and grinning.
 
 **The aquarium** — everything is continuous in total restoration, with no tiers: water clarity,
 murk particles, gravel cleanliness and colour, ooze pockets, algae on the glass, light, and how much
-of the bedroom you can see. Music layers enter gradually and the muffling filter opens. Unexplained
+of the bedroom you can see. The music is muffled while a ball is murky and opens up as it heals. Unexplained
 bedroom sounds (footsteps, a drawer, a door, something set down) are louder while the tank is dirty
 and recede as it clears. Incidental legs and a hand may pass outside; no face, no acknowledgement.
 
@@ -308,6 +310,6 @@ The bot's early runs uncovered real bugs, all fixed:
 - The Mote APK is a debug-signed build, signed with the stable Mote keystore from secrets (the pinned certificate), or with a throwaway key if the secret is missing. There is no Play-store release signing.
 - Art is deliberately simple procedural geometry (primitives, instanced blades, shader-driven moss).
   Animation is procedural rather than hand-keyed.
-- Music and sound are procedurally synthesized placeholders of reasonable quality, not composed and mixed audio.
+- Sound effects and ambience are procedurally synthesized placeholders of reasonable quality, not recorded and mixed audio.
 - The playthrough bot is a verification tool, not a human. Its route times, especially the
   12.7 s tutorial with a perfect run-up, are not estimates of human play time.

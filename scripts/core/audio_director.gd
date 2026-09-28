@@ -5,11 +5,16 @@ extends Node
 
 signal outside_event(kind: String)
 
-const LAYERS := 5
+## The owner's two songs, played one after the other on the title and every moss ball.
+const SONGS: Array[String] = [
+	"res://assets/audio/music_aquarium_whimsy.ogg",
+	"res://assets/audio/music_bubbly_underworld.ogg",
+]
+const SONG_DB := -1.5
 
-var _music: Array = []            # [ball][layer] -> AudioStreamPlayer
-var _ball_gain: Array[float] = [0.0, 0.0, 0.0]
-var _ball_target: Array[float] = [0.0, 0.0, 0.0]
+var song_index := 0
+var _song: AudioStreamPlayer
+var _songs: Array[AudioStream] = []
 var _lowpass: AudioEffectLowPassFilter
 var _out_lowpass: AudioEffectLowPassFilter
 var _water: AudioStreamPlayer
@@ -49,16 +54,13 @@ func _setup_buses() -> void:
 
 
 func _ready() -> void:
-	for b in 3:
-		var row := []
-		for l in LAYERS:
-			var p := AudioStreamPlayer.new()
-			p.bus = "Music"
-			p.stream = _load("res://assets/audio/music_b%d_l%d.wav" % [b + 1, l])
-			p.volume_db = -80.0
-			add_child(p)
-			row.append(p)
-		_music.append(row)
+	for path in SONGS:
+		_songs.append(_load(path))
+	_song = AudioStreamPlayer.new()
+	_song.bus = "Music"
+	_song.volume_db = SONG_DB
+	_song.finished.connect(next_song)
+	add_child(_song)
 	_water = _loop_player("res://assets/audio/amb_water.wav", "Ambience", -12.0)
 	_life = _loop_player("res://assets/audio/amb_life.wav", "Ambience", -40.0)
 	_travel = _loop_player("res://assets/audio/amb_travel.wav", "SFX", -80.0, false)
@@ -82,18 +84,28 @@ func _loop_player(path: String, bus: String, db: float, autoplay := true) -> Aud
 	return p
 
 
-## Switch to a moss ball's theme (all layers restart together so they stay locked).
-func set_ball(i: int, fade: bool) -> void:
-	for b in 3:
-		_ball_target[b] = 1.0 if b == i else 0.0
-		if not fade:
-			_ball_gain[b] = _ball_target[b]
-	var row: Array = _music[i]
-	if not (row[0] as AudioStreamPlayer).playing:
-		for p in row:
-			if p.stream:
-				p.play()
+## Every moss ball shares the songs: arriving on a ball starts the music if it is not already
+## playing, and never restarts a song that is (travelling between balls keeps it going).
+func set_ball(_i: int, _fade: bool) -> void:
+	if not _song.playing:
+		_play_song(song_index)
 	_started = true
+
+
+## The song after the current one (called when a song ends; the two alternate).
+func next_song() -> void:
+	_play_song((song_index + 1) % SONGS.size())
+
+
+func current_song() -> AudioStream:
+	return _song.stream
+
+
+func _play_song(i: int) -> void:
+	song_index = i
+	_song.stream = _songs[i]
+	if _song.stream:
+		_song.play()
 
 
 func travel_whoosh(on: bool) -> void:
@@ -111,23 +123,7 @@ func travel_whoosh(on: bool) -> void:
 ## ball_r: displayed restoration per ball (0..1); g: displayed total restoration.
 func update_mix(ball_r: Array[float], g: float, current: int) -> void:
 	_g = g
-	var dt := get_process_delta_time()
-	for b in 3:
-		_ball_gain[b] = move_toward(_ball_gain[b], _ball_target[b], dt * 0.45)
-		var row: Array = _music[b]
-		var r: float = ball_r[b]
-		for l in LAYERS:
-			var p: AudioStreamPlayer = row[l]
-			# Layers enter continuously with restoration (no tiers): each layer has its own
-			# soft ramp, overlapping the next.
-			var start := 0.0 if l == 0 else (l - 1) * 0.2 + 0.02
-			var v := 1.0 if l == 0 else smoothstep(start, start + 0.3, r)
-			var base := 0.85 if l == 0 else 0.7
-			var lin := v * base * _ball_gain[b]
-			p.volume_db = linear_to_db(maxf(lin, 0.00001))
-			if _ball_gain[b] <= 0.001 and _ball_target[b] == 0.0 and p.playing:
-				p.stop()
-	# Clarity: the current ball's theme is muffled early and opens up as it heals.
+	# Clarity: the music is muffled while the current ball is murky and opens up as it heals.
 	var rc: float = ball_r[current]
 	if _lowpass:
 		_lowpass.cutoff_hz = lerpf(750.0, 18000.0, pow(rc, 1.4))
