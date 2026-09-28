@@ -271,6 +271,13 @@ func run(runner) -> void:
 			e.fog_density = v[5]
 			await t.seconds(0.3)
 			await t.shot("light_side_%s" % v[0])
+	if only == "feedback":
+		await _feedback(g, "")
+		for b in g.balls:
+			b.add_heal(Vector3.UP, 340.0, 0.0)
+		g.g_disp = 1.0
+		g.aquarium.apply(1.0)
+		await _feedback(g, "_restored")
 	if only == "critterclose":
 		await _critter_close(g)
 	if only == "parasite":
@@ -583,6 +590,87 @@ func _review(g: Game) -> void:
 		await t.seconds(1.5)
 		await t.shot("r_ball3_stems_%s" % stage[0])
 		await _leaf_close(g, b2, "r_leaf_close_%s" % stage[0])
+
+
+## The owner's phone-review items close up: a rosette plant, a mote swimming, the crab, the
+## pufferfish calm and puffed, a burrowing worm out of its hole.
+func _feedback(g: Game, sfx: String) -> void:
+	g.player.invuln_t = 9999
+	var b2 := g.balls[2]
+	# A fern rosette on Giant Stems (the jungle floor).
+	_look(g, 2, b2.surface_point(MossBall.dir_ll(10, 110), 0.2), Vector3.FORWARD, 0.3)
+	await t.seconds(1.2)
+	await t.shot("fb_rosettes" + sfx)
+	# A mote, drifting (the camera just off it).
+	var b0 := g.balls[0]
+	var m: Mote = null
+	for x in b0.motes:
+		if x.is_available():
+			m = x
+			break
+	if m != null:
+		var mu := b0.up_at(m.global_position)
+		var side := MossBall.frame_at(mu, 0).x
+		_look(g, 0, b0.surface_point(b0.up_at(m.global_position + side * 4.0), 0.2), -side)
+		await t.seconds(0.6)
+		m.push(side * 1.2)
+		for i in 20:
+			await t.frames(1)
+			_close(g, m.global_position + side * 0.9 + mu * 0.25, m.global_position, mu)
+		await t.shot("fb_mote_moving" + sfx)
+		_open(g)
+	for c in g.ecosystem.all_critters():
+		if c is CrabGuardian or c is Pufferfish:
+			if c is CrabGuardian and not (c as CrabGuardian).ball.index == 6:
+				continue
+			var b: MossBall = c.ball
+			var pt: Vector3 = c.discover_point()
+			var up := b.up_at(pt)
+			var away: Vector3 = (c as CrabGuardian).facing if c is CrabGuardian else MossBall.frame_at(up, 30.0).z
+			_look(g, b.index, b.surface_point(b.up_at(pt + away * 7.0), 0.3), pt - b.surface_point(b.up_at(pt + away * 7.0)), 0.2)
+			await t.seconds(0.8)
+			var sd := away.cross(up).normalized()
+			var d := 2.4 if c is CrabGuardian else 2.0
+			_close(g, pt + away * d + sd * d * 0.6 + up * d * 0.5, pt, up)
+			await t.seconds(0.6)
+			if c is Pufferfish:
+				var pf := c as Pufferfish
+				pf.puffed = false
+				pf.inflate = 0.0
+				pf._pose(0.0)
+				await t.shot("fb_puffer_calm" + sfx)
+				pf.inflate = 1.0
+				pf.puffed = true
+				pf._pose(0.0)
+				_close(g, pt + away * 3.2 + sd * 1.8 + up * 1.4, pt, up)
+				await t.frames(2)
+				await t.shot("fb_puffer_puffed" + sfx)
+			else:
+				await t.shot("fb_crab" + sfx)
+			_open(g)
+			if c is Pufferfish:
+				break
+	# A burrowing worm, out of its hole.
+	for bb in g.balls:
+		for f in bb.foods:
+			if (f as Food).type == Food.Type.BURROWER:
+				var fo := f as Food
+				fo.state = "exposed"
+				fo.expose = 0.5
+				await t.frames(2)
+				var hp: Vector3 = fo._hole_pos
+				if hp == Vector3.ZERO:
+					continue
+				var up := bb.up_at(hp)
+				var sd := MossBall.frame_at(up, 0).x
+				_look(g, bb.index, bb.surface_point(bb.up_at(hp + sd * 5.0), 0.2), -sd)
+				await t.seconds(0.8)
+				fo.state = "exposed"
+				_close(g, hp + sd * 1.3 + up * 0.5, hp + up * 0.25, up)
+				await t.seconds(0.5)
+				await t.shot("fb_burrower" + sfx)
+				_open(g)
+				return
 
 
 ## Each Expansion 5 species close up (judging silhouettes and construction), then as the player

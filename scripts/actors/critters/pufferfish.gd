@@ -27,8 +27,6 @@ var _wander_t := 0.0
 var _ground_alt := 0.0
 var _ground_t := 0.0
 var _body: MeshInstance3D
-var _spike_mi: MeshInstance3D
-var _skin: StandardMaterial3D
 
 
 func place(p_ball: MossBall, p_home: Vector3, p_deg: float, p_hover: float, seed_v: int) -> void:
@@ -51,35 +49,141 @@ func late_place() -> void:
 
 
 func _build() -> void:
-	# One mesh for the body (skin, spots, eyes, fins, tail) and one for all the spikes.
-	_skin = Critter.vc_mat().duplicate()
-	var skin := Color(0.82, 0.7, 0.36)
-	var spot := Color(0.45, 0.32, 0.16)
-	var parts := [[Critter.sphere(BODY_R, 14), skin, Transform3D()]]
-	for i in 5:
-		var a := rng.randf() * TAU
-		var e := rng.randf_range(-0.6, 0.8)
-		parts.append([Critter.sphere(0.05, 6), spot, Critter.xf(Vector3(cos(a) * cos(e), sin(e), sin(a) * cos(e)) * BODY_R * 0.95)])
+	# One mesh, two shapes (Expansion 6, owner reference photos): calm, a spotted porcupinefish with
+	# fins and flat spines; puffed, a spiny ball (shaders/puffer_body.gdshader morphs between them).
+	_mat = ShaderMaterial.new()
+	_mat.shader = BODY_SHADER
+	_body = Critter.part(_puffer_mesh(), _mat, self)
+	_body.custom_aabb = AABB(Vector3.ONE * -1.4, Vector3.ONE * 2.8)
+
+
+const BODY_SHADER := preload("res://shaders/puffer_body.gdshader")
+const SPINES := 170
+var _mat: ShaderMaterial
+static var _mesh: ArrayMesh
+
+
+## The calm fish: head toward -Z, `BODY_R` (0.28 m) round the middle. Each vertex also carries its
+## puffed position and normal (CUSTOM0/1): body points out onto a sphere of PUFFED_R, fins and
+## eyes moved with the body point they sit on, spines standing out along the sphere.
+static func _puffer_mesh() -> ArrayMesh:
+	if _mesh != null:
+		return _mesh
+	var st := SurfaceTool.new()
+	st.begin(Mesh.PRIMITIVE_TRIANGLES)
+	st.set_custom_format(0, SurfaceTool.CUSTOM_RGBA_FLOAT)
+	st.set_custom_format(1, SurfaceTool.CUSTOM_RGBA_FLOAT)
+	var skin := Color(0.62, 0.55, 0.38, 1.0)
+	var belly := Color(0.9, 0.86, 0.74, 1.0)
+	var fin := Color(0.78, 0.7, 0.36, 0.0)
+	var centre := Vector3(0, 0, -0.03)
+	var rings := 16
+	var sides := 16
+	var calm := func(u: float, a: float) -> Vector3:
+		# u: 0 at the snout, 1 where the tail stalk meets the tail fin.
+		var z := lerpf(-0.4, 0.4, u)
+		var r := BODY_R * 0.82 * pow(sin(PI * clampf(u * 0.86 + 0.07, 0.0, 1.0)), 0.62) * (1.0 - 0.45 * pow(u, 3.0))
+		return Vector3(cos(a) * r * 0.95, sin(a) * r * 0.88, z)
+	var puff := func(p: Vector3) -> Vector3:
+		return centre + (p - centre).normalized() * PUFFED_R
+	var nv := 0
+	# Body (closed at the snout; the tail fin covers the stalk's end).
+	for i in rings + 1:
+		var u := float(i) / rings
+		for k in sides:
+			var a := TAU * k / sides
+			var p: Vector3 = calm.call(u, a)
+			var pp: Vector3 = puff.call(p)
+			st.set_color(belly if sin(a) < -0.35 else skin)
+			st.set_custom(0, Color(pp.x, pp.y, pp.z))
+			var pn := (pp - centre).normalized()
+			st.set_custom(1, Color(pn.x, pn.y, pn.z))
+			st.add_vertex(p)
+			nv += 1
+	for i in rings:
+		for k in sides:
+			var a := i * sides + k
+			var b := i * sides + (k + 1) % sides
+			for q in [a, b, a + sides, b, b + sides, a + sides]:
+				st.add_index(q)
+	# Parts riding the body: each vertex moves by the same offset as its anchor body point.
+	var ride := func(verts: Array, anchor: Vector3, col: Color) -> void:
+		var shift: Vector3 = puff.call(anchor) - anchor
+		var pn := (anchor + shift - centre).normalized()
+		var start := nv
+		for v in verts:
+			st.set_color(col)
+			st.set_custom(0, Color((v as Vector3).x + shift.x, (v as Vector3).y + shift.y, (v as Vector3).z + shift.z))
+			st.set_custom(1, Color(pn.x, pn.y, pn.z))
+			st.add_vertex(v)
+			nv += 1
+		for t in range(0, verts.size(), 3):
+			st.add_index(start + t)
+			st.add_index(start + t + 1)
+			st.add_index(start + t + 2)
+	var fan := func(root: Vector3, dir_a: Vector3, dir_b: Vector3, n: int) -> Array:
+		var out := []
+		for f in n:
+			var d0 := dir_a.slerp(dir_b, float(f) / n)
+			var d1 := dir_a.slerp(dir_b, float(f + 1) / n)
+			out.append_array([root, root + d0, root + d1])
+		return out
+	# Tail fin, dorsal and anal fins, two pectoral fins.
+	var tail: Vector3 = calm.call(1.0, 0.0) * Vector3(0, 0, 1)
+	ride.call(fan.call(tail, Vector3(0, 0.16, 0.12), Vector3(0, -0.16, 0.12), 6), tail, fin)
+	var dors: Vector3 = calm.call(0.72, PI * 0.5)
+	ride.call(fan.call(dors, Vector3(0, 0.12, 0.02), Vector3(0, 0.02, 0.14), 4), dors, fin)
+	var anal: Vector3 = calm.call(0.72, -PI * 0.5)
+	ride.call(fan.call(anal, Vector3(0, -0.11, 0.02), Vector3(0, -0.02, 0.13), 4), anal, fin)
 	for side in [-1.0, 1.0]:
-		parts.append([Critter.sphere(0.05, 6), Color(0.05, 0.05, 0.05), Critter.xf(Vector3(side * 0.16, 0.08, -0.2))])
-		parts.append([Critter.sphere(0.07, 6), skin, Critter.xf(Vector3(side * 0.26, 0, 0.02), Vector3(0.3, 1.0, 1.2))])
-	parts.append([Critter.sphere(0.09, 6), skin, Critter.xf(Vector3(0, 0, 0.3), Vector3(0.3, 1.1, 1.0))])
-	_body = Critter.part(Critter.merge(parts), _skin, self)
-	var cone := CylinderMesh.new()
-	cone.top_radius = 0.0
-	cone.bottom_radius = 0.035
-	cone.height = 0.16
-	cone.radial_segments = 5
-	cone.rings = 1
-	var spikes := []
-	for i in SPIKES:
-		# Spread evenly over the sphere (golden spiral).
-		var y := 1.0 - 2.0 * (i + 0.5) / SPIKES
+		var pec: Vector3 = calm.call(0.36, 0.0 if side > 0.0 else PI)
+		ride.call(fan.call(pec, Vector3(side * 0.12, 0.06, 0.02), Vector3(side * 0.1, -0.06, 0.08), 5), pec, fin)
+		# A big dark eye with a bright catch-light, and pale lips at the snout.
+		var eye: Vector3 = calm.call(0.2, 0.0 if side > 0.0 else PI) + Vector3(0, 0.05, 0)
+		var ev := []
+		for k in 8:
+			var a0 := TAU * k / 8
+			var a1 := TAU * (k + 1) / 8
+			var o := Vector3(side * 0.012, 0, 0)
+			ev.append_array([eye + o, eye + o + Vector3(0, cos(a0), sin(a0)) * 0.05, eye + o + Vector3(0, cos(a1), sin(a1)) * 0.05])
+		ride.call(ev, eye, Color(0.04, 0.05, 0.08, 0.0))
+		ride.call([eye + Vector3(side * 0.016, 0.02, -0.01), eye + Vector3(side * 0.016, 0.03, 0.005), eye + Vector3(side * 0.016, 0.012, 0.004)], eye, Color(0.9, 0.95, 1.0, 0.0))
+	var snout: Vector3 = calm.call(0.0, 0.0) * Vector3(0, 0, 1) + Vector3(0, -0.03, -0.01)
+	var lips := []
+	for k in 8:
+		var a0 := TAU * k / 8
+		var a1 := TAU * (k + 1) / 8
+		lips.append_array([snout, snout + Vector3(cos(a0) * 0.045, sin(a0) * 0.028, -0.01), snout + Vector3(cos(a1) * 0.045, sin(a1) * 0.028, -0.01)])
+	ride.call(lips, snout, Color(0.9, 0.62, 0.58, 0.0))
+	# Spines: flat along the body toward the tail when calm; standing out when puffed.
+	for i in SPINES:
+		var y := 1.0 - 2.0 * (i + 0.5) / SPINES
 		var r := sqrt(1.0 - y * y)
-		var a := i * 2.399963
-		var n := Vector3(cos(a) * r, y, sin(a) * r)
-		spikes.append([cone, Color(0.95, 0.9, 0.7), Transform3D(Basis(Quaternion(Vector3.UP, n)), n * (BODY_R + 0.06))])
-	_spike_mi = Critter.part(Critter.merge(spikes), _skin, self)
+		var ga := i * 2.399963
+		var n := Vector3(cos(ga) * r, y, sin(ga) * r)
+		var u := clampf(0.5 + n.z * 0.42, 0.08, 0.85)
+		var a := atan2(n.y, n.x)
+		var base_c: Vector3 = calm.call(u, a)
+		var base_p := centre + n * PUFFED_R
+		var back := Vector3(0, 0, 1)
+		var side_c := back.cross(base_c.normalized()).normalized() * 0.012
+		var side_p := n.cross(Vector3.UP if absf(n.y) < 0.9 else Vector3.RIGHT).normalized() * 0.03
+		var calm_tri := [base_c - side_c, base_c + side_c, base_c + back * 0.06 + (base_c - Vector3(0, 0, base_c.z)).normalized() * 0.01]
+		var puff_tri := [base_p - side_p * 1.5, base_p + side_p * 1.5, base_p + n * 0.26]
+		var start := nv
+		for q in 3:
+			var pv: Vector3 = puff_tri[q]
+			st.set_color(Color(0.95, 0.9, 0.74, 0.0))
+			st.set_custom(0, Color(pv.x, pv.y, pv.z))
+			st.set_custom(1, Color(n.x, n.y, n.z))
+			st.add_vertex(calm_tri[q])
+			nv += 1
+		st.add_index(start)
+		st.add_index(start + 1)
+		st.add_index(start + 2)
+	st.generate_normals()
+	_mesh = st.commit()
+	return _mesh
 
 
 func tick(dt: float) -> void:
@@ -135,12 +239,7 @@ func _pose(_dt: float) -> void:
 		fwd = -global_basis.z
 	fwd = fwd.normalized()
 	global_basis = Basis(fwd.cross(up).normalized(), up, -fwd).orthonormalized()
-	var k := radius() / BODY_R
-	_body.scale = Vector3.ONE * k
-	# The spikes stand out as it puffs up (hidden while it is smooth).
-	_spike_mi.scale = Vector3.ONE * k
-	_spike_mi.visible = inflate > 0.25
-	_skin.albedo_color = Color(1, 1, 1).lerp(Color(1.15, 1.1, 0.75), inflate)
+	_mat.set_shader_parameter("inflate", inflate)
 
 
 func wake_points() -> Array:

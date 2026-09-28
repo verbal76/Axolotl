@@ -114,13 +114,134 @@ func _build_darter() -> void:
 		_parts.append(ant)
 
 
+## A garden-eel-like burrowing worm (Expansion 6, owner reference photos; it was a stack of beads
+## with nothing where it met the ground): one slim spotted body rising from a small mound with a
+## dark hole, its head curled forward like a question mark. It sways while it is out.
 func _build_burrower() -> void:
-	var m := _mat(Color(0.95, 0.45, 0.5), 0.3)
-	for i in 7:
-		_ball_mesh(0.05, m, _vis, Vector3(0, i * 0.07, 0), Vector3(1, 1.3, 1))
-		_parts.append(_vis.get_child(_vis.get_child_count() - 1))
-	_ball_mesh(0.014, _mat(Color(0.05, 0.05, 0.05), 0.0), _vis, Vector3(0.03, 0.47, -0.03), Vector3.ONE)
-	_ball_mesh(0.014, _mat(Color(0.05, 0.05, 0.05), 0.0), _vis, Vector3(-0.03, 0.47, -0.03), Vector3.ONE)
+	var m := StandardMaterial3D.new()
+	m.vertex_color_use_as_albedo = true
+	m.roughness = 0.5
+	m.emission_enabled = true
+	m.emission = Color(0.55, 0.3, 0.3)
+	m.emission_energy_multiplier = 0.35
+	var body := MeshInstance3D.new()
+	body.mesh = _eel_mesh()
+	body.material_override = m
+	body.visibility_range_end = 35.0
+	_vis.add_child(body)
+	_parts.append(body)
+	# The burrow: stays at the hole whatever the worm does (placed in _update_burrower).
+	_mound = MeshInstance3D.new()
+	_mound.mesh = _mound_mesh()
+	var mm := StandardMaterial3D.new()
+	mm.vertex_color_use_as_albedo = true
+	mm.roughness = 0.95
+	_mound.material_override = mm
+	_mound.top_level = true
+	_mound.visibility_range_end = 35.0
+	_mound.cast_shadow = GeometryInstance3D.SHADOW_CASTING_SETTING_OFF
+	add_child(_mound)
+
+
+var _mound: MeshInstance3D
+static var _eel: ArrayMesh
+static var _burrow: ArrayMesh
+
+
+static func _hash2(a: int, b: int) -> float:
+	return fposmod(sin(float(a) * 12.9898 + float(b) * 78.233) * 43758.5453, 1.0)
+
+
+## The worm along +Y from its base (0.62 m long): straight, then curling toward -Z at the head.
+static func _eel_mesh() -> ArrayMesh:
+	if _eel != null:
+		return _eel
+	var st := SurfaceTool.new()
+	st.begin(Mesh.PRIMITIVE_TRIANGLES)
+	var rings := 26
+	var sides := 8
+	var pts := []
+	var p := Vector3.ZERO
+	var dirv := Vector3.UP
+	for j in rings + 1:
+		var s := float(j) / rings
+		pts.append([p, dirv])
+		var bend := 0.0 if s < 0.68 else (s - 0.68) / 0.32 * 0.32
+		dirv = dirv.rotated(Vector3.RIGHT, -bend).normalized()
+		p += dirv * (0.62 / rings)
+	var pale := Color(0.86, 0.82, 0.72)
+	var spot := Color(0.12, 0.11, 0.1)
+	for j in rings + 1:
+		var s := float(j) / rings
+		var c: Vector3 = pts[j][0]
+		var d: Vector3 = pts[j][1]
+		var x := Vector3.RIGHT
+		var y := d.cross(x).normalized()
+		var r := 0.034 * (1.0 if s < 0.92 else sqrt(maxf(0.0, 1.0 - pow((s - 0.92) / 0.08, 2.0))) * 0.9 + 0.1)
+		for k in sides:
+			var a := TAU * k / sides
+			var col := pale
+			if _hash2(j, k) < 0.3 and s < 0.9:
+				col = spot
+			# A dark patch behind the head, as the owner's photos show.
+			if s > 0.72 and s < 0.8 and (k == 2 or k == 3):
+				col = spot
+			st.set_color(col)
+			st.add_vertex(c + (x * cos(a) + y * sin(a)) * r)
+	for j in rings:
+		for k in sides:
+			var a := j * sides + k
+			var b := j * sides + (k + 1) % sides
+			for q in [a, a + sides, b, b, a + sides, b + sides]:
+				st.add_index(q)
+	# Eyes near the snout.
+	var head: Vector3 = pts[rings - 1][0]
+	var n := (rings + 1) * sides
+	for side in [-1.0, 1.0]:
+		var e := head + Vector3(side * 0.026, 0.004, -0.006)
+		for k in 6:
+			var a0 := TAU * k / 6
+			var a1 := TAU * (k + 1) / 6
+			st.set_color(Color(0.04, 0.04, 0.05))
+			st.add_vertex(e + Vector3(side * 0.006, 0, 0))
+			st.set_color(Color(0.04, 0.04, 0.05))
+			st.add_vertex(e + Vector3(0, cos(a0), sin(a0)) * 0.011)
+			st.set_color(Color(0.04, 0.04, 0.05))
+			st.add_vertex(e + Vector3(0, cos(a1), sin(a1)) * 0.011)
+			st.add_index(n)
+			st.add_index(n + 1)
+			st.add_index(n + 2)
+			n += 3
+	st.generate_normals()
+	_eel = st.commit()
+	return _eel
+
+
+## A low mound of sand round a dark hole, flat side down at y = 0.
+static func _mound_mesh() -> ArrayMesh:
+	if _burrow != null:
+		return _burrow
+	var st := SurfaceTool.new()
+	st.begin(Mesh.PRIMITIVE_TRIANGLES)
+	var sides := 16
+	var radii := [0.0, 0.06, 0.1, 0.2, 0.34]
+	var heights := [-0.03, -0.01, 0.07, 0.05, -0.03]
+	var cols := [Color(0.03, 0.03, 0.02), Color(0.08, 0.07, 0.05), Color(0.6, 0.54, 0.42), Color(0.5, 0.45, 0.34), Color(0.42, 0.4, 0.3)]
+	for i in radii.size():
+		for k in sides:
+			var a := TAU * k / sides
+			var wob := 1.0 + 0.12 * sin(a * 3.0 + i)
+			st.set_color(cols[i])
+			st.add_vertex(Vector3(cos(a) * radii[i] * wob, heights[i], sin(a) * radii[i] * wob))
+	for i in radii.size() - 1:
+		for k in sides:
+			var a := i * sides + k
+			var b := i * sides + (k + 1) % sides
+			for q in [a, b, a + sides, b, b + sides, a + sides]:
+				st.add_index(q)
+	st.generate_normals()
+	_burrow = st.commit()
+	return _burrow
 
 
 func is_catchable() -> bool:
@@ -251,6 +372,8 @@ func _update_burrower(dt: float, pl: Axolotl) -> void:
 		_hole_pos = ball.surface_point(dir, hole.get("h", 0.0))
 		_hole_up = ball.up_at(_hole_pos)
 		global_transform = Transform3D(MossBall.frame_at(_hole_up, randf() * 360.0), _hole_pos - _hole_up * 0.5)
+		if _mound != null:
+			_mound.global_transform = Transform3D(MossBall.frame_at(_hole_up, 0.0), _hole_pos)
 	var d := pl.global_position.distance_to(_hole_pos)
 	var disturbed := d < 2.6 and (pl.velocity.length() > 1.5 or pl.lunge_t >= 0.0) or WaterFX.inst.push_at(_hole_pos).length() > 0.9
 	match state:
@@ -279,8 +402,9 @@ func _update_burrower(dt: float, pl: Axolotl) -> void:
 				_cd = randf_range(4.0, 7.0)
 	global_position = _hole_pos - _hole_up * (0.5 - expose * 0.9)
 	_vis.visible = expose > 0.02
+	# A gentle sway of the whole body from the burrow, the head nodding.
 	for i in _parts.size():
-		_parts[i].position.x = sin(_t * 2.0 + i * 0.6) * 0.02 * i
+		_parts[i].rotation = Vector3(sin(_t * 1.3) * 0.12, 0.0, sin(_t * 1.7 + 0.8) * 0.14) * expose * 2.0
 
 
 func _orient(dir: Vector3, up: Vector3) -> void:

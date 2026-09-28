@@ -85,44 +85,58 @@ static func reed_clump(blades: int, width: float, height: float, spread: float, 
 	return st.commit()
 
 
-## Broad-leaf aquatic plant: a few wide, rounded leaves on short stalks.
+## Broad-leaf aquatic plant: a rosette of wide, rounded leaves (Expansion 6, owner: they read as
+## sharp and blocky). Each leaf is an ovate blade that rises from the centre, arches over and droops
+## under its own weight, its edges cupped a little, with smooth shading. UV.y runs base to tip, so
+## the vegetation material sways the outer leaf most in the current.
 static func broadleaf_mesh(leaves: int, size: float, seed_v: int) -> ArrayMesh:
 	var rng := RandomNumberGenerator.new()
 	rng.seed = seed_v
 	var st := SurfaceTool.new()
 	st.begin(Mesh.PRIMITIVE_TRIANGLES)
+	var base := 0
 	for i in leaves:
 		var a := TAU * i / leaves + rng.randf() * 0.5
-		var b := Basis(Vector3.UP, a) * Basis(Vector3.RIGHT, -rng.randf_range(0.5, 1.1))
-		_leaf_blade(st, Transform3D(b, Vector3.ZERO), size * rng.randf_range(0.35, 0.5), size * rng.randf_range(0.8, 1.2), Color.WHITE.darkened(rng.randf() * 0.2))
+		var rise := rng.randf_range(0.55, 1.05)
+		var length := size * rng.randf_range(0.8, 1.2)
+		var half_w := size * rng.randf_range(0.3, 0.42)
+		base = _broad_leaf(st, Basis(Vector3.UP, a), rise, half_w, length, Color.WHITE.darkened(rng.randf() * 0.2), base)
+	st.generate_normals()
 	return st.commit()
 
 
-## Leaf outline along +Y (in the leaf's local plane XY), cupped slightly toward +Z.
-static func _leaf_blade(st: SurfaceTool, xf: Transform3D, half_w: float, length: float, tint: Color) -> void:
-	var segs := 6
-	var pts_l: Array[Vector3] = []
-	var pts_r: Array[Vector3] = []
-	var mid: Array[Vector3] = []
-	for i in range(segs + 1):
-		var t := float(i) / segs
-		var w := half_w * sin(PI * clampf(t * 0.95 + 0.05, 0.0, 1.0)) * (1.0 - t * 0.3)
-		var y := t * length
-		var cup := w * 0.25
-		pts_l.append(xf * Vector3(-w, y, cup))
-		pts_r.append(xf * Vector3(w, y, cup))
-		mid.append(xf * Vector3(0, y, -0.02 * length))
-	var n := (xf.basis * Vector3(0, 0, 1)).normalized()
-	for i in range(segs):
-		var t0 := float(i) / segs
-		var t1 := float(i + 1) / segs
-		for tri in [[mid[i], t0, pts_l[i], t0, pts_l[i + 1], t1], [mid[i], t0, pts_l[i + 1], t1, mid[i + 1], t1],
-				[mid[i], t0, pts_r[i + 1], t1, pts_r[i], t0], [mid[i], t0, mid[i + 1], t1, pts_r[i + 1], t1]]:
-			for k in 3:
-				st.set_normal(n)
-				st.set_color(tint)
-				st.set_uv(Vector2(0.5, tri[k * 2 + 1]))
-				st.add_vertex(tri[k * 2])
+## One rosette leaf pointing out along the basis' +Z: `rise` radians up from level at the base,
+## curving down toward the tip. Indexed from `base`; returns the new vertex count.
+static func _broad_leaf(st: SurfaceTool, rot: Basis, rise: float, half_w: float, length: float, tint: Color, base: int) -> int:
+	var rows := 9
+	var cols := [-1.0, -0.5, 0.0, 0.5, 1.0]
+	var p := Vector3.ZERO
+	var start := base
+	for i in rows + 1:
+		var t := float(i) / rows
+		# The midrib: out and up at first, arching over and down toward the tip.
+		var ang := rise - t * (rise + 0.55)
+		var dirv := Vector3(0, sin(ang), cos(ang))
+		if i > 0:
+			p += dirv * (length / rows)
+		var w := half_w * pow(sin(PI * clampf(t * 0.92 + 0.06, 0.0, 1.0)), 0.75) * (1.0 - 0.2 * t)
+		var side := Vector3(1, 0, 0)
+		var lift := Vector3(0, cos(ang), -sin(ang))
+		for s in cols:
+			var v: Vector3 = p + side * s * w + lift * (s * s) * w * 0.28
+			st.set_color(tint)
+			st.set_uv(Vector2(0.5 + s * 0.5, t))
+			st.add_vertex(rot * v)
+			base += 1
+	for i in rows:
+		for k in cols.size() - 1:
+			var a := start + i * cols.size() + k
+			var b := a + 1
+			var c := a + cols.size()
+			var d := c + 1
+			for q in [a, c, b, b, c, d]:
+				st.add_index(q)
+	return base
 
 
 ## Platform leaf outline (Expansion 6, owner phone report): narrow where it joins its stalk, broad
@@ -531,27 +545,40 @@ static func cushion_hull(radius: float, height: float, sink: float = 1.2) -> Pac
 	return pts
 
 
-## Vertical stem / trunk (tapered cylinder) along +Y.
+## Vertical stem / trunk along +Y (Expansion 6: grown, not a cylinder): tapering, with a root
+## flare where it meets the ground (0.5 m up the mesh; the flare is mostly below it), soft growth
+## nodes every ~1.7 m, and a slight irregular wobble. UV.x runs round it and UV.y along it in
+## metres, so the plant material's grain runs up the stem (it banded across it before).
+## Collision (LevelBuilder.stem_xf) stays within a few centimetres of it.
 static func stem_mesh(r0: float, r1: float, height: float, radial := 10, bend := 0.0) -> ArrayMesh:
 	var st := SurfaceTool.new()
 	st.begin(Mesh.PRIMITIVE_TRIANGLES)
-	var rings := 8
-	for j in range(rings):
-		var t0 := float(j) / rings
-		var t1 := float(j + 1) / rings
-		for s in radial:
-			var a0 := TAU * s / radial
-			var a1 := TAU * (s + 1) / radial
-			var ra := lerpf(r0, r1, t0)
-			var rb := lerpf(r1, r1, t1) if false else lerpf(r0, r1, t1)
-			var oa := Vector3(bend * t0 * t0 * height, 0, 0)
-			var ob := Vector3(bend * t1 * t1 * height, 0, 0)
-			var v00 := oa + Vector3(cos(a0) * ra, t0 * height, sin(a0) * ra)
-			var v01 := oa + Vector3(cos(a1) * ra, t0 * height, sin(a1) * ra)
-			var v10 := ob + Vector3(cos(a0) * rb, t1 * height, sin(a0) * rb)
-			var v11 := ob + Vector3(cos(a1) * rb, t1 * height, sin(a1) * rb)
-			for v in [[v00, t0], [v11, t1], [v10, t1], [v00, t0], [v01, t0], [v11, t1]]:
-				st.set_uv(Vector2(0.5, v[1]))
+	var rings := maxi(8, int(height / 0.6))
+	var sides := maxi(radial, 12)
+	var seed_v := r0 * 37.1 + height * 3.3
+	var ring_pts: Array = []
+	for j in rings + 1:
+		var t := float(j) / rings
+		var y := t * height
+		var row: Array = []
+		for k in sides + 1:
+			var a := TAU * k / sides
+			var r := lerpf(r0, r1, t)
+			r *= 1.0 + 0.3 * (1.0 - smoothstep(0.1, 0.75, y))
+			var node := fposmod(y + seed_v, 1.7) / 1.7
+			r *= 1.0 + 0.06 * pow(1.0 - absf(node * 2.0 - 1.0), 10.0)
+			r *= 1.0 + 0.03 * sin(a * 3.0 + y * 0.8 + seed_v) + 0.02 * sin(a * 5.0 - y * 1.3)
+			var o := Vector3(bend * t * t * height, 0, 0)
+			row.append([o + Vector3(cos(a) * r, y, sin(a) * r), Vector2(float(k) / sides * 3.0, y * 0.08)])
+		ring_pts.append(row)
+	for j in rings:
+		for k in sides:
+			var v00: Array = ring_pts[j][k]
+			var v01: Array = ring_pts[j][k + 1]
+			var v10: Array = ring_pts[j + 1][k]
+			var v11: Array = ring_pts[j + 1][k + 1]
+			for v in [v00, v11, v10, v00, v01, v11]:
+				st.set_uv(v[1])
 				st.add_vertex(v[0])
 	st.generate_normals()
 	return st.commit()

@@ -108,10 +108,19 @@ void vertex() {
 	v_up = up;
 }
 
+// An even 4x4 ordered dither (Expansion 6: random per-pixel dither read as noise on a phone).
+float bayer4(vec2 fc) {
+	int x = int(mod(fc.x, 4.0));
+	int y = int(mod(fc.y, 4.0));
+	int i = x + y * 4;
+	int m[16] = int[](0, 8, 2, 10, 12, 4, 14, 6, 3, 11, 1, 9, 15, 7, 13, 5);
+	return (float(m[i]) + 0.5) / 16.0;
+}
+
 void fragment() {
 	float d = length(VERTEX);
 	if (d < cam_fade) {
-		float r = fract(sin(dot(FRAGCOORD.xy, vec2(12.9898, 78.233))) * 43758.5453);
+		float r = bayer4(FRAGCOORD.xy);
 		if (r > d / cam_fade) discard;
 	}
 	float h = smoothstep(0.1, 0.9, v_health);

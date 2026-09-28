@@ -20,7 +20,10 @@ var _dive_from := Vector3.ZERO
 var _dive_to := Vector3.ZERO
 var _core: MeshInstance3D
 var _halo: MeshInstance3D
-var _cilia: Node3D
+var _body: Node3D
+var _bell: MeshInstance3D
+var _limbs: MeshInstance3D
+var _swim := 0.0
 var _dir := Vector3.UP
 
 
@@ -58,26 +61,77 @@ func _ready() -> void:
 	_halo.material_override = hm
 	_halo.cast_shadow = GeometryInstance3D.SHADOW_CASTING_SETTING_OFF
 	add_child(_halo)
-	# Wispy filaments / spore strands so it reads as a living organism.
-	_cilia = Node3D.new()
-	add_child(_cilia)
-	var fil_mat := StandardMaterial3D.new()
-	fil_mat.albedo_color = Color(0.6, 1.0, 0.75)
-	fil_mat.emission_enabled = true
-	fil_mat.emission = Color(0.45, 0.95, 0.65)
-	fil_mat.emission_energy_multiplier = 2.0
-	var parts := []
-	for i in 7:
-		var d := Vector3(randf() - 0.5, randf() - 0.5, randf() - 0.5).normalized()
-		var h := randf_range(0.12, 0.22)
-		parts.append([MeshLib.capsule(0.008, h), Transform3D(Basis(Quaternion(Vector3.UP, d)), d * h * 0.5)])
-		parts.append([MeshLib.sphere(0.018, 6, 3), Transform3D(Basis(), d * h)])
-	var fil := MeshInstance3D.new()
-	fil.mesh = MeshLib.merge(parts)
-	fil.material_override = fil_mat
-	_cilia.add_child(fil)
-	for mi in [_core, _halo, fil]:
+	# The organism (Expansion 6): a soft glowing bell over the nucleus, and tentacles hanging below
+	# that sway and trail as it swims. Turned to its ball's up each frame (_body).
+	_body = Node3D.new()
+	add_child(_body)
+	_core.reparent(_body, false)
+	_core.scale = Vector3.ONE * 0.6
+	_bell = MeshInstance3D.new()
+	var bs := SphereMesh.new()
+	bs.radius = 0.1
+	bs.height = 0.16
+	bs.radial_segments = 14
+	bs.rings = 7
+	bs.is_hemisphere = true
+	_bell.mesh = bs
+	_bell.position = Vector3(0, -0.02, 0)
+	var bm := ShaderMaterial.new()
+	bm.shader = BELL_SHADER
+	_bell.material_override = bm
+	_bell.cast_shadow = GeometryInstance3D.SHADOW_CASTING_SETTING_OFF
+	_body.add_child(_bell)
+	_limbs = MeshInstance3D.new()
+	_limbs.mesh = _tentacles()
+	var lm := ShaderMaterial.new()
+	lm.shader = LIMB_SHADER
+	_limbs.material_override = lm
+	_limbs.cast_shadow = GeometryInstance3D.SHADOW_CASTING_SETTING_OFF
+	_body.add_child(_limbs)
+	for mi in [_core, _halo, _bell, _limbs]:
 		mi.visibility_range_end = 70.0
+
+
+const BELL_SHADER := preload("res://shaders/mote_bell.gdshader")
+const LIMB_SHADER := preload("res://shaders/mote_limb.gdshader")
+static var _tent_mesh: ArrayMesh
+
+
+## Six tapering tentacles from under the bell's rim, hanging down (-Y); UV.y root to tip, COLOR.r
+## each one's phase. Shared by every mote.
+static func _tentacles() -> ArrayMesh:
+	if _tent_mesh != null:
+		return _tent_mesh
+	var st := SurfaceTool.new()
+	st.begin(Mesh.PRIMITIVE_TRIANGLES)
+	var n := 6
+	var rings := 7
+	var sides := 4
+	var base := 0
+	for k in n:
+		var a := TAU * k / n + 0.3
+		var root := Vector3(cos(a) * 0.07, -0.02, sin(a) * 0.07)
+		var length := 0.2 + 0.08 * float(k % 3)
+		var start := base
+		for j in rings:
+			var t := float(j) / (rings - 1)
+			var c := root + Vector3(cos(a) * 0.03 * t, -length * t, sin(a) * 0.03 * t)
+			var r := lerpf(0.011, 0.002, t)
+			for q in sides:
+				var b := TAU * q / sides
+				st.set_color(Color(float(k) / n, 0, 0))
+				st.set_uv(Vector2(float(q) / sides, t))
+				st.add_vertex(c + Vector3(cos(b) * r, 0, sin(b) * r))
+				base += 1
+		for j in rings - 1:
+			for q in sides:
+				var i0 := start + j * sides + q
+				var i1 := start + j * sides + (q + 1) % sides
+				for v in [i0, i0 + sides, i1, i1, i0 + sides, i1 + sides]:
+					st.add_index(v)
+	st.generate_normals()
+	_tent_mesh = st.commit()
+	return _tent_mesh
 
 
 func is_available() -> bool:
@@ -129,11 +183,24 @@ func _physics_process(dt: float) -> void:
 				intensity = 0.0
 				visible = false
 				Game.inst.mote_restored(self)
-	_cilia.rotation += Vector3(0.7, 1.3, 0.4) * dt
+	# Swims by pulsing its bell (quicker when it moves); upright to its ball, leaning a little into
+	# its motion; its tentacles trail behind (mote_limb.gdshader).
+	var spd := vel.length()
+	_swim += dt * (3.0 + spd * 4.0)
+	var up := ball.up_at(global_position)
+	var lean := (vel - up * vel.dot(up)) * 0.25
+	var bup := (up + lean.limit_length(0.5)).normalized()
+	var bx := bup.cross(Vector3.FORWARD if absf(bup.z) < 0.9 else Vector3.RIGHT).normalized()
+	_body.global_basis = Basis(bx, bup, bx.cross(bup)).orthonormalized()
+	var squeeze := sin(_swim) * 0.12
+	_bell.scale = Vector3(1.0 + squeeze, 1.0 - squeeze * 1.3, 1.0 + squeeze)
+	_limbs.set_instance_shader_parameter("drag", (_body.global_basis.inverse() * vel).limit_length(2.5))
 	var pulse := 0.85 + 0.15 * sin(_t * 3.1) + 0.05 * sin(_t * 11.0)
-	_core.scale = Vector3.ONE * pulse
+	_core.scale = Vector3.ONE * 0.6 * pulse
 	if state == "wander":
 		intensity = pulse
+	_bell.set_instance_shader_parameter("glow", intensity)
+	_limbs.set_instance_shader_parameter("glow", intensity)
 
 
 func _update_wander(dt: float) -> void:

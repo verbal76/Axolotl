@@ -63,14 +63,15 @@ func _build_light() -> void:
 	sun.shadow_enabled = true
 	# A modest map for a phone (set here, not in the project settings, so an update carries it).
 	RenderingServer.directional_shadow_atlas_set_size(2048, true)
-	# The cheapest soft filter: no noisy sampling (there is no temporal smoothing on a phone).
-	RenderingServer.directional_soft_shadow_filter_set_quality(RenderingServer.SHADOW_QUALITY_SOFT_VERY_LOW)
+	# Hard-edged sampling: soft filters dither (there is no temporal smoothing on a phone to hide
+	# it); the water's haze softens the look instead.
+	RenderingServer.directional_soft_shadow_filter_set_quality(RenderingServer.SHADOW_QUALITY_HARD)
 	sun.directional_shadow_mode = DirectionalLight3D.SHADOW_PARALLEL_2_SPLITS
 	sun.directional_shadow_max_distance = 42.0
 	sun.directional_shadow_split_1 = 0.3
 	sun.shadow_blur = 0.8
-	sun.shadow_bias = 0.06
-	sun.shadow_normal_bias = 1.2
+	sun.shadow_bias = 0.1
+	sun.shadow_normal_bias = 2.0
 	sun.light_cull_mask = 0xFFFFF & ~(1 << (ROOM_LAYER - 1))
 	add_child(sun)
 	light_params["lamp_dir"] = Basis.from_euler(sun.rotation).z.normalized()
@@ -119,6 +120,9 @@ func _build_gravel() -> void:
 	pebble_mat.set_shader_parameter("gravel_tex", GRAVEL_TEX)
 	pebble_mat.set_shader_parameter("grime_tex", GRIME_TEX)
 	pebble_mat.set_shader_parameter("tile", 0.35)
+	pebble_mat.set_shader_parameter("pebble", true)
+	for m in [gravel_mat, pebble_mat]:
+		m.set_shader_parameter("lamp_dir", light_params["lamp_dir"])
 	var mm := MultiMesh.new()
 	mm.transform_format = MultiMesh.TRANSFORM_3D
 	var sm := SphereMesh.new()
@@ -559,12 +563,14 @@ func apply(g: float) -> void:
 	clean = g
 	var e := ease(g, 0.8)
 	# Even clear water keeps some haze, so the far glass and the room recede (Expansion 6).
-	env.fog_density = lerpf(0.017, 0.0055, e)
+	env.fog_density = lerpf(0.017, 0.007, e)
 	env.fog_light_color = Color(0.2, 0.26, 0.17).lerp(Color(0.24, 0.45, 0.52), e)
 	env.background_color = env.fog_light_color
 	env.ambient_light_color = Color(0.45, 0.5, 0.38).lerp(Color(0.5, 0.7, 0.75), e)
-	env.ambient_light_energy = lerpf(0.55, 0.8, e)
-	sun.light_energy = lerpf(0.75, 1.2, e)
+	# Healed, the light has a direction (Expansion 6): the ceiling light carries the image and the
+	# ambient stays low, so forms model and shade instead of glowing flat.
+	env.ambient_light_energy = lerpf(0.55, 0.62, e)
+	sun.light_energy = lerpf(0.75, 1.4, e)
 	sun.light_color = Color(0.85, 0.92, 0.75).lerp(Color(0.97, 1.0, 0.97), e)
 	# Clear water and glass: light carries further in, shadows read more crisply, and the window's
 	# daylight comes through the side glass.
@@ -579,6 +585,8 @@ func apply(g: float) -> void:
 				b.set_field_param("clarity", e)
 	gravel_mat.set_shader_parameter("clean", e)
 	pebble_mat.set_shader_parameter("clean", e)
+	gravel_mat.set_shader_parameter("clarity", e)
+	pebble_mat.set_shader_parameter("clarity", e)
 	for m in glass_mats:
 		m.set_shader_parameter("clean", g)
 		m.set_shader_parameter("water_density", env.fog_density)

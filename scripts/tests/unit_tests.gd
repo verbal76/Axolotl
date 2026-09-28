@@ -383,7 +383,12 @@ func _test_vegetation() -> void:
 		p.bot_input = Vector2.ZERO
 		dist.append(from.distance_to(p.global_position))
 	t.check("veg_does_not_slow_or_block", dist[1] > dist[0] * 0.85, "open %.2f m, reeds %.2f m in 1 s" % [dist[0], dist[1]])
-	# The wake follows him, and is stronger at speed.
+	# The wake follows him, and is stronger at speed. (His own wake: the reed bed is a stalker's
+	# habitat, and one pouncing on him would swamp it; creature wakes have their own tests.)
+	g.ecosystem.set_physics_process(false)
+	for c in g.ecosystem.active:
+		c.set_active(false)
+	g.ecosystem.active = []
 	place_at(0, b.surface_point(reeds, 0.2), -MossBall.frame_at(reeds, 0.0).x)
 	await t.seconds(1.5)
 	var rest := _bend_near(p.body_center(), 0.8, 2.2)
@@ -406,6 +411,7 @@ func _test_vegetation() -> void:
 	var ahead := g.wake.bend_at(b, b.surface_point(b.up_at(p.head_position() + p.facing * 0.5), 0.0), 2.2).length()
 	t.check("wake_follows_axolotl", run > 0.8 and far < 0.01 and ahead > 0.3, "around him %.2f, 5 m away %.3f, just ahead %.2f" % [run, far, ahead])
 	t.check("wake_grows_with_speed", rest < creep and creep < run * 0.85 and rest < 0.6, "standing %.2f, creeping %.2f, running %.2f" % [rest, creep, run])
+	g.ecosystem.set_physics_process(true)
 	# Behind him the plants recover progressively; when he stops, the wake settles and stays settled.
 	var passed := p.global_position - p.facing * 1.2
 	var just := g.wake.bend_at(b, b.surface_point(b.up_at(passed), 0.0), 2.2).length()
@@ -1001,12 +1007,14 @@ func _test_ambient() -> void:
 	g.audio.set_ball(b.index, false)
 	var tuck: float = await _until(func(): return sn.tuck > 0.9, 2.0)
 	t.check("snail_tucks_in_when_near", tuck >= 0.0, "")
-	# A hopper springs up its climb ahead of him.
+	# A hopper springs up its climb ahead of him: settled on its step, then he lands on its leaf (as
+	# a player climbing up to it does).
 	var hp_ := _crit("hopper", 5) as LeafHopper
 	b = hp_.ball
+	await _until(func(): return hp_._hop < 0.0 and hp_._rest <= 0.0, 3.0)
 	var i0 := hp_.index
 	var h0 := b.altitude(hp_.global_position)
-	place_at(b.index, hp_.global_position + b.up_at(hp_.global_position) * 0.3 + MossBall.frame_at(b.up_at(hp_.global_position), 0).z * 1.5, -MossBall.frame_at(b.up_at(hp_.global_position), 0).z)
+	place_at(b.index, hp_.global_position + b.up_at(hp_.global_position) * 1.0, -MossBall.frame_at(b.up_at(hp_.global_position), 0).z)
 	await _until(func(): return hp_.index != i0 and hp_._hop < 0.0, 3.0)
 	t.check("hopper_leads_up_the_climb", hp_.index > i0 and b.altitude(hp_.global_position) > h0 + 0.5, "step %d -> %d, %.1f -> %.1f m" % [i0, hp_.index, h0, b.altitude(hp_.global_position)])
 	# Glow-worms dim and draw up near him.
@@ -3488,5 +3496,5 @@ func _test_all_clear() -> void:
 	t.check("finish_saved", on_disk["run"]["clock"]["state"] == "finished" and absf(float(on_disk["run"]["clock"]["finish_s"]) - fin) < 1e-6,
 			"on disk: state %s, finish %s; in play: finish %s; last save %s, read only %s, path %s" % [on_disk["run"]["clock"]["state"],
 			str(on_disk["run"]["clock"]["finish_s"]), str(fin), g.run_save.last_save_result, g.run_save.read_only, g.run_save.path])
-	# (Expansion 6: clear water keeps a little haze, 0.0055, so the far glass and room recede.)
-	t.check("aquarium_fully_clean", is_equal_approx(g.aquarium.clean, 1.0) and g.env.fog_density < 0.006, "fog %.4f" % g.env.fog_density)
+	# (Expansion 6: clear water keeps a little haze, 0.007, so the far glass and room recede.)
+	t.check("aquarium_fully_clean", is_equal_approx(g.aquarium.clean, 1.0) and g.env.fog_density < 0.0075, "fog %.4f" % g.env.fog_density)
