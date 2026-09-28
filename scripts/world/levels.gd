@@ -42,7 +42,8 @@ static func _materials(lb: LevelBuilder, stem_a: Color, stem_b: Color, leaf_a: C
 	lb.stem_mat = b.make_plant_material(stem_a, stem_b)
 	lb.leaf_mat = b.make_plant_material(leaf_a, leaf_b, {"vein": 1.0})
 	lb.shell_mat = b.make_moss_material({"fuzz": 0.0})
-	lb.strand_mat = b.make_veg_material(b.palette["moss_healthy_a"], b.palette["moss_healthy_b"], {"sway": 0.08, "impulse_gain": 2.2, "cam_fade": 1.2})
+	lb.strand_mat = b.make_veg_material(b.palette["moss_healthy_a"], b.palette["moss_healthy_b"], {"sway": 0.08, "impulse_gain": 2.2, "cam_fade": 1.2,
+			"wake_gain": 1.0, "plant_height": 2.4})
 
 
 static func _vortex_dir(from_i: int, to_i: int) -> Vector3:
@@ -55,6 +56,42 @@ static func _latlon(v: Vector3) -> Vector2:
 
 static func leaf_mid(xf: Transform3D, along: float, side: float) -> Transform3D:
 	return Transform3D(xf.basis, xf * Vector3(side, 0.05, -along))
+
+
+## Where new vegetation must not grow on this ball, so what matters stays readable: blooms, motes
+## (a small clearing), burrow holes, cave mouths, the mounds (platforms), brittle moss and the
+## vortex mouths; plus `extra` [[dir, degrees], ...]. Returns Callable(dir) -> true to keep clear.
+static func _veg_keep_clear(lb: LevelBuilder, extra: Array = []) -> Callable:
+	var b := lb.ball
+	var deg := func(m: float) -> float: return rad_to_deg(m / b.radius)
+	var list: Array = extra.duplicate()
+	for bl in b.blooms:
+		list.append([bl.dir, deg.call(1.6)])
+	for m in b.motes:
+		list.append([m.home_dir(), deg.call(1.8)])
+	for h in b.food_spots:
+		list.append([h["dir"], deg.call(0.9)])
+	for c in b.crumbles:
+		list.append([b.up_at(c._home.origin), deg.call(1.8)])
+	for other in [b.index - 1, b.index + 1]:
+		if other >= 0 and other < 3:
+			list.append([_vortex_dir(b.index, other), 6.0])
+	for h in lb.bot_hints:
+		if h.has("cave"):
+			list.append([b.up_at(h["door"]), deg.call(3.5)])
+	for body in lb.root.get_children():
+		if body is StaticBody3D and body.get_meta("grounded", "") == "cushion":
+			list.append([b.up_at(body.global_position), deg.call(float(body.get_meta("radius")) * 1.9)])
+	return func(d: Vector3) -> bool: return _near_any(d, list)
+
+
+## Dense stands with clearings: Callable(dir) -> true where a stand grows (smooth noise over the
+## ball above `threshold`, about half the surface for threshold -0.15). Deterministic per seed.
+static func _stands(seed_v: int, threshold: float) -> Callable:
+	var n := FastNoiseLite.new()
+	n.seed = seed_v
+	n.frequency = 1.6
+	return func(d: Vector3) -> bool: return n.get_noise_3dv(d) > threshold
 
 
 static func _near_any(dir: Vector3, list: Array) -> bool:
@@ -155,11 +192,19 @@ static func _ball1(lb: LevelBuilder) -> void:
 	_holes(lb, 12, 101, [[MossBall.dir_ll(72, 0), 22], [MossBall.dir_ll(26, -104), 14]])
 
 	# Vegetation: soft velvety marimo moss, short plants and broad leaves.
-	var veg := b.make_veg_material(Color(0.12, 0.4, 0.1), Color(0.5, 0.8, 0.28), {"sway": 0.1})
+	var veg := b.make_veg_material(Color(0.12, 0.4, 0.1), Color(0.5, 0.8, 0.28), Vegetation.family_params("short", 0.34))
 	b.scatter(MeshLib.tuft_mesh(5, 0.07, 0.34, 0.12, 1, 3, 0.3), veg, 5200, 11, 0.8, 1.35)
-	var veg2 := b.make_veg_material(Color(0.1, 0.36, 0.1), Color(0.35, 0.7, 0.22), {"sway": 0.14})
-	b.scatter(MeshLib.broadleaf_mesh(4, 0.7, 2), veg2, 380, 12, 0.7, 1.25)
-	b.scatter(MeshLib.tuft_mesh(3, 0.1, 1.7, 0.1, 3, 5, 0.25), veg2, 160, 13, 0.8, 1.3)
+	var leaves := b.make_veg_material(Color(0.1, 0.36, 0.1), Color(0.35, 0.7, 0.22), Vegetation.family_params("short", 0.5).merged({"sway": 0.14, "wake_gain": 0.6}, true))
+	b.scatter(MeshLib.broadleaf_mesh(4, 0.7, 2), leaves, 380, 12, 0.7, 1.25)
+	var stalks := b.make_veg_material(Color(0.1, 0.36, 0.1), Color(0.35, 0.7, 0.22), Vegetation.family_params("medium", 1.7).merged({"sway": 0.14}, true))
+	b.scatter(MeshLib.tuft_mesh(3, 0.1, 1.7, 0.1, 3, 5, 0.25), stalks, 160, 13, 0.8, 1.3)
+	# Reactive vegetation (Expansion 3): medium growth through the meadow, and a tall reed bed in
+	# the southern hills where the large parasite roams (its movement shows in the reeds). The
+	# tutorial route, caves, blooms, motes, holes and platforms are kept clear.
+	var clear := _veg_keep_clear(lb, [[MossBall.dir_ll(66, 0), 16.0]])
+	Vegetation.field(b, "medium", MossBall.dir_ll(28, 10), 17.0, 900, 101, {"avoid": clear, "clumps": 8})
+	Vegetation.field(b, "tall", MossBall.dir_ll(-58, 34), 14.0, 950, 102, {"avoid": clear, "clumps": 6, "fill": 0.35, "edge": 0.7})
+	Vegetation.corridor(b, "medium", MossBall.dir_ll(4, 60), MossBall.dir_ll(-40, 30), 8.0, 260, 103, {"avoid": clear})
 
 
 # =========================================================================================
@@ -239,9 +284,14 @@ static func _ball2(lb: LevelBuilder) -> void:
 	# Long flowing grasses bending with the current; broad leaves; tall stems.
 	var avoid := [[MossBall.dir_ll(15, -20), 9.0], [_vortex_dir(1, 2), 5.0], [_vortex_dir(1, 0), 5.0]]
 	var ok := func(dd: Vector3) -> bool: return not _near_any(dd, avoid)
-	var grass := b.make_veg_material(Color(0.07, 0.36, 0.18), Color(0.45, 0.8, 0.32), {"sway": 0.3, "sway_speed": 1.8, "cam_fade": 2.0})
-	b.scatter(MeshLib.tuft_mesh(4, 0.1, 3.0, 0.15, 4, 6, 0.2), grass, 2100, 21, 0.7, 1.4, ok)
-	var short := b.make_veg_material(Color(0.06, 0.32, 0.16), Color(0.3, 0.66, 0.34), {"sway": 0.12})
+	# The long grass grows in dense stands with open clearings between them (same number of
+	# plants, so the stands are thicker), rather than an even carpet.
+	var stands := _stands(20, -0.15)
+	var ok_tall := func(dd: Vector3) -> bool: return ok.call(dd) and stands.call(dd)
+	var grass := b.make_veg_material(Color(0.07, 0.36, 0.18), Color(0.45, 0.8, 0.32),
+			Vegetation.family_params("tall", 3.0).merged({"sway": 0.3, "sway_speed": 1.8, "cam_fade": 2.0}, true))
+	b.scatter(MeshLib.tuft_mesh(4, 0.1, 3.0, 0.15, 4, 6, 0.2), grass, 2100, 21, 0.7, 1.4, ok_tall)
+	var short := b.make_veg_material(Color(0.06, 0.32, 0.16), Color(0.3, 0.66, 0.34), Vegetation.family_params("short", 0.4).merged({"sway": 0.12}, true))
 	b.scatter(MeshLib.tuft_mesh(5, 0.07, 0.4, 0.12, 5, 3, 0.3), short, 3200, 22, 0.8, 1.3)
 	b.scatter(MeshLib.broadleaf_mesh(4, 0.9, 7), short, 260, 23, 1.0, 1.6, ok)
 	var rng := RandomNumberGenerator.new()
@@ -431,9 +481,11 @@ static func _ball3(lb: LevelBuilder) -> void:
 			var xf := b.xform_on_dir(dd, y, rng.randf() * 360.0)
 			lb.leaf_xf(xf.translated_local(Vector3(0, 0, -0.3)), rng.randf_range(3.0, 5.5), rng.randf_range(2.0, 3.4), y < 9.0)
 	var ok := func(dd: Vector3) -> bool: return not _near_any(dd, keep.slice(0, 4))
-	var tall := b.make_veg_material(Color(0.06, 0.3, 0.06), Color(0.4, 0.7, 0.16), {"sway": 0.16, "cam_fade": 2.4})
-	b.scatter(MeshLib.tuft_mesh(3, 0.18, 4.2, 0.2, 5, 6, 0.25), tall, 1300, 31, 0.8, 1.4, ok)
-	var fern := b.make_veg_material(Color(0.05, 0.28, 0.06), Color(0.3, 0.62, 0.14), {"sway": 0.1, "cam_fade": 1.6})
+	var stands := _stands(30, -0.2)
+	var ok_tall := func(dd: Vector3) -> bool: return ok.call(dd) and stands.call(dd)
+	var tall := b.make_veg_material(Color(0.06, 0.3, 0.06), Color(0.4, 0.7, 0.16), Vegetation.family_params("tall", 4.2).merged({"cam_fade": 2.4}, true))
+	b.scatter(MeshLib.tuft_mesh(3, 0.18, 4.2, 0.2, 5, 6, 0.25), tall, 1300, 31, 0.8, 1.4, ok_tall)
+	var fern := b.make_veg_material(Color(0.05, 0.28, 0.06), Color(0.3, 0.62, 0.14), Vegetation.family_params("medium", 1.2).merged({"sway": 0.1, "cam_fade": 1.6, "wake_gain": 0.8}, true))
 	b.scatter(MeshLib.broadleaf_mesh(7, 1.4, 6), fern, 520, 32, 1.0, 1.8, ok)
-	var short := b.make_veg_material(Color(0.05, 0.26, 0.05), Color(0.3, 0.6, 0.14), {"sway": 0.1})
+	var short := b.make_veg_material(Color(0.05, 0.26, 0.05), Color(0.3, 0.6, 0.14), Vegetation.family_params("short", 0.4))
 	b.scatter(MeshLib.tuft_mesh(5, 0.07, 0.4, 0.12, 8, 3, 0.3), short, 3200, 34, 0.8, 1.3)

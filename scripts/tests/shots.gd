@@ -57,10 +57,26 @@ func run(runner) -> void:
 				g.cam.snap_behind()
 				await t.seconds(1.2)
 				await t.shot("cave_b%d_inside" % (b.index + 1))
+	if only == "" or only == "veg":
+		# Vegetation: walk into each kind of growth, shot mid-stride (the wake) and after stopping.
+		var views := [[0, 29.0, 9.0, "meadow_medium"], [0, -59.0, 31.0, "reeds_tall"], [0, 45.0, 40.0, "short"]]
+		for v in views:
+			var b := g.balls[v[0]]
+			var at := MossBall.dir_ll(v[1], v[2])
+			g.player.place(b, b.surface_point(at, 0.2), -MossBall.frame_at(at, 0.0).z)
+			g.cam.snap_behind()
+			g.player.use_bot_input = true
+			g.player.bot_input = Vector2(0.1, 0.5)
+			await t.seconds(0.9)
+			await t.shot("veg_%s_moving" % v[3])
+			g.player.bot_input = Vector2.ZERO
+			await t.seconds(2.5)
+			await t.shot("veg_%s_stopped" % v[3])
+		g.player.use_bot_input = false
 	if only == "perf":
 		# Rendering cost at fixed views: frame time (software renderer here, so a proxy for GPU
 		# fill cost, not phone numbers), draw calls, triangles and video memory.
-		var views := [[0, 66.0, 0.0, 50.0], [0, 10.0, 30.0, 0.0], [1, 10.0, 70.0, 0.0], [2, 10.0, 110.0, 0.0]]
+		var views := [[0, 66.0, 0.0, 50.0], [0, 10.0, 30.0, 0.0], [1, 10.0, 70.0, 0.0], [2, 10.0, 110.0, 0.0], [0, -59.0, 31.0, 0.0], [1, 30.0, -20.0, 0.0]]
 		for v in views:
 			var b := g.balls[v[0]]
 			var at := MossBall.dir_ll(v[1], v[2])
@@ -244,6 +260,9 @@ func _moments(g: Game) -> void:
 
 
 func _perf_view(label: String) -> void:
+	# Measured while the axolotl walks (movers active, the vegetation wake running).
+	t.g.player.use_bot_input = true
+	t.g.player.bot_input = Vector2(0.3, 0.5)
 	await t.seconds(1.0)
 	await RenderingServer.frame_post_draw
 	var t0 := Time.get_ticks_usec()
@@ -254,3 +273,4 @@ func _perf_view(label: String) -> void:
 			Performance.get_monitor(Performance.RENDER_TOTAL_DRAW_CALLS_IN_FRAME),
 			Performance.get_monitor(Performance.RENDER_TOTAL_PRIMITIVES_IN_FRAME),
 			Performance.get_monitor(Performance.RENDER_VIDEO_MEM_USED) / 1048576.0])
+	t.g.player.bot_input = Vector2.ZERO

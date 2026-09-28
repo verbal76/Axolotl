@@ -14,7 +14,7 @@ func run(runner) -> void:
 	p.use_bot_input = true
 	await t.seconds(0.5)
 	var only: String = Settings.test_args.get("only", "")
-	for name_ in ["_test_startup", "_test_ota_and_version", "_test_mesh_winding", "_test_terrain", "_test_terrain_grounded", "_test_no_floating_platforms", "_test_parasite_locomotion", "_test_placements", "_test_tutorial_route", "_test_sphere_walk", "_test_jump_and_burst", "_test_coyote_and_buffer", "_test_swipe_direction_and_stages", "_test_hard_landing", "_test_food", "_test_food_reach", "_test_darter_and_burrower", "_test_food_repopulates", "_test_motes", "_test_checkpoint_and_regen", "_test_crumble", "_test_restoration_continuity", "_test_vortex", "_test_current", "_test_canopy", "_test_canopy_plain_jumps", "_test_caves", "_test_mounds", "_test_music", "_test_run_clock", "_test_completion_catalog", "_test_run_save_file", "_test_run_timer_live", "_test_run_continue", "_phase_continue_write", "_phase_continue_read", "_test_upgrades", "_test_ui", "_test_all_clear"]:
+	for name_ in ["_test_startup", "_test_ota_and_version", "_test_mesh_winding", "_test_terrain", "_test_terrain_grounded", "_test_no_floating_platforms", "_test_parasite_locomotion", "_test_placements", "_test_tutorial_route", "_test_sphere_walk", "_test_jump_and_burst", "_test_coyote_and_buffer", "_test_swipe_direction_and_stages", "_test_hard_landing", "_test_food", "_test_food_reach", "_test_darter_and_burrower", "_test_food_repopulates", "_test_motes", "_test_checkpoint_and_regen", "_test_crumble", "_test_restoration_continuity", "_test_vortex", "_test_current", "_test_canopy", "_test_canopy_plain_jumps", "_test_caves", "_test_mounds", "_test_vegetation", "_test_music", "_test_run_clock", "_test_completion_catalog", "_test_run_save_file", "_test_run_timer_live", "_test_run_continue", "_phase_continue_write", "_phase_continue_read", "_test_upgrades", "_test_ui", "_test_all_clear"]:
 		# "_phase_*" tests are halves of a relaunch test: they run only when asked for by name
 		# (in a child process started by _test_run_continue).
 		if name_.begins_with("_phase") and only != name_:
@@ -310,6 +310,187 @@ func _ray_to(space: PhysicsDirectSpaceState3D, from: Vector3, to: Vector3, body:
 			return hit
 		excl.append(hit["rid"])
 	return {}
+
+
+# --- vegetation (Expansion 3) ---------------------------------------------------------------
+
+func _veg_fields(b: MossBall, family := "") -> Array:
+	var out := []
+	for c in b.find_child("Vegetation", false, false).get_children():
+		if c.has_meta("veg_family") and (family == "" or c.get_meta("veg_family") == family):
+			out.append(c)
+	return out
+
+
+## Largest wake bend on plants of height `h` around `centre` (sampled on a small disc).
+func _bend_near(centre: Vector3, reach: float, h := 1.0) -> float:
+	var b := p.ball
+	var up := b.up_at(centre)
+	var fx := MossBall.frame_at(up, 0.0)
+	var best := 0.0
+	for i in 9:
+		for j in 9:
+			var off := (fx.x * (i - 4) + fx.z * (j - 4)) * (reach / 4.0)
+			var base := b.surface_point(b.up_at(centre + off), 0.0)
+			best = maxf(best, g.wake.bend_at(b, base, h).length())
+	return best
+
+
+## Reactive vegetation: families placed on the terrain and clear of what matters, no collision,
+## and the wake (body, bow, tail and trail, plus parasites) behaves: follows the axolotl, grows
+## with speed and with a tail whip, settles when he stops, recovers behind him, is the same at
+## any frame rate, and never touches the global random generator.
+func _test_vegetation() -> void:
+	var b := g.balls[0]
+	var lb: LevelBuilder = b.get_meta("builder")
+	var fams := {}
+	var attached := true
+	var worst_alt := 0.0
+	var clear_ok := true
+	var clear := Levels._veg_keep_clear(lb)
+	for f in _veg_fields(b):
+		fams[f.get_meta("veg_family")] = fams.get(f.get_meta("veg_family"), 0) + (f.get_meta("veg_transforms") as Array).size()
+		for x in f.get_meta("veg_transforms"):
+			var w: Vector3 = b.global_transform * (x as Transform3D).origin
+			var alt := b.altitude(w)
+			worst_alt = maxf(worst_alt, absf(alt + 0.05))
+			attached = attached and absf(alt + 0.05) < 0.03
+			clear_ok = clear_ok and not clear.call(b.up_at(w))
+	t.check("veg_families_placed", fams.get("medium", 0) >= 800 and fams.get("tall", 0) >= 800, str(fams))
+	t.check("veg_rooted_on_terrain", attached, "worst %.3f m off the ground" % worst_alt)
+	t.check("veg_keeps_clear_of_landmarks", clear_ok, "blooms, motes, holes, cave mouths, platforms, brittle moss, vortices")
+	var bodies := 0
+	for bb in g.balls:
+		for n in bb.find_child("Vegetation", false, false).find_children("*", "CollisionObject3D", true, false):
+			bodies += 1
+	t.check("veg_has_no_collision", bodies == 0, "%d collision objects" % bodies)
+	# Walking through the reeds is as quick as walking on open ground (no invisible barriers).
+	var reeds := MossBall.dir_ll(-59, 31)
+	var open_ := MossBall.dir_ll(-10, -40)
+	var dist := []
+	for at in [open_, reeds]:
+		place_at(0, b.surface_point(at, 0.2), -MossBall.frame_at(at, 0.0).x)
+		p.invuln_t = 999
+		await t.seconds(0.3)
+		var from := p.global_position
+		p.bot_input = Vector2(0, 0.6)
+		await t.seconds(1.0)
+		p.bot_input = Vector2.ZERO
+		dist.append(from.distance_to(p.global_position))
+	t.check("veg_does_not_slow_or_block", dist[1] > dist[0] * 0.85, "open %.2f m, reeds %.2f m in 1 s" % [dist[0], dist[1]])
+	# The wake follows him, and is stronger at speed.
+	place_at(0, b.surface_point(reeds, 0.2), -MossBall.frame_at(reeds, 0.0).x)
+	await t.seconds(1.5)
+	var rest := _bend_near(p.body_center(), 0.8, 2.2)
+	# 5 m from him, at a spot no parasite is near (they disturb plants too).
+	var far := INF
+	for k in 12:
+		var spot := p.global_position + p.facing.rotated(p.up, TAU * k / 12.0) * 5.0
+		var lonely := true
+		for pp in b.parasites:
+			lonely = lonely and (not pp.is_alive() or pp.global_position.distance_to(spot) > 3.0)
+		if lonely:
+			far = g.wake.bend_at(b, b.surface_point(b.up_at(spot), 0.0), 2.2).length()
+			break
+	p.bot_input = Vector2(0, 0.3)
+	await t.seconds(0.8)
+	var creep := _bend_near(p.body_center(), 0.8, 2.2)
+	p.bot_input = Vector2(0, 1.0)
+	await t.seconds(0.8)
+	var run := _bend_near(p.body_center(), 0.8, 2.2)
+	var ahead := g.wake.bend_at(b, b.surface_point(b.up_at(p.head_position() + p.facing * 0.5), 0.0), 2.2).length()
+	t.check("wake_follows_axolotl", run > 0.8 and far < 0.01 and ahead > 0.3, "around him %.2f, 5 m away %.3f, just ahead %.2f" % [run, far, ahead])
+	t.check("wake_grows_with_speed", rest < creep and creep < run * 0.85 and rest < 0.6, "standing %.2f, creeping %.2f, running %.2f" % [rest, creep, run])
+	# Behind him the plants recover progressively; when he stops, the wake settles and stays settled.
+	var passed := p.global_position - p.facing * 1.2
+	var just := g.wake.bend_at(b, b.surface_point(b.up_at(passed), 0.0), 2.2).length()
+	p.bot_input = Vector2.ZERO
+	await t.seconds(0.6)
+	var mid := g.wake.bend_at(b, b.surface_point(b.up_at(passed), 0.0), 2.2).length()
+	await t.seconds(1.4)
+	var later := g.wake.bend_at(b, b.surface_point(b.up_at(passed), 0.0), 2.2).length()
+	var settled1 := _bend_near(p.body_center(), 0.8, 2.2)
+	await t.seconds(2.0)
+	var settled2 := _bend_near(p.body_center(), 0.8, 2.2)
+	t.check("wake_recovers_behind", just > 0.3 and mid < just and later < just * 0.15, "passed %.2f, 0.6 s %.2f, 2 s %.2f" % [just, mid, later])
+	t.check("wake_settles_when_stopped", g.wake._trail.is_empty() and absf(settled2 - settled1) < 0.02 and settled2 <= rest + 0.05,
+			"%.2f then %.2f (standing level %.2f)" % [settled1, settled2, rest])
+	# The tail: a swipe sweeps the plants beside the tail far harder than standing still.
+	var tail_before := 0.0
+	var tail_during := 0.0
+	var sk := p.model.skeleton
+	var tail_at := func() -> Vector3: return sk.global_transform * sk.get_bone_global_pose(9).origin
+	tail_before = _bend_near(tail_at.call(), 0.9, 2.2)
+	await controls_ready()
+	Input.action_press("swipe")
+	for f in 20:
+		await t.frames(1)
+		if f == 1:
+			Input.action_release("swipe")
+		tail_during = maxf(tail_during, _bend_near(tail_at.call(), 0.9, 2.2))
+	Input.action_release("swipe")
+	t.check("wake_tail_whip_sweeps", tail_during > tail_before + 0.3, "beside the tail %.2f standing, %.2f in a whip" % [tail_before, tail_during])
+	# Other movers: a parasite nearby disturbs the plants around it too. (The wake follows the
+	# parasites nearest the axolotl, so probe beside the nearest one, at least 3 m from him.)
+	# (Earlier tests clear ball 1's parasites, so use a live one on any ball.)
+	var par: Parasite = null
+	for bb in g.balls:
+		for pp in bb.parasites:
+			if par == null and pp.is_alive() and pp.visible and bb.altitude(pp.global_position) < 0.5:
+				par = pp
+	var par_bend := 0.0
+	var par_note := "no ground parasite left"
+	if par:
+		b = par.ball
+		place_at(b.index, b.surface_point(b.up_at(par.global_position + MossBall.frame_at(b.up_at(par.global_position), 0).x * 6.0), 0.2), p.facing)
+		p.invuln_t = 999
+		await t.seconds(0.4)
+		var nearest: Parasite = null
+		for pp in b.parasites:
+			if pp.is_alive() and pp.visible and (nearest == null or pp.global_position.distance_to(p.global_position) < nearest.global_position.distance_to(p.global_position)):
+				nearest = pp
+		var near_pts := 0
+		for i in g.wake.count:
+			var pa: Vector4 = g.wake.points_a[i]
+			if Vector3(pa.x, pa.y, pa.z).distance_to(nearest.global_position) < 1.5:
+				near_pts += 1
+		par_note = "nearest parasite %.1f m from him, %.2f m up, state %s, %d wake points on it" % [nearest.global_position.distance_to(p.global_position),
+				b.altitude(nearest.global_position), nearest.state, near_pts]
+		if nearest.global_position.distance_to(p.global_position) > 3.0 and b.altitude(nearest.global_position) < 0.5:
+			par_bend = g.wake.bend_at(b, b.surface_point(b.up_at(nearest.global_position + MossBall.frame_at(b.up_at(nearest.global_position), 0).z * 0.25), 0.0), 1.0).length()
+	t.check("wake_parasites_disturb_plants", par != null and par_bend > 0.15, "%.2f beside a parasite (%s)" % [par_bend, par_note])
+	# Frame rate: the same walk simulated at 30 and 60 fps leaves the same wake.
+	b = g.balls[0]
+	g.wake.set_process(false)
+	var probes := []
+	for fps in [30, 60]:
+		place_at(0, b.surface_point(open_, 0.2), -MossBall.frame_at(open_, 0.0).x)
+		p.set_physics_process(false)
+		g.wake._trail.clear()
+		g.wake._prev.clear()
+		g.wake._speed_s = 0.0
+		var start := p.global_position
+		var dir := p.facing
+		var dt: float = 1.0 / fps
+		for k in fps:
+			p.velocity = dir * 4.0
+			p.global_position = start + dir * 4.0 * dt * (k + 1)
+			g.wake.update(dt)
+		var probe := b.surface_point(b.up_at(start + dir * 2.0 + MossBall.frame_at(p.up, 0).x * 0.4), 0.0)
+		probes.append(g.wake.bend_at(b, probe, 1.0).length())
+		p.set_physics_process(true)
+	g.wake.set_process(true)
+	p.velocity = Vector3.ZERO
+	t.check("wake_frame_rate_independent", absf(probes[0] - probes[1]) < 0.12 * maxf(probes[0], probes[1]) and probes[1] > 0.04, "30 fps %.3f, 60 fps %.3f" % [probes[0], probes[1]])
+	# Cosmetic only: building vegetation never moves the global random sequence gameplay uses.
+	seed(77)
+	var a1 := randi()
+	seed(77)
+	var extra := Vegetation.field(b, "medium", MossBall.dir_ll(0, 0), 3.0, 20, 5)
+	var a2 := randi()
+	for n in extra:
+		n.queue_free()
+	t.check("veg_leaves_gameplay_rng_alone", a1 == a2, "")
 
 
 # --- run timer, completion, run save ----------------------------------------------------

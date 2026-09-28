@@ -296,6 +296,21 @@ too straight, it's a perfect 90 into the ground" (the platforms).
 | E2-07 | Mobile performance measured | I+V | `--test=shots --only=perf` | `docs/TERRAIN.md` Performance |
 | E2-08 | Ships by OTA, no APK | I+V | game layer only; runtime r5 unchanged | dev-000019 (OTA publish #19, source `4461b84`, PCK `e0c2b637…eef249`, 8,796,124 bytes, baked, save schema 1): signature (pinned key), hash, size and inspector verified from public URLs; a b22 client downloads and stages it; `_test_caves` and `_test_mounds` pass run from the pack; Build & Verify #27 green with no APK build |
 
+## E3 — Expansion 3: reactive vegetation / cornfield movement (owner, 2026-09-28)
+
+Design and measurements: `docs/VEGETATION.md`.
+
+| ID | Requirement | Status | Implementation | Evidence |
+|---|---|---|---|---|
+| E3-01 | Vegetation reacts to the axolotl's body, direction, speed and tail (not one point): parts ahead, displaced beside, recovers behind; stops settle; frame-rate stable | I+V / needs phone | `Wake` (skeleton head/body/tail points, bow, exact-time trail) → `vegetation.gdshader` `wake_bend` | `wake_follows_axolotl`, `wake_grows_with_speed`, `wake_tail_whip_sweeps`, `wake_recovers_behind`, `wake_settles_when_stopped`, `wake_frame_rate_independent` |
+| E3-02 | Short, medium and tall families; the tall one can hide him, the movement tracks him | I+V / needs phone | `Vegetation.FAMILIES`, creased reed meshes; ball 1 medium meadow + corridor + tall reed bed; balls 2 and 3 long grass in stands | `veg_families_placed`; rendered shots |
+| E3-03 | Ambient motion, not synchronised | I+V / needs phone | per-plant hashed phase and pace, rolling gusts | shader; rendered |
+| E3-04 | Other movers disturb vegetation | I+V / needs phone | nearest 3 parasites add head and tail points | `wake_parasites_disturb_plants` |
+| E3-05 | Reusable placement for later expansions | I+V | `Vegetation.field`, `corridor`, `family_params`; `Levels._stands`, `_veg_keep_clear` | used for all new placement |
+| E3-06 | Readability: paths, caves, blooms, holes, platforms, hazards kept clear; open ground stays | I+V | keep-clear rule; patches, not carpets | `veg_keeps_clear_of_landmarks` |
+| E3-07 | No gameplay effect: no collision, no barriers, gameplay RNG untouched, save unaffected | I+V | cosmetic only | `veg_has_no_collision`, `veg_does_not_slow_or_block`, `veg_leaves_gameplay_rng_alone`; relaunch tests; playthroughs |
+| E3-08 | Mobile performance measured with movers | I+V | instancing, bounds early-out, reduced segments and visibility ranges | `docs/VEGETATION.md` Performance |
+
 ## Precedence notes
 
 - The reconciliation prompt's floor list repeats two items that the owner changed earlier today: "diegetic

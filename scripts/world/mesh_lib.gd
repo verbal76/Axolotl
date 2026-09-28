@@ -40,6 +40,51 @@ static func tuft_mesh(blades: int, width: float, height: float, spread: float, s
 	return st.commit()
 
 
+## A creased blade (a shallow V with a midrib, so it is not a flat card), curved and tapered, with a
+## little twist; for the medium and tall vegetation families.
+static func reed(st: SurfaceTool, xf: Transform3D, width: float, height: float, segs: int, curve: float, twist: float, tint: Color) -> void:
+	var prev: Array = []
+	for i in range(segs + 1):
+		var t := float(i) / segs
+		var w := width * (1.0 - t * 0.8) * (0.85 + 0.3 * sin(t * PI))
+		var z := curve * t * t * height
+		var y := t * height
+		var rot := Basis(Vector3.UP, twist * t)
+		var crease := w * 0.35
+		var row := [xf * (rot * Vector3(-w * 0.5, y, z)), xf * (rot * Vector3(0.0, y, z - crease)), xf * (rot * Vector3(w * 0.5, y, z))]
+		if i > 0:
+			var tp := t - 1.0 / segs
+			for half in 2:
+				var a0: Vector3 = prev[half]
+				var a1: Vector3 = prev[half + 1]
+				var b0: Vector3 = row[half]
+				var b1: Vector3 = row[half + 1]
+				var n := (b0 - a0).cross(a1 - a0).normalized()
+				for v in [[a0, tp], [a1, tp], [b1, t], [a0, tp], [b1, t], [b0, t]]:
+					st.set_normal(n)
+					st.set_color(tint)
+					st.set_uv(Vector2(0.5, v[1]))
+					st.add_vertex(v[0])
+		prev = row
+
+
+## A clump of reeds (medium/tall vegetation): `blades` creased blades from a small base spread,
+## leaning out a little, heights and curves varied.
+static func reed_clump(blades: int, width: float, height: float, spread: float, seed_v: int, segs := 5, curve := 0.25) -> ArrayMesh:
+	var rng := RandomNumberGenerator.new()
+	rng.seed = seed_v
+	var st := SurfaceTool.new()
+	st.begin(Mesh.PRIMITIVE_TRIANGLES)
+	for i in blades:
+		var a := rng.randf() * TAU
+		var p := Vector3(cos(a), 0, sin(a)) * sqrt(rng.randf()) * spread
+		var bs := Basis(Vector3.UP, rng.randf() * TAU) * Basis(Vector3.RIGHT, rng.randf_range(-0.2, 0.3))
+		var tint := Color.WHITE.darkened(rng.randf() * 0.3)
+		reed(st, Transform3D(bs, p), width * rng.randf_range(0.7, 1.25), height * rng.randf_range(0.6, 1.15), segs,
+				curve * rng.randf_range(0.4, 1.4), rng.randf_range(-0.8, 0.8), tint)
+	return st.commit()
+
+
 ## Broad-leaf aquatic plant: a few wide, rounded leaves on short stalks.
 static func broadleaf_mesh(leaves: int, size: float, seed_v: int) -> ArrayMesh:
 	var rng := RandomNumberGenerator.new()

@@ -24,6 +24,8 @@ var heal_targets: Array[float] = []
 var heal_speed: Array[float] = []
 var _heals_dirty := true
 var field_materials: Array[ShaderMaterial] = []
+## Vegetation materials only (they take the wake every frame).
+var veg_materials: Array[ShaderMaterial] = []
 
 # Restoration bookkeeping.
 var zones := {}
@@ -127,6 +129,7 @@ func make_veg_material(healthy_a: Color, healthy_b: Color, extra := {}) -> Shade
 	m.set_shader_parameter("current_strength", current_strength * 0.35)
 	for k in extra:
 		m.set_shader_parameter(k, extra[k])
+	veg_materials.append(m)
 	return register_material(m)
 
 
@@ -359,6 +362,11 @@ func _push_heals() -> void:
 		m.set_shader_parameter("ball_center", global_position)
 
 
+func set_veg_param(param: String, value: Variant) -> void:
+	for m in veg_materials:
+		m.set_shader_parameter(param, value)
+
+
 func set_field_param(param: String, value: Variant) -> void:
 	for m in field_materials:
 		m.set_shader_parameter(param, value)
@@ -489,6 +497,12 @@ func scatter(mesh: Mesh, mat: Material, count: int, seed_v: int, scale_min: floa
 		_veg_parent.add_child(mmi)
 		out.append(mmi)
 	return out
+
+
+## Adds an instanced vegetation node (Vegetation.field and friends) to this ball's vegetation,
+## so it is density-scaled with the rest.
+func add_vegetation(node: Node3D) -> void:
+	_veg_parent.add_child(node)
 
 
 ## Fraction of scattered vegetation instances kept visible (thermal scaling).

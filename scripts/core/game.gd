@@ -15,6 +15,8 @@ var aquarium: Aquarium
 var water_fx: WaterFX
 var sfx: Sfx
 var audio: AudioDirector
+## The movers' disturbance in the vegetation (cosmetic only).
+var wake: Wake
 var balls: Array[MossBall] = []
 var vortices: Array[Vortex] = []
 var player: Axolotl
@@ -144,6 +146,8 @@ func _build_world() -> void:
 	add_child(water_fx)
 	sfx = Sfx.new()
 	add_child(sfx)
+	wake = Wake.new()
+	add_child(wake)
 	audio = AudioDirector.new()
 	add_child(audio)
 
