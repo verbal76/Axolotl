@@ -107,9 +107,10 @@ static func _sprouts(lb: LevelBuilder, i: int) -> void:
 			Vegetation.family_params("medium", 1.0).merged({"sway": 0.2, "wake_gain": 0.8, "cam_fade": 1.4, "sprout": 1.0}, true))
 	var nodes: Array = []
 	nodes += b.scatter(MeshLib.stem_plant_mesh(5, 1.2, 700 + i, 7), stems, int(90 * area), 700 + i, 0.8, 1.6, crown, 45.0)
-	var ferns := b.make_veg_material(Color(0.12, 0.42, 0.1), Color(0.55, 0.85, 0.25), {"variegate": 1.0, "vari_style": float(i % 2),
-			"vari_edge": Color(0.95, 0.46, 0.62), "vari_stripe": Color(0.96, 0.94, 0.82)}.merged(
-			Vegetation.family_params("short", 0.6).merged({"sway": 0.18, "wake_gain": 0.7, "cam_fade": 1.2, "sprout": 1.0}, true))
+	# (Variegated: an earth star's pink margins and cream stripes, or a fire-and-ice white centre.)
+	var fern_p := Vegetation.family_params("short", 0.6).merged({"sway": 0.18, "wake_gain": 0.7, "cam_fade": 1.2, "sprout": 1.0,
+			"variegate": 1.0, "vari_style": float(i % 2), "vari_edge": Color(0.95, 0.46, 0.62), "vari_stripe": Color(0.96, 0.94, 0.82)}, true)
+	var ferns := b.make_veg_material(Color(0.12, 0.42, 0.1), Color(0.55, 0.85, 0.25), fern_p)
 	nodes += b.scatter(MeshLib.broadleaf_mesh(5, 1.0, 720 + i), ferns, int(45 * area), 720 + i, 0.8, 1.5, crown, 45.0)
 	# The crown itself: tall stem plants and big fern clumps over the top of the ball, large enough
 	# to shape its outline from across the tank (he walks through them like tall reeds).
