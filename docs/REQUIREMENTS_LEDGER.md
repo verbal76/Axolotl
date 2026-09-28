@@ -228,7 +228,7 @@ consolidate everything into ONE Mote app and ONE current APK (retire Mote Dev; k
 | S-14 | Real OTA download → activate → rollback on the phone with the current APK | needs phone | | needs b22 installed and the next OTA (any later push without `[skip ci]`) |
 | S-15 | iOS team ID for device builds | OPEN (owner input) | `export_presets.cfg` `AXOLOTL000` | iOS is built only as an unsigned simulator build; needs the owner's Apple team ID if iOS devices are wanted |
 
-## P — Phone playtest fixes (owner, 2026-09-27; delivered by OTA dev-000015)
+## P — Phone playtest fixes (owner, 2026-09-27; delivered by OTA dev-000015, P-06 by dev-000016)
 
 | ID | Requirement | Status | Implementation | Evidence |
 |---|---|---|---|---|
@@ -237,6 +237,7 @@ consolidate everything into ONE Mote app and ONE current APK (retire Mote Dev; k
 | P-03 | Centipede-like parasites move as articulated creatures (head leads, wave travels head→tail, turns curve the body, restrained idle, no twitch, no separation, frame-rate independent, deterministic) | I+V / needs phone | `Parasite._update_segments`: distance-driven travelling wave on the existing trail-following segments | 11 `parasite_*` checks (wave 0.089 m peak on a large parasite, tail lags by 64 frames, 30 vs 60 fps within 6 mm, 12–21 µs per creature); playthrough 12/12 on seeds 4242 and 7 |
 | P-04 | Deliver as the first real OTA past b22's bundled game; no new APK | I+V | OTA publish #15 (run 36361312212); Build & Verify #23 skipped the APK job (native layer unchanged) | dev-000015, source `637014d`, r5, PCK `4fc048be…c5bdfe` (4,859,880 bytes), baked; signature, pin, hash, inspector verified from public URLs; a b22 client downloads and stages it |
 | P-05 | CI builds a new APK only when the native layer changes | I+V | `build.yml` `native` job gates `android` | Build & Verify #23: "Android APK" skipped; tests green |
+| P-06 | Moss Ball 3 canopy: the spiral climb can be started from the ground and climbed with plain jumps (owner: "my daughter couldn't get to any of the higher leaves, the double jump isn't enough") | I+V / needs phone | `Levels._ball3` spiral: 16 leaves, 72° apart (5 per turn), first leaf 0.8 m + 1.0 m per step (was 10 leaves, 1.5 m + 1.6 m per step, 60° apart) | Root cause: first leaf ~1.6 m up and 1.6 m steps vs a 1.85 m plain-jump apex, so every step needed a precise jump + burst. Now first leaf 0.89 m, steps 1.00 m, headroom 1.87 m; `canopy_climb_with_plain_jumps` climbs all 16 leaves with one plain jump each; playthrough 12/12 (seeds 4242, 7). Delivered by OTA dev-000016 (source `346a0bc`, PCK `4ac0e085…2a4681`, 4,861,880 bytes, baked; verified from public URLs; a b22 client downloads it); Build & Verify #24 skipped the APK |
 
 ## Precedence notes
 

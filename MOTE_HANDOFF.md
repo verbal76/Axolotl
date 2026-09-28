@@ -19,7 +19,7 @@ kept below as history.
 | **Release commit** (APK + OTA source) | `104605727ab2bc48f6b0b6e2d56a0fd44127c5be` (`1046057`) |
 | **The one Android app** | **Mote**, `com.verbal76.axolotl`. The separate Mote Dev app is **retired** (owner, 2026-09-27). |
 | **Current APK** | **`mote-v0.1.0-b22.apk`** (artifact `mote-android-v0.1.0-b22`), Android build 22, bundled baseline `1046057` |
-| **Current OTA / channel pointer** | **`dev-000015`**, built from `637014d` (bridge + parasite fixes; the first OTA newer than b22's bundled game). dev-000014 = b22's own game |
+| **Current OTA / channel pointer** | **`dev-000016`**, built from `346a0bc` (ball 3 canopy climb; includes dev-000015's bridge + parasite fixes). dev-000014 = b22's own game |
 | Runtime | `android-godot-4.7.2-r5` |
 | Game version / save schema | `0.1.0` / `1` |
 | Requirement authority | `docs/REQUIREMENTS_LEDGER.md` (sections G, F, O, V, N, C, A, R, **S**) |
@@ -345,7 +345,12 @@ is expected; tap **Install anyway**.
 
 ## 11. Current OTA
 
-**Latest: `dev-000015`** (OTA publish #15, run 36361312212): source `637014dcd639bbd071d0b9be16efc2654eb794e2`,
+**Latest: `dev-000016`** (OTA publish #16, run 36363153615): source `346a0bc2d63a6d0dd99de9fb5af3daa7df092af2`,
+runtime r5, PCK `4ac0e08572d520623b160b929c3d0494116e5147f33d542f433d2f5eef2a4681` (4,861,880 bytes, shaders
+baked). Moss Ball 3 canopy (ledger P-06): 16 spiral leaves, first 0.89 m off the ground, 1.0 m steps, every
+step a plain jump. Verified from the public URLs; a b22 client downloads it. No APK (Build & Verify #24).
+
+Before it: `dev-000015` (OTA publish #15, run 36361312212): source `637014dcd639bbd071d0b9be16efc2654eb794e2`,
 runtime r5, PCK `4fc048be6af27eb9934f07dee57141a54a8c46bdebcdfc01e6b5dea13bc5bdfe` (4,859,880 bytes, shaders
 baked). Game-layer fixes from the phone playtest (ledger P): brittle-moss bridge caps grounded on stalks,
 cave-dome skirt, articulated parasite locomotion. Verified from the public URLs; a b22 client downloads it.
@@ -470,7 +475,9 @@ These are implemented but lack automated evidence. They are **not** unimplemente
 
 7. **After dev-000015 is active:** Moss Ball 1, east tower (the view of the playtest screenshot): the two brittle bridge caps stand on moss stalks down to the ground; Gill cannot walk under them; stepping on a cap makes the whole cap-and-stalk crumble, Gill drops to the ground, and it regrows once Gill moves away. Same on Moss Ball 2's south tower. Watch several parasites crawl, turn and stop: a wave should roll from head to tail, turns should curve the body, no stiff-stick sliding or twitching.
 
-Record results in the ledger (O-19, A-05, R-01, R-14, R-19, S-03, S-06, S-14, F-07, F-09, P-01, P-03) only with the owner's evidence.
+8. **After dev-000016 is active:** Moss Ball 3, the giant stem's canopy: the first spiral leaf is about knee-to-hip height for Gill and reachable with one normal jump from the ground; each next leaf is one normal jump up (no burst needed), all the way to the top leaves next to the canopy.
+
+Record results in the ledger (O-19, A-05, R-01, R-14, R-19, S-03, S-06, S-14, F-07, F-09, P-01, P-03, P-06) only with the owner's evidence.
 
 ## 17. Repository isolation
 
@@ -481,8 +488,8 @@ repository. Do not name, open or use any other game repository in Mote developme
 
 - **Released:** one Mote APK (b22, r5) with everything approved bundled, OTA on `dev`, channel pointer
   reconciled to dev-000014 (the APK's own game). CI green on `1046057`.
-- **Delivered after b22:** dev-000015 (phone-playtest fixes, ledger P), by OTA only.
-- **Next task:** the owner's phone checks (§16), including the startup numbers and the dev-000015 fixes.
+- **Delivered after b22:** dev-000015 (phone-playtest fixes, ledger P) and dev-000016 (ball 3 canopy climb, P-06), by OTA only.
+- **Next task:** the owner's phone checks (§16), including the startup numbers and the dev-000015/dev-000016 fixes.
 - **After that:** continue from the owner's feedback. Game-layer changes reach b22 by OTA on push
   (that push is also the first OTA a b22 phone downloads). Native changes need `--bump` and a new APK.
 
