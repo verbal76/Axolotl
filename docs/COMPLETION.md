@@ -65,9 +65,10 @@ The finishing floor stays at **58.5%** (restoration 45% + milestones 13.5%). The
   optional content. The floor is what a player gets if they skip all of it. It sits well below
   100% on purpose, so the percentage keeps meaning something after the credits.
 - **Real finishes land far above the floor.** The route to restore each ball passes blooms,
-  grotto mouths and creatures. The playthrough bot earns only what its route touches, and it still
-  finishes at 85–88% (table below). The gap from there to 100% is the hidden caves, the out-of-the-
-  way blooms and the guarded eels, which is the intended completionist content.
+  grotto mouths and creatures. The playthrough bot earns only what its route touches (which
+  includes every hidden cave), and it still finishes at 88–89% (table below). The gap from there to
+  100% is the out-of-the-way blooms and the cave eels, which is the intended completionist
+  content.
 - **Nothing can be farmed.** Each id counts once. Stalkers and puffers, which return, earn
   nothing. Only species discovered and guardians and eels defeated count.
 - **Raising the floor** would mean moving share from caves, blooms or wildlife into restoration.
@@ -92,13 +93,22 @@ by the door. Nothing is granted directly. Checks:
 
 | Seed | Normal finish | Finish time | What the 100% phase earned | 100% reached at | Deaths | Checks |
 |---|---|---|---|---|---|---|
-| 7 | 88.4% | 1875.02 s | 16 blooms, 4 eels, the eel species | 2935.9 s (game time) | 0 | 23/23 |
-| 4242 | 88.4% | 1678.60 s | 16 blooms, 4 eels, the eel species | 2661.5 s (game time) | 0 | 23/23 |
+| 7 | 87.8% | 1343.63 s | 17 blooms, 4 eels, the eel species | 2241.4 s (game time) | 0 | 23/23 |
+| 4242 | 89.4% | 1610.05 s | 14 blooms, 4 eels, the eel species | 2662.7 s (game time) | 0 | 23/23 |
 
-The finish time was unchanged through the 100% phase on both seeds. The proof found two real
-defects, both fixed in Expansion 6. One was a pearl in the small Hollow Grotto cave that rested on
-the cave's ceiling, out of reach (now `cave_rewards_on_their_top_ledge`). The other was a stall in
-the bot itself.
+(Final release code, with the Expansion 6 parasite combat, commit `1734ea2`.)
+
+The finish time was unchanged through the 100% phase on both seeds. The proof found real defects,
+all fixed in Expansion 6:
+- a pearl in the small Hollow Grotto cave rested on the cave's ceiling, out of reach
+  (`cave_rewards_on_their_top_ledge`);
+- after the parasite combat upgrade, a spitter backing away climbed onto a jungle stem's top,
+  8.9 m up, so its ball could never be fully restored (`parasites_never_climb_stems`);
+- the vortex-connection shot took the axolotl's controls while a parasite kept hitting him
+  (`no_attacks_while_controls_taken`).
+
+It also found stalls in the bot itself (eels fought from the roof above their grotto, a food search
+at 1 hp that never timed out); those were the bot's.
 
 ## Completion catalog (catalog version 3)
 
