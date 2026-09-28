@@ -254,7 +254,7 @@ consolidate everything into ONE Mote app and ONE current APK (retire Mote Dev; k
 [x] 3. Dense reactive vegetation / cornfield movement (dev-000020, verified 2026-09-28)
 [x] 4. Additional moss balls + expanded terrain set (dev-000021, verified 2026-09-28; dev-000022 adds only test fixes)
 [x] 5. Additional enemies + ecosystem expansion (dev-000023, verified 2026-09-28)
-[ ] 6. Full expansion integration + progression/balance/100%/speedrun reconciliation
+[x] 6. Full expansion integration + progression/balance/100%/speedrun reconciliation (dev-000024, verified 2026-09-28)
 
 Each item ships as its own dev OTA once its automated validation passes, and is ticked only after
 that OTA is published and independently verified. Each item is authorised separately.
@@ -375,7 +375,7 @@ stylised undersea game (the healed look), and a sprouted moss ball.
 | E6-11 | Timer integrity | I+V | unchanged model | `_test_timer_integrity` (3), `finish_time_kept_through_100` |
 | E6-12 | Resume points safe; save and migration | I+V | bloom pulse startles parasites on re-forming | `_test_resume_points_safe`, `_test_run_save_file`, relaunch test |
 | E6-13 | Performance is a hard requirement | I+V (proxy) / needs phone | selective shadow casters (a caster layer, flat leaf stand-ins), one 1024 map over 30 m, shadows first to go in `QualityScaler`; sprouts not drawn on neglected balls; lean sprout and coral meshes | `docs/WORLD.md` Performance, Expansion 6 (before/after, 15 views); shots `perfsplit`; `shadows_first_to_scale_down`, `parasite_combat_cheap` |
-| E6-14 | Ships by OTA, no APK | pending | game layer only; runtime r5 | (filled in on publish) |
+| E6-14 | Ships by OTA, no APK | I+V | game layer only; runtime r5 | dev-000024 (OTA publish #24, run 36465899336, source `6e6f71e`, PCK `6816257c…d1ed2e7fa`, 9,214,288 bytes, 38 baked shader caches, save schema 1): signature (pinned key), hash, size, inspector (INSPECT OK) and the E6 sources in the pack verified from the public URLs; a b22 client (bundled `1046057`) discovers, downloads, verifies and stages it; 53 E6 checks pass run from the pack; unit suite 364/364 (fresh user data); playthroughs on seeds 7 and 4242: 23/23 each, 0 deaths, 100% by play; OTA end-to-end 42/42; version drift and runtime gate r5 pass; Build & Verify #32 green, Android APK job skipped |
 | E6-15 | Owner: leafy plants not solid green (terrarium earth star, fire-and-ice hosta) | I+V / needs phone | `shaders/variegation.gdshaderinc` on the rosettes, ferns and climbing leaves (`docs/VEGETATION.md`) | shots `feedback`, `review` |
 | E6-16 | Addendum: parasite combat and AI (sizes, retreat, pack alert, spitter, fairness, sight, determinism, cost) | I+V / needs phone | `scripts/actors/parasite.gd`, `parasite_glob.gd` (`docs/ECOSYSTEM.md` Parasites) | `_test_parasite_combat` (27); playthroughs on both seeds and 100% by play rerun after it; defects it exposed fixed: a parasite climbing a stem out of reach, damage during the vortex-connection shot, latching onto an invulnerable axolotl, stacking while waiting |
 
