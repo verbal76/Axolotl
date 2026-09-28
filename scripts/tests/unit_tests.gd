@@ -398,6 +398,13 @@ func _test_vegetation() -> void:
 	for c in g.ecosystem.active:
 		c.set_active(false)
 	g.ecosystem.active = []
+	# (Parasites held still too until the recovery is measured: the reed bed's large one now
+	# hunts him through the reeds, which would stir the very spot being measured.)
+	var held: Array = []
+	for pp in b.parasites:
+		if pp.is_physics_processing():
+			pp.set_physics_process(false)
+			held.append(pp)
 	place_at(0, b.surface_point(reeds, 0.2), -MossBall.frame_at(reeds, 0.0).x)
 	await t.seconds(1.5)
 	var rest := _bend_near(p.body_center(), 0.8, 2.2)
@@ -420,7 +427,6 @@ func _test_vegetation() -> void:
 	var ahead := g.wake.bend_at(b, b.surface_point(b.up_at(p.head_position() + p.facing * 0.5), 0.0), 2.2).length()
 	t.check("wake_follows_axolotl", run > 0.8 and far < 0.01 and ahead > 0.3, "around him %.2f, 5 m away %.3f, just ahead %.2f" % [run, far, ahead])
 	t.check("wake_grows_with_speed", rest < creep and creep < run * 0.85 and rest < 0.6, "standing %.2f, creeping %.2f, running %.2f" % [rest, creep, run])
-	g.ecosystem.set_physics_process(true)
 	# Behind him the plants recover progressively; when he stops, the wake settles and stays settled.
 	var passed := p.global_position - p.facing * 1.2
 	var just := g.wake.bend_at(b, b.surface_point(b.up_at(passed), 0.0), 2.2).length()
@@ -432,6 +438,9 @@ func _test_vegetation() -> void:
 	var settled1 := _bend_near(p.body_center(), 0.8, 2.2)
 	await t.seconds(2.0)
 	var settled2 := _bend_near(p.body_center(), 0.8, 2.2)
+	g.ecosystem.set_physics_process(true)
+	for pp in held:
+		pp.set_physics_process(true)
 	t.check("wake_recovers_behind", just > 0.3 and mid < just and later < just * 0.15, "passed %.2f, 0.6 s %.2f, 2 s %.2f" % [just, mid, later])
 	t.check("wake_settles_when_stopped", g.wake._trail.is_empty() and absf(settled2 - settled1) < 0.02 and settled2 <= rest + 0.05,
 			"%.2f then %.2f (standing level %.2f)" % [settled1, settled2, rest])
