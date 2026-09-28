@@ -118,7 +118,7 @@ The signature is RSA-3072 PKCS#1 v1.5 over SHA-256 of the exact manifest bytes (
 
 ### Workflow `ota-publish.yml`
 
-It runs on every push to `claude/axolotl-aquarium-platformer-3y0qyy`, or manually through **Run workflow** for any commit. In order, it:
+It runs on every push, without `[skip ci]`, to an authorized Mote development branch: currently `claude/mote-game-continuation-bov2x9`, and `claude/axolotl-aquarium-platformer-3y0qyy` (Expansions 1–6). It can also be run manually through **Run workflow** for any commit. A new development branch is added to the workflow's `branches` list, explicitly, in its first release. In order, it:
 
 1. checks out the exact commit and records its SHA;
 2. runs the runtime gate (`ota_runtime.py --check`);
