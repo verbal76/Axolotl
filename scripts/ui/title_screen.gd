@@ -43,6 +43,9 @@ func _ready() -> void:
 	_new_run = UiStyle.confirm_button("New Run", "Start a new run? This run's progress and time are replaced (your best finish is kept).",
 			"Start over", _on_new_run)
 	box.add_child(_new_run)
+	var colours := UiStyle.button("Gill's colours", _on_colours)
+	colours.name = "GillColours"
+	box.add_child(colours)
 	box.add_child(UiStyle.button("Settings", _on_settings))
 	_run_info = UiStyle.note()
 	_run_info.name = "RunInfo"
@@ -91,6 +94,13 @@ func _on_play() -> void:
 func _on_new_run() -> void:
 	Sfx.play("ui_tap", null, -6.0)
 	Game.inst.restart_experience()
+
+
+## Straight to Gill's colours page (the pause menu's, opened from here), with his live preview.
+func _on_colours() -> void:
+	Sfx.play("ui_tap", null, -6.0)
+	Game.inst.pause_menu.open(true)
+	Game.inst.pause_menu._open_gill(true)
 
 
 func _on_settings() -> void:

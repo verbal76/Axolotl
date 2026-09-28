@@ -17,6 +17,7 @@ var _sfx: HSlider
 var _session_rows: Array[Control] = []
 var _from_title := false
 var gill_page: GillPage
+var _gill_direct := false        # opened straight from the title screen
 
 
 func _ready() -> void:
@@ -101,7 +102,8 @@ func _ready() -> void:
 	Settings.input_mode_changed.connect(func(_m): _refresh())
 
 
-func _open_gill() -> void:
+func _open_gill(direct := false) -> void:
+	_gill_direct = direct
 	_panel.visible = false
 	gill_page.refresh()
 	gill_page.visible = true
@@ -111,6 +113,11 @@ func _open_gill() -> void:
 func _close_gill() -> void:
 	gill_page.visible = false
 	_panel.visible = true
+	if _gill_direct:
+		# Straight back to the title screen.
+		_gill_direct = false
+		close()
+		return
 	(_panel.find_child("GillColours", true, false) as Button).grab_focus.call_deferred()
 
 

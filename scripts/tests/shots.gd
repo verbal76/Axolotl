@@ -1041,7 +1041,44 @@ func _colour_shots(g: Game) -> void:
 		await t.seconds(0.5)
 		await t.shot("colours_world_%s" % id)
 	Settings.set_gill_look("pink", 0.0, 1.0, 0.0, 1.0)
+	# Patterns: each built-in as markings, two in full colour, and a picture "from the phone".
+	var gu2 := p.up
+	var gf2 := p.facing
+	var gr2 := gf2.cross(gu2).normalized()
+	var head2 := p.global_position + gu2 * 0.35 + gf2 * 0.2
+	for pat in GillLook.PATTERNS:
+		if pat[0] == "none":
+			continue
+		for mode in [0, 1]:
+			if mode == 1 and not pat[0] in ["hearts", "stars"]:
+				continue
+			Settings.set_gill_pattern(pat[0], mode, 3)
+			_close(g, head2 + gf2 * 1.3 + gr2 * 1.2 + gu2 * 0.9, head2 - gf2 * 0.3, gu2)
+			await t.seconds(0.5)
+			await t.shot("pattern_%s_%s" % [pat[0], ["markings", "colour"][mode]])
+	var photo := Image.load_from_file(ProjectSettings.globalize_path("res://assets/icon/icon_192.png"))
+	var pp := OS.get_user_data_dir().path_join("shot_pick.png")
+	photo.save_png(pp)
+	g.pause_menu.open(true)
+	g.pause_menu._open_gill(true)
+	g.pause_menu.gill_page.import_picture(pp)
+	Settings.set_gill_pattern(GillLook.UPLOAD, 1, 2)
+	await t.seconds(0.5)
+	await t.shot("pattern_page_upload")
+	(g.pause_menu.gill_page.find_child("Done", true, false) as Button).pressed.emit()
+	_close(g, head2 + gf2 * 1.3 + gr2 * 1.2 + gu2 * 0.9, head2 - gf2 * 0.3, gu2)
+	await t.seconds(0.5)
+	await t.shot("pattern_upload_world")
+	Settings.set_gill_pattern("none", 0, 3)
 	_open(g)
+	# The title screen's button.
+	g.title.show_title()
+	await t.seconds(0.5)
+	await t.shot("title_with_colours")
+	g.title._on_colours()
+	await t.seconds(0.5)
+	await t.shot("title_colours_page")
+	(g.pause_menu.gill_page.find_child("Done", true, false) as Button).pressed.emit()
 
 
 ## Undisturbed vegetation over time (dev-000024 playtest polish): the same view every 0.25 s with

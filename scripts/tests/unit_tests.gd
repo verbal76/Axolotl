@@ -14,7 +14,7 @@ func run(runner) -> void:
 	p.use_bot_input = true
 	await t.seconds(0.5)
 	var only: String = Settings.test_args.get("only", "")
-	for name_ in ["_test_startup", "_test_ota_and_version", "_test_mesh_winding", "_test_terrain", "_test_terrain_grounded", "_test_no_floating_platforms", "_test_parasite_locomotion", "_test_parasite_body_and_death", "_test_parasite_combat", "_test_gill_look", "_test_gill_idles", "_test_gill_colours", "_test_tail_whip", "_test_ambient_sway", "_test_placements", "_test_tutorial_route", "_test_sphere_walk", "_test_jump_and_burst", "_test_coyote_and_buffer", "_test_swipe_direction_and_stages", "_test_hard_landing", "_test_food", "_test_food_reach", "_test_darter_and_burrower", "_test_food_repopulates", "_test_motes", "_test_checkpoint_and_regen", "_test_crumble", "_test_restoration_continuity", "_test_vortex", "_test_current", "_test_canopy", "_test_canopy_plain_jumps", "_test_climbs_physical", "_test_jungle_ladders_physical", "_test_leaf_geometry", "_test_leaf_footing", "_test_caves", "_test_mounds", "_test_vegetation", "_test_vortex_mouths_clear", "_test_route_audit", "_test_new_areas", "_test_ecosystem", "_test_music", "_test_run_clock", "_test_completion_catalog", "_test_run_save_file", "_test_run_timer_live", "_test_run_continue", "_test_timer_integrity", "_test_resume_points_safe", "_phase_continue_write", "_phase_continue_read", "_test_upgrades", "_test_ui", "_test_all_clear"]:
+	for name_ in ["_test_startup", "_test_ota_and_version", "_test_mesh_winding", "_test_terrain", "_test_terrain_grounded", "_test_no_floating_platforms", "_test_parasite_locomotion", "_test_parasite_body_and_death", "_test_parasite_combat", "_test_gill_look", "_test_gill_idles", "_test_gill_colours", "_test_gill_patterns", "_test_tail_whip", "_test_ambient_sway", "_test_placements", "_test_tutorial_route", "_test_sphere_walk", "_test_jump_and_burst", "_test_coyote_and_buffer", "_test_swipe_direction_and_stages", "_test_hard_landing", "_test_food", "_test_food_reach", "_test_darter_and_burrower", "_test_food_repopulates", "_test_motes", "_test_checkpoint_and_regen", "_test_crumble", "_test_restoration_continuity", "_test_vortex", "_test_current", "_test_canopy", "_test_canopy_plain_jumps", "_test_climbs_physical", "_test_jungle_ladders_physical", "_test_leaf_geometry", "_test_leaf_footing", "_test_caves", "_test_mounds", "_test_vegetation", "_test_vortex_mouths_clear", "_test_route_audit", "_test_new_areas", "_test_ecosystem", "_test_music", "_test_run_clock", "_test_completion_catalog", "_test_run_save_file", "_test_run_timer_live", "_test_run_continue", "_test_timer_integrity", "_test_resume_points_safe", "_phase_continue_write", "_phase_continue_read", "_test_upgrades", "_test_ui", "_test_all_clear"]:
 		# "_phase_*" tests are halves of a relaunch test: they run only when asked for by name
 		# (in a child process started by _test_run_continue).
 		if name_.begins_with("_phase") and only != name_:
@@ -3875,6 +3875,101 @@ func _test_gill_colours() -> void:
 	t.check("stretch_yawns_once", y1 - y0 == 1 and m.yawns == y1 and Sfx.inst.stream("gill_yawn") != null,
 			"%d yawn(s) in a stretch, %d in a head tilt; sound loaded %s" % [y1 - y0, m.yawns - y1, Sfx.inst.stream("gill_yawn") != null])
 	release.call()
+
+
+## Gill's patterns (owner request): built-in patterns tile seamlessly, replace his freckles, show as
+## markings or in full colour at a chosen size; a picture from the phone becomes his pattern; the
+## page opens straight from the title screen. All in settings, save schema unchanged.
+func _test_gill_patterns() -> void:
+	var m := p.model
+	# Built-ins: drawn, tileable (the first and last columns and rows meet).
+	# (Tiled, the last column meets the first: that step must be no sharper than the pattern's own
+	# sharpest step between neighbouring pixels anywhere inside it.)
+	var drawn := 0
+	var seam_excess := 0.0
+	for pat in GillLook.PATTERNS:
+		if pat[0] == "none":
+			continue
+		var img := GillLook.draw_pattern(pat[0])
+		var n := img.get_width()
+		var cover := 0.0
+		var seam := 0.0
+		var inner := 0.0
+		for i in n:
+			if i % 2 == 0:
+				for j in range(0, n, 8):
+					cover += img.get_pixel(i, j).a
+			seam = maxf(seam, maxf(absf(img.get_pixel(0, i).a - img.get_pixel(n - 1, i).a), absf(img.get_pixel(i, 0).a - img.get_pixel(i, n - 1).a)))
+			for k in range(1, n - 1, 3):
+				inner = maxf(inner, maxf(absf(img.get_pixel(k, i).a - img.get_pixel(k + 1, i).a), absf(img.get_pixel(i, k).a - img.get_pixel(i, k + 1).a)))
+		seam_excess = maxf(seam_excess, seam - inner)
+		drawn += 1 if cover > 20.0 else 0
+	t.check("gill_patterns_drawn_and_tileable", drawn == GillLook.PATTERNS.size() - 1 and seam_excess <= 0.05,
+			"%d built-in patterns drawn; seam steps at most %.2f sharper than inside" % [drawn, seam_excess])
+	# Choosing one: on his skin in place of the freckles; mode and repeats follow the page.
+	var pm := g.pause_menu
+	pm.open()
+	await t.frames(2)
+	pm._open_gill()
+	await t.frames(1)
+	var page := pm.gill_page
+	(page.find_child("Pattern_hearts", true, false) as Button).pressed.emit()
+	await t.frames(1)
+	var sm: ShaderMaterial = m._skin_mats[0]
+	var on_ok: bool = float(sm.get_shader_parameter("pattern_on")) == 1.0 and sm.get_shader_parameter("pattern_tex") != null and int(sm.get_shader_parameter("pattern_mode")) == 0
+	page._full_colour.button_pressed = true
+	page._pattern_size.value = 6
+	await t.frames(1)
+	var tuned_ok: bool = int(sm.get_shader_parameter("pattern_mode")) == 1 and is_equal_approx(float(sm.get_shader_parameter("pattern_scale")), 6.0) \
+			and Settings.gill_pattern == "hearts" and Settings.gill_pattern_mode == 1 and Settings.gill_pattern_size == 6
+	var src := (load("res://shaders/axolotl_skin.gdshader") as Shader).code
+	var replaces := src.find("* (1.0 - pattern_on)") > 0
+	t.check("gill_pattern_on_skin_replacing_freckles", on_ok and tuned_ok and replaces and page.preview._skin_mats[0].get_shader_parameter("pattern_tex") != null,
+			"on %s; full colour and 6 repeats %s; freckles give way %s" % [on_ok, tuned_ok, replaces])
+	# A picture from the phone: any size, cropped square, shrunk, stored, and read back next launch.
+	var pic := Image.create(480, 300, false, Image.FORMAT_RGB8)
+	for y in 300:
+		for x in 480:
+			pic.set_pixel(x, y, Color(0.1, 0.2, 0.6) if (x / 40 + y / 40) % 2 == 0 else Color(0.95, 0.9, 0.8))
+	var pic_path := OS.get_user_data_dir().path_join("test_pick.jpg")
+	pic.save_jpg(pic_path)
+	page.import_picture(pic_path)
+	await t.frames(1)
+	var stored := Image.load_from_file(GillLook.UPLOAD_PATH)
+	var up_ok := Settings.gill_pattern == GillLook.UPLOAD and stored != null and stored.get_width() == GillLook.PATTERN_PX and stored.get_height() == GillLook.PATTERN_PX \
+			and not Settings.gill_pattern_alpha and (page.find_child("Pattern_upload", true, false) as Button).visible and sm.get_shader_parameter("pattern_tex") != null
+	page.import_picture(OS.get_user_data_dir().path_join("no_such_picture.png"))
+	var bad_ok := (page.find_child("PatternNote", true, false) as Label).text != "" and Settings.gill_pattern == GillLook.UPLOAD
+	Settings.gill_pattern = "none"
+	Settings._load()
+	var cf := ConfigFile.new()
+	cf.load(Settings.SETTINGS_PATH)
+	var reload_ok := Settings.gill_pattern == GillLook.UPLOAD and int(cf.get_value("meta", "save_schema", -1)) == 1
+	t.check("gill_picture_upload_becomes_pattern", up_ok and bad_ok and reload_ok,
+			"uploaded, %dx%d, on Gill %s; a bad file refused politely %s; kept for next launch (schema 1) %s" % [stored.get_width() if stored else 0, stored.get_height() if stored else 0, up_ok, bad_ok, reload_ok])
+	# Freckles again, and back to the menu.
+	(page.find_child("Pattern_none", true, false) as Button).pressed.emit()
+	page._full_colour.button_pressed = false
+	page._pattern_size.value = 3
+	await t.frames(1)
+	var cleared: bool = float(sm.get_shader_parameter("pattern_on")) == 0.0 and Settings.gill_pattern == "none"
+	(page.find_child("Done", true, false) as Button).pressed.emit()
+	pm.close()
+	await t.frames(1)
+	# From the title screen: straight to the page with its preview, and Done goes back to the title.
+	var ts: TitleScreen = g.title
+	var direct_ok := false
+	var back_ok := false
+	if ts != null:
+		ts._on_colours()
+		await t.frames(2)
+		direct_ok = pm.visible and page.visible and not pm._panel.visible and page._vp.render_target_update_mode == SubViewport.UPDATE_ALWAYS
+		(page.find_child("Done", true, false) as Button).pressed.emit()
+		await t.frames(1)
+		back_ok = not pm.visible and not page.visible
+	t.check("gill_colours_from_title_screen", cleared and ts != null and direct_ok and back_ok,
+			"pattern cleared %s; title screen found %s; opens straight to the page %s; Done returns %s" % [cleared, ts != null, direct_ok, back_ok])
+	DirAccess.remove_absolute(pic_path)
 
 
 func add_child_safe(n: Node) -> void:

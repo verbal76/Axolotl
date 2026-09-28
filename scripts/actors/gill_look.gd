@@ -52,6 +52,139 @@ static func _tune(c: Color, hue: float, bright: float) -> Color:
 	return Color.from_hsv(h, s, clampf(c.v * bright, 0.04, 1.0))
 
 
-## The current choice (Settings).
+## The current choice (Settings): colours plus the pattern.
 static func current() -> Dictionary:
-	return tones(Settings.gill_morph, Settings.gill_body_hue, Settings.gill_body_bright, Settings.gill_dots_hue, Settings.gill_dots_bright)
+	var t := tones(Settings.gill_morph, Settings.gill_body_hue, Settings.gill_body_bright, Settings.gill_dots_hue, Settings.gill_dots_bright)
+	t["pattern"] = pattern_texture(Settings.gill_pattern)
+	t["pattern_mode"] = Settings.gill_pattern_mode
+	t["pattern_size"] = Settings.gill_pattern_size
+	t["pattern_alpha"] = 1.0 if Settings.gill_pattern != UPLOAD else (1.0 if Settings.gill_pattern_alpha else 0.0)
+	return t
+
+
+# --- Patterns ---------------------------------------------------------------------------------
+
+## Built-in patterns (drawn here, tileable), then the player's own upload.
+const PATTERNS := [["none", "Freckles"], ["spots", "Spots"], ["stripes", "Stripes"], ["hearts", "Hearts"], ["stars", "Stars"], ["leopard", "Leopard"]]
+const UPLOAD := "upload"
+const UPLOAD_PATH := "user://gill_pattern.png"
+const PATTERN_PX := 256
+static var _cache := {}
+
+
+static func pattern_texture(id: String) -> Texture2D:
+	if id == "none" or id == "":
+		return null
+	if _cache.has(id):
+		return _cache[id]
+	var img: Image = null
+	if id == UPLOAD:
+		if FileAccess.file_exists(UPLOAD_PATH):
+			img = Image.load_from_file(UPLOAD_PATH)
+	else:
+		img = draw_pattern(id)
+	if img == null or img.is_empty():
+		return null
+	img.generate_mipmaps()
+	var tex := ImageTexture.create_from_image(img)
+	_cache[id] = tex
+	return tex
+
+
+## Takes a picture the player picked (any size or shape), keeps its centre square, shrinks it to
+## PATTERN_PX and stores it in user:// as their pattern. Returns "" or what went wrong.
+static func import_pattern(path: String) -> String:
+	var img := Image.load_from_file(path)
+	if img == null or img.is_empty():
+		return "That file could not be read as a picture."
+	var side := mini(img.get_width(), img.get_height())
+	img = img.get_region(Rect2i((img.get_width() - side) / 2, (img.get_height() - side) / 2, side, side))
+	img.convert(Image.FORMAT_RGBA8)
+	img.resize(PATTERN_PX, PATTERN_PX, Image.INTERPOLATE_LANCZOS)
+	# Pictures with see-through parts use those as the markings; others use their dark parts.
+	var see_through := false
+	for y in range(0, PATTERN_PX, 4):
+		for x in range(0, PATTERN_PX, 4):
+			if img.get_pixel(x, y).a < 0.9:
+				see_through = true
+				break
+		if see_through:
+			break
+	if img.save_png(UPLOAD_PATH) != OK:
+		return "The picture could not be saved."
+	_cache.erase(UPLOAD)
+	Settings.gill_pattern_alpha = see_through
+	return ""
+
+
+static func has_upload() -> bool:
+	return FileAccess.file_exists(UPLOAD_PATH)
+
+
+## Draws a built-in pattern: tileable, coloured shapes on a clear background.
+static func draw_pattern(id: String) -> Image:
+	var n := PATTERN_PX
+	var img := Image.create(n, n, false, Image.FORMAT_RGBA8)
+	img.fill(Color(0, 0, 0, 0))
+	var rng := RandomNumberGenerator.new()
+	rng.seed = hash(id)
+	var shapes := []          # [centre, size, colour, angle]
+	match id:
+		"spots":
+			for k in 16:
+				shapes.append([Vector2(rng.randf() * n, rng.randf() * n), rng.randf_range(9.0, 22.0), Color(0.38, 0.14, 0.18), 0.0])
+		"hearts":
+			for k in 4:
+				shapes.append([Vector2((k % 2) * n * 0.5 + (k / 2) * n * 0.25 + n * 0.25, (k / 2) * n * 0.5 + n * 0.25), 34.0, Color(0.95, 0.28, 0.45), 0.0])
+		"stars":
+			for k in 5:
+				shapes.append([Vector2(rng.randf() * n, (k + rng.randf() * 0.6) * n / 5.0), rng.randf_range(22.0, 32.0), Color(1.0, 0.82, 0.28), rng.randf() * TAU])
+		"leopard":
+			for k in 12:
+				shapes.append([Vector2(rng.randf() * n, rng.randf() * n), rng.randf_range(16.0, 26.0), Color(0.2, 0.11, 0.06), rng.randf() * TAU])
+	for y in n:
+		for x in n:
+			var p := Vector2(x + 0.5, y + 0.5)
+			var col := Color(0, 0, 0, 0)
+			if id == "stripes":
+				var f := sin((p.y / n) * TAU * 3.0 + sin(p.x / n * TAU) * 0.9)
+				var a := smoothstep(0.25, 0.45, f)
+				col = Color(0.3, 0.12, 0.16, a)
+			for sh in shapes:
+				var d: Vector2 = p - sh[0]
+				d.x -= roundf(d.x / n) * n
+				d.y -= roundf(d.y / n) * n
+				var cov := _shape(id, d, sh[1], sh[3])
+				if cov > 0.0:
+					var sc: Color = sh[2]
+					if id == "leopard":
+						# A rosette: a broken dark ring round a tawny middle.
+						var r := d.length() / float(sh[1])
+						var ring := smoothstep(0.55, 0.7, r) * (1.0 - smoothstep(0.95, 1.05, r))
+						ring *= 0.35 + 0.65 * smoothstep(-0.2, 0.3, sin(atan2(d.y, d.x) * 3.0 + float(sh[3])))
+						var mid := (1.0 - smoothstep(0.5, 0.62, r)) * 0.55
+						col = Color(0.62, 0.42, 0.2, maxf(col.a, mid)).lerp(Color(sc.r, sc.g, sc.b, 1.0), ring)
+						col.a = maxf(mid, ring)
+					else:
+						col = Color(sc.r, sc.g, sc.b, maxf(col.a, cov))
+			img.set_pixel(x, y, col)
+	return img
+
+
+## How much of shape `id` (size `s`, turned by `ang`) covers offset `d` from its centre (0..1).
+static func _shape(id: String, d: Vector2, s: float, ang: float) -> float:
+	match id:
+		"spots":
+			return 1.0 - smoothstep(s - 1.5, s + 0.5, d.length())
+		"hearts":
+			var q := Vector2(d.x, -d.y + s * 0.25) / s * 1.25
+			var f := pow(q.x * q.x + q.y * q.y - 1.0, 3.0) - q.x * q.x * q.y * q.y * q.y
+			return 1.0 - smoothstep(-0.02, 0.02, f)
+		"stars":
+			var r := d.length()
+			var a := fposmod(atan2(d.y, d.x) + ang, TAU / 5.0) - TAU / 10.0
+			var edge := s * 0.42 + (s - s * 0.42) * pow(1.0 - absf(a) / (TAU / 10.0), 1.6)
+			return 1.0 - smoothstep(edge - 1.2, edge + 0.8, r)
+		"leopard":
+			return 1.0 if d.length() < s * 1.1 else 0.0
+	return 0.0

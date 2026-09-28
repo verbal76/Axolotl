@@ -154,13 +154,20 @@ func _skin_mat(mode: int, freckles := 1.0, spot_scale := 1.0) -> ShaderMaterial:
 	return m
 
 
-## Recolours his skin, freckles and cheeks (GillLook.tones); the gill fronds keep their colours.
+## Recolours his skin, freckles and cheeks and lays on his pattern (GillLook.current); the gill
+## fronds keep their colours.
 func apply_look(t: Dictionary) -> void:
+	var pat: Texture2D = t.get("pattern", null)
 	for m in _skin_mats:
 		m.set_shader_parameter("base_color", t["base"])
 		m.set_shader_parameter("back_tint", t["back"])
 		m.set_shader_parameter("belly_tint", t["belly"])
 		m.set_shader_parameter("freckle_color", t["freckle"])
+		m.set_shader_parameter("pattern_on", 1.0 if pat != null else 0.0)
+		m.set_shader_parameter("pattern_tex", pat)
+		m.set_shader_parameter("pattern_mode", int(t.get("pattern_mode", 0)))
+		m.set_shader_parameter("pattern_scale", float(t.get("pattern_size", 3)))
+		m.set_shader_parameter("pattern_alpha", float(t.get("pattern_alpha", 1.0)))
 	if _cheek_mat:
 		_cheek_mat.albedo_color = t["cheek"]
 

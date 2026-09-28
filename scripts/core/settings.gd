@@ -23,6 +23,12 @@ var gill_body_hue := 0.0
 var gill_body_bright := 1.0
 var gill_dots_hue := 0.0
 var gill_dots_bright := 1.0
+## Gill's pattern (GillLook.PATTERNS or "upload"), shown as markings (0) or in full colour (1),
+## repeated this many times round his body.
+var gill_pattern := "none"
+var gill_pattern_mode := 0
+var gill_pattern_size := 3
+var gill_pattern_alpha := false
 
 ## Session flags (not saved to disk).
 var skip_title := false
@@ -158,6 +164,10 @@ func _load() -> void:
 	gill_body_bright = float(cf.get_value("gill", "body_bright", gill_body_bright))
 	gill_dots_hue = float(cf.get_value("gill", "dots_hue", gill_dots_hue))
 	gill_dots_bright = float(cf.get_value("gill", "dots_bright", gill_dots_bright))
+	gill_pattern = str(cf.get_value("gill", "pattern", gill_pattern))
+	gill_pattern_mode = int(cf.get_value("gill", "pattern_mode", gill_pattern_mode))
+	gill_pattern_size = int(cf.get_value("gill", "pattern_size", gill_pattern_size))
+	gill_pattern_alpha = bool(cf.get_value("gill", "pattern_alpha", gill_pattern_alpha))
 
 
 ## Sets Gill's colours, saves them and tells every model.
@@ -167,6 +177,15 @@ func set_gill_look(morph_id: String, body_hue: float, body_bright: float, dots_h
 	gill_body_bright = body_bright
 	gill_dots_hue = dots_hue
 	gill_dots_bright = dots_bright
+	save()
+	gill_look_changed.emit()
+
+
+## Sets Gill's pattern (GillLook), saves it and tells every model.
+func set_gill_pattern(id: String, mode: int, size: int) -> void:
+	gill_pattern = id
+	gill_pattern_mode = mode
+	gill_pattern_size = size
 	save()
 	gill_look_changed.emit()
 
@@ -183,6 +202,10 @@ func save() -> void:
 	cf.set_value("gill", "body_bright", gill_body_bright)
 	cf.set_value("gill", "dots_hue", gill_dots_hue)
 	cf.set_value("gill", "dots_bright", gill_dots_bright)
+	cf.set_value("gill", "pattern", gill_pattern)
+	cf.set_value("gill", "pattern_mode", gill_pattern_mode)
+	cf.set_value("gill", "pattern_size", gill_pattern_size)
+	cf.set_value("gill", "pattern_alpha", gill_pattern_alpha)
 	for k in save_meta():
 		cf.set_value("meta", k, save_meta()[k])
 	cf.save(SETTINGS_PATH)

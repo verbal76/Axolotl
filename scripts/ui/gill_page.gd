@@ -14,6 +14,11 @@ var _dots_hue: HSlider
 var _dots_bright: HSlider
 var _turn: Node3D
 var _vp: SubViewport
+var _patterns := {}
+var _full_colour: CheckButton
+var _pattern_size: HSlider
+var _pattern_note: Label
+var _file_dialog: FileDialog
 
 
 func _ready() -> void:
@@ -57,6 +62,42 @@ func _ready() -> void:
 	_dots_bright = _slider(v, "Freckle shade", 0.4, 1.6)
 	for s in [_body_hue, _body_bright, _dots_hue, _dots_bright]:
 		s.value_changed.connect(func(_x: float) -> void: _tuned())
+	# Patterns: built-in ones, the player's own picture, as markings or in full colour.
+	v.add_child(UiStyle.note("Pattern", 22))
+	var pgrid := GridContainer.new()
+	pgrid.columns = 4
+	pgrid.add_theme_constant_override("h_separation", 10)
+	pgrid.add_theme_constant_override("v_separation", 10)
+	v.add_child(pgrid)
+	for pat in GillLook.PATTERNS + [[GillLook.UPLOAD, "Mine"]]:
+		var b := Button.new()
+		var id: String = pat[0]
+		b.name = "Pattern_" + id
+		b.text = pat[1]
+		b.custom_minimum_size = Vector2(122, 84)
+		b.add_theme_font_size_override("font_size", 18)
+		b.icon_alignment = HORIZONTAL_ALIGNMENT_CENTER
+		b.vertical_icon_alignment = VERTICAL_ALIGNMENT_TOP
+		b.expand_icon = true
+		b.focus_mode = Control.FOCUS_ALL
+		b.pressed.connect(func() -> void: _pick_pattern(id))
+		pgrid.add_child(b)
+		_patterns[id] = b
+	var upload := UiStyle.button("Upload a picture…", _upload)
+	upload.name = "Upload"
+	v.add_child(upload)
+	_pattern_note = UiStyle.note("", 20)
+	_pattern_note.name = "PatternNote"
+	v.add_child(_pattern_note)
+	_full_colour = CheckButton.new()
+	_full_colour.name = "FullColour"
+	_full_colour.text = "Full colour (off: markings in the freckle colour)"
+	_full_colour.toggled.connect(func(_on: bool) -> void: _pattern_tuned())
+	v.add_child(_full_colour)
+	# (How many times it repeats round his body: left, a few big; right, many small.)
+	_pattern_size = _slider(v, "Pattern repeats", 1.0, 8.0)
+	_pattern_size.step = 1.0
+	_pattern_size.value_changed.connect(func(_x: float) -> void: _pattern_tuned())
 	var row := HBoxContainer.new()
 	row.add_theme_constant_override("separation", 10)
 	var reset := UiStyle.button("Reset", func() -> void: _pick(Settings.gill_morph))
@@ -155,7 +196,57 @@ func _tuned() -> void:
 	_style_swatches()
 
 
+func _pick_pattern(id: String) -> void:
+	if id == GillLook.UPLOAD and not GillLook.has_upload():
+		_upload()
+		return
+	Settings.set_gill_pattern(id, Settings.gill_pattern_mode, Settings.gill_pattern_size)
+	refresh()
+
+
+func _pattern_tuned() -> void:
+	Settings.set_gill_pattern(Settings.gill_pattern, 1 if _full_colour.button_pressed else 0, int(_pattern_size.value))
+	_style_patterns()
+
+
+## Picks a picture: the phone's own picker where there is one, Godot's file dialog otherwise.
+func _upload() -> void:
+	_pattern_note.text = ""
+	var filters := PackedStringArray(["*.png, *.jpg, *.jpeg, *.webp ; Pictures"])
+	if DisplayServer.has_feature(DisplayServer.FEATURE_NATIVE_DIALOG_FILE):
+		DisplayServer.file_dialog_show("Pick a picture for Gill", "", "", false, DisplayServer.FILE_DIALOG_MODE_OPEN_FILE, filters, _on_native_picked)
+		return
+	if _file_dialog == null:
+		_file_dialog = FileDialog.new()
+		_file_dialog.file_mode = FileDialog.FILE_MODE_OPEN_FILE
+		_file_dialog.access = FileDialog.ACCESS_FILESYSTEM
+		_file_dialog.filters = filters
+		_file_dialog.use_native_dialog = false
+		_file_dialog.file_selected.connect(import_picture)
+		add_child(_file_dialog)
+	_file_dialog.popup_centered_ratio(0.8)
+
+
+func _on_native_picked(status: bool, paths: PackedStringArray, _filter: int) -> void:
+	if status and not paths.is_empty():
+		import_picture(paths[0])
+
+
+## Makes a picked picture his pattern (GillLook.import_pattern), or says why not.
+func import_picture(path: String) -> void:
+	var err := GillLook.import_pattern(path)
+	if err != "":
+		_pattern_note.text = err
+		return
+	_pattern_note.text = "Your picture is on Gill."
+	Settings.set_gill_pattern(GillLook.UPLOAD, Settings.gill_pattern_mode, Settings.gill_pattern_size)
+	refresh()
+
+
 func refresh() -> void:
+	_full_colour.set_pressed_no_signal(Settings.gill_pattern_mode == 1)
+	_pattern_size.set_value_no_signal(Settings.gill_pattern_size)
+	_style_patterns()
 	_body_hue.set_value_no_signal(Settings.gill_body_hue)
 	_body_bright.set_value_no_signal(Settings.gill_body_bright)
 	_dots_hue.set_value_no_signal(Settings.gill_dots_hue)
@@ -178,3 +269,22 @@ func _style_swatches() -> void:
 				sb.draw_center = false
 				sb.border_color = Color(1, 1, 1, 0.6)
 			(_swatches[id] as Button).add_theme_stylebox_override(state, sb)
+
+
+## Each pattern swatch shows its pattern; the chosen one is ringed white. "Mine" appears once a
+## picture has been uploaded.
+func _style_patterns() -> void:
+	for id in _patterns:
+		var b := _patterns[id] as Button
+		b.icon = GillLook.pattern_texture(id) if id != "none" else null
+		if id == GillLook.UPLOAD:
+			b.visible = GillLook.has_upload()
+		var chosen: bool = id == Settings.gill_pattern
+		for state in ["normal", "hover", "pressed"]:
+			var sb := StyleBoxFlat.new()
+			sb.bg_color = Color(0.93, 0.9, 0.86) if id != "none" else GillLook.morph(Settings.gill_morph)["base"]
+			sb.border_color = Color.WHITE if chosen else Color(0.3, 0.4, 0.4)
+			sb.set_border_width_all(7 if chosen else 3)
+			sb.set_corner_radius_all(18)
+			b.add_theme_stylebox_override(state, sb)
+		b.add_theme_color_override("font_color", Color(0.1, 0.12, 0.12))
