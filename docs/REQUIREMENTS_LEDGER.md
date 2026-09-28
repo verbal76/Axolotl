@@ -253,7 +253,7 @@ consolidate everything into ONE Mote app and ONE current APK (retire Mote Dev; k
 [x] 2. Living terrain / texture and material upgrade (dev-000019, verified 2026-09-28)
 [x] 3. Dense reactive vegetation / cornfield movement (dev-000020, verified 2026-09-28)
 [x] 4. Additional moss balls + expanded terrain set (dev-000021, verified 2026-09-28; dev-000022 adds only test fixes)
-[ ] 5. Additional enemies + ecosystem expansion
+[x] 5. Additional enemies + ecosystem expansion (dev-000023, verified 2026-09-28)
 [ ] 6. Full expansion integration + progression/balance/100%/speedrun reconciliation
 
 Each item ships as its own dev OTA once its automated validation passes, and is ticked only after
@@ -351,7 +351,7 @@ defeated; guardians and eels stay defeated, stalkers and puffers return, ambient
 | E5-08 | Completion: discoveries and significant threats only, never grind | I+V | catalog v3, 172 ids (+8 species, +3 crabs, +4 eels), no id changed | `completion_ids_unique_and_pinned`, `species_discovered_once`, `crab_defeated_counts_once` |
 | E5-09 | Save/load of creature state | I+V | defeated guardians and eels restored from ids | relaunch `read_creatures_restored` |
 | E5-10 | Determinism; both playthrough seeds viable | I+V | per-creature seeded generators | `eco_leaves_gameplay_rng_alone`, `eco_deterministic`; playthroughs on seeds 4242 and 7 |
-| E5-11 | Ships by OTA, no APK | pending | game layer only; runtime r5 | (next dev OTA) |
+| E5-11 | Ships by OTA, no APK | I+V | game layer only; runtime r5 | dev-000023 (OTA publish #23, run 36411346325, source `9d4fd24`, PCK `c0a4037a…e6f226`, 9,026,936 bytes, baked, save schema 1): signature (pinned key), hash, size, inspector and the E5 sources in the pack verified from public URLs; a b22 client downloads, verifies and stages it; `_test_ecosystem` (30) and `_test_all_clear` (7) pass run from the pack; unit suite 315/315 (fresh user data); playthroughs 20/20 on seeds 7 and 4242, 0 deaths; Build & Verify #31 green, Android APK job skipped |
 
 ## Precedence notes
 
