@@ -52,8 +52,41 @@ jobs:
           name: test-results
           path: test_out/
 
+  # A new APK is built only when the native layer changes (the owner's rule: game-layer changes
+  # ship by OTA; a replacement APK only when native/runtime changes require one). Native layer =
+  # what the runtime lock guards: project.godot, export_presets.cfg, scripts/boot/, and the lock
+  # itself (a Godot version change bumps it). A manual run always builds.
+  native:
+    name: Native layer changed?
+    runs-on: ubuntu-latest
+    outputs:
+      changed: ${{ steps.diff.outputs.changed }}
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          ref: ${{ env.SOURCE_SHA }}
+          fetch-depth: 0
+      - id: diff
+        env:
+          BEFORE: ${{ github.event.before }}
+        run: |
+          if [ "${{ github.event_name }}" = "workflow_dispatch" ]; then
+            echo "manual run: build the APK"; echo "changed=true" >> $GITHUB_OUTPUT; exit 0
+          fi
+          if [ -z "$BEFORE" ] || [ "$BEFORE" = "0000000000000000000000000000000000000000" ] || ! git cat-file -e "$BEFORE^{commit}" 2>/dev/null; then
+            echo "no previous commit to compare: build the APK"; echo "changed=true" >> $GITHUB_OUTPUT; exit 0
+          fi
+          CHANGED=$(git diff --name-only "$BEFORE" "$SOURCE_SHA" -- project.godot export_presets.cfg scripts/boot ota/runtime_lock.json)
+          if [ -n "$CHANGED" ]; then
+            echo "native layer changed since $BEFORE:"; echo "$CHANGED"; echo "changed=true" >> $GITHUB_OUTPUT
+          else
+            echo "game layer only since $BEFORE: no new APK (the change ships by OTA)"; echo "changed=false" >> $GITHUB_OUTPUT
+          fi
+
   android:
     name: Android APK (Mote, offline-first with OTA)
+    needs: native
+    if: needs.native.outputs.changed == 'true'
     runs-on: ubuntu-latest
     timeout-minutes: 45
     steps:

@@ -74,7 +74,7 @@ cd build/ios && xcodebuild -project Axolotl.xcodeproj -scheme Axolotl -sdk iphon
    - runs the mechanics suite and the beginning-to-end playthrough bot headless;
    - runs the version-drift regression and the native-runtime lock check;
    - uploads the results.
-2. **android** exports the one Mote APK, with shaders baked:
+2. **android** exports the one Mote APK, with shaders baked. It runs only when the pushed commits change the native layer (`project.godot`, `export_presets.cfg`, `scripts/boot/`, `ota/runtime_lock.json`) or on a manual run; game-layer changes ship by OTA without a new APK:
    - Android build (versionCode) = the run number;
    - it is signed with the stable Mote keystore (alias `mote_dev`; secrets `MOTE_ANDROID_DEV_KEYSTORE_*`, names kept from before the Mote Dev app was retired), and the certificate pin is enforced;
    - it checks the package ID, label "Mote", versionCode/versionName, the INTERNET permission, the embedded OTA key pin, the baked shader caches and the splash image inside the APK;
