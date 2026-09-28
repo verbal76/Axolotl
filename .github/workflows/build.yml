@@ -1,0 +1,291 @@
+name: Build & Verify
+
+on:
+  push:
+    branches: [main]
+  pull_request:
+  workflow_dispatch:
+
+env:
+  GODOT_VERSION: 4.7.2
+  # Build the branch commit itself, not the synthetic PR merge ref, so every identity names a real commit.
+  SOURCE_SHA: ${{ github.event.pull_request.head.sha || github.sha }}
+  # Public verification pins (not secrets): the Mote signing certificate and OTA public key.
+  MOTE_DEV_CERT_SHA256: A8:4F:BA:D5:61:B9:F5:E2:4E:BB:45:E2:95:17:94:F6:17:28:19:56:CF:DB:CA:FF:3A:CF:DB:9E:63:E2:C2:E3
+  MOTE_OTA_PUBKEY_DER_SHA256: a003a45ce422325ef1de52958bd9d4d2a06b912ae119c6c7a7f9e40ff2720cf2
+  GODOT_BASE: https://github.com/godotengine/godot/releases/download/4.7.2-stable
+
+jobs:
+  verify:
+    name: Scripts + automated tests (headless)
+    runs-on: ubuntu-latest
+    timeout-minutes: 60
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          ref: ${{ env.SOURCE_SHA }}
+      - name: Install Godot
+        run: |
+          curl -sSL -o godot.zip "$GODOT_BASE/Godot_v${GODOT_VERSION}-stable_linux.x86_64.zip"
+          unzip -q godot.zip && mv Godot_v${GODOT_VERSION}-stable_linux.x86_64 /usr/local/bin/godot
+      - name: Import project
+        run: godot --headless --path . --import || true
+      - name: Check every script compiles
+        run: |
+          godot --headless --path . -s tools/check_scripts.gd 2>&1 | tee check.log
+          ! grep -E "Parse Error" check.log
+      - name: Mechanics test suite
+        run: |
+          godot --headless --path . --fixed-fps 60 --max-fps 0 -- --test=unit --out=$PWD/test_out 2>&1 | tee unit.log
+          grep -E "\[TEST\] SUMMARY [0-9]+ passed, 0 failed" unit.log
+      - name: Beginning-to-end playthrough bot
+        run: |
+          godot --headless --path . --fixed-fps 60 --max-fps 0 -- --test=playthrough --out=$PWD/test_out 2>&1 | tee playthrough.log
+          grep -E "\[TEST\] SUMMARY [0-9]+ passed, 0 failed" playthrough.log
+      - name: Version-drift regression (all consumers follow the canonical GAME_VERSION)
+        run: GODOT=godot tools/version_drift_check.sh
+      - name: Native-runtime lock is current
+        run: python3 tools/ota_runtime.py --check
+      - uses: actions/upload-artifact@v4
+        if: always()
+        with:
+          name: test-results
+          path: test_out/
+
+  # A new APK is built only when the native layer changes (the owner's rule: game-layer changes
+  # ship by OTA; a replacement APK only when native/runtime changes require one). Native layer =
+  # what the runtime lock guards: project.godot, export_presets.cfg, scripts/boot/, and the lock
+  # itself (a Godot version change bumps it). A manual run always builds.
+  native:
+    name: Native layer changed?
+    runs-on: ubuntu-latest
+    outputs:
+      changed: ${{ steps.diff.outputs.changed }}
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          ref: ${{ env.SOURCE_SHA }}
+          fetch-depth: 0
+      - id: diff
+        env:
+          BEFORE: ${{ github.event.before }}
+        run: |
+          if [ "${{ github.event_name }}" = "workflow_dispatch" ]; then
+            echo "manual run: build the APK"; echo "changed=true" >> $GITHUB_OUTPUT; exit 0
+          fi
+          if [ -z "$BEFORE" ] || [ "$BEFORE" = "0000000000000000000000000000000000000000" ] || ! git cat-file -e "$BEFORE^{commit}" 2>/dev/null; then
+            echo "no previous commit to compare: build the APK"; echo "changed=true" >> $GITHUB_OUTPUT; exit 0
+          fi
+          CHANGED=$(git diff --name-only "$BEFORE" "$SOURCE_SHA" -- project.godot export_presets.cfg scripts/boot ota/runtime_lock.json)
+          if [ -n "$CHANGED" ]; then
+            echo "native layer changed since $BEFORE:"; echo "$CHANGED"; echo "changed=true" >> $GITHUB_OUTPUT
+          else
+            echo "game layer only since $BEFORE: no new APK (the change ships by OTA)"; echo "changed=false" >> $GITHUB_OUTPUT
+          fi
+
+  android:
+    name: Android APK (Mote, offline-first with OTA)
+    needs: native
+    if: needs.native.outputs.changed == 'true'
+    runs-on: ubuntu-latest
+    timeout-minutes: 45
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          ref: ${{ env.SOURCE_SHA }}
+      - uses: actions/setup-java@v4
+        with:
+          distribution: temurin
+          java-version: "17"
+      - name: Install Godot + export templates
+        run: |
+          curl -sSL -o godot.zip "$GODOT_BASE/Godot_v${GODOT_VERSION}-stable_linux.x86_64.zip"
+          unzip -q godot.zip && mv Godot_v${GODOT_VERSION}-stable_linux.x86_64 /usr/local/bin/godot
+          curl -sSL -o tpl.tpz "$GODOT_BASE/Godot_v${GODOT_VERSION}-stable_export_templates.tpz"
+          mkdir -p ~/.local/share/godot/export_templates/${GODOT_VERSION}.stable
+          unzip -q tpl.tpz -d tpl && mv tpl/templates/* ~/.local/share/godot/export_templates/${GODOT_VERSION}.stable/
+      - name: Mote signing keystore (stable, from Mote secrets)
+        env:
+          MOTE_ANDROID_DEV_KEYSTORE_B64: ${{ secrets.MOTE_ANDROID_DEV_KEYSTORE_B64 }}
+          MOTE_ANDROID_DEV_KEYSTORE_PASSWORD: ${{ secrets.MOTE_ANDROID_DEV_KEYSTORE_PASSWORD }}
+          MOTE_ANDROID_DEV_KEY_ALIAS: ${{ secrets.MOTE_ANDROID_DEV_KEY_ALIAS }}
+          MOTE_ANDROID_DEV_KEY_PASSWORD: ${{ secrets.MOTE_ANDROID_DEV_KEY_PASSWORD }}
+        run: |
+          # Secret NAMES are reported, never their values.
+          for n in MOTE_ANDROID_DEV_KEYSTORE_B64 MOTE_ANDROID_DEV_KEYSTORE_PASSWORD MOTE_ANDROID_DEV_KEY_ALIAS MOTE_ANDROID_DEV_KEY_PASSWORD; do
+            if [ -n "${!n}" ]; then echo "$n: present"; else echo "$n: MISSING"; fi
+          done
+          KS="$RUNNER_TEMP/mote_dev.keystore"
+          if [ -n "$MOTE_ANDROID_DEV_KEYSTORE_B64" ] && [ -n "$MOTE_ANDROID_DEV_KEYSTORE_PASSWORD" ] && [ -n "$MOTE_ANDROID_DEV_KEY_ALIAS" ]; then
+            # Tolerate line breaks/spaces introduced when pasting the base64 value.
+            printf '%s' "$MOTE_ANDROID_DEV_KEYSTORE_B64" | tr -d ' \r\n\t' | base64 -d > "$KS"
+            # PKCS12 keystores (and Godot's single-password signing) need key password == store password.
+            if [ -n "$MOTE_ANDROID_DEV_KEY_PASSWORD" ] && [ "$MOTE_ANDROID_DEV_KEY_PASSWORD" != "$MOTE_ANDROID_DEV_KEYSTORE_PASSWORD" ]; then
+              echo "::error::MOTE_ANDROID_DEV_KEY_PASSWORD must equal MOTE_ANDROID_DEV_KEYSTORE_PASSWORD (PKCS12 keystore)"; exit 1
+            fi
+            if ! keytool -list -keystore "$KS" -storepass "$MOTE_ANDROID_DEV_KEYSTORE_PASSWORD" -alias "$MOTE_ANDROID_DEV_KEY_ALIAS" >/dev/null 2>&1; then
+              echo "::error::the Mote keystore does not open with the given password/alias"; exit 1
+            fi
+            ALIAS="$MOTE_ANDROID_DEV_KEY_ALIAS"; PASS="$MOTE_ANDROID_DEV_KEYSTORE_PASSWORD"
+            echo "Using the stable Mote keystore."
+            echo "MOTE_STABLE_KEY=true" >> "$GITHUB_ENV"
+          else
+            echo "::warning::Mote keystore secrets not set: signing with a throwaway key. This APK will NOT install over a previously installed one (uninstall first)."
+            ALIAS=mote_dev; PASS=$(openssl rand -hex 24)
+            echo "::add-mask::$PASS"
+            keytool -genkeypair -storetype PKCS12 -keyalg RSA -keysize 2048 -validity 9999 -alias "$ALIAS" -keystore "$KS" \
+              -storepass "$PASS" -keypass "$PASS" -dname "CN=Mote (throwaway),O=verbal76,C=US" -noprompt >/dev/null
+          fi
+          echo "Signing certificate: $(keytool -list -v -keystore "$KS" -storepass "$PASS" -alias "$ALIAS" 2>/dev/null | grep -m1 'SHA256:' | sed 's/.*SHA256: //')"
+          {
+            echo "MOTE_KS_PATH=$KS"
+            echo "MOTE_KS_ALIAS=$ALIAS"
+            echo "MOTE_KS_PASS=$PASS"
+          } >> "$GITHUB_ENV"
+          mkdir -p ~/.config/godot
+          for f in editor_settings-4.tres editor_settings-4.7.tres; do
+            printf '[gd_resource type="EditorSettings" format=3]\n\n[resource]\nexport/android/android_sdk_path = "%s"\nexport/android/java_sdk_path = "%s"\n' "$ANDROID_HOME" "$JAVA_HOME" > ~/.config/godot/$f
+          done
+      - name: Read canonical identities (CI never defines the game version)
+        id: ident
+        run: |
+          godot --headless --path . --import || true
+          # Written outside the project so it is never packed into an APK or PCK.
+          ID="$RUNNER_TEMP/identity.json"
+          godot --headless --path . -s tools/print_identity.gd | grep IDENTITY_JSON | sed 's/^IDENTITY_JSON //' > "$ID"
+          cat "$ID"
+          echo "game_version=$(jq -r .game_version "$ID")" >> $GITHUB_OUTPUT
+          echo "runtime_id=$(jq -r .runtime_id "$ID")" >> $GITHUB_OUTPUT
+          echo "channel=$(jq -r .channel "$ID")" >> $GITHUB_OUTPUT
+          test "$(jq -r .godot_version "$ID")" = "$GODOT_VERSION"
+      - name: Export the Mote APK (shaders baked)
+        env:
+          GV: ${{ steps.ident.outputs.game_version }}
+        run: |
+          export GODOT_ANDROID_KEYSTORE_DEBUG_PATH="$MOTE_KS_PATH"
+          export GODOT_ANDROID_KEYSTORE_DEBUG_USER="$MOTE_KS_ALIAS"
+          export GODOT_ANDROID_KEYSTORE_DEBUG_PASSWORD="$MOTE_KS_PASS"
+          # ANDROID BUILD (versionCode) = this workflow's run number: monotonic, never the game version.
+          BUILD=${{ github.run_number }}
+          sed -i "s/^version\/code=.*/version\/code=$BUILD/" export_presets.cfg
+          RUN="${{ github.run_id }}"
+          RUN_URL="${{ github.server_url }}/${{ github.repository }}/actions/runs/${{ github.run_id }}"
+          test "$(git rev-parse HEAD)" = "$SOURCE_SHA"
+          echo "source commit: $SOURCE_SHA"
+          mkdir -p build/android
+          APK="build/android/mote-v$GV-b$BUILD.apk"
+          echo "APK=$APK" >> $GITHUB_ENV
+          echo "BUILD=$BUILD" >> $GITHUB_ENV
+          python3 tools/write_native_build_info.py "Android" normal "$BUILD" "$SOURCE_SHA" "$RUN" "$RUN_URL"
+          # The shader baker (shader_baker/enabled) precompiles shaders into the APK so the phone
+          # does not compile them on first launch. It only runs when the exporting editor uses the
+          # target renderer: export on software Vulkan (Mobile) under a virtual display.
+          sudo apt-get update -q > /dev/null && sudo apt-get install -y -q mesa-vulkan-drivers xvfb > /dev/null
+          xvfb-run -a -s "-screen 0 1280x720x24" godot --path . --rendering-driver vulkan --rendering-method mobile \
+            --export-debug "Android" "$APK" 2>&1 | tee export.log | grep -E "Baking shaders|ERROR" || true
+          grep -q "Started Baking shaders" export.log || { echo "::error::shaders were not baked"; exit 1; }
+          test -s "$APK"
+          ls -la build/android
+
+      - name: Verify the APK (identity, permissions, signing, baked shaders, bundled baseline)
+        env:
+          GV: ${{ steps.ident.outputs.game_version }}
+        run: |
+          AAPT=$(ls "$ANDROID_HOME"/build-tools/*/aapt | tail -1)
+          AAPT2=$(ls "$ANDROID_HOME"/build-tools/*/aapt2 | tail -1)
+          APKSIGNER=$(ls "$ANDROID_HOME"/build-tools/*/apksigner | tail -1)
+          # aapt exits non-zero on this manifest's android:required attribute but still prints badging.
+          B=$("$AAPT" dump badging "$APK" 2>/dev/null || true)
+          echo "$B" | grep -E "^package:|application-label:|application-icon-160|launchable" || true
+          echo "$B" | grep -q "^package: name='com.verbal76.axolotl' versionCode='$BUILD' versionName='$GV'" || { echo "::error::package id / versionCode / versionName wrong"; exit 1; }
+          echo "$B" | grep -q "^application-label:'Mote'$" || { echo "::error::label is not 'Mote'"; exit 1; }
+          # Offline-capable, not offline-only: the OTA client needs network access.
+          "$AAPT2" dump xmltree --file AndroidManifest.xml "$APK" > manifest.txt
+          grep -oE 'android.permission\.[A-Z_]+' manifest.txt | sort -u | sed 's/^/  permission: /'
+          grep -q "android.permission.INTERNET" manifest.txt || { echo "::error::no INTERNET permission"; exit 1; }
+          # Signing: the pinned Mote certificate.
+          "$APKSIGNER" verify "$APK"
+          GOT=$("$APKSIGNER" verify --print-certs "$APK" | grep -m1 "certificate SHA-256 digest" | sed 's/.*digest: //')
+          WANT=$(echo "$MOTE_DEV_CERT_SHA256" | tr -d ':' | tr 'A-F' 'a-f')
+          echo "signature verified, certificate SHA-256 $GOT"
+          if [ "${MOTE_STABLE_KEY:-false}" = "true" ] && [ "$GOT" != "$WANT" ]; then
+            echo "::error::signed by an unexpected certificate (want $WANT)"; exit 1
+          fi
+          # The OTA public key baked into the APK is the pinned Mote key.
+          python3 -c "import re;print(re.search(r'const PUBLIC_KEY_PEM := \"\"\"(.*?)\"\"\"',open('scripts/boot/ota_config.gd').read(),re.S).group(1).strip())" > pub.pem
+          test "$(openssl pkey -pubin -in pub.pem -outform DER | sha256sum | cut -d' ' -f1)" = "$MOTE_OTA_PUBKEY_DER_SHA256"
+          echo "embedded OTA public key SHA-256 matches the pin"
+          rm -f pub.pem manifest.txt
+          # Baked shaders really are inside the APK: engine core shaders and the scene/material shaders.
+          unzip -l "$APK" | awk '{print $4}' | grep '^assets/.godot/shader_cache/' > baked.txt || true
+          echo "baked shader caches in the APK: $(wc -l < baked.txt)"
+          cut -d/ -f4 baked.txt | sort | uniq -c
+          [ "$(wc -l < baked.txt)" -ge 30 ] || { echo "::error::too few baked shader caches in the APK"; exit 1; }
+          grep -q "/SceneForwardMobileShaderRD/" baked.txt || { echo "::error::scene/material shaders not baked"; exit 1; }
+          unzip -l "$APK" | grep -q "assets/.godot/imported/splash.png-" || { echo "::error::boot splash image missing"; exit 1; }
+          # Run the APK's own bundled game and ask it who it is: the bundled baseline must be this
+          # commit, this build, the normal Mote flavour, OTA on the dev channel, on this runtime.
+          rm -rf apkx && mkdir apkx && unzip -q "$APK" 'assets/*' -d apkx
+          godot --headless --path apkx/assets -- --print-identity --ota-root="$RUNNER_TEMP/ota_probe" | grep IDENTITY_JSON | sed 's/^IDENTITY_JSON //' > apk_identity.json
+          cat apk_identity.json
+          REV=$(jq -r .runtime_revision "$RUNNER_TEMP/identity.json")
+          jq -e --arg sha "$SOURCE_SHA" --arg b "$BUILD" --arg gv "$GV" --arg rev "-r$REV" \
+            '.native_source_sha == $sha and .source_sha == $sha and .native_build == $b and .build_flavor == "normal"
+             and .ota_enabled == true and .ota_channel == "dev" and .ota_id == "none" and .game_version == $gv
+             and .product == "Mote" and .save_schema == 1 and (.runtime_id | endswith($rev))' apk_identity.json > /dev/null \
+            || { echo "::error::the APK's bundled game does not report the expected identity"; exit 1; }
+          echo "bundled baseline verified: $SOURCE_SHA, build $BUILD, runtime r$REV"
+          rm -rf apkx baked.txt
+          sha256sum "$APK"
+          jq -n --arg gv "$GV" --arg b "$BUILD" --arg sha "$SOURCE_SHA" --arg run "${{ github.run_id }}" \
+            --arg url "${{ github.server_url }}/${{ github.repository }}/actions/runs/${{ github.run_id }}" \
+            --arg rt "${{ steps.ident.outputs.runtime_id }}" --arg ch "${{ steps.ident.outputs.channel }}" \
+            --arg apk "$(basename "$APK")" --arg apksha "$(sha256sum "$APK" | cut -d' ' -f1)" \
+            '{game_version:$gv, android_build:($b|tonumber), source_sha:$sha, build_run:$run, build_run_url:$url, runtime_id:$rt,
+              apk:{file:$apk, sha256:$apksha, package:"com.verbal76.axolotl", label:"Mote", ota:true, channel:$ch}}' \
+            > build/android/build-info.json
+          cat build/android/build-info.json
+      - uses: actions/upload-artifact@v4
+        with:
+          name: mote-android-v${{ steps.ident.outputs.game_version }}-b${{ github.run_number }}
+          path: |
+            build/android/mote-v*.apk
+            build/android/build-info.json
+
+  ios:
+    name: iOS simulator build (unsigned)
+    runs-on: macos-latest
+    timeout-minutes: 60
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          ref: ${{ env.SOURCE_SHA }}
+      - name: Install Godot + export templates
+        run: |
+          curl -sSL -o godot.zip "$GODOT_BASE/Godot_v${GODOT_VERSION}-stable_macos.universal.zip"
+          unzip -q godot.zip
+          curl -sSL -o tpl.tpz "$GODOT_BASE/Godot_v${GODOT_VERSION}-stable_export_templates.tpz"
+          T="$HOME/Library/Application Support/Godot/export_templates/${GODOT_VERSION}.stable"
+          mkdir -p "$T"
+          unzip -q tpl.tpz -d tpl && mv tpl/templates/* "$T/"
+      - name: Export Xcode project
+        run: |
+          GODOT=./Godot.app/Contents/MacOS/Godot
+          $GODOT --headless --path . --import || true
+          mkdir -p build/ios
+          $GODOT --headless --path . --export-debug "iOS" build/ios/Axolotl.ipa
+          ls -la build/ios
+      - name: Build for the iOS Simulator
+        run: |
+          cd build/ios
+          xcodebuild -project Axolotl.xcodeproj -scheme Axolotl -configuration Debug -sdk iphonesimulator \
+            -destination 'generic/platform=iOS Simulator' -derivedDataPath dd \
+            CODE_SIGNING_ALLOWED=NO CODE_SIGNING_REQUIRED=NO ONLY_ACTIVE_ARCH=NO build | tail -40
+          APP=$(find dd -name "*.app" -maxdepth 5 | head -1)
+          echo "Built: $APP"
+          test -n "$APP"
+          ditto -c -k --keepParent "$APP" ../mote-ios-simulator.zip
+      - uses: actions/upload-artifact@v4
+        with:
+          name: mote-ios-simulator-app
+          path: build/mote-ios-simulator.zip

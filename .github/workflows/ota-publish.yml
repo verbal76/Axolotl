@@ -1,0 +1,269 @@
+name: OTA publish (dev channel)
+
+# Publishes the game layer as a signed, immutable OTA for the installed Mote app.
+# No APK is built here. Order of evidence:
+#   exact SHA -> runtime gate -> tests -> PCK -> SHA-256/size -> signed manifest
+#   -> client-side inspection -> immutable release -> re-download + re-verify
+#   -> channel pointer moved forward -> receipt.
+
+on:
+  push:
+    branches: [claude/axolotl-aquarium-platformer-3y0qyy]
+  workflow_dispatch:
+    inputs:
+      ref:
+        description: Commit SHA (or branch) to publish to the dev channel
+        required: true
+        default: claude/axolotl-aquarium-platformer-3y0qyy
+
+permissions:
+  contents: write
+
+concurrency:
+  group: ota-dev-channel
+  cancel-in-progress: false
+
+env:
+  GODOT_VERSION: 4.7.2
+  GODOT_BASE: https://github.com/godotengine/godot/releases/download/4.7.2-stable
+  CHANNEL: dev
+  PRESET: Android
+  MOTE_OTA_PUBKEY_DER_SHA256: a003a45ce422325ef1de52958bd9d4d2a06b912ae119c6c7a7f9e40ff2720cf2
+
+jobs:
+  publish:
+    name: Publish OTA to dev
+    runs-on: ubuntu-latest
+    timeout-minutes: 60
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          ref: ${{ inputs.ref || github.sha }}
+
+      - name: Exact source identity
+        id: src
+        run: |
+          SHA=$(git rev-parse HEAD)
+          echo "sha=$SHA" >> $GITHUB_OUTPUT
+          SEQ=${{ github.run_number }}
+          ID=$(printf "%s-%06d" "$CHANNEL" "$SEQ")
+          echo "seq=$SEQ" >> $GITHUB_OUTPUT
+          echo "ota_id=$ID" >> $GITHUB_OUTPUT
+          echo "tag=ota-$ID" >> $GITHUB_OUTPUT
+          echo "Publishing $ID from $SHA"
+
+      - name: Native-runtime compatibility gate
+        run: python3 tools/ota_runtime.py --check
+
+      - name: Install Godot (the runtime's exact engine version)
+        run: |
+          curl -sSL -o godot.zip "$GODOT_BASE/Godot_v${GODOT_VERSION}-stable_linux.x86_64.zip"
+          unzip -q godot.zip && mv Godot_v${GODOT_VERSION}-stable_linux.x86_64 /usr/local/bin/godot
+
+      - name: Import + read canonical identities
+        id: ident
+        run: |
+          godot --headless --path . --import || true
+          # Written outside the project so it is never packed into the PCK.
+          ID="$RUNNER_TEMP/identity.json"
+          godot --headless --path . -s tools/print_identity.gd | grep IDENTITY_JSON | sed 's/^IDENTITY_JSON //' > "$ID"
+          cat "$ID"
+          test "$(jq -r .godot_version "$ID")" = "$GODOT_VERSION"
+          test "$(jq -r .channel "$ID")" = "$CHANNEL"
+          echo "game_version=$(jq -r .game_version "$ID")" >> $GITHUB_OUTPUT
+          echo "runtime_id=$(jq -r .runtime_id "$ID")" >> $GITHUB_OUTPUT
+
+      - name: Required checks (scripts, mechanics, playthrough)
+        run: |
+          godot --headless --path . -s tools/check_scripts.gd 2>&1 | tee check.log
+          if grep -E "Parse Error" check.log; then exit 1; fi
+          godot --headless --path . --fixed-fps 60 --max-fps 0 -- --test=unit --out=$PWD/test_out 2>&1 | tee unit.log
+          grep -E "\[TEST\] SUMMARY [0-9]+ passed, 0 failed" unit.log
+          godot --headless --path . --fixed-fps 60 --max-fps 0 -- --test=playthrough --out=$PWD/test_out 2>&1 | tee playthrough.log
+          grep -E "\[TEST\] SUMMARY [0-9]+ passed, 0 failed" playthrough.log
+
+      - name: Signing key
+        id: key
+        env:
+          MOTE_OTA_SIGNING_KEY: ${{ secrets.MOTE_OTA_SIGNING_KEY }}
+        run: |
+          # Report presence only; the value is never printed.
+          if [ -z "$MOTE_OTA_SIGNING_KEY" ]; then
+            echo "::warning::MOTE_OTA_SIGNING_KEY secret is not set: NOT PUBLISHING. Add it in Settings > Secrets and variables > Actions."
+            echo "ok=false" >> $GITHUB_OUTPUT
+            exit 0
+          fi
+          umask 077
+          echo "MOTE_OTA_SIGNING_KEY: present"
+          # Rebuild a canonical PEM from however the key was pasted: phones turn line breaks into
+          # spaces, add CRLF, turn "-----" into dashes of other kinds, or drop the BEGIN/END lines.
+          # Only structural facts are printed, never key material.
+          python3 - "$RUNNER_TEMP/ota_key.pem" <<'PY'
+          import base64, binascii, os, re, sys, textwrap
+          raw = os.environ["MOTE_OTA_SIGNING_KEY"].replace("\r", "")
+          lines = raw.count("\n") + 1
+          marker = re.compile(r"[-\u2010-\u2015\u2212\s]*(BEGIN|END) ?([A-Z]* ?)PRIVATE KEY[-\u2010-\u2015\u2212\s]*")
+          kinds = {m.group(2).strip() for m in marker.finditer(raw)}
+          found = [m.group(1) for m in marker.finditer(raw)]
+          body = re.sub(r"[^A-Za-z0-9+/=]", "", marker.sub("", raw))
+          print(f"key text: {lines} lines, markers found: {found or 'none (rebuilding them)'}, base64 body: {len(body)} chars")
+          try:
+              der = base64.b64decode(body, validate=True)
+          except (binascii.Error, ValueError):
+              sys.exit("MOTE_OTA_SIGNING_KEY: the text is not a base64 private key")
+          if not der or der[0] != 0x30:
+              sys.exit("MOTE_OTA_SIGNING_KEY: decoded text is not a DER key")
+          # PKCS#8 ("PRIVATE KEY") unless the paste said it was PKCS#1 ("RSA PRIVATE KEY").
+          label = "RSA PRIVATE KEY" if kinds == {"RSA"} else "PRIVATE KEY"
+          print(f"decoded key: {len(der)} bytes, rebuilt as {label}")
+          pem = f"-----BEGIN {label}-----\n" + "\n".join(textwrap.wrap(body, 64)) + f"\n-----END {label}-----\n"
+          open(sys.argv[1], "w").write(pem)
+          PY
+          openssl pkey -in "$RUNNER_TEMP/ota_key.pem" -pubout > "$RUNNER_TEMP/derived_pub.pem"
+          python3 - "$RUNNER_TEMP/derived_pub.pem" <<'PY'
+          import re, sys
+          derived = open(sys.argv[1]).read().strip()
+          embedded = re.search(r'const PUBLIC_KEY_PEM := """(.*?)"""', open("scripts/boot/ota_config.gd").read(), re.S).group(1).strip()
+          if derived != embedded:
+              sys.exit("MOTE_OTA_SIGNING_KEY does not match the public key embedded in the APK bootstrap")
+          print("signing key matches the APK's embedded public key")
+          PY
+          test "$(openssl pkey -pubin -in "$RUNNER_TEMP/derived_pub.pem" -outform DER | sha256sum | cut -d' ' -f1)" = "$MOTE_OTA_PUBKEY_DER_SHA256"
+          echo "OTA public key SHA-256 matches the pin"
+          echo "ok=true" >> $GITHUB_OUTPUT
+
+      - name: Export PCK + build and sign the manifest
+        if: steps.key.outputs.ok == 'true'
+        env:
+          ID: ${{ steps.src.outputs.ota_id }}
+          TAG: ${{ steps.src.outputs.tag }}
+          SHA: ${{ steps.src.outputs.sha }}
+          SEQ: ${{ steps.src.outputs.seq }}
+        run: |
+          mkdir -p out
+          # Bake shaders into the pack (see build.yml): software Vulkan (Mobile) under a virtual display.
+          sudo apt-get update -q > /dev/null && sudo apt-get install -y -q mesa-vulkan-drivers xvfb > /dev/null
+          xvfb-run -a -s "-screen 0 1280x720x24" godot --path . --rendering-driver vulkan --rendering-method mobile \
+            --export-pack "$PRESET" "out/axolotl-$ID.pck" 2>&1 | tee export.log | grep -E "Baking shaders|ERROR" || true
+          grep -q "Started Baking shaders" export.log || { echo "::error::shaders were not baked into the OTA pack"; exit 1; }
+          test -s "out/axolotl-$ID.pck"
+          python3 tools/pck_files.py "out/axolotl-$ID.pck" --require-baked
+          URL="${{ github.server_url }}/${{ github.repository }}/releases/download/$TAG/axolotl-$ID.pck"
+          godot --headless --path . -s tools/ota_make_manifest.gd -- pck="out/axolotl-$ID.pck" out=out/manifest.json \
+            seq="$SEQ" sha="$SHA" url="$URL" channel="$CHANNEL" run_id="${{ github.run_id }}" \
+            run_number="${{ github.run_number }}" run_attempt="${{ github.run_attempt }}" \
+            run_url="${{ github.server_url }}/${{ github.repository }}/actions/runs/${{ github.run_id }}"
+          cat out/manifest.json
+          openssl dgst -sha256 -sign "$RUNNER_TEMP/ota_key.pem" -out out/manifest.sig.bin out/manifest.json
+          base64 -w0 out/manifest.sig.bin > out/manifest.json.sig
+          rm -f out/manifest.sig.bin "$RUNNER_TEMP/ota_key.pem"
+          # Same client code as the phone: signature, runtime, size, SHA-256, and the game version
+          # inside the pack == manifest == canonical source.
+          godot --headless --path . -s tools/ota_inspect_pack.gd -- manifest=out/manifest.json \
+            sig=out/manifest.json.sig pck="out/axolotl-$ID.pck" platform=android \
+            expect_version="${{ steps.ident.outputs.game_version }}" | tee inspect.log
+          grep -q "INSPECT OK" inspect.log
+
+      - name: Publish immutable release (PCK + manifest + signature)
+        if: steps.key.outputs.ok == 'true'
+        env:
+          GH_TOKEN: ${{ github.token }}
+          ID: ${{ steps.src.outputs.ota_id }}
+          TAG: ${{ steps.src.outputs.tag }}
+          SHA: ${{ steps.src.outputs.sha }}
+          GV: ${{ steps.ident.outputs.game_version }}
+        run: |
+          if gh release view "$TAG" >/dev/null 2>&1; then
+            echo "::error::$TAG already exists; OTA releases are immutable"; exit 1
+          fi
+          gh release create "$TAG" --target "$SHA" --prerelease \
+            --title "OTA $ID (game v$GV, ${SHA:0:12})" \
+            --notes "Immutable dev-channel OTA. Source $SHA. Runtime ${{ steps.ident.outputs.runtime_id }}. Game v$GV. Built by run ${{ github.run_id }}." \
+            "out/axolotl-$ID.pck" out/manifest.json out/manifest.json.sig
+
+      - name: Re-download published objects and verify them
+        if: steps.key.outputs.ok == 'true'
+        env:
+          ID: ${{ steps.src.outputs.ota_id }}
+          TAG: ${{ steps.src.outputs.tag }}
+        run: |
+          mkdir -p dl
+          B="${{ github.server_url }}/${{ github.repository }}/releases/download/$TAG"
+          for i in 1 2 3 4 5; do
+            curl -fsSL -o "dl/axolotl-$ID.pck" "$B/axolotl-$ID.pck" && curl -fsSL -o dl/manifest.json "$B/manifest.json" \
+              && curl -fsSL -o dl/manifest.json.sig "$B/manifest.json.sig" && break
+            sleep $((i * 5))
+          done
+          cmp out/manifest.json dl/manifest.json
+          cmp out/manifest.json.sig dl/manifest.json.sig
+          test "$(sha256sum dl/axolotl-$ID.pck | cut -d' ' -f1)" = "$(jq -r .pck_sha256 out/manifest.json)"
+          godot --headless --path . -s tools/ota_inspect_pack.gd -- manifest=dl/manifest.json \
+            sig=dl/manifest.json.sig pck="dl/axolotl-$ID.pck" platform=android | tee inspect_dl.log
+          grep -q "INSPECT OK" inspect_dl.log
+
+      - name: Move the channel pointer forward
+        if: steps.key.outputs.ok == 'true'
+        env:
+          GH_TOKEN: ${{ github.token }}
+          ID: ${{ steps.src.outputs.ota_id }}
+          TAG: ${{ steps.src.outputs.tag }}
+          SEQ: ${{ steps.src.outputs.seq }}
+        run: |
+          PTAG="ota-channel-$CHANNEL"
+          B="${{ github.server_url }}/${{ github.repository }}/releases/download"
+          if ! gh release view "$PTAG" >/dev/null 2>&1; then
+            gh release create "$PTAG" --prerelease --title "OTA channel pointer: $CHANNEL" \
+              --notes "Mutable pointer (latest.json) to the newest immutable $CHANNEL OTA. Do not delete."
+          fi
+          CUR=$(curl -fsSL "$B/$PTAG/latest.json" 2>/dev/null | jq -r '.seq // 0' || echo 0)
+          if [ "${CUR:-0}" -ge "$SEQ" ]; then
+            echo "::warning::channel already points at seq $CUR >= $SEQ; pointer left unchanged"
+            echo "POINTER_MOVED=false" >> $GITHUB_ENV
+            exit 0
+          fi
+          jq -n --arg ch "$CHANNEL" --arg id "$ID" --argjson seq "$SEQ" \
+            --arg m "$B/$TAG/manifest.json" --arg s "$B/$TAG/manifest.json.sig" \
+            --arg at "$(date -u +%Y-%m-%dT%H:%M:%SZ)" \
+            '{channel:$ch, ota_id:$id, seq:$seq, manifest_url:$m, signature_url:$s, published_at:$at}' > latest.json
+          gh release upload "$PTAG" latest.json --clobber
+          for i in 1 2 3 4 5 6; do
+            GOT=$(curl -fsSL "$B/$PTAG/latest.json?nocache=$RANDOM" | jq -r .ota_id || true)
+            [ "$GOT" = "$ID" ] && break
+            sleep $((i * 5))
+          done
+          test "$GOT" = "$ID"
+          echo "POINTER_MOVED=true" >> $GITHUB_ENV
+
+      - name: Publication receipt
+        if: always()
+        env:
+          ID: ${{ steps.src.outputs.ota_id }}
+          TAG: ${{ steps.src.outputs.tag }}
+        run: |
+          PUBLISHED=false
+          [ "${{ steps.key.outputs.ok }}" = "true" ] && [ "${{ job.status }}" = "success" ] && PUBLISHED=true
+          jq -n --arg id "$ID" --arg sha "${{ steps.src.outputs.sha }}" --arg rt "${{ steps.ident.outputs.runtime_id }}" \
+            --arg gv "${{ steps.ident.outputs.game_version }}" --arg ch "$CHANNEL" \
+            --arg rel "${{ github.server_url }}/${{ github.repository }}/releases/tag/$TAG" \
+            --arg ptr "${{ github.server_url }}/${{ github.repository }}/releases/download/ota-channel-$CHANNEL/latest.json" \
+            --arg run "${{ github.run_id }}" --arg pub "$PUBLISHED" --arg moved "${POINTER_MOVED:-false}" \
+            --slurpfile m <(cat out/manifest.json 2>/dev/null || echo '{}') \
+            '{published:($pub=="true"), channel:$ch, ota_id:$id, source_sha:$sha, runtime_id:$rt, game_version:$gv,
+              pck_sha256:($m[0].pck_sha256 // null), pck_size:($m[0].pck_size // null), manifest:$rel,
+              channel_pointer:$ptr, pointer_moved:($moved=="true"), build_run:$run}' > receipt.json
+          cat receipt.json
+          {
+            echo "## OTA publication receipt"
+            echo ""
+            echo '```json'
+            cat receipt.json
+            echo '```'
+          } >> $GITHUB_STEP_SUMMARY
+      - uses: actions/upload-artifact@v4
+        if: always()
+        with:
+          name: ota-receipt-${{ steps.src.outputs.ota_id }}
+          path: |
+            receipt.json
+            out/manifest.json
+            out/manifest.json.sig
