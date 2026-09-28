@@ -556,7 +556,7 @@ These are implemented but lack automated evidence. They are **not** unimplemente
     - Finishing now needs all seven balls; the pause menu's completion shows the larger catalog (a finished run's time is kept).
 
 14. **After the Expansion 5 OTA is active (ecosystem):**
-    - Mossy Meadow's tall reed bed (south hills) and Reed Canyon's floor: watch for reeds moving on their own. A reed stalker is in there. When it rears and hisses (the reeds thrash), step sideways; hit it while it lies low.
+    - Mossy Meadow's tall reed bed (south hills), Reed Canyon's floor and Giant Stems' far jungle: watch for reeds moving on their own. A reed stalker is in there. When it rears and hisses (the reeds thrash), step sideways; hit it while it lies low.
     - Grotto mouths on Terrace Steps, Reed Canyon and Hollow Grotto: a crab raises its claws and clacks when you come close. Back off, or stay and fight it (three swipes; sidestep its charge).
     - Inside the grottoes (and Current Hollows' cave): glow-worms dim as you pass. In the walls, eyes brighten and bubbles rise before an eel strikes: step back out of reach, or swipe it while it is out.
     - Pufferfish drift at jump height (Current Hollows, Terrace Steps, Reed Canyon, Hollow Grotto): they puff up when you come close. Go round them.
@@ -585,7 +585,7 @@ repository. Do not name, open or use any other game repository in Mote developme
   [ ] 6. Full expansion integration + progression/balance/100%/speedrun reconciliation
 
   New completion-bearing content must extend the catalog as `docs/COMPLETION.md` describes.
-- **Expansion list:** items 1–4 of 6 are done (dev-000018, dev-000019, dev-000020, dev-000021/22). Item 5 (ecosystem) is authorised with owner design decisions recorded; item 6's prompt is received and starts only after item 5 is published and verified.
+- **Expansion list:** items 1–5 of 6 are done (dev-000018, dev-000019, dev-000020, dev-000021/22, dev-000023). Item 6's prompt is received; it starts in a later session when the owner says so.
 - **Next task:** the owner's phone checks (§16), including the dev-000015..18 changes.
 - **After that:** continue from the owner's feedback. Game-layer changes reach b22 by OTA on push
   (that push is also the first OTA a b22 phone downloads). Native changes need `--bump` and a new APK.
