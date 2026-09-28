@@ -55,6 +55,25 @@ func run(runner) -> void:
 		t.check("debug_reached_ball3", p.ball == g.balls[2], "")
 		_report()
 		return
+	if Settings.test_args.get("start", "") == "probe":
+		# Debug: what stands at --ball=N --lat --lon (surfaces above the ground, top down).
+		g.start_play(true)
+		var pb := g.balls[int(Settings.test_args.get("ball", "3")) - 1]
+		var dd := MossBall.dir_ll(float(Settings.test_args.get("lat", "0")), float(Settings.test_args.get("lon", "0")))
+		var top := pb.surface_point(dd, 20.0)
+		var space := g.get_world_3d().direct_space_state
+		var excl: Array[RID] = []
+		for k in 8:
+			var q := PhysicsRayQueryParameters3D.create(top, pb.surface_point(dd, -1.0), 0xFFFF)
+			q.exclude = excl
+			var hit := space.intersect_ray(q)
+			if hit.is_empty():
+				break
+			var col: Object = hit["collider"]
+			t.log_line("probe: %.2f m up: %s layer %d meta %s" % [pb.altitude(hit["position"]), str(col), (col as CollisionObject3D).collision_layer, str(col.get_meta("grounded", col.get_meta("terrain_kind", ""))) if col is Node else ""])
+			excl.append((col as CollisionObject3D).get_rid())
+		_report()
+		return
 	if Settings.test_args.get("start", "") == "fight":
 		# Debug scenario: fight one parasite (--ball=N --zone=Z [--kind=K]) from 8 m off.
 		g.start_play(true)
@@ -381,6 +400,7 @@ var _perf_max := 0.0
 var _hb := 0.0
 var _last_hp := 99
 var _last_eat_try := -99.0
+var _high_logged := {}
 
 
 func _nearest_threat() -> String:
@@ -408,6 +428,15 @@ func tick() -> void:
 		_perf_proc += ms
 		_perf_max = maxf(_perf_max, ms)
 	_last_us = now
+	# Invariant (Expansion 6): no parasite ends up high above the ground unless it is flying.
+	if int(sim_time * 60.0) % 120 == 0:
+		for par in p.ball.parasites:
+			if par.is_alive() and not par.state in ["flung", "init"] and par.ball.altitude(par.global_position) > par.spawn_h + 2.0:
+				var key := "%d" % par.get_instance_id()
+				if not _high_logged.has(key):
+					_high_logged[key] = true
+					t.log_line("PARASITE HIGH: %s %s %s at %.1f m (spawned %.1f m), state %s, standing on %s" % [par.zone_id, par.variant, str(par.get_meta("completion_id", "")),
+							par.ball.altitude(par.global_position), par.spawn_h, par.state, str(par.standing_on.get_meta("grounded", par.standing_on.name)) if is_instance_valid(par.standing_on) else "-"])
 	if p.health < _last_hp:
 		t.log_line("hurt at %.1fs: hp %d (%s; nearest threat %s)" % [sim_time, p.health, activity, _nearest_threat()])
 	_last_hp = p.health

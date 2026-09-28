@@ -3481,6 +3481,38 @@ func _test_parasite_combat() -> void:
 	t.check("parasite_combat_cheap", us < 400.0, "%.0f us per engaged parasite per frame (desktop)" % us)
 	park.call()
 
+	# --- It never climbs what its crawl cannot: sent under a jungle ladder's first leaf (and past
+	# its stem), a parasite stays on the ground.
+	var jb := g.balls[2]
+	var lad: Dictionary = {}
+	for h in (jb.get_meta("builder") as LevelBuilder).bot_hints:
+		if h.has("route") and str(h["route"]).begins_with("jungle"):
+			lad = h
+			break
+	if not lad.is_empty():
+		var twin_c := Parasite.new()
+		var st: Vector3 = lad["start"]
+		var leaf0: Vector3 = (lad["tops"] as Array)[0]
+		twin_c.setup(jb, Parasite.Kind.MEDIUM, jb.parasites[0].zone_id, jb.up_at(st), 20.0)
+		jb.add_child(twin_c)
+		place_at(jb.index, jb.surface_point(jb.up_at(st - (leaf0 - st) * 3.0), 0.2), Vector3.FORWARD)
+		await t.frames(2)
+		twin_c._set_state("graze")
+		var highest := 0.0
+		for k in 4:
+			# Crawl toward the ground under the leaf and on past the stem, from different sides.
+			var aim: Vector3 = leaf0 + (leaf0 - st).rotated(jb.up_at(leaf0), k * 0.6) * (0.5 + k * 0.4)
+			twin_c._graze_target = jb.surface_point(jb.up_at(aim))
+			twin_c._graze_t = 99.0
+			for i in 60 * 3:
+				await t.frames(1)
+				highest = maxf(highest, jb.altitude(twin_c.global_position) - twin_c._ground_offset)
+		t.check("parasites_never_climb_stems", highest < Parasite.MAX_STEP + 0.1, "highest %.2f m off the ground (first leaf %.2f m up)" % [highest, jb.altitude(leaf0)])
+		twin_c.hp = 0
+		jb.zones[twin_c.zone_id]["total"] -= 1
+		jb.events_total -= 1
+		twin_c.queue_free()
+
 	# --- Determinism: the same parasite set up twice decides the same way, and setting one up
 	# never draws from the gameplay random sequence. ---
 	seed(4242)

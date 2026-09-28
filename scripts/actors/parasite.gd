@@ -50,6 +50,8 @@ var hit_cd := 0.0
 var _shaken := 0.0
 
 # --- Combat behaviour (Expansion 6) ---
+## The highest step up it crawls onto (anything higher is a wall to it).
+const MAX_STEP := 0.5
 ## Neighbours within this distance of one that spots the axolotl join in.
 const ALERT_R := 8.0
 ## At most this many parasites (and globs in flight) committed to an attack on a ball at once...
@@ -558,8 +560,9 @@ func _move(dir: Vector3, spd: float, dt: float) -> void:
 		_face(dir.normalized(), dt * 5.0)
 	var step := heading * spd * dt + _pushed * dt
 	_pushed = _pushed.move_toward(Vector3.ZERO, dt * 6.0)
-	# Parasites grip the moss: they never crawl off a ledge on their own.
-	if step.length() > 0.0001 and not _ground_ahead(global_position + step * 4.0):
+	# Parasites grip the moss: they never crawl off a ledge on their own, and never into a wall
+	# (a stem, rock, a cave's side).
+	if step.length() > 0.0001 and (not _ground_ahead(global_position + step * 4.0) or _wall_ahead(step)):
 		_graze_target = global_position - heading * 1.0
 		_graze_t = 1.0
 		heading = -heading
@@ -805,15 +808,34 @@ func _face(dir: Vector3, t: float) -> void:
 	heading = (heading - up * heading.dot(up)).normalized()
 
 
+## Rock or a stem just ahead along `step`, at body height.
+func _wall_ahead(step: Vector3) -> bool:
+	var dir := step.normalized()
+	var a := global_position + up * seg_radius
+	var q := PhysicsRayQueryParameters3D.create(a, a + dir * (seg_radius * 1.5 + step.length() * 4.0), 1)
+	var hit := get_world_3d().direct_space_state.intersect_ray(q)
+	# (A surface facing up is ground rising gently, not a wall.)
+	return not hit.is_empty() and (hit["normal"] as Vector3).dot(up) < 0.6
+
+
+## Walkable ground at `p`: something to grip, no more than a small step above where it stands
+## (Expansion 6: a spitter backing away climbed a jungle stem's leaves out of reach; a parasite
+## never climbs what its crawl cannot).
 func _ground_ahead(p: Vector3) -> bool:
 	var u := ball.up_at(p)
 	var q := PhysicsRayQueryParameters3D.create(p + u * 1.0, p - u * 0.9, 1 | 2)
-	return not get_world_3d().direct_space_state.intersect_ray(q).is_empty()
+	var hit := get_world_3d().direct_space_state.intersect_ray(q)
+	if hit.is_empty():
+		return false
+	var rise: float = ((hit["position"] as Vector3) - (global_position - up * _ground_offset)).dot(u)
+	return rise < MAX_STEP
 
 
 func _snap_ground() -> void:
 	up = ball.up_at(global_position)
-	var from := global_position + up * 1.2
+	# (From a small step above its feet: from higher up, a low leaf overhead was taken for ground
+	# and it popped up onto the leaf, then climbed a jungle ladder out of reach.)
+	var from := global_position + up * (MAX_STEP + _ground_offset)
 	var q := PhysicsRayQueryParameters3D.create(from, global_position - up * 2.0, 1 | 2)
 	var hit := get_world_3d().direct_space_state.intersect_ray(q)
 	if hit.is_empty():
