@@ -14,7 +14,7 @@ func run(runner) -> void:
 	p.use_bot_input = true
 	await t.seconds(0.5)
 	var only: String = Settings.test_args.get("only", "")
-	for name_ in ["_test_startup", "_test_ota_and_version", "_test_mesh_winding", "_test_terrain", "_test_terrain_grounded", "_test_no_floating_platforms", "_test_parasite_locomotion", "_test_placements", "_test_tutorial_route", "_test_sphere_walk", "_test_jump_and_burst", "_test_coyote_and_buffer", "_test_swipe_direction_and_stages", "_test_hard_landing", "_test_food", "_test_food_reach", "_test_darter_and_burrower", "_test_food_repopulates", "_test_motes", "_test_checkpoint_and_regen", "_test_crumble", "_test_restoration_continuity", "_test_vortex", "_test_current", "_test_canopy", "_test_canopy_plain_jumps", "_test_climbs_physical", "_test_jungle_ladders_physical", "_test_caves", "_test_mounds", "_test_vegetation", "_test_vortex_mouths_clear", "_test_route_audit", "_test_new_areas", "_test_music", "_test_run_clock", "_test_completion_catalog", "_test_run_save_file", "_test_run_timer_live", "_test_run_continue", "_phase_continue_write", "_phase_continue_read", "_test_upgrades", "_test_ui", "_test_all_clear"]:
+	for name_ in ["_test_startup", "_test_ota_and_version", "_test_mesh_winding", "_test_terrain", "_test_terrain_grounded", "_test_no_floating_platforms", "_test_parasite_locomotion", "_test_placements", "_test_tutorial_route", "_test_sphere_walk", "_test_jump_and_burst", "_test_coyote_and_buffer", "_test_swipe_direction_and_stages", "_test_hard_landing", "_test_food", "_test_food_reach", "_test_darter_and_burrower", "_test_food_repopulates", "_test_motes", "_test_checkpoint_and_regen", "_test_crumble", "_test_restoration_continuity", "_test_vortex", "_test_current", "_test_canopy", "_test_canopy_plain_jumps", "_test_climbs_physical", "_test_jungle_ladders_physical", "_test_caves", "_test_mounds", "_test_vegetation", "_test_vortex_mouths_clear", "_test_route_audit", "_test_new_areas", "_test_ecosystem", "_test_music", "_test_run_clock", "_test_completion_catalog", "_test_run_save_file", "_test_run_timer_live", "_test_run_continue", "_phase_continue_write", "_phase_continue_read", "_test_upgrades", "_test_ui", "_test_all_clear"]:
 		# "_phase_*" tests are halves of a relaunch test: they run only when asked for by name
 		# (in a child process started by _test_run_continue).
 		if name_.begins_with("_phase") and only != name_:
@@ -663,6 +663,374 @@ func _test_route_audit() -> void:
 	t.check("elevated_motes_have_routes", orphans.is_empty(), ", ".join(orphans))
 
 
+# --- Expansion 5: ecosystem -----------------------------------------------------------------
+
+func _crit(sp: String, bi := -1) -> Critter:
+	for c in g.ecosystem.all_critters():
+		if c.species == sp and (bi < 0 or c.ball.index == bi):
+			return c
+	return null
+
+
+## Waits until `cond` holds (up to `timeout` s of play); returns the play time it took (-1 if never).
+func _until(cond: Callable, timeout: float) -> float:
+	var el := 0.0
+	while el < timeout:
+		if cond.call():
+			return el
+		await t.frames(1)
+		el += 1.0 / 60.0
+	return -1.0
+
+
+func _test_ecosystem() -> void:
+	var eco: Ecosystem = g.ecosystem
+	var all := eco.all_critters()
+	# Habitats: every species present, each where it belongs.
+	var n := {}
+	for c in all:
+		n[c.species] = n.get(c.species, 0) + 1
+	var hab_ok := n.size() == 8
+	var why: Array[String] = []
+	for c in all:
+		var b: MossBall = c.ball
+		match c.species:
+			"glowworm":
+				if (c as GlowWorms).count < 20:
+					why.append("ball %d glow-worms %d" % [b.index + 1, (c as GlowWorms).count])
+			"snail", "hopper":
+				if b.altitude(c.global_position) < 1.0:
+					why.append("ball %d %s on the ground" % [b.index + 1, c.species])
+			"puffer":
+				if b.altitude(c.global_position) < 1.2:
+					why.append("ball %d puffer low" % (b.index + 1))
+			"eel":
+				var e := c as CaveEel
+				if b.altitude(e.mouth) < 0.5 or b.altitude(e.mouth) > 2.5:
+					why.append("ball %d eel mouth at %.2f m" % [b.index + 1, b.altitude(e.mouth)])
+	hab_ok = hab_ok and why.is_empty()
+	t.check("eco_species_in_their_habitats", hab_ok, "%s %s" % [str(n), str(why)])
+	# Only the axolotl's ball, near him, runs.
+	place(0, 28, 5)
+	await t.seconds(0.6)
+	var act_ok := not eco.active.is_empty()
+	for c in eco.active:
+		act_ok = act_ok and c.ball == p.ball and c.global_position.distance_to(p.global_position) < Critter.ACTIVE_RANGE
+	var inactive := 0
+	for c in all:
+		if not c.active:
+			inactive += 1
+	t.check("eco_only_nearby_creatures_run", act_ok and inactive > all.size() / 2, "%d active of %d" % [eco.active.size(), all.size()])
+	# Creatures never draw from the random sequence gameplay (and the test bot) rely on.
+	seed(55)
+	var r1 := randi()
+	seed(55)
+	for c in all:
+		for k in 30:
+			c.tick(1.0 / 60.0)
+	var r2 := randi()
+	t.check("eco_leaves_gameplay_rng_alone", r1 == r2, "")
+	# Deterministic: two shoals from the same seed, disturbed the same way, move the same way.
+	var s1 := ShrimpShoal.new()
+	var s2 := ShrimpShoal.new()
+	s1.place(g.balls[0], MossBall.dir_ll(20, 20), 5.0, 999)
+	s2.place(g.balls[0], MossBall.dir_ll(20, 20), 5.0, 999)
+	for k in 90:
+		s1.tick(1.0 / 60.0)
+		s2.tick(1.0 / 60.0)
+	var same: bool = s1.centre.is_equal_approx(s2.centre) and s1._mm.get_instance_transform(3).origin.is_equal_approx(s2._mm.get_instance_transform(3).origin)
+	for s in [s1, s2]:
+		g.balls[0].critters.erase(s)
+		s.queue_free()
+	t.check("eco_deterministic", same, "")
+	# No creature can hurt the axolotl where he respawns or arrives (blooms, arrival points).
+	var unfair: Array[String] = []
+	for b in g.balls:
+		var spots: Array[Vector3] = [b.surface_point(b.start_dir), b.surface_point(b.arrival_dir)]
+		for bl in b.blooms:
+			spots.append(bl.respawn_point())
+		for sp in spots:
+			for c in b.critters:
+				var bad := false
+				if c is CrabGuardian:
+					bad = (c as CrabGuardian).post.distance_to(sp) < CrabGuardian.WARN_R + 1.0
+				elif c is CaveEel:
+					bad = (c as CaveEel).mouth.distance_to(sp) < CaveEel.STRIKE_REACH + 1.0
+				elif c is ReedStalker:
+					bad = (c as ReedStalker)._in_patch(sp, 1.0)
+				elif c is Pufferfish:
+					bad = b.surface_point((c as Pufferfish).home_dir).distance_to(sp) < 4.0
+				if bad:
+					unfair.append("ball %d %s near %s" % [b.index + 1, c.species, Levels._latlon(b.up_at(sp)).round()])
+	t.check("eco_no_threats_at_respawn_or_arrival", unfair.is_empty(), str(unfair))
+	await _test_crab()
+	await _test_eel()
+	await _test_stalker()
+	await _test_puffer()
+	await _test_ambient()
+	# Cost: every creature near the axolotl on the busiest ball, per physics frame.
+	place(2, 28, -26)
+	await t.seconds(0.6)
+	var t0 := Time.get_ticks_usec()
+	for k in 60:
+		for c in eco.active:
+			c.tick(1.0 / 60.0)
+	var us := (Time.get_ticks_usec() - t0) / 60.0
+	t.check("eco_tick_cheap", us < 1500.0, "%d creatures active, %.0f us per frame" % [eco.active.size(), us])
+	p.invuln_t = 0.0
+	p.restore_full()
+
+
+func _test_crab() -> void:
+	var crab := _crit("crab", 3) as CrabGuardian
+	var b := crab.ball
+	var up := b.up_at(crab.post)
+	var out := crab.facing
+	p.restore_full()
+	p.invuln_t = 0.0
+	# Close to its post: it warns first (claws up, clack), then charges; only the charge hurts.
+	var stand := b.surface_point(b.up_at(crab.post + out * 3.0), 0.2)
+	place_at(b.index, stand, crab.post - stand)
+	g.audio.set_ball(b.index, false)
+	var h0 := p.health
+	var tw: float = await _until(func(): return crab.state == "warn", 3.0)
+	var hurt_in_warn := false
+	var el := 0.0
+	var t_charge := -1.0
+	var far := 0.0
+	while el < 4.0:
+		await t.frames(1)
+		el += 1.0 / 60.0
+		if crab.state == "warn" and t_charge < 0.0 and p.health < h0:
+			hurt_in_warn = true
+		if crab.state == "charge" and t_charge < 0.0:
+			t_charge = el
+		far = maxf(far, crab.global_position.distance_to(crab.post))
+	t.check("crab_warns_before_charging", tw >= 0.0 and t_charge >= CrabGuardian.WARN_TIME - 0.05 and not hurt_in_warn,
+			"warned after %.2f s, charged %.2f s later" % [tw, t_charge])
+	t.check("crab_charge_hurts", p.health < h0, "health %d -> %d" % [h0, p.health])
+	t.check("crab_stays_in_territory", far <= CrabGuardian.TERRITORY + 0.2, "furthest %.2f m from its post" % far)
+	# Leave: it walks back to its post.
+	p.restore_full()
+	place_at(b.index, b.surface_point(b.up_at(crab.post + out * 14.0), 0.2), out)
+	await t.seconds(5.0)
+	t.check("crab_returns_to_post", crab.global_position.distance_to(crab.post) < 0.7 and crab.state == "rest", "%.2f m, %s" % [crab.global_position.distance_to(crab.post), crab.state])
+	# Standing at the edge of its territory: a warning, never a charge.
+	p.invuln_t = 0.0
+	stand = b.surface_point(b.up_at(crab.post + out * 4.5), 0.2)
+	place_at(b.index, stand, crab.post - stand)
+	var h1 := p.health
+	var charged := false
+	el = 0.0
+	while el < 4.0:
+		await t.frames(1)
+		el += 1.0 / 60.0
+		charged = charged or crab.state == "charge"
+	t.check("crab_warning_only_at_the_edge", not charged and p.health == h1, "")
+	# Three hits defeat it, once.
+	p.invuln_t = 999
+	var n0: int = g.run_save.earned().size()
+	for k in 3:
+		crab.hit(1, p.global_position)
+		await t.seconds(0.2)
+	var again := crab.hit(1, p.global_position)
+	await t.seconds(0.2)
+	t.check("crab_defeated_counts_once", crab.defeated and not again and g.run_save.earned().has(crab.threat_id) and g.run_save.earned().size() == n0 + 1,
+			"%s earned %s" % [crab.threat_id, g.run_save.earned().has(crab.threat_id)])
+	p.invuln_t = 0.0
+
+
+func _test_eel() -> void:
+	var eel := _crit("eel", 4) as CaveEel
+	var b := eel.ball
+	p.restore_full()
+	p.invuln_t = 0.0
+	# Behind the rock, close to the crevice: it never notices him through the wall.
+	var behind := b.surface_point(b.up_at(eel.mouth - eel.normal * 1.6), 0.2)
+	place_at(b.index, behind, eel.mouth - behind)
+	g.audio.set_ball(b.index, false)
+	var noticed: float = await _until(func(): return eel.state != "hidden", 2.5)
+	t.check("eel_never_strikes_through_rock", noticed < 0.0, "")
+	# In front of it: eyes and bubbles first, then the strike.
+	var front := b.surface_point(b.up_at(eel.mouth + eel.normal * 2.4), 0.2)
+	place_at(b.index, front, eel.mouth - front)
+	var ta: float = await _until(func(): return eel.state == "alert", 2.5)
+	var ts: float = await _until(func(): return eel.ext > 0.3, 2.5)
+	var most := 0.0
+	var el := 0.0
+	while el < 1.0:
+		most = maxf(most, eel.ext)
+		await t.frames(1)
+		el += 1.0 / 60.0
+	t.check("eel_telegraphs_then_strikes", ta >= 0.0 and ts >= CaveEel.ALERT_TIME - 0.05, "alert after %.2f s, strike %.2f s later" % [ta, ts])
+	t.check("eel_stays_in_its_crevice", most <= CaveEel.STRIKE_REACH + 0.01 and eel.mouth.distance_to(eel.global_position) < 0.01, "reached %.2f m" % most)
+	# Swiped while it is out: two hits and it is gone for good.
+	p.invuln_t = 999
+	var hits := 0
+	el = 0.0
+	while not eel.defeated and el < 15.0:
+		# (Stay in front of it: each strike knocks him back.)
+		if eel.state in ["hidden", "cooldown"] and p.global_position.distance_to(front) > 0.5:
+			place_at(b.index, front, eel.mouth - front)
+		if eel.hittable() and eel.hit(1, p.global_position):
+			hits += 1
+		await t.frames(1)
+		el += 1.0 / 60.0
+	t.check("eel_defeated_while_out", eel.defeated and hits == 2 and g.run_save.earned().has(eel.threat_id), "%d hits" % hits)
+	p.invuln_t = 0.0
+
+
+func _test_stalker() -> void:
+	var st := _crit("stalker", 4) as ReedStalker
+	var b := st.ball
+	p.restore_full()
+	p.invuln_t = 0.0
+	# The reeds move where it is before it can be seen: with him well away, its wake bends them.
+	var centre := b.surface_point(st.patch_dir)
+	var fr := MossBall.frame_at(st.patch_dir, 0.0)
+	var outside := b.surface_point(b.up_at(centre + fr.z * (deg_to_rad(st.patch_deg) * b.radius + 9.0)), 0.2)
+	place_at(b.index, outside, centre - outside)
+	g.audio.set_ball(b.index, false)
+	await t.seconds(1.5)
+	# Plants part around it: the strongest bend on a ring just beside its body.
+	var bend := 0.0
+	var su := b.up_at(st.global_position)
+	for k in 8:
+		var ring := st.global_position + MossBall.frame_at(su, k * 45.0).z * 0.7
+		bend = maxf(bend, g.wake.bend_at(b, b.surface_point(b.up_at(ring)), 3.0).length())
+	# (Too far to see it: beyond the distance at which it can be discovered.)
+	var away := p.body_center().distance_to(st.global_position)
+	t.check("stalker_moves_the_reeds_unseen", bend > 0.2 and away > st.seen_radius and st.state == "prowl", "bend %.2f beside it, %.1f m from him" % [bend, away])
+	# In its patch, close: it stalks, then telegraphs (rears, hisses, reeds thrash) before pouncing
+	# along a locked line. A sidestep during the telegraph avoids the pounce.
+	# (Standing on the patch side of it, so he is in its patch.)
+	var up := b.up_at(st.global_position)
+	var off := centre - st.global_position
+	off -= up * off.dot(up)
+	off = off.normalized() if off.length() > 0.5 else MossBall.frame_at(up, 0.0).z
+	var near := b.surface_point(b.up_at(st.global_position + off * 3.2), 0.2)
+	place_at(b.index, near, st.global_position - near)
+	var tt: float = await _until(func(): return st.state == "telegraph", 6.0)
+	var h0 := p.health
+	var lock := st._lock
+	var side := lock.cross(b.up_at(p.global_position)).normalized()
+	place_at(b.index, b.surface_point(b.up_at(p.global_position + side * 2.2), 0.2), p.facing)
+	var tp: float = await _until(func(): return st.state == "pounce", 2.0)
+	await t.seconds(0.6)
+	t.check("stalker_telegraphs_then_pounces", tt >= 0.0 and tp >= ReedStalker.TELEGRAPH - 0.05, "telegraph after %.2f s, pounce %.2f s later" % [tt, tp])
+	t.check("stalker_sidestep_avoids_pounce", p.health == h0 and st.heading.dot(lock) > 0.95, "")
+	# Standing in the line instead: the pounce lands.
+	p.invuln_t = 0.0
+	var h1 := p.health
+	await _until(func(): return st.state in ["stalk", "prowl"], 4.0)
+	off = centre - st.global_position
+	off -= b.up_at(st.global_position) * off.dot(b.up_at(st.global_position))
+	off = off.normalized() if off.length() > 0.5 else MossBall.frame_at(b.up_at(st.global_position), 0.0).z
+	near = b.surface_point(b.up_at(st.global_position + off * 3.0), 0.2)
+	place_at(b.index, near, st.global_position - near)
+	await _until(func(): return st.state == "telegraph", 6.0)
+	await _until(func(): return st.state == "recover", 2.0)
+	t.check("stalker_pounce_hurts_in_line", p.health < h1, "health %d -> %d" % [h1, p.health])
+	# Out of its patch it gives up.
+	p.invuln_t = 999
+	place_at(b.index, outside, centre - outside)
+	var gave: float = await _until(func(): return st.state == "prowl", 5.0)
+	t.check("stalker_gives_up_outside_its_patch", gave >= 0.0, "")
+	# Driven off, it comes back to its patch later, when he is away.
+	st.hit(1, p.global_position)
+	await t.frames(2)
+	st.hit(1, p.global_position)
+	var gone := st.defeated and not st.visible
+	g.clock.play_s += ReedStalker.RETURN_AFTER + 1.0
+	place_at(b.index, b.surface_point(b.up_at(centre + fr.z * 32.0), 0.2), fr.z)
+	var back: float = await _until(func(): return not st.defeated, 2.0)
+	t.check("stalker_driven_off_then_returns", gone and back >= 0.0 and st._in_patch(st.global_position, 0.5), "")
+	p.invuln_t = 0.0
+
+
+func _test_puffer() -> void:
+	var pf := _crit("puffer", 1) as Pufferfish
+	var b := pf.ball
+	p.restore_full()
+	p.invuln_t = 0.0
+	var under := b.surface_point(b.up_at(pf.global_position), 0.2)
+	var aside := b.surface_point(b.up_at(pf.global_position + MossBall.frame_at(b.up_at(under), 0).z * 2.0), 0.2)
+	place_at(b.index, aside, under - aside)
+	g.audio.set_ball(b.index, false)
+	var tin: float = await _until(func(): return pf.inflate > 0.99, 3.0)
+	t.check("puffer_puffs_up_near", tin >= PufferFish_INFLATE_MIN and pf.puffed, "fully puffed after %.2f s" % tin)
+	# Touching it puffed hurts once (then a pause); a swipe bats it away, it is not beaten.
+	# (It may already have brushed him while puffing up: start from a clean slate.)
+	p.restore_full()
+	p.invuln_t = 0.0
+	pf.contact_cd = 0.0
+	var h0 := p.health
+	pf.global_position = p.body_center() + b.up_at(p.global_position) * 0.4
+	await t.frames(2)
+	var h1 := p.health
+	pf.global_position = p.body_center() + b.up_at(p.global_position) * 0.4
+	await t.frames(20)
+	t.check("puffer_contact_hurts_once", h1 == h0 - 1 and p.health >= h1 - 0, "health %d -> %d -> %d" % [h0, h1, p.health])
+	var hit_ok := pf.hit(1, p.global_position)
+	await t.frames(10)
+	t.check("puffer_batted_not_beaten", hit_ok and pf.is_alive() and pf.visible and (pf.global_position - p.global_position).length() > 0.5, "")
+	p.invuln_t = 0.0
+	p.restore_full()
+
+
+const PufferFish_INFLATE_MIN := 0.5
+
+
+func _test_ambient() -> void:
+	# Shrimp scatter when he rushes at them, and drift back together.
+	var sh := _crit("shrimp", 0) as ShrimpShoal
+	var b := sh.ball
+	var from := b.surface_point(b.up_at(sh.centre + MossBall.frame_at(b.up_at(sh.centre), 0).z * 6.0), 0.2)
+	place_at(b.index, from, sh.centre - from)
+	g.audio.set_ball(b.index, false)
+	var ran: float = await _until(func():
+		stick_toward(sh.centre - p.global_position)
+		return sh.scatter > 0.9, 4.0)
+	p.bot_input = Vector2.ZERO
+	var calm: float = await _until(func(): return sh.scatter < 0.05, 12.0)
+	t.check("shrimp_scatter_then_regroup", ran >= 0.0 and calm >= 0.0, "scattered after %.2f s, regrouped %.2f s later" % [ran, calm])
+	# A snail tucks into its shell when he comes close.
+	var sn := _crit("snail", 5) as CanopySnail
+	b = sn.ball
+	place_at(b.index, sn.global_position + b.up_at(sn.global_position) * 0.3 + MossBall.frame_at(b.up_at(sn.global_position), 0).z * 1.2, -MossBall.frame_at(b.up_at(sn.global_position), 0).z)
+	g.audio.set_ball(b.index, false)
+	var tuck: float = await _until(func(): return sn.tuck > 0.9, 2.0)
+	t.check("snail_tucks_in_when_near", tuck >= 0.0, "")
+	# A hopper springs up its climb ahead of him.
+	var hp_ := _crit("hopper", 5) as LeafHopper
+	b = hp_.ball
+	var i0 := hp_.index
+	var h0 := b.altitude(hp_.global_position)
+	place_at(b.index, hp_.global_position + b.up_at(hp_.global_position) * 0.3 + MossBall.frame_at(b.up_at(hp_.global_position), 0).z * 1.5, -MossBall.frame_at(b.up_at(hp_.global_position), 0).z)
+	await _until(func(): return hp_.index != i0 and hp_._hop < 0.0, 3.0)
+	t.check("hopper_leads_up_the_climb", hp_.index > i0 and b.altitude(hp_.global_position) > h0 + 0.5, "step %d -> %d, %.1f -> %.1f m" % [i0, hp_.index, h0, b.altitude(hp_.global_position)])
+	# Glow-worms dim and draw up near him.
+	var gw := _crit("glowworm", 0) as GlowWorms
+	b = gw.ball
+	place_at(b.index, b.surface_point(b.up_at(gw.cave_centre), 0.2), MossBall.frame_at(b.up_at(gw.cave_centre), 0).z)
+	g.audio.set_ball(b.index, false)
+	await t.seconds(0.6)
+	var pp: Vector3 = gw._mat.get_shader_parameter("player_pos")
+	t.check("glowworms_react_to_him", gw.count >= 20 and pp.distance_to(p.body_center()) < 0.5, "%d worms" % gw.count)
+	# Every species is a discovery, counted once.
+	var ids := 0
+	for id in g.run_save.earned():
+		if str(id).begins_with("species."):
+			ids += 1
+	g.discover_species("snail")
+	g.discover_species("snail")
+	var after := 0
+	for id in g.run_save.earned():
+		if str(id).begins_with("species."):
+			after += 1
+	t.check("species_discovered_once", g.species_known("snail") and after - ids <= 1 and g.completion.has("species.snail"), "%d species known" % after)
+
+
 ## The new areas: four more balls, each distinct (size, palette, landmarks), linked as branches;
 ## their content is in the completion catalog; their caves are natural and hold pearls.
 func _test_new_areas() -> void:
@@ -707,8 +1075,8 @@ func _test_new_areas() -> void:
 
 ## Pinned: the current game's completion ids (sha256 of the ids in catalog order). A change means
 ## completion content changed: bump Completion.CATALOG_VERSION, update docs/COMPLETION.md, re-pin.
-const CATALOG_IDS_SHA := "d1c49999be977476571569650bdfdf6c5fca61acdccb66539ee353b42b060b94"
-const CATALOG_SIZE := 157
+const CATALOG_IDS_SHA := "bd5445feaec288e1192b1c7dd19b614d193fab78ea1be1dc2ce9e61e69ed710f"
+const CATALOG_SIZE := 172
 
 
 ## The timer's rules on a bare clock: start, what counts, background, finish, frame rates.
@@ -778,12 +1146,13 @@ func _test_completion_catalog() -> void:
 		half[id] = 1
 	var pc := cat.percent(half)
 	t.check("completion_partial", pc > 0.0 and pc < 100.0 and cat.remaining(half).size() == cat.size() - 20, "%.2f%%" % pc)
-	# Finishing (every ball restored) without the caves and blooms: below 100%.
+	# Finishing (every ball restored) without the caves, blooms and wildlife: below 100%
+	# (restoration 45% + milestones 13.5% since catalog version 3 added wildlife).
 	var fin := {}
 	for id in cat.order:
 		if cat.entries[id]["category"] in ["restoration", "milestones"]:
 			fin[id] = 1
-	t.check("completion_finished_below_100", is_equal_approx(cat.percent(fin), 65.0) and cat.percent_display(fin) == 65, "%.2f%%" % cat.percent(fin))
+	t.check("completion_finished_below_100", is_equal_approx(cat.percent(fin), 58.5) and cat.percent_display(fin) == 58, "%.2f%%" % cat.percent(fin))
 	var all := {}
 	for id in cat.order:
 		all[id] = 1
@@ -994,15 +1363,26 @@ func _phase_continue_write() -> void:
 	var bl7: Bloom = b7.blooms[1]
 	place_at(6, bl7.global_position + b7.up_at(bl7.global_position) * 0.3, -MossBall.frame_at(b7.up_at(bl7.global_position), 0.0).z)
 	g.audio.set_ball(6, false)
+	# Expansion 5: beat Hollow Grotto's guardian crab (a completion entry that must stay beaten).
+	var crab7: CrabGuardian = null
+	for c in b7.critters:
+		if c is CrabGuardian:
+			crab7 = c
+	p.invuln_t = 999
+	for k in 3:
+		crab7.hit(1, p.global_position)
+		await t.seconds(0.2)
+	g.discover_species("crab")
+	p.invuln_t = 0.0
 	await t.seconds(1.0)
 	g.save_run()
 	var st := {"earned": g.run_save.earned().keys(), "run_s": g.clock.run_s, "r0": b.restoration, "r6": b7.restoration, "checkpoint": bl7.get_meta("completion_id"),
 			"max_hp": p.max_health, "par": par.get_meta("completion_id"), "mote": m.get_meta("completion_id"), "run_id": g.run_save.run()["id"],
-			"par7": par7.get_meta("completion_id"), "pearl": pearl.get_meta("completion_id", "")}
+			"par7": par7.get_meta("completion_id"), "pearl": pearl.get_meta("completion_id", ""), "crab7": crab7.threat_id}
 	var f := FileAccess.open(g.run_save.path + ".expect", FileAccess.WRITE)
 	f.store_string(JSON.stringify(st))
 	f.close()
-	t.check("write_earned_progress", st["earned"].size() >= 7 and b.restoration > 0.0 and b7.restoration > 0.0 and g.checkpoint == bl7
+	t.check("write_earned_progress", st["earned"].size() >= 9 and crab7.defeated and st["earned"].has(crab7.threat_id) and b.restoration > 0.0 and b7.restoration > 0.0 and g.checkpoint == bl7
 			and p.ball == b7 and pearl.kind == "pearl" and st["earned"].has(st["pearl"]), str(st["earned"]))
 
 
@@ -1035,6 +1415,21 @@ func _phase_continue_read() -> void:
 			par7 = x
 	t.check("read_new_area_progress", par7 != null and not par7.is_alive() and b7.upgrades[0].taken and is_equal_approx(b7.restoration, float(st["r6"]))
 			and is_equal_approx(g.ball_disp[6], b7.restoration), "ball 7 restoration %.3f (saved %.3f)" % [b7.restoration, float(st["r6"])])
+	# The beaten guardian stays beaten (and not counted twice); the species stays discovered; the
+	# other creatures are there as usual.
+	var crab7: CrabGuardian = null
+	var others := 0
+	for c in b7.critters:
+		if c is CrabGuardian:
+			crab7 = c
+		elif c.visible:
+			others += 1
+	var dup := 0
+	for id in g.run_save.earned():
+		if id == st["crab7"]:
+			dup += 1
+	t.check("read_creatures_restored", crab7 != null and crab7.defeated and not crab7.visible and crab7.threat_id == st["crab7"] and dup == 1
+			and g.species_known("crab") and others > 0, "crab %s defeated %s; %d other creatures" % [st["crab7"], crab7.defeated if crab7 else false, others])
 	t.check("read_resumes_at_last_bloom", g.checkpoint != null and g.checkpoint.get_meta("completion_id") == st["checkpoint"]
 			and p.ball == b7 and p.global_position.distance_to(g.checkpoint.respawn_point()) < 1.0,
 			"checkpoint %s (saved %s), ball %d, %.2f m from its respawn point" % [g.checkpoint.get_meta("completion_id") if g.checkpoint else "none", st["checkpoint"],

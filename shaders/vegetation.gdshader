@@ -22,8 +22,8 @@ uniform float current_strength = 0.0;
 uniform float impulse_gain = 1.0;
 uniform float cam_fade = 1.8;
 // Wake (scripts/world/wake.gd): a = position + radius, b = velocity + strength.
-uniform vec4 wake_a[24];
-uniform vec4 wake_b[24];
+uniform vec4 wake_a[32];
+uniform vec4 wake_b[32];
 uniform int wake_count = 0;
 uniform vec4 wake_bounds = vec4(0.0);
 // How strongly this family answers the wake, and its full height (for movers passing over it).

@@ -46,6 +46,8 @@ var blooms: Array = []
 var crumbles: Array = []
 var flex_leaves: Array = []
 var upgrades: Array = []
+## Expansion 5's creatures (Critter): ambient life and threats.
+var critters: Array = []
 var vortex_out: Node = null
 ## Every vortex that starts or ends on this ball.
 var vortices: Array = []

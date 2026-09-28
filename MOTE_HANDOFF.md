@@ -548,7 +548,15 @@ These are implemented but lack automated evidence. They are **not** unimplemente
     - The new caves hold pearls (they refill health). Ball 2's thin kelp stalks now have drooping leaves (decoration).
     - Finishing now needs all seven balls; the pause menu's completion shows the larger catalog (a finished run's time is kept).
 
-Record results in the ledger (O-19, A-05, R-01, R-14, R-19, S-03, S-06, S-14, F-07, F-09, P-01, P-03, P-06, M-01, M-03, E1-01, E1-07, E1-09, E2-01, E2-02, E2-04, E2-05, E3-01, E3-02, E3-04, E4-01..E4-05) only with the owner's evidence.
+14. **After the Expansion 5 OTA is active (ecosystem):**
+    - Mossy Meadow's tall reed bed (south hills) and Reed Canyon's floor: watch for reeds moving on their own. A reed stalker is in there. When it rears and hisses (the reeds thrash), step sideways; hit it while it lies low.
+    - Grotto mouths on Terrace Steps, Reed Canyon and Hollow Grotto: a crab raises its claws and clacks when you come close. Back off, or stay and fight it (three swipes; sidestep its charge).
+    - Inside the grottoes (and Current Hollows' cave): glow-worms dim as you pass. In the walls, eyes brighten and bubbles rise before an eel strikes: step back out of reach, or swipe it while it is out.
+    - Pufferfish drift at jump height (Current Hollows, Terrace Steps, Reed Canyon, Hollow Grotto): they puff up when you come close. Go round them.
+    - Shrimp shoals scatter when you run at them; snails tuck in on the leaves; leaf hoppers spring up the climbs ahead of you.
+    - Each new species shows "New species: …" once; the pause menu's completion has a Wildlife line.
+
+Record results in the ledger (O-19, A-05, R-01, R-14, R-19, S-03, S-06, S-14, F-07, F-09, P-01, P-03, P-06, M-01, M-03, E1-01, E1-07, E1-09, E2-01, E2-02, E2-04, E2-05, E3-01, E3-02, E3-04, E4-01..E4-05, E5-02..E5-06) only with the owner's evidence.
 
 ## 17. Repository isolation
 

@@ -15,14 +15,15 @@ extends RefCounted
 ## - Finishing the game (every moss ball restored) is separate from 100%.
 
 ## Bump whenever the set of entries changes.
-const CATALOG_VERSION := 2
+const CATALOG_VERSION := 3
 
 ## id: [label, share of 100%]. Shares must sum to 100.
 const CATEGORIES := {
-	"restoration": ["Moss restored", 50.0],
-	"caves": ["Hidden caves", 20.0],
-	"blooms": ["Blooms found", 15.0],
-	"milestones": ["Milestones", 15.0],
+	"restoration": ["Moss restored", 45.0],
+	"caves": ["Hidden caves", 18.0],
+	"blooms": ["Blooms found", 13.5],
+	"milestones": ["Milestones", 13.5],
+	"wildlife": ["Wildlife", 10.0],
 }
 
 ## Milestone ids that are not tied to one node.
@@ -135,6 +136,7 @@ static func ball_restored_id(index: int) -> String:
 ##   b1.<zone>.parasite.<n>, b1.<zone>.mote.<n>   restoration (n counts within the zone, from 0)
 ##   b1.cave.<n>                                   caves (health upgrades in hidden caves)
 ##   b1.bloom.<n>                                  blooms (checkpoints)
+##   b5.crab.<n>, b5.eel.<n>, species.<name>       wildlife (Expansion 5)
 ##   b1.restored, vortex.b1-b2, ending.all_clear   milestones
 static func build_from_world(balls: Array, vortices: Array) -> Completion:
 	var cat := Completion.new()
@@ -161,6 +163,18 @@ static func build_from_world(balls: Array, vortices: Array) -> Completion:
 			var id := "%s.bloom.%d" % [tag, i]
 			b.blooms[i].set_meta("completion_id", id)
 			cat.add(id, "blooms", "Bloom found")
+	# Wildlife (Expansion 5): each species discovered, and each guardian crab and cave eel defeated.
+	for b in balls:
+		var tag := ball_tag(b.index)
+		var n := {}
+		for c in b.critters:
+			if c.species in ["crab", "eel"]:
+				var k := "%s.%s" % [tag, c.species]
+				c.threat_id = "%s.%d" % [k, n.get(k, 0)]
+				n[k] = n.get(k, 0) + 1
+				cat.add(c.threat_id, "wildlife", "Crab guardian defeated" if c.species == "crab" else "Cave eel defeated")
+	for sp in Ecosystem.SPECIES:
+		cat.add("species." + sp, "wildlife", "Species discovered: " + Ecosystem.SPECIES[sp])
 	for b in balls:
 		cat.add(ball_restored_id(b.index), "milestones", "Moss ball %d restored" % (b.index + 1))
 	for v in vortices:

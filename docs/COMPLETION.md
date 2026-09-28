@@ -54,31 +54,36 @@ timing model (`RunClock.TIMER_MODEL`).
 - **100% complete**: every entry in the catalog earned.
 
 You can finish below 100%: finishing needs only the restoration (and the milestones it brings).
-The hidden caves and all the blooms are what's left. Finishing with none of them is **65%**.
+The hidden caves, the blooms and the wildlife are what's left. Finishing with none of them is **58.5%**
+(65% before catalog version 3).
 
-## Completion catalog (catalog version 2)
+## Completion catalog (catalog version 3)
 
-Version 2 came with Expansion 4 (four new moss balls, dev-000021). Version 1 had 87 entries on three
-balls; version 2 has 157 on seven. No version 1 id changed.
+- **Version 3** came with Expansion 5 (the ecosystem): a Wildlife category, 172 entries (was 157).
+- **Version 2** came with Expansion 4 (four new moss balls): 157 entries (was 87).
+- No id has ever changed.
 
 Each category has a fixed share of 100%. Inside a category every entry counts equally (weight 1).
+Version 3 made room for Wildlife by scaling the other shares.
 
-| Category | Share | Entries (v1 → v2) | What earns it |
+| Category | Share (v2 → v3) | Entries (v1 → v2 → v3) | What earns it |
 |---|---|---|---|
-| Moss restored (`restoration`) | 50% | 64 → 110 | a parasite cleared (30 → 50), a mote returned to the moss (34 → 60) |
-| Hidden caves (`caves`) | 20% | 3 → 7 | the reward in each hidden cave: the health upgrade (balls 1–3) or a pearl (balls 4, 5 and 7; ball 7 has two caves) |
-| Blooms found (`blooms`) | 15% | 14 → 26 | touching a bloom (checkpoint) |
-| Milestones (`milestones`) | 15% | 6 → 14 | each moss ball fully restored (3 → 7), each vortex opened (2 → 6), the aquarium all clear (1) |
+| Moss restored (`restoration`) | 50% → 45% | 64 → 110 → 110 | a parasite cleared (50), a mote returned to the moss (60) |
+| Hidden caves (`caves`) | 20% → 18% | 3 → 7 → 7 | the reward in each hidden cave: the health upgrade (balls 1–3) or a pearl (balls 4, 5 and 7; ball 7 has two caves) |
+| Blooms found (`blooms`) | 15% → 13.5% | 14 → 26 → 26 | touching a bloom (checkpoint) |
+| Milestones (`milestones`) | 15% → 13.5% | 6 → 14 → 14 | each moss ball fully restored (7), each vortex opened (6), the aquarium all clear (1) |
+| Wildlife (`wildlife`) | — → 10% | 0 → 0 → 15 | each of the 8 species discovered (a first close look), each guardian crab (3) and cave eel (4) defeated |
 
-A pearl is a new cave reward: it refills health instead of adding a heart, so the new caves count
-toward completion without making the game easier in the old balls.
+A pearl is a cave reward: it refills health instead of adding a heart, so the new caves count toward
+completion without making the game easier in the old balls.
 
 Percent = the sum over categories that have entries of share × earned weight ÷ total weight,
 normalised by those categories' shares. It shows as a whole number rounded **down**, so 100% appears
 only when every entry is earned. Earning the same id twice counts once.
 
-**Finishing now needs all seven balls restored** (owner decision for Expansion 4). Finishing with
-no caves and no blooms is still **65%**.
+**Finishing needs all seven balls restored** (owner decision for Expansion 4). Finishing with no
+caves, blooms or wildlife is **58.5%** (65% before version 3). Wildlife is never needed to finish,
+and nothing about it can be farmed: each species counts once, and each guardian and eel once.
 
 ### Ids
 
@@ -95,10 +100,13 @@ Ids are permanent and come from level-data order, which is deterministic. `b1` i
 - Caves: `b1.cave.0`, `b2.cave.0`, `b3.cave.0`, `b4.cave.0`, `b5.cave.0`, `b7.cave.0`, `b7.cave.1`.
 - Blooms: `b1.bloom.0`–`b1.bloom.3`, `b2.bloom.0`–`b2.bloom.4`, `b3.bloom.0`–`b3.bloom.4`, and
   `b<n>.bloom.0`–`b<n>.bloom.2` for balls 4–7.
+- Wildlife: `species.shrimp`, `species.snail`, `species.hopper`, `species.glowworm`,
+  `species.stalker`, `species.crab`, `species.eel`, `species.puffer`; `b4.crab.0`, `b5.crab.0`,
+  `b7.crab.0`; `b2.eel.0`, `b5.eel.0`, `b7.eel.0`, `b7.eel.1`.
 - Milestones: `b1.restored` … `b7.restored`; `vortex.b1-b2`, `vortex.b2-b3`, `vortex.b1-b4`,
   `vortex.b2-b5`, `vortex.b3-b6`, `vortex.b4-b7`; `ending.all_clear`.
 
-The unit test `completion_ids_unique_and_pinned` pins the count (157) and a SHA-256 of the ids in
+The unit test `completion_ids_unique_and_pinned` pins the count (172) and a SHA-256 of the ids in
 catalog order. Any change to completion content fails it on purpose.
 
 ## Extending the catalog (Expansions 2–6)
@@ -149,7 +157,7 @@ The "Run timer & completion" section shows:
 
 In `scripts/tests/unit_tests.gd`:
 - `_test_run_clock`: the start, active, pause, background, cap, finish, frozen, serialisation, frame-rate and wall-clock rules, and formatting.
-- `_test_completion_catalog`: pinned unique ids; shares sum to 100; 0%, partial, finished below 100% (65%), exactly 100%, never above 100%; duplicates count once; growth changes the denominator and keeps earned ids; ids are stamped on the world.
+- `_test_completion_catalog`: pinned unique ids; shares sum to 100; 0%, partial, finished below 100% (58.5%), exactly 100%, never above 100%; duplicates count once; growth changes the denominator and keeps earned ids; ids are stamped on the world.
 - `_test_run_save_file`: migration from no progress, write and reload, best time, New Run keeps records, damaged file uses the backup, newer format untouched, partial data completed, outside OTA storage.
 - `_test_run_timer_live`: starts at play, advances in play, paused by the pause menu and in the background, saved when backgrounded, Diagnostics, HUD timer toggle, pause menu and title.
 - `_test_run_continue`: a real relaunch (from an exported pack, pass `--pack=<its file>`). A child process plays (clears a parasite, returns a mote, finds a bloom and a cave) and saves. A second child continues: same run and ids, timer continues, restoration, cleared things, cave and health all restored, resumed at the last bloom, and the timer keeps running.

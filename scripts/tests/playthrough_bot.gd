@@ -283,6 +283,10 @@ func goto(target: Variant, radius := 0.9, timeout := 45.0, allow_vortex: Vortex 
 			var threat := _threat()
 			if threat:
 				await fight_parasite(threat, 6.0)
+		# Expansion 5's creatures: read their telegraphs and get out of the way (or fight a crab).
+		var ct := _critter_threat()
+		if ct:
+			await handle_critter(ct)
 		if p.health <= 1 and p.max_health > 1:
 			await eat_nearby(8.0)
 		var dir := flat.normalized()
@@ -502,6 +506,94 @@ func _threat() -> Parasite:
 				and absf(height_of(par.global_position)) < 1.2:
 			return par
 	return null
+
+
+## A creature showing its telegraph (or charging) near the axolotl, or null.
+func _critter_threat() -> Critter:
+	for c in p.ball.critters:
+		if not c.active or c.defeated:
+			continue
+		var d: float = c.global_position.distance_to(p.global_position)
+		if c is CrabGuardian and c.state in ["warn", "charge"] and d < 6.0:
+			return c
+		if c is CaveEel and c.state == "alert" and (c as CaveEel).mouth.distance_to(p.body_center()) < CaveEel.STRIKE_REACH + 1.0:
+			return c
+		if c is ReedStalker and c.state == "telegraph" and d < 6.0:
+			return c
+		if c is Pufferfish and c.puffed and d < c.radius() + 1.6:
+			return c
+	return null
+
+
+## What a player learns to do: sidestep a stalker's locked pounce line, back out of an eel's reach
+## while it bubbles, steer clear of a puffed pufferfish, and beat a crab that is guarding the way
+## (hit it while it warns or after its charge, sidestep the charge).
+func handle_critter(c: Critter) -> void:
+	var up := p.up
+	if c is ReedStalker:
+		var lock: Vector3 = (c as ReedStalker)._lock
+		var side := lock.cross(up).normalized()
+		if side.dot(p.global_position - c.global_position) < 0.0:
+			side = -side
+		for k in 30:
+			set_stick(stick_for(side))
+			await tick()
+		set_stick(Vector2.ZERO)
+		# After the pounce it lies low: strike back if it is close.
+		for k in 40:
+			await tick()
+			if c.state == "recover" and c.global_position.distance_to(p.global_position) < 2.6:
+				await press("swipe")
+				break
+	elif c is CaveEel:
+		var e := c as CaveEel
+		var away := p.body_center() - e.mouth
+		away -= up * away.dot(up)
+		for k in 40:
+			set_stick(stick_for(away.normalized()))
+			await tick()
+			if e.state not in ["alert", "strike", "hold"]:
+				break
+		set_stick(Vector2.ZERO)
+	elif c is Pufferfish:
+		var away := p.global_position - c.global_position
+		away -= up * away.dot(up)
+		for k in 30:
+			set_stick(stick_for(away.normalized()))
+			await tick()
+		set_stick(Vector2.ZERO)
+	elif c is CrabGuardian:
+		await fight_crab(c as CrabGuardian, 12.0)
+
+
+func fight_crab(crab: CrabGuardian, timeout := 15.0) -> void:
+	var el := 0.0
+	while not crab.defeated and el < timeout and p.state == "normal":
+		var to := crab.global_position - p.global_position
+		to -= p.up * to.dot(p.up)
+		if crab.state == "charge":
+			var side := crab._vel.cross(p.up).normalized()
+			if side.dot(-to) < 0.0:
+				side = -side
+			for k in 12:
+				set_stick(stick_for(side))
+				await tick()
+			el += 0.2
+			continue
+		if to.length() > 1.9:
+			set_stick(stick_for(to.normalized()))
+			await tick()
+			el += 1.0 / 60.0
+			continue
+		# Close: turn away so the tail sweeps across it, then swipe.
+		for k in 5:
+			set_stick(stick_for(-to.normalized(), 0.35))
+			await tick()
+		set_stick(Vector2.ZERO)
+		await press("swipe")
+		await wait(0.35)
+		el += 0.45
+	set_stick(Vector2.ZERO)
 
 
 ## Swipe a parasite: bring it behind/beside, then tail-swipe. Dodges big telegraphs.
@@ -946,6 +1038,9 @@ func cave(b: MossBall, h: Dictionary) -> void:
 	var door: Vector3 = h["door"]
 	for attempt in 3:
 		await goto(entry, 0.8, 60.0)
+		for c in b.critters:
+			if c is CrabGuardian and not c.defeated and c.post.distance_to(entry) < 6.0:
+				await fight_crab(c, 20.0)
 		await goto(door, 0.8, 10.0)
 		var tops := []
 		for l in ledges:

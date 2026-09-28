@@ -17,6 +17,8 @@ var sfx: Sfx
 var audio: AudioDirector
 ## The movers' disturbance in the vegetation (cosmetic only).
 var wake: Wake
+## Expansion 5's creatures: placement, activation near the axolotl, discovery (docs/ECOSYSTEM.md).
+var ecosystem: Ecosystem
 var balls: Array[MossBall] = []
 var vortices: Array[Vortex] = []
 var player: Axolotl
@@ -204,6 +206,10 @@ func _build_world() -> void:
 	for b in balls:
 		_initial_food(b)
 	StartupTrace.mark("food placed")
+	ecosystem = Ecosystem.new()
+	add_child(ecosystem)
+	ecosystem.populate(balls)
+	StartupTrace.mark("creatures placed")
 	await _stage("Setting up the tank")
 
 	hud = Hud.new()
@@ -340,6 +346,9 @@ func _apply_run() -> void:
 	for v in vortices:
 		if e.has(v.get_meta("completion_id", "")):
 			v.connected = true
+	for c in ecosystem.all_critters():
+		if c.threat_id != "" and e.has(c.threat_id):
+			c.restore_defeated()
 	player.restore_full()
 	if world.is_empty():
 		return
@@ -573,8 +582,21 @@ const SWIPE_AIM_MAX := deg_to_rad(60.0)
 const SWIPE_AIM_TARGET := deg_to_rad(80.0)
 
 
-## Flattened offset from the swiping axolotl to a parasite, or ZERO when out of reach.
-func _swipe_offset(p: Axolotl, par: Parasite) -> Vector3:
+## Everything on the axolotl's ball the tail swipe and hard landings can strike: live parasites and
+## creatures that can be hit (Critter.hittable).
+func _strikeable(p: Axolotl) -> Array:
+	var out := []
+	for par in p.ball.parasites:
+		if par.is_alive():
+			out.append(par)
+	for c in p.ball.critters:
+		if c.active and c.hittable():
+			out.append(c)
+	return out
+
+
+## Flattened offset from the swiping axolotl to a parasite or creature, or ZERO when out of reach.
+func _swipe_offset(p: Axolotl, par: Node3D) -> Vector3:
 	var c := p.body_center()
 	var to: Vector3 = par.closest_body_point(c) - c
 	if to.length() > SWIPE_REACH + par.body_extent() or absf(to.dot(p.up)) > 1.5:
@@ -588,8 +610,9 @@ func _swipe_offset(p: Axolotl, par: Parasite) -> Vector3:
 func swipe_aim(p: Axolotl) -> Vector3:
 	var best := Vector3.ZERO
 	var bd := INF
-	for par in p.ball.parasites:
-		if not par.is_alive():
+	for par in _strikeable(p):
+		# (Aim assist never turns him toward a pufferfish: swiping one only bats it away.)
+		if par is Pufferfish:
 			continue
 		var flat := _swipe_offset(p, par)
 		if flat != Vector3.ZERO and flat.length() < bd:
@@ -609,9 +632,7 @@ func swipe_aim(p: Axolotl) -> Vector3:
 
 func player_swipe(p: Axolotl) -> void:
 	var connected := false
-	for par in p.ball.parasites:
-		if not par.is_alive():
-			continue
+	for par in _strikeable(p):
 		var flat := _swipe_offset(p, par)
 		if flat == Vector3.ZERO:
 			continue
@@ -629,11 +650,12 @@ func player_swipe(p: Axolotl) -> void:
 
 func pressure_wave(p: Axolotl, pos: Vector3, radius: float, stages: int) -> void:
 	var hit := false
-	for par in p.ball.parasites:
-		if not par.is_alive():
-			continue
+	for par in _strikeable(p):
 		var cp: Vector3 = par.closest_body_point(pos)
 		if cp.distance_to(pos) > radius + par.body_extent():
+			continue
+		if par is Critter:
+			hit = par.hit(stages, pos) or hit
 			continue
 		var s := stages
 		if par.kind == Parasite.Kind.SMALL:
@@ -731,6 +753,25 @@ func parasite_killed(par: Parasite) -> void:
 	Sfx.play("drain", par.global_position)
 	ball.complete_event(par.zone_id, par.global_position, 12.0)
 	_hide_prompt("swipe", true)
+
+
+## A creature defeated by the axolotl (crab guardians and cave eels are completion entries).
+func critter_defeated(c: Critter) -> void:
+	stats["critters"] = int(stats.get("critters", 0)) + 1
+	_earn(c.threat_id)
+	WaterFX.inst.sparkle(c.global_position, Color(0.85, 1.0, 0.8, 0.9), 16, 1.8, 0.07, 1.0)
+	Sfx.play("drain", c.global_position, -4.0)
+
+
+func species_known(sp: String) -> bool:
+	return run_save != null and run_save.earned().has("species." + sp)
+
+
+## The first close look at a species (once per run).
+func discover_species(sp: String) -> void:
+	if _earn("species." + sp):
+		hud.show_discovery("New species: %s" % Ecosystem.SPECIES.get(sp, sp))
+		Sfx.play("discover", null, -4.0)
 
 
 func mote_restored(m: Mote) -> void:

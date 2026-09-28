@@ -332,6 +332,27 @@ plus big formations; four new areas.
 | E4-10 | Performance measured | I+V | MultiMesh ladders; per-ball simulation only | `docs/WORLD.md` Performance |
 | E4-11 | Ships by OTA, no APK | I+V | game layer only; runtime r5 | dev-000021 (OTA publish #21, run 36383509240, source `9ed29db`, PCK `7415e907…162274`, 8,882,636 bytes, baked, save schema 1): signature (pinned key), hash, size and inspector verified from public URLs; a b22 client downloads, verifies and stages it; `_test_route_audit`, `_test_new_areas`, `_test_completion_catalog`, `_test_caves`, `_test_climbs_physical` pass run from the pack. CI on that commit found `_test_upgrades` stopping silently on Canopy Spire (no cave); fixed with the runner now failing any test that reports nothing: dev-000022 (OTA publish #22, run 36385605395, source `fe3e0fd`, PCK `48597241…1e5894`, 8,883,196 bytes; same game, tests only) verified the same way; Build & Verify #30 green, Android APK job skipped |
 
+## E5 — Expansion 5: ecosystem / creatures / enemies (owner, 2026-09-28)
+
+Design, audit and measurements: `docs/ECOSYSTEM.md`; catalog v3 in `docs/COMPLETION.md`. Owner
+decisions: threats = reed stalker, crab guardian, cave eel, pufferfish; ambient = shrimp shoals,
+canopy snails, leaf hoppers, cave glow-worms; completion = species discovered + guardians and eels
+defeated; guardians and eels stay defeated, stalkers and puffers return, ambient life is not saved.
+
+| ID | Requirement | Status | Implementation | Evidence |
+|---|---|---|---|---|
+| E5-01 | Audit of the existing ecosystem | I+V | | `docs/ECOSYSTEM.md` Audit |
+| E5-02 | Varied creatures with distinct behaviour, not reskins | I+V / needs phone | 8 species (`scripts/actors/critters/`) on a shared `Critter` base | per-species tests (E5-05) |
+| E5-03 | Habitats give each ball its own life | I+V / needs phone | `Ecosystem.populate`: reeds, grotto mouths and walls, open water, open moss, leaves and shelves, climbs, ceilings | `eco_species_in_their_habitats` |
+| E5-04 | Vegetation reveals movers before they are seen | I+V / needs phone | creature wake points (32-point wake) | `stalker_moves_the_reeds_unseen` |
+| E5-05 | Fair, readable threats: telegraphs, no attacks through rock, no spawn damage, no chained damage | I+V / needs phone | telegraphs; line-of-sight on terrain; locked pounce line; threats kept off respawn and arrival points | `crab_*`, `eel_*`, `stalker_*`, `puffer_*`, `eco_no_threats_at_respawn_or_arrival` |
+| E5-06 | Cave and canopy life | I+V / needs phone | glow-worms in every grotto, guardians, eels; snails and hoppers on climbs | `glowworms_react_to_him`, `snail_tucks_in_when_near`, `hopper_leads_up_the_climb` |
+| E5-07 | Scalable cost: distant creatures do no work | I+V | activation within 38 m on the current ball; merged meshes; MultiMeshes | `eco_only_nearby_creatures_run`, `eco_tick_cheap`; `docs/ECOSYSTEM.md` Performance |
+| E5-08 | Completion: discoveries and significant threats only, never grind | I+V | catalog v3, 172 ids (+8 species, +3 crabs, +4 eels), no id changed | `completion_ids_unique_and_pinned`, `species_discovered_once`, `crab_defeated_counts_once` |
+| E5-09 | Save/load of creature state | I+V | defeated guardians and eels restored from ids | relaunch `read_creatures_restored` |
+| E5-10 | Determinism; both playthrough seeds viable | I+V | per-creature seeded generators | `eco_leaves_gameplay_rng_alone`, `eco_deterministic`; playthroughs on seeds 4242 and 7 |
+| E5-11 | Ships by OTA, no APK | pending | game layer only; runtime r5 | (next dev OTA) |
+
 ## Precedence notes
 
 - The reconciliation prompt's floor list repeats two items that the owner changed earlier today: "diegetic

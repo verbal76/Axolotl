@@ -73,6 +73,47 @@ func run(runner) -> void:
 			await t.seconds(2.5)
 			await t.shot("veg_%s_stopped" % v[3])
 		g.player.use_bot_input = false
+	if only == "" or only == "critters":
+		# Expansion 5: each species from where a player meets it (threats in their telegraphs).
+		var seen := {}
+		for c in g.ecosystem.all_critters():
+			if seen.has(c.species):
+				continue
+			seen[c.species] = true
+			var b: MossBall = c.ball
+			var pt: Vector3 = c.discover_point()
+			var up := b.up_at(pt)
+			var away := MossBall.frame_at(up, 30.0).z
+			if c is CaveEel:
+				away = (c as CaveEel).normal
+			elif c is CrabGuardian:
+				away = (c as CrabGuardian).facing
+			var dist := 3.2 if c is CaveEel else (2.6 if c is ShrimpShoal or c is CanopySnail or c is LeafHopper else 4.2)
+			var stand := b.surface_point(b.up_at(pt + away * dist), 0.3)
+			if c is GlowWorms:
+				stand = b.surface_point(b.up_at((c as GlowWorms).cave_centre), 0.3)
+			g.player.place(b, stand, pt - stand)
+			g.audio.set_ball(b.index, false)
+			g.cam.snap_behind()
+			g.cam.pitch = 0.35 if c is GlowWorms or c is CanopySnail or c is LeafHopper or c is Pufferfish else 0.15
+			await t.seconds(1.6 if c is CaveEel else 1.2)
+			await t.shot("critter_%s" % c.species)
+		# The stalker's telegraph in the reeds.
+		for c in g.ecosystem.all_critters():
+			if c is ReedStalker:
+				var st := c as ReedStalker
+				var b: MossBall = st.ball
+				var up := b.up_at(st.global_position)
+				var stand := b.surface_point(b.up_at(st.global_position + MossBall.frame_at(up, 0).z * 3.6), 0.3)
+				g.player.place(b, stand, st.global_position - stand)
+				g.audio.set_ball(b.index, false)
+				g.cam.snap_behind()
+				await t.seconds(0.5)
+				st._go("telegraph")
+				st._lock = (stand - st.global_position).normalized()
+				await t.seconds(0.5)
+				await t.shot("critter_stalker_telegraph")
+				break
 	if only == "" or only == "climbs":
 		# Every ball-3 jungle stem ladder and the mesa, from where a player stands underneath.
 		for bi in [2, 1]:

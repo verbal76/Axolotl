@@ -11,7 +11,7 @@ extends Node
 ## sampled every TRAIL_DT seconds, and strengths are functions of speed and age (never
 ## accumulated per frame).
 
-const MAX_POINTS := 24
+const MAX_POINTS := 32
 const TRAIL_DT := 0.1
 const TRAIL_LEN := 10
 const TRAIL_LIFE := 1.0
@@ -19,6 +19,8 @@ const TRAIL_LIFE := 1.0
 const REST := 0.3
 ## Parasites near the axolotl that also disturb vegetation.
 const MAX_PARASITES := 3
+## Wake points from Expansion 5's creatures (reed stalkers, crabs, scattering shrimp), nearest first.
+const MAX_CRITTER_POINTS := 8
 
 ## xyz = world position, w = radius of influence.
 var points_a := PackedVector4Array()
@@ -128,6 +130,10 @@ func update(dt: float) -> void:
 			_prev[key] = pts[j]
 			var r := par.seg_radius * 2.5 + 0.2
 			_add(pts[j], r, vel, 0.25 + 0.6 * clampf(vel.length() / 2.5, 0.0, 1.2))
+	# Creatures moving through the plants (Ecosystem): the reeds part where they really are.
+	if g.ecosystem:
+		for w in g.ecosystem.wake_points(p.global_position, MAX_CRITTER_POINTS):
+			_add(w[0], w[1], w[2], w[3])
 	# Bounds for the shader's quick reject.
 	var c := Vector3.ZERO
 	for i in count:

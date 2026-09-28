@@ -613,4 +613,4 @@ func cave(lat: float, lon: float, heading: float, radius := 8.0, reward := "heal
 	mmi.top_level = true
 	root.add_child(mmi)
 	bot_hints.append({"cave": true, "reward": u, "body": body, "shape": res[2], "centre": xf.origin, "entry": at(lat, lon, heading, 0, 0, -radius - 2.5).origin, "door": at(lat, lon, heading, 0, 0, -radius + 1.0).origin,
-			"ledges": [l1, l2, l3], "upgrade": up_xf.origin})
+			"ledges": [l1, l2, l3], "upgrade": up_xf.origin, "radius": radius})

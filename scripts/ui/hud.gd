@@ -14,6 +14,8 @@ var all_clear_label: Label
 var timer_label: Label
 ## Under ALL CLEAR: the run's frozen finish time.
 var finish_label: Label
+## "New species" note at the top of the screen (Expansion 5's discoveries).
+var discovery_label: Label
 
 var _stick_touch := -1
 var _stick_origin := Vector2.ZERO
@@ -68,6 +70,18 @@ func _ready() -> void:
 	finish_label.offset_top = 56
 	finish_label.modulate.a = 0.0
 	root.add_child(finish_label)
+	discovery_label = Label.new()
+	discovery_label.name = "Discovery"
+	discovery_label.set_anchors_preset(Control.PRESET_CENTER_TOP)
+	discovery_label.horizontal_alignment = HORIZONTAL_ALIGNMENT_CENTER
+	discovery_label.add_theme_font_size_override("font_size", 28)
+	discovery_label.add_theme_color_override("font_color", Color(0.85, 1.0, 0.92))
+	discovery_label.add_theme_color_override("font_outline_color", Color(0.05, 0.2, 0.18, 0.6))
+	discovery_label.add_theme_constant_override("outline_size", 4)
+	discovery_label.grow_horizontal = Control.GROW_DIRECTION_BOTH
+	discovery_label.offset_top = 70
+	discovery_label.modulate.a = 0.0
+	root.add_child(discovery_label)
 	timer_label = Label.new()
 	timer_label.name = "RunTimer"
 	timer_label.add_theme_font_size_override("font_size", 22)
@@ -281,6 +295,15 @@ func show_all_clear(finish_text := "") -> void:
 		tw.tween_property(l, "modulate:a", 1.0, 2.5)
 		tw.tween_interval(3.5 if l == all_clear_label else 5.5)
 		tw.tween_property(l, "modulate:a", 0.0, 3.0)
+
+
+## A short note that a new species was discovered ("New species: Canopy snail").
+func show_discovery(text: String) -> void:
+	discovery_label.text = text
+	var tw := create_tween()
+	tw.tween_property(discovery_label, "modulate:a", 1.0, 0.6)
+	tw.tween_interval(2.6)
+	tw.tween_property(discovery_label, "modulate:a", 0.0, 1.2)
 
 
 func _update_timer() -> void:

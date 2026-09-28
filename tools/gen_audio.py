@@ -431,11 +431,61 @@ def outside():
     write_wav("out_place", reverb(s, 0.25))
 
 
+def creatures():
+    # Expansion 5's creatures (docs/ECOSYSTEM.md). Own generator, so the sounds above never change.
+    r = np.random.default_rng(5005)
+    n = lambda d: int(d * SR)
+    # Crab guardian: a dry double clack (warning), then a skitter.
+    s = np.zeros(n(0.5))
+    for k, f in enumerate([2400, 2900]):
+        c = bandpass_fast(r.standard_normal(n(0.05)), f * 0.6, f * 1.4) * expdecay(n(0.05), 0.008)
+        place(s, 0.02 + k * 0.14, c, 1.0, wrap=False)
+    write_wav("sfx_crab_clack", s)
+    s = np.zeros(n(0.6))
+    for k in range(9):
+        c = bandpass_fast(r.standard_normal(n(0.03)), 1500, 4200) * expdecay(n(0.03), 0.006)
+        place(s, k * 0.06 + r.uniform(0, 0.02), c, r.uniform(0.4, 0.8), wrap=False)
+    write_wav("sfx_crab_skitter", s)
+    # Reed stalker: a rising breathy hiss through the reeds (the telegraph), then the pounce whoosh.
+    tt = t_axis(0.9)
+    s = bandpass_fast(r.standard_normal(len(tt)), 2500, 7000) * np.clip(tt / 0.8, 0, 1) ** 1.5 * (0.7 + 0.3 * np.sin(2 * np.pi * 23 * tt))
+    s += sweep_noise(0.9, 300, 900) * env_adsr(len(tt), 0.3, 0.2, 0.8, 0.2) * 0.4
+    write_wav("sfx_stalker_hiss", s)
+    s = sweep_noise(0.35, 900, 200) * env_adsr(n(0.35), 0.01, 0.1, 0.6, 0.2) + lowpass_fast(r.standard_normal(n(0.35)), 300) * expdecay(n(0.35), 0.08) * 0.8
+    write_wav("sfx_stalker_pounce", s)
+    # Cave eel: bubbles rising from the crevice (the telegraph), then a snap.
+    s = bubbles(0.9, 14, 300, 1100) + lowpass_fast(r.standard_normal(n(0.9)), 200) * 0.15
+    write_wav("sfx_eel_bubbles", reverb(s, 0.45))
+    tt = t_axis(0.25)
+    s = np.sin(2 * np.pi * (180 - 300 * tt) * tt) * expdecay(len(tt), 0.05) + bandpass_fast(r.standard_normal(len(tt)), 800, 3000) * expdecay(len(tt), 0.02) * 0.7
+    write_wav("sfx_eel_strike", reverb(s, 0.3))
+    # Pufferfish: a rubbery inflating swell, and a soft boing when it is batted away.
+    tt = t_axis(0.6)
+    s = np.sin(2 * np.pi * np.cumsum(120 + 260 * tt) / SR) * env_adsr(len(tt), 0.05, 0.1, 0.8, 0.2) + bubbles(0.6, 5, 300, 800) * 0.6
+    write_wav("sfx_puff_inflate", s)
+    tt = t_axis(0.35)
+    s = np.sin(2 * np.pi * np.cumsum(340 - 500 * tt * np.exp(-tt * 8)) / SR) * expdecay(len(tt), 0.1)
+    write_wav("sfx_puff_bounce", s)
+    # Shrimp shoal scattering: a flurry of tiny ticks and bubbles.
+    s = np.zeros(n(0.5))
+    for k in range(14):
+        c = bandpass_fast(r.standard_normal(n(0.02)), 3000, 8000) * expdecay(n(0.02), 0.004)
+        place(s, r.uniform(0, 0.35), c, r.uniform(0.3, 0.7), wrap=False)
+    s += bubbles(0.5, 6, 900, 2400) * 0.5
+    write_wav("sfx_shrimp_scatter", s)
+    # A new species discovered: a soft two-note chime.
+    s = np.zeros(n(1.2))
+    place(s, 0.0, kalimba(note_f(79), 1.0), 0.6, wrap=False)
+    place(s, 0.14, kalimba(note_f(86), 1.0), 0.5, wrap=False)
+    write_wav("sfx_discover", reverb(s, 0.4))
+
+
 def main():
     os.makedirs(OUT, exist_ok=True)
     sfx()
     ambience()
     outside()
+    creatures()
     print("audio written to", os.path.abspath(OUT))
 
 
