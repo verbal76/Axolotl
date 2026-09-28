@@ -275,8 +275,7 @@ func ladder_stem(stem_xf_: Transform3D, stem_h: float, r0: float, r1: float, ben
 	root.add_child(body)
 	body.global_transform = stem_xf_
 	body.set_meta("floats_by_design", "leaves attached to a stem")
-	var st := SurfaceTool.new()
-	st.begin(Mesh.PRIMITIVE_TRIANGLES)
+	var st := MeshLib.leaf_surface()
 	var nv := 0
 	var out := []
 	var tops := []

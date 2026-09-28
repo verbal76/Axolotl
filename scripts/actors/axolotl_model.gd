@@ -75,9 +75,44 @@ var _wave := 0.0            # body-wave phase (advances with movement)
 var _blink := 2.0
 var _bone_rot: Array[Vector3] = []
 var _land_pose := {}
+## Cosmetic randomness (blinks, idle choice and timing): its own generator, so animation never
+## moves the global random sequence gameplay uses.
+var _fx := RandomNumberGenerator.new()
+
+# Tail whip (physical playtest of dev-000024: the drawn arc swept 270 degrees while the tail barely
+# moved). The whip runs on its own clock from the swipe press: a short cock to one side, the strike
+# (the hips lead, the bend travels down the tail, which stretches out), follow-through past the far
+# side, then recovery. The tail tip passes straight behind him at the hit frame (0.09 s: the
+# swipe's timing, reach and damage are unchanged), and the water arc's bright head rides the tip.
+const WHIP_LEN := 0.55
+const WHIP_HIT_S := 0.09          # Axolotl.SWIPE_TIME * 0.3: the frame the hit registers
+var _whip_s := -1.0
+var _whip_side := 1.0
+var _prev_swipe_t := -1.0
+var whip_tip_az := 0.0            # the tail tip's direction round his body (0 = straight behind)
+
+# Idles (physical playtest of dev-000024): standing still, now and then he does one of a few
+# little things. Purely the model: the gameplay body, its collision and the camera never move.
+enum Idle { NONE = -1, LOOKAROUND, SCOOT, TILT, STRETCH }
+const IDLE_LEN := [4.6, 3.8, 2.8, 3.4]
+const IDLE_FIRST := Vector2(4.0, 8.0)     # first idle after he stops
+const IDLE_GAP := Vector2(7.0, 16.0)      # between idles while he stays still
+var idle_ok := false                      # set by the controller: nothing else going on
+var idle_kind: int = Idle.NONE
+var idle_s := 0.0
+var idle_side := 1.0
+var idle_count := 0
+var _idle_wait := -1.0
+var _still_s := 0.0
+var _idle_last: int = Idle.NONE
+var _idle_stride := 0.0
+var _leg_idle: Array = []
+var _leg_idle_w := 0.0
+var _leg_swing := 1.0
 
 
 func _ready() -> void:
+	_fx.seed = 0x6711
 	_build()
 
 
@@ -156,13 +191,14 @@ func _build() -> void:
 	_build_head(head_mat)
 	_build_legs(body_mat)
 
-	# Water arc shown during the tail swipe (270-degree sweep around the back and sides).
+	# Water arc shown during the tail swipe: the real hit area, drawn to scale (the 270 degrees
+	# behind and beside him, out to the swipe's reach from his body centre; Game.player_swipe).
 	swipe_fx = MeshInstance3D.new()
-	swipe_fx.mesh = _arc_mesh(1.55, 0.35)
+	swipe_fx.mesh = _arc_mesh(Game.SWIPE_REACH, 0.45)
 	_swipe_mat = ShaderMaterial.new()
 	_swipe_mat.shader = preload("res://shaders/swipe_arc.gdshader")
 	swipe_fx.material_override = _swipe_mat
-	swipe_fx.position = Vector3(0, 0.22, 0.05)
+	swipe_fx.position = Vector3(0, 0.25, 0.0)   # Axolotl.body_center()
 	swipe_fx.visible = false
 	swipe_fx.cast_shadow = GeometryInstance3D.SHADOW_CASTING_SETTING_OFF
 	add_child(swipe_fx)
@@ -483,7 +519,7 @@ func _arc_mesh(r_out: float, r_in: float) -> ArrayMesh:
 	var st := SurfaceTool.new()
 	st.begin(Mesh.PRIMITIVE_TRIANGLES)
 	var n := 28
-	var span := PI * 1.5
+	var span := ARC_SPAN
 	for i in n:
 		var a0 := -span / 2 + span * i / n
 		var a1 := -span / 2 + span * (i + 1) / n
@@ -495,6 +531,170 @@ func _arc_mesh(r_out: float, r_in: float) -> ArrayMesh:
 			st.set_uv(uv[k])
 			st.add_vertex(p[k])
 	return st.commit()
+
+
+# --- Tail whip ------------------------------------------------------------------------------
+
+const ARC_SPAN := PI * 1.5            # the swipe's 270 degrees (only the cone ahead is safe)
+const WHIP_HIP_SHARE := 0.4
+## Each bone's share of the tail's bend (head end first; the front half stays out of it).
+const WHIP_BONE_W := [0.0, 0.0, 0.0, 0.068, 0.108, 0.135, 0.135, 0.135, 0.122, 0.095, 0.068]
+
+
+## The whip's sweep (radians round him, 0 = straight behind, + toward the swipe's far side) at
+## `s` seconds from the press: cock to the near side, strike across, overshoot, settle, recover.
+static func whip_curve(s: float) -> float:
+	const COCK := -2.15
+	const OVER := 2.7
+	const HOLD := 2.0
+	if s <= 0.0:
+		return 0.0
+	if s < 0.045:
+		return COCK * sin(s / 0.045 * PI * 0.5)
+	if s < 0.15:
+		return lerpf(COCK, OVER, smoothstep(0.0, 1.0, (s - 0.045) / 0.105))
+	if s < 0.25:
+		return lerpf(OVER, HOLD, smoothstep(0.0, 1.0, (s - 0.15) / 0.1))
+	return lerpf(HOLD, 0.0, smoothstep(0.0, 1.0, clampf((s - 0.25) / (WHIP_LEN - 0.25), 0.0, 1.0)))
+
+
+func whip_active() -> bool:
+	return _whip_s >= 0.0
+
+
+# --- Idles ----------------------------------------------------------------------------------
+
+func _update_idle(dt: float) -> void:
+	var busy := not idle_ok or dissolve > 0.0 or swipe_t >= 0.0 or _whip_s >= 0.0 or lunge_t >= 0.0 or burst_t >= 0.0 \
+			or hurt_t >= 0.0 or land_t >= 0.0 or happy_t >= 0.0 or perk_t >= 0.0 or surf > 0.0 or brace > 0.0 or not grounded
+	if busy:
+		# Anything else going on ends an idle at once (the pose blends out in a few frames) and
+		# restarts the wait.
+		idle_kind = Idle.NONE
+		_still_s = 0.0
+		_idle_wait = -1.0
+		_idle_stride = 0.0
+		return
+	if idle_kind != Idle.NONE:
+		idle_s += dt
+		if idle_s >= IDLE_LEN[idle_kind]:
+			idle_kind = Idle.NONE
+			_still_s = 0.0
+			_idle_wait = _fx.randf_range(IDLE_GAP.x, IDLE_GAP.y)
+			_idle_stride = 0.0
+		else:
+			_idle_stride = _idle_pose_at(idle_kind, idle_s, idle_side).get("stride", 0.0)
+		return
+	_still_s += dt
+	if _idle_wait < 0.0:
+		_idle_wait = _fx.randf_range(IDLE_FIRST.x, IDLE_FIRST.y)
+	if _still_s >= _idle_wait:
+		# Any idle but the one just played, so no two in a row and no fixed order.
+		var pool: Array[int] = []
+		for k in IDLE_LEN.size():
+			if k != _idle_last:
+				pool.append(k)
+		start_idle(pool[_fx.randi() % pool.size()])
+
+
+func start_idle(kind: int) -> void:
+	idle_kind = kind
+	idle_s = 0.0
+	idle_side = -1.0 if _fx.randf() < 0.5 else 1.0
+	_idle_last = kind
+	idle_count += 1
+
+
+static func _env(s: float, a: float, b: float, c: float, d: float) -> float:
+	return smoothstep(a, b, s) * (1.0 - smoothstep(c, d, s))
+
+
+## The pose an idle adds at `s` seconds (mirrored by `side`). Legs: per leg (FL, FR, BL, BR)
+## (shoulder yaw, shoulder roll, elbow bend) for the left side, mirrored for the right.
+static func _idle_pose_at(kind: int, s: float, side: float) -> Dictionary:
+	var spine: Array = []
+	spine.resize(BONE_Z.size())
+	spine.fill(Vector2.ZERO)
+	var p := {"pos": Vector3.ZERO, "rot": Vector3.ZERO, "scale": Vector3.ONE, "head": Vector3.ZERO, "eye": 1.0, "mouth": 0.0,
+			"gback": 0.0, "gflap": 0.0, "gflare": 0.0, "wave": 1.0, "pivot": Vector3.ZERO, "spine": spine, "legs": [], "legw": 0.0,
+			"stride": 0.0, "swing": 1.0}
+	match kind:
+		Idle.LOOKAROUND:
+			# Up onto his back legs, a look one way and the other, and back down onto all fours.
+			var up := _env(s, 0.15, 0.95, 3.75, 4.45)
+			var th := 0.78 * up
+			var look := 0.85 * _env(s, 1.15, 1.55, 1.95, 2.3) - 0.85 * _env(s, 2.35, 2.8, 3.2, 3.55)
+			look *= side
+			p["pivot"] = Vector3(0, 0.03, BONE_Z[REAR_BONE])
+			p["rot"] = Vector3(th, look * 0.22, 0.0)
+			# Head kept near level (he looks out, not at the ceiling), turning with each look.
+			p["head"] = Vector3(-th * 0.62, look * 0.85, -look * 0.18)
+			# The tail stays down on the ground behind him as a counterweight, its tip lifting.
+			spine[REAR_BONE] = Vector2(-th, -look * 0.22)
+			spine[6] = Vector2(-0.07 * up, 0.0)
+			spine[7] = Vector2(-0.06 * up, 0.0)
+			p["wave"] = lerpf(1.0, 0.3, up)
+			# Front paws lifted and held in front of the chest; back legs splayed for balance.
+			p["legs"] = [Vector3(-0.55, 0.95, 0.95), Vector3(-0.55, 0.95, 0.95), Vector3(0.45, 0.25, -0.1), Vector3(0.45, 0.25, -0.1)]
+			p["legw"] = up
+			p["gflare"] = 0.55 * absf(look)
+			p["gflap"] = 0.25 * absf(look)
+			p["eye"] = 1.0 + 0.12 * up
+			var land := _env(s, 4.3, 4.42, 4.45, 4.6)
+			p["scale"] = Vector3(1.0 + 0.05 * land, 1.0 - 0.08 * land, 1.0)
+		Idle.SCOOT:
+			# A curious little scoot to one side, one to the other, and back to where he started.
+			var k1 := smoothstep(0.55, 0.95, s)
+			var k2 := smoothstep(1.75, 2.25, s)
+			var k3 := smoothstep(3.05, 3.5, s)
+			p["pos"] = Vector3(side * (0.2 * k1 - 0.38 * k2 + 0.18 * k3), 0.0, 0.0)
+			var m1 := _env(s, 0.5, 0.65, 0.85, 1.0)
+			var m2 := _env(s, 1.7, 1.85, 2.15, 2.3)
+			var m3 := _env(s, 3.0, 3.15, 3.4, 3.55)
+			var moving := side * (m1 - m2 + m3)          # + toward `side`
+			p["pos"].y = 0.025 * (m1 + m2 + m3)
+			p["stride"] = 0.75 * (m1 + m2 + m3)
+			p["swing"] = 0.35                            # feet patter sideways, not a walk
+			p["rot"] = Vector3(0.0, 0.0, -moving * 0.1)
+			var look := side * (0.55 * _env(s, 0.1, 0.45, 0.95, 1.3) - 0.6 * _env(s, 1.35, 1.65, 2.3, 2.6) + 0.3 * _env(s, 2.7, 2.95, 3.3, 3.6))
+			p["head"] = Vector3(0.0, look, 0.0)
+			# The body curves toward the scoot and the tail drags behind it.
+			for i in range(1, BONE_Z.size()):
+				spine[i] = Vector2(0.0, (-0.05 if i < 5 else 0.07) * moving)
+			p["gflap"] = 0.3 * (m1 + m2 + m3)
+			p["gflare"] = 0.35 * absf(look)
+		Idle.TILT:
+			# A curious head tilt one way, a blink, then the other way.
+			var t1 := _env(s, 0.2, 0.6, 1.05, 1.35)
+			var t2 := _env(s, 1.4, 1.75, 2.2, 2.55)
+			var roll := side * (0.42 * t1 - 0.38 * t2)
+			p["head"] = Vector3(-0.08 * (t1 + t2), side * (0.15 * t1 - 0.12 * t2), roll)
+			p["rot"] = Vector3(0.0, 0.0, roll * 0.12)
+			p["gflare"] = 0.6 * (t1 + t2)
+			p["gflap"] = 0.2 * (t1 + t2)
+			p["eye"] = (1.0 + 0.15 * (t1 + t2)) * (0.1 if absf(s - 1.37) < 0.07 else 1.0)
+			p["mouth"] = 0.5 * (t1 + t2)
+		Idle.STRETCH:
+			# A long stretch with a yawn (front legs reaching forward, back legs back, tail straight),
+			# then a quick shake from gills to tail.
+			var st := _env(s, 0.1, 0.8, 1.5, 2.0)
+			var yawn := _env(s, 0.4, 0.8, 1.25, 1.6)
+			p["scale"] = Vector3(1.0 - 0.05 * st, 1.0 - 0.07 * st, 1.0 + 0.1 * st)
+			p["pos"] = Vector3(0.0, -0.02 * st, 0.0)
+			p["head"] = Vector3(0.3 * yawn, 0.0, 0.0)
+			p["mouth"] = 1.9 * yawn
+			p["eye"] = lerpf(1.0, 0.12, yawn)
+			p["legs"] = [Vector3(-0.95, 0.2, 0.1), Vector3(-0.95, 0.2, 0.1), Vector3(1.0, 0.2, 0.05), Vector3(1.0, 0.2, 0.05)]
+			p["legw"] = st
+			p["gback"] = 0.9 * st
+			p["wave"] = lerpf(1.0, 0.15, st)
+			var sh := _env(s, 2.0, 2.1, 2.7, 3.0)
+			p["head"] += Vector3(0.0, sin(s * 38.0) * 0.32 * sh, 0.0)
+			p["rot"] = Vector3(0.0, 0.0, sin(s * 38.0 + 1.0) * 0.07 * sh)
+			p["gflap"] = sh
+			for i in range(3, BONE_Z.size()):
+				spine[i] = Vector2(0.0, sin(s * 30.0 - i * 0.7) * 0.13 * sh)
+	return p
 
 
 # --- Health (gills) -------------------------------------------------------------------------
@@ -559,10 +759,11 @@ func _process(dt: float) -> void:
 	# The body wave advances with movement (and idles slowly), so it matches the ground speed.
 	var s := clampf(speed, 0.0, 1.4)
 	if grounded:
-		_wave += dt * (1.2 + s * 10.5)
+		_wave += dt * (1.2 + maxf(s, _idle_stride) * 10.5)
 	else:
 		_wave += dt * 7.0
 	_advance_timers(dt)
+	_update_idle(dt)
 	_animate(dt)
 
 
@@ -589,7 +790,16 @@ func _advance_timers(dt: float) -> void:
 		if land_t > 1.0: land_t = -1.0
 	_blink -= dt
 	if _blink < -0.12:
-		_blink = randf_range(1.8, 4.5)
+		_blink = _fx.randf_range(1.8, 4.5)
+	# The whip clock starts on a new swipe (swipe_t restarting) and runs on past it.
+	if swipe_t >= 0.0 and (_prev_swipe_t < 0.0 or swipe_t < _prev_swipe_t):
+		_whip_s = 0.0
+		_whip_side = swipe_side
+	_prev_swipe_t = swipe_t
+	if _whip_s >= 0.0:
+		_whip_s += dt
+		if _whip_s > WHIP_LEN:
+			_whip_s = -1.0
 
 
 func _animate(dt: float) -> void:
@@ -626,11 +836,18 @@ func _animate(dt: float) -> void:
 		rig_scale = Vector3(0.94, 0.94, 1.0 + 0.18 * k)
 		gill_back = 1.1
 		mouth_open = 0.7
-	if swipe_t >= 0.0:
-		var k := swipe_t
-		rig_rot.y += sin(k * PI) * 0.45 * swipe_side
-		tail_base = lerpf(-1.0, 1.0, smoothstep(0.0, 1.0, k)) * swipe_side
-		wave_amp = 0.04
+	var whip := _whip_s >= 0.0
+	if whip:
+		# The hips lead the sweep and carry about 0.4 of it; the head turns back against the twist
+		# so his eyes stay on what he is swiping.
+		var hips := whip_curve(_whip_s + 0.012) * _whip_side * WHIP_HIP_SHARE
+		rig_rot.y += hips
+		head_rot.y -= hips * 0.6
+		wave_amp = 0.02
+		if _whip_s < 0.3:
+			leg_mode = 2
+		gill_back = maxf(gill_back, 0.8)
+		mouth_open = maxf(mouth_open, 0.8 * (1.0 - smoothstep(0.2, 0.4, _whip_s)))
 	if lunge_t >= 0.0:
 		var k := sin(clampf(lunge_t, 0.0, 1.0) * PI)
 		rig_pos.z -= 0.16 * k
@@ -694,14 +911,34 @@ func _animate(dt: float) -> void:
 		gill_flap = maxf(gill_flap, l["flap"])
 		wave_amp *= 0.4
 
-	if has_look and land_t < 0.0 and swipe_t < 0.0:
+	var ip := {}
+	if idle_kind != Idle.NONE:
+		ip = _idle_pose_at(idle_kind, idle_s, idle_side)
+		rig_pos += ip["pos"]
+		rig_rot += ip["rot"]
+		rig_scale *= ip["scale"]
+		head_rot += ip["head"]
+		eye_scale.y *= ip["eye"]
+		mouth_open = maxf(mouth_open, ip["mouth"])
+		gill_back = maxf(gill_back, ip["gback"])
+		gill_flap = maxf(gill_flap, ip["gflap"])
+		gill_flare = maxf(gill_flare, ip["gflare"])
+		wave_amp *= ip["wave"]
+		# Rotations pivot where the pose says (the hips, to rise onto the back legs), so the feet
+		# that stay down stay planted.
+		var pv: Vector3 = ip["pivot"]
+		rig_pos += pv - Basis.from_euler(ip["rot"]) * pv
+	elif grounded and s < 0.3:
+		# Breathing.
+		rig_scale.y *= 1.0 + 0.012 * sin(_t * 1.7)
+	if has_look and land_t < 0.0 and swipe_t < 0.0 and idle_kind == Idle.NONE:
 		var local := to_local(look_target)
 		head_rot.y += clampf(atan2(-local.x, -local.z), -0.7, 0.7)
 	if _blink < 0.0:
 		eye_scale.y *= 0.1
 
 	rig.position = rig.position.lerp(rig_pos, minf(1.0, dt * 18.0))
-	rig.rotation = rig.rotation.lerp(rig_rot, minf(1.0, dt * 14.0))
+	rig.rotation = rig.rotation.lerp(rig_rot, minf(1.0, dt * (60.0 if whip else 14.0)))
 	rig.scale = rig.scale.lerp(rig_scale * (1.0 - dissolve), minf(1.0, dt * 16.0))
 	head.rotation = head.rotation.lerp(head_rot, minf(1.0, dt * 12.0))
 	eye_l.scale = eye_l.scale.lerp(eye_scale * eye_l_scale, minf(1.0, dt * 20.0))
@@ -712,34 +949,51 @@ func _animate(dt: float) -> void:
 
 	# Spine: travelling S-wave (relative bend per bone), plus swipe whip and back arch.
 	var n := BONE_Z.size()
+	var spine_ip: Array = ip.get("spine", [])
+	# The tail tip's direction round him (for the whip's water arc): walked down the chain.
+	var hx := sin(rig.rotation.y) * BONE_Z[0]
+	var hz := cos(rig.rotation.y) * BONE_Z[0]
+	var heading := rig.rotation.y
 	for i in n:
 		var f := float(i) / (n - 1)
 		var amp := wave_amp * lerpf(0.12, 1.25, pow(f, 1.1))
 		var yaw := sin(_wave - i * wave_len) * amp
-		if swipe_t >= 0.0 and i >= 3:
-			# Whip: the rear half sweeps across with a little lag down the chain.
-			var lag := clampf(swipe_t * 1.25 - (i - 3) * 0.04, 0.0, 1.0)
-			yaw += lerpf(-1.0, 1.0, smoothstep(0.0, 1.0, lag)) * swipe_side * 0.32 * (1.0 if i >= 5 else 0.5)
+		if whip and i >= 3:
+			# Whip: the bend travels down the tail, each bone a little behind the one before.
+			yaw += whip_curve(_whip_s - (i - 3) * 0.008) * _whip_side * WHIP_BONE_W[i]
 		elif i >= 5:
 			yaw += tail_base * 0.12
 		var pitch := arch * (1.0 if i >= 5 else -0.4) * 0.5
 		if brace > 0.0 and i >= 5:
 			pitch -= 0.06 * brace
+		if not spine_ip.is_empty():
+			pitch += (spine_ip[i] as Vector2).x
+			yaw += (spine_ip[i] as Vector2).y
 		var target := Vector3(pitch, yaw, 0.0)
-		_bone_rot[i] = _bone_rot[i].lerp(target, minf(1.0, dt * 18.0))
+		_bone_rot[i] = _bone_rot[i].lerp(target, minf(1.0, dt * (70.0 if whip else 18.0)))
+		if i > 0:
+			heading += _bone_rot[i].y
+		var seg: float = (BONE_Z[i + 1] - BONE_Z[i]) if i < n - 1 else 0.12
+		hx += sin(heading) * seg
+		hz += cos(heading) * seg
 		if i == 0:
 			continue   # the head stays aligned with the controller's facing
 		skeleton.set_bone_pose_rotation(i, Quaternion.from_euler(_bone_rot[i]))
+	whip_tip_az = atan2(hx, hz)
+	_leg_idle = ip.get("legs", [])
+	_leg_idle_w = ip.get("legw", 0.0)
+	_leg_swing = ip.get("swing", 1.0)
 
 	_update_gills(dt, clampf(gill_back, 0.0, 1.4), gill_flap, gill_flare)
-	_animate_legs(dt, s, leg_mode)
+	_animate_legs(dt, maxf(s, ip.get("stride", 0.0)), leg_mode)
 
-	if swipe_t >= 0.0:
-		swipe_fx.visible = true
-		_swipe_mat.set_shader_parameter("progress", swipe_t)
-		_swipe_mat.set_shader_parameter("side", swipe_side)
-	else:
-		swipe_fx.visible = false
+	# The water arc: its bright head rides the tail tip, from the strike to the follow-through.
+	var arc_a := smoothstep(0.02, 0.05, _whip_s) * (1.0 - smoothstep(0.2, 0.34, _whip_s)) if whip else 0.0
+	swipe_fx.visible = arc_a > 0.0
+	if swipe_fx.visible:
+		_swipe_mat.set_shader_parameter("head", clampf((whip_tip_az + ARC_SPAN * 0.5) / ARC_SPAN, 0.0, 1.0))
+		_swipe_mat.set_shader_parameter("dir", _whip_side)
+		_swipe_mat.set_shader_parameter("strength", arc_a)
 
 
 ## Salamander gait: diagonal pairs (FL+BR, FR+BL) swing together, each leg protracting while
@@ -756,7 +1010,7 @@ func _animate_legs(dt: float, s: float, mode: int) -> void:
 		var bend := 0.0
 		match mode:
 			0:
-				var swing := sin(ph) * 0.62 * stride
+				var swing := sin(ph) * 0.62 * stride * _leg_swing
 				var lift := maxf(0.0, cos(ph)) * 0.55 * stride
 				yaw = side * swing * (1.0 if front else 0.85)
 				roll = side * lift * 0.8
@@ -777,6 +1031,11 @@ func _animate_legs(dt: float, s: float, mode: int) -> void:
 			yaw += fist.y
 			roll += fist.z
 			bend += fist.x * 0.5
+		if _leg_idle_w > 0.0 and not _leg_idle.is_empty():
+			var li: Vector3 = _leg_idle[i]    # (shoulder yaw, shoulder roll, elbow bend), mirrored per side
+			yaw = lerpf(yaw, side * li.x, _leg_idle_w)
+			roll = lerpf(roll, side * li.y, _leg_idle_w)
+			bend = lerpf(bend, side * li.z, _leg_idle_w)
 		legs[i].rotation = legs[i].rotation.lerp(Vector3(0, yaw, roll), minf(1.0, dt * 14.0))
 		_elbows[i].rotation = _elbows[i].rotation.lerp(Vector3(0, 0, bend), minf(1.0, dt * 14.0))
 

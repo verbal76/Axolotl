@@ -396,6 +396,10 @@ func run(runner) -> void:
 		g.g_disp = 1.0
 		g.aquarium.apply(1.0)
 		await _gill_shots(g, "gill_restored")
+	if only == "sway":
+		await _sway_shots(g)
+	if only == "gillanim":
+		await _gill_anim(g)
 	if only == "leafclose":
 		await _leaf_close(g, g.balls[2], "leaf_close")
 		for b in g.balls:
@@ -935,6 +939,115 @@ func _gill_shots(g: Game, prefix: String) -> void:
 	_close(g, p.global_position + gu * 2.2 - gf * 1.0, p.global_position + gu * 0.2 + gf * 0.2, gu)
 	await t.seconds(0.4)
 	await t.shot(prefix + "_top")
+	_open(g)
+
+
+## Gill's idles and tail whip (dev-000024 physical playtest polish), frame by frame. Slowed down
+## (Engine.time_scale) so the software renderer catches each moment at its time.
+func _gill_anim(g: Game) -> void:
+	var p := g.player
+	var m := p.model
+	for b in g.balls:
+		b.add_heal(Vector3.UP, 340.0, 0.0)
+	g.g_disp = 1.0
+	g.aquarium.apply(1.0)
+	var b0 := g.balls[0]
+	_look(g, 0, b0.surface_point(MossBall.dir_ll(12, 30), 0.1), Vector3.FORWARD)
+	await t.seconds(1.5)
+	var gu := p.up
+	var gf := p.facing
+	var gr := gf.cross(gu).normalized()
+	var c := p.global_position + gu * 0.3
+	Engine.time_scale = 0.2
+	var names := ["lookaround", "scoot", "tilt", "stretch"]
+	var times := [[0.0, 0.6, 1.1, 1.7, 2.1, 2.9, 3.4, 4.1, 4.6], [0.0, 0.8, 1.2, 2.1, 2.6, 3.3, 3.8], [0.0, 0.8, 1.37, 1.95, 2.8], [0.0, 0.7, 1.0, 1.8, 2.3, 2.5, 3.4]]
+	var kinds: Array = Settings.test_args.get("kinds", "0,1,2,3").split(",", false)
+	for ks in kinds:
+		var k := int(ks)
+		for view in ["side", "front"]:
+			if view == "side":
+				_close(g, c + gr * 2.3 + gf * 0.5 + gu * 0.45, c + gf * 0.1, gu)
+			else:
+				_close(g, c + gf * 2.1 + gr * 1.0 + gu * 0.7, c, gu)
+			m.idle_kind = AxolotlModel.Idle.NONE
+			await t.seconds(0.6)
+			var from := p.global_position
+			m.start_idle(k)
+			m.idle_side = 1.0
+			var shot_i := 0
+			for target in times[k]:
+				while m.idle_kind == k and m.idle_s < target:
+					await t.frames(1)
+				await t.shot("idle_%s_%s_%d" % [names[k], view, shot_i])
+				t.log_line("idle %s %s at %.2f s: rig offset %s, body moved %.4f m" % [names[k], view, m.idle_s, str(m.rig.position), from.distance_to(p.global_position)])
+				shot_i += 1
+			while m.idle_kind == k:
+				await t.frames(1)
+			await t.seconds(0.4)
+			t.log_line("idle %s done: rig offset %s (|%.4f|), body moved %.4f m" % [names[k], str(m.rig.position), m.rig.position.length(), from.distance_to(p.global_position)])
+	# The whip from above (its arc is the hit area) and from the game camera.
+	for view in (["above", "game"] if Settings.test_args.get("whip", "1") == "1" else []):
+		if view == "above":
+			_close(g, c + gu * 3.6 + gf * 1.2, c - gf * 0.4, gf)
+		else:
+			_open(g)
+			g.cam.snap_behind()
+		m.idle_kind = AxolotlModel.Idle.NONE
+		Engine.time_scale = 1.0
+		await t.seconds(0.8)
+		Engine.time_scale = 0.08
+		Input.action_press("swipe")
+		await t.frames(1)
+		Input.action_release("swipe")
+		var i := 0
+		for target in ([0.02, 0.05, 0.08, 0.1, 0.13, 0.17, 0.24, 0.35, 0.5] if view == "above" else [0.05, 0.09, 0.13, 0.2]):
+			while m.whip_active() and m._whip_s < target:
+				await t.frames(1)
+			await t.shot("whip_%s_%d" % [view, i])
+			t.log_line("whip %s at %.3f s: tail tip %.0f deg" % [view, m._whip_s, rad_to_deg(m.whip_tip_az)])
+			i += 1
+	Engine.time_scale = 1.0
+	_open(g)
+
+
+## Undisturbed vegetation over time (dev-000024 playtest polish): the same view every 0.25 s with
+## the axolotl far away, for a reed bed, a jungle ladder, and a restored ball's sprouts.
+func _sway_shots(g: Game) -> void:
+	var p := g.player
+	var views := []
+	var b0 := g.balls[0]
+	var reeds := MossBall.dir_ll(-59, 31)
+	var ru := b0.up_at(b0.surface_point(reeds))
+	var rf := MossBall.frame_at(ru, 0.0)
+	views.append(["reeds", b0, b0.surface_point(reeds, 1.1) + rf.x * 3.2, b0.surface_point(reeds, 0.5), ru])
+	var b2 := g.balls[2]
+	var lb: LevelBuilder = b2.get_meta("builder")
+	for n in lb.root.get_children():
+		if n is StaticBody3D and (n as StaticBody3D).collision_layer == LevelBuilder.CLIMB_LAYER and n.has_meta("leaves") and (n.get_meta("leaves") as Array).size() >= 10:
+			var xf: Transform3D = (n.get_meta("leaves") as Array)[4][0]
+			var up := b2.up_at(xf.origin)
+			views.append(["ladder", b2, xf.origin + xf.basis.x * 4.5 + up * 1.2, xf.origin - xf.basis.z * 1.0 + up * 0.3, up])
+			break
+	var top := MossBall.dir_ll(62, 20)
+	var tu := b0.up_at(b0.surface_point(top))
+	var tf := MossBall.frame_at(tu, 0.0)
+	views.append(["restored_sprouts", b0, b0.surface_point(top, 2.2) + tf.x * 5.0, b0.surface_point(top, 1.0), tu])
+	for v in views:
+		var b: MossBall = v[1]
+		if v[0] == "restored_sprouts":
+			for bb in g.balls:
+				bb.add_heal(Vector3.UP, 340.0, 0.0)
+			g.g_disp = 1.0
+			g.aquarium.apply(1.0)
+		# He waits well away, so nothing but the water moves the plants.
+		var away := b.up_at(v[3]).rotated(MossBall.frame_at(b.up_at(v[3]), 0).x, deg_to_rad(40.0))
+		p.place(b, b.surface_point(away, 0.2), Vector3.FORWARD)
+		g.audio.set_ball(b.index, false)
+		_close(g, v[2], v[3], v[4])
+		await t.seconds(2.0)
+		for k in 16:
+			await t.shot("sway_%s_%02d" % [v[0], k])
+			await t.seconds(0.25)
 	_open(g)
 
 

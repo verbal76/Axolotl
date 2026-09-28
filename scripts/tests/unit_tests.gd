@@ -14,7 +14,7 @@ func run(runner) -> void:
 	p.use_bot_input = true
 	await t.seconds(0.5)
 	var only: String = Settings.test_args.get("only", "")
-	for name_ in ["_test_startup", "_test_ota_and_version", "_test_mesh_winding", "_test_terrain", "_test_terrain_grounded", "_test_no_floating_platforms", "_test_parasite_locomotion", "_test_parasite_body_and_death", "_test_parasite_combat", "_test_gill_look", "_test_placements", "_test_tutorial_route", "_test_sphere_walk", "_test_jump_and_burst", "_test_coyote_and_buffer", "_test_swipe_direction_and_stages", "_test_hard_landing", "_test_food", "_test_food_reach", "_test_darter_and_burrower", "_test_food_repopulates", "_test_motes", "_test_checkpoint_and_regen", "_test_crumble", "_test_restoration_continuity", "_test_vortex", "_test_current", "_test_canopy", "_test_canopy_plain_jumps", "_test_climbs_physical", "_test_jungle_ladders_physical", "_test_leaf_geometry", "_test_leaf_footing", "_test_caves", "_test_mounds", "_test_vegetation", "_test_vortex_mouths_clear", "_test_route_audit", "_test_new_areas", "_test_ecosystem", "_test_music", "_test_run_clock", "_test_completion_catalog", "_test_run_save_file", "_test_run_timer_live", "_test_run_continue", "_test_timer_integrity", "_test_resume_points_safe", "_phase_continue_write", "_phase_continue_read", "_test_upgrades", "_test_ui", "_test_all_clear"]:
+	for name_ in ["_test_startup", "_test_ota_and_version", "_test_mesh_winding", "_test_terrain", "_test_terrain_grounded", "_test_no_floating_platforms", "_test_parasite_locomotion", "_test_parasite_body_and_death", "_test_parasite_combat", "_test_gill_look", "_test_gill_idles", "_test_tail_whip", "_test_ambient_sway", "_test_placements", "_test_tutorial_route", "_test_sphere_walk", "_test_jump_and_burst", "_test_coyote_and_buffer", "_test_swipe_direction_and_stages", "_test_hard_landing", "_test_food", "_test_food_reach", "_test_darter_and_burrower", "_test_food_repopulates", "_test_motes", "_test_checkpoint_and_regen", "_test_crumble", "_test_restoration_continuity", "_test_vortex", "_test_current", "_test_canopy", "_test_canopy_plain_jumps", "_test_climbs_physical", "_test_jungle_ladders_physical", "_test_leaf_geometry", "_test_leaf_footing", "_test_caves", "_test_mounds", "_test_vegetation", "_test_vortex_mouths_clear", "_test_route_audit", "_test_new_areas", "_test_ecosystem", "_test_music", "_test_run_clock", "_test_completion_catalog", "_test_run_save_file", "_test_run_timer_live", "_test_run_continue", "_test_timer_integrity", "_test_resume_points_safe", "_phase_continue_write", "_phase_continue_read", "_test_upgrades", "_test_ui", "_test_all_clear"]:
 		# "_phase_*" tests are halves of a relaunch test: they run only when asked for by name
 		# (in a child process started by _test_run_continue).
 		if name_.begins_with("_phase") and only != name_:
@@ -3632,6 +3632,431 @@ func _test_gill_look() -> void:
 	t.check("gill_collision_unchanged", shapes.size() == 1 and (shapes[0] as CollisionShape3D).shape is SphereShape3D
 			and is_equal_approx(((shapes[0] as CollisionShape3D).shape as SphereShape3D).radius, Axolotl.BODY_RADIUS) and in_model.is_empty(),
 			"%d collision shapes on the axolotl, %d collision objects in the model" % [shapes.size(), in_model.size()])
+
+
+# --- dev-000024 physical playtest polish ------------------------------------------------------
+
+## Holds every threat on the ball still (restored by the returned callable).
+func _hold_threats(b: MossBall) -> Callable:
+	g.ecosystem.set_physics_process(false)
+	var held: Array = []
+	for pp in b.parasites:
+		if pp.is_physics_processing():
+			pp.set_physics_process(false)
+			held.append(pp)
+	return func() -> void:
+		for pp in held:
+			if is_instance_valid(pp):
+				pp.set_physics_process(true)
+		g.ecosystem.set_physics_process(true)
+
+
+## Gill's idles: now and then, standing still, one of four little animations; cosmetic only.
+func _test_gill_idles() -> void:
+	var b := g.balls[0]
+	var release := _hold_threats(b)
+	var m := p.model
+	var open_ := MossBall.dir_ll(-10, -40)
+	place_at(0, b.surface_point(open_, 0.2), -MossBall.frame_at(open_, 0.0).x)
+	p.invuln_t = 0.0
+	# The first idle comes after a random wait inside IDLE_FIRST, once he is standing still.
+	var still_at := -1.0
+	var began_at := -1.0
+	var clock := 0.0
+	for i in 60 * 12:
+		await t.frames(1)
+		clock += 1.0 / 60.0
+		if still_at < 0.0 and m._still_s > 0.0:
+			still_at = clock
+		if m.idle_kind != AxolotlModel.Idle.NONE:
+			began_at = clock
+			break
+	var wait := began_at - still_at
+	t.check("idle_starts_after_standing_still", began_at > 0.0 and wait >= AxolotlModel.IDLE_FIRST.x - 0.05 and wait <= AxolotlModel.IDLE_FIRST.y + 0.1,
+			"still from %.2f s, first idle at %.2f s (wait %.2f s)" % [still_at, began_at, wait])
+	# Input ends an idle at once, and he moves off as quickly as from a plain stand.
+	var from := p.global_position
+	p.bot_input = Vector2(0, 0.8)
+	await t.frames(2)
+	var cancelled := m.idle_kind == AxolotlModel.Idle.NONE
+	await t.seconds(0.5)
+	var moved_idle := from.distance_to(p.global_position)
+	p.bot_input = Vector2.ZERO
+	place_at(0, b.surface_point(open_, 0.2), -MossBall.frame_at(open_, 0.0).x)
+	await t.seconds(0.6)
+	from = p.global_position
+	p.bot_input = Vector2(0, 0.8)
+	await t.seconds(0.5)
+	var moved_plain := from.distance_to(p.global_position)
+	p.bot_input = Vector2.ZERO
+	t.check("idle_cancels_on_input_without_delay", cancelled and moved_idle > moved_plain * 0.97,
+			"cancelled within 2 frames %s; moved %.3f m out of an idle, %.3f m from a plain stand" % [cancelled, moved_idle, moved_plain])
+	# Every idle leaves the gameplay body, its collision and facing exactly where they were, and
+	# the drawn model settles back to rest.
+	place_at(0, b.surface_point(open_, 0.2), -MossBall.frame_at(open_, 0.0).x)
+	await t.seconds(0.6)
+	var shape := p.find_children("*", "CollisionShape3D", true, false)[0] as CollisionShape3D
+	var worst := 0.0
+	var worst_rig := 0.0
+	var worst_rest := 0.0
+	var model_xf := m.transform
+	for k in AxolotlModel.IDLE_LEN.size():
+		var pos0 := p.global_position
+		var face0 := p.facing
+		var shape0 := shape.global_transform
+		m.start_idle(k)
+		var ran := 0
+		while m.idle_kind == k and ran < 60 * 6:
+			await t.frames(1)
+			ran += 1
+			worst = maxf(worst, maxf(p.global_position.distance_to(pos0), shape.global_transform.origin.distance_to(shape0.origin)) + face0.angle_to(p.facing))
+			worst_rig = maxf(worst_rig, m.rig.position.length())
+		await t.seconds(0.5)
+		worst_rest = maxf(worst_rest, m.rig.position.length() + m.rig.rotation.length() * 0.2)
+	t.check("idles_never_move_gameplay_body", worst < 0.0001 and m.transform.is_equal_approx(model_xf),
+			"worst body/collision/facing change %.6f; the model node itself unmoved %s" % [worst, m.transform.is_equal_approx(model_xf)])
+	t.check("idles_animate_and_return_to_rest", worst_rig > 0.1 and worst_rest < 0.015, "largest drawn offset %.3f m; after: %.4f" % [worst_rig, worst_rest])
+	# Anything else going on suppresses idles (the controller's side).
+	var blocked := []
+	var cases := {
+		"airborne": func(on: bool) -> void: p.grounded = not on,
+		"swipe": func(on: bool) -> void: p.swipe_t = 0.2 if on else -1.0,
+		"lunge (feeding)": func(on: bool) -> void: p.lunge_t = 0.2 if on else -1.0,
+		"hurt": func(on: bool) -> void: p.hurt_lock = 0.3 if on else 0.0,
+		"landing": func(on: bool) -> void: p.land_lock = 0.3 if on else 0.0,
+		"controls taken": func(on: bool) -> void: p.controls_enabled = not on,
+		"cinematic (vortex, death, respawn)": func(on: bool) -> void: g.cinematic = "travel" if on else "",
+		"not in play": func(on: bool) -> void: p.state = "dead" if on else "normal",
+		"moving": func(on: bool) -> void: p.move_input = Vector2(0, 0.5) if on else Vector2.ZERO,
+		"current pull": func(on: bool) -> void: p.ext_vel = p.facing * 2.0 if on else Vector3.ZERO,
+		"falling danger": func(on: bool) -> void: p.fall_danger = on,
+	}
+	p.set_physics_process(false)
+	p.grounded = true
+	p.velocity = Vector3.ZERO
+	var base_ok := p.idle_allowed()
+	for key in cases:
+		(cases[key] as Callable).call(true)
+		if not p.idle_allowed():
+			blocked.append(key)
+		(cases[key] as Callable).call(false)
+	p.set_physics_process(true)
+	# (And the model's side: a forced idle stops at once for anything the model itself plays.)
+	var mblocked := []
+	var mcases := ["hurt_t", "land_t", "burst_t", "happy_t", "perk_t", "lunge_t", "swipe_t", "surf", "brace", "dissolve"]
+	var m2 := AxolotlModel.new()
+	m2.set_process(false)
+	m2.visible = false
+	add_child_safe(m2)
+	for key in mcases:
+		m2.idle_ok = true
+		m2.grounded = true
+		m2.start_idle(0)
+		m2.set(key, 0.5 if key in ["surf", "brace", "dissolve"] else 0.1)
+		m2._update_idle(1.0 / 60.0)
+		if m2.idle_kind == AxolotlModel.Idle.NONE:
+			mblocked.append(key)
+		m2.set(key, 0.0 if key in ["surf", "brace", "dissolve"] else -1.0)
+	t.check("incompatible_states_suppress_idles", base_ok and blocked.size() == cases.size() and mblocked.size() == mcases.size(),
+			"allowed when idle %s; blocked by %s; model stops for %s" % [base_ok, str(blocked), str(mblocked)])
+	# Twenty minutes of standing still: all four idles, never the same one twice running, no fixed
+	# order, the waits spread over IDLE_GAP; and none of it touches gameplay's random sequence.
+	seed(55)
+	var r1 := randi()
+	seed(55)
+	var seq: Array[int] = []
+	var starts: Array[float] = []
+	var ends: Array[float] = []
+	var prev := AxolotlModel.Idle.NONE
+	m2.idle_ok = true
+	var dt := 1.0 / 30.0
+	for i in 30 * 60 * 20:
+		m2._process(dt)
+		if m2.idle_kind != prev:
+			if m2.idle_kind != AxolotlModel.Idle.NONE:
+				seq.append(m2.idle_kind)
+				starts.append(i * dt)
+			else:
+				ends.append(i * dt)
+			prev = m2.idle_kind
+	var r2 := randi()
+	var repeats := 0
+	for i in range(1, seq.size()):
+		repeats += 1 if seq[i] == seq[i - 1] else 0
+	var kinds := {}
+	for k in seq:
+		kinds[k] = true
+	var grams := {}
+	for i in range(0, seq.size() - 3):
+		grams[str(seq.slice(i, i + 4))] = true
+	var gap_lo := INF
+	var gap_hi := 0.0
+	for i in range(1, starts.size()):
+		var gap := starts[i] - ends[i - 1]
+		gap_lo = minf(gap_lo, gap)
+		gap_hi = maxf(gap_hi, gap)
+	t.check("idles_varied_not_repeated", kinds.size() == AxolotlModel.IDLE_LEN.size() and repeats == 0 and grams.size() > 4 and seq.size() >= 40 and seq.size() <= 150
+			and gap_lo >= AxolotlModel.IDLE_GAP.x - 0.05 and gap_hi <= AxolotlModel.IDLE_GAP.y + 0.05,
+			"%d idles in 20 min, kinds %s, %d back-to-back repeats, %d different runs of four, gaps %.1f..%.1f s" % [seq.size(), str(kinds.keys()), repeats, grams.size(), gap_lo, gap_hi])
+	t.check("idles_leave_gameplay_rng_alone", r1 == r2, "")
+	m2.queue_free()
+	release.call()
+
+
+func add_child_safe(n: Node) -> void:
+	g.add_child(n)
+
+
+## The tail whip: the tail visibly sweeps the arc, the arc is drawn over the real hit area, and the
+## swipe's timing, reach and damage are what they were.
+func _test_tail_whip() -> void:
+	var b := g.balls[0]
+	var release := _hold_threats(b)
+	var m := p.model
+	var open_ := MossBall.dir_ll(-10, -40)
+	place_at(0, b.surface_point(open_, 0.2), -MossBall.frame_at(open_, 0.0).x)
+	p.invuln_t = 999
+	await t.seconds(0.5)
+	t.check("swipe_rules_unchanged", is_equal_approx(Axolotl.SWIPE_TIME, 0.3) and is_equal_approx(Game.SWIPE_REACH, 1.95)
+			and is_equal_approx(Game.SWIPE_FRONT_DOT, 0.7071) and is_equal_approx(Game.SWIPE_AIM_MAX, deg_to_rad(60.0)) and is_equal_approx(Game.SWIPE_AIM_TARGET, deg_to_rad(80.0)),
+			"time %.2f s, reach %.2f m, safe cone dot %.4f" % [Axolotl.SWIPE_TIME, Game.SWIPE_REACH, Game.SWIPE_FRONT_DOT])
+	# A medium twin (never registered, never killed) straight behind him at a set distance.
+	var twin := Parasite.new()
+	twin.setup(b, Parasite.Kind.MEDIUM, "whip_test", open_, 9.0, 0.0, false)
+	b.add_child(twin)
+	await t.frames(2)
+	twin.set_physics_process(false)
+	b.parasites.append(twin)
+	var put_behind := func(dist: float, deg: float) -> void:
+		var back := (-p.facing).rotated(p.up, deg_to_rad(deg))
+		var d := b.up_at(p.global_position + back * dist)
+		twin.global_position = b.surface_point(d, twin._ground_offset)
+		twin.up = d
+		twin.heading = back
+		twin._trail.clear()
+		twin._trail_up.clear()
+		for i in 12:
+			twin._trail.push_back(twin.global_position + back * 0.05 * i)
+			twin._trail_up.push_back(d)
+		twin._update_segments(0.0)
+		twin.hp = 2
+		twin.hit_cd = 0.0
+		twin._set_state("graze")
+	# Timing: the hit lands on the same frame of the swipe as before (30% into its 0.3 s).
+	put_behind.call(1.2, 0.0)
+	var face0 := p.facing
+	Input.action_press("swipe")
+	var frame := 0
+	var hit_frame := -1
+	var started := -1
+	var az: Array[float] = []
+	var az_at_hit := 0.0
+	var side := 0.0
+	for i in 60:
+		await t.frames(1)
+		if i == 0:
+			Input.action_release("swipe")
+		if started < 0 and p.swipe_t >= 0.0:
+			started = i
+			side = m.swipe_side
+		if started >= 0:
+			frame += 1
+			az.append(m.whip_tip_az * side)
+			if hit_frame < 0 and twin.hp < 2:
+				hit_frame = frame
+				az_at_hit = rad_to_deg(m.whip_tip_az * side)
+	var expect := int(ceil(0.3 * Axolotl.SWIPE_TIME * 60.0 - 0.0001))
+	t.check("swipe_hit_timing_unchanged", hit_frame == expect and twin.hp == 1 and p.swipe_cd >= 0.0,
+			"hit on frame %d of the swipe (expected %d, 0.09 s); one stage of damage (hp %d of 2)" % [hit_frame, expect, twin.hp])
+	# The drawn tail sweeps from one side round behind him to the other, most of the arc.
+	var lo := INF
+	var hi := -INF
+	for a in az:
+		lo = minf(lo, a)
+		hi = maxf(hi, a)
+	var last := rad_to_deg(az[az.size() - 1])
+	t.check("tail_sweeps_the_arc", rad_to_deg(hi - lo) >= 200.0 and absf(az_at_hit) < 45.0 and absf(last) < 12.0 and not m.whip_active(),
+			"tail tip from %.0f to %.0f deg (%.0f of the arc's 270), %.0f deg at the hit frame, back to %.0f deg" % [rad_to_deg(lo), rad_to_deg(hi), rad_to_deg(hi - lo), az_at_hit, last])
+	# Reach: hit exactly when the target is within SWIPE_REACH of his body centre (plus its body).
+	var agree := true
+	var hits := 0
+	var misses := 0
+	var detail := []
+	for dist in [1.0, 1.6, 2.0, 2.4, 2.9, 3.4]:
+		for deg in [0.0, 70.0, -110.0]:
+			put_behind.call(dist, deg)
+			var c := p.body_center()
+			var to: Vector3 = twin.closest_body_point(c) - c
+			var in_reach := to.length() <= Game.SWIPE_REACH + twin.body_extent() and absf(to.dot(p.up)) <= 1.5
+			g.player_swipe(p)
+			var was_hit := twin.hp < 2
+			hits += 1 if was_hit else 0
+			misses += 0 if was_hit else 1
+			if was_hit != in_reach:
+				agree = false
+				detail.append("%.1f m %d deg" % [dist, deg])
+	t.check("swipe_reach_unchanged", agree and hits > 0 and misses > 0, "%d hits, %d misses; mismatches: %s" % [hits, misses, str(detail)])
+	# The drawn arc is the hit area: out to SWIPE_REACH, centred on his body centre, 270 degrees.
+	var aabb := m.swipe_fx.mesh.get_aabb()
+	var r := maxf(aabb.end.x, -aabb.position.x)
+	t.check("swipe_arc_drawn_to_scale", absf(aabb.end.z - Game.SWIPE_REACH) < 0.02 and absf(r - Game.SWIPE_REACH) < 0.02 and m.swipe_fx.position.is_equal_approx(Vector3(0, 0.25, 0))
+			and is_equal_approx(AxolotlModel.ARC_SPAN, PI * 1.5), "arc reaches %.2f m back, %.2f m to the sides" % [aabb.end.z, r])
+	b.parasites.erase(twin)
+	twin.queue_free()
+	p.facing = face0
+	release.call()
+
+
+## Plants and leaves move a little on their own, each out of step with its neighbours; the wake
+## still adds to it; all of it in the shaders (no per-plant scripts).
+func _test_ambient_sway() -> void:
+	var b := g.balls[0]
+	var centre := b.global_position
+	# Neighbouring plants of a field: series of their sway, sampled over 20 s.
+	var bases: Array[Vector3] = []
+	var f0: MultiMeshInstance3D = _veg_fields(b, "medium")[0]
+	var xfs: Array = f0.get_meta("veg_transforms")
+	var first: Vector3 = b.global_transform * (xfs[0] as Transform3D).origin
+	var near := xfs.duplicate()
+	near.sort_custom(func(a, c) -> bool: return (b.global_transform * (a as Transform3D).origin).distance_to(first) < (b.global_transform * (c as Transform3D).origin).distance_to(first))
+	for i in 24:
+		bases.append(b.global_transform * (near[i] as Transform3D).origin)
+	var series := func(base: Vector3, tint: float) -> Array:
+		var out := []
+		var up := (base - centre).normalized()
+		var ax := MossBall.frame_at(up, 0.0).x
+		for k in 200:
+			out.append(Vegetation.ambient_bend(base, centre, tint, k * 0.1, 0.13, 1.3).dot(ax))
+		return out
+	var ss := []
+	for bb in bases:
+		ss.append(series.call(bb, 0.9))
+	var mean_r := 0.0
+	var locked := 0
+	var pairs := 0
+	for i in ss.size():
+		for j in range(i + 1, ss.size()):
+			var r := _corr(ss[i], ss[j])
+			mean_r += absf(r)
+			locked += 1 if r > 0.9 else 0
+			pairs += 1
+	mean_r /= pairs
+	t.check("neighbour_plants_sway_out_of_step", mean_r < 0.35 and locked <= pairs / 20, "24 neighbouring reeds (within %.1f m): mean |r| %.2f, %d of %d pairs in step" % [bases[23].distance_to(first), mean_r, locked, pairs])
+	# Blades within one plant (their tints) flutter on their own phases too.
+	var blade := []
+	for tint in [0.72, 0.78, 0.83, 0.9, 0.97]:
+		blade.append(series.call(bases[0], tint))
+	var br := 0.0
+	var bn := 0
+	for i in blade.size():
+		for j in range(i + 1, blade.size()):
+			br += _corr(blade[i], blade[j])
+			bn += 1
+	br /= bn
+	# Small: the tip of a medium reed moves a few centimetres to a couple of decimetres.
+	var peak := 0.0
+	for sr in ss:
+		for v in sr:
+			peak = maxf(peak, absf(v))
+	var tip := peak * Vegetation.FAMILIES["medium"]["height"] * 0.6
+	t.check("blades_in_a_plant_not_in_lockstep", br < 0.9, "mean r between blades of one plant %.2f" % br)
+	t.check("ambient_sway_small", tip > 0.03 and tip < 0.3, "largest tip swing of a medium reed %.2f m" % tip)
+	# Climbing and platform leaves: each leaf of a ladder has its own phase and flaps a few
+	# centimetres at the tip; the stems stay rigid.
+	var lb: LevelBuilder = g.balls[2].get_meta("builder")
+	var ladder: StaticBody3D = null
+	for n in lb.root.get_children():
+		if n is StaticBody3D and (n as StaticBody3D).collision_layer == LevelBuilder.CLIMB_LAYER and n.has_meta("leaves") and (n.get_meta("leaves") as Array).size() >= 10:
+			ladder = n
+			break
+	var phases := {}
+	var ups_ok := true
+	var leaf_series := []
+	var st := MeshLib.leaf_surface()
+	var nv := 0
+	for lf in ladder.get_meta("leaves"):
+		var local: Transform3D = ladder.global_transform.affine_inverse() * (lf[0] as Transform3D)
+		nv = MeshLib._leaf_into(st, local, lf[1], lf[2], true, nv)
+	var arrays := st.commit_to_arrays()
+	var custom: PackedFloat32Array = arrays[Mesh.ARRAY_CUSTOM0]
+	for i in range(0, custom.size(), 4):
+		phases[snappedf(custom[i + 3], 0.0001)] = Vector3(custom[i], custom[i + 1], custom[i + 2])
+	for ph in phases:
+		ups_ok = ups_ok and absf((phases[ph] as Vector3).length() - 1.0) < 0.01
+		var sr := []
+		for k in 200:
+			sr.append(Vegetation.leaf_flutter(ph, ladder.global_position, k * 0.1, Levels.LEAF_FLUTTER, 1.1))
+		leaf_series.append(sr)
+	var lr := 0.0
+	var ln := 0
+	var lpeak := 0.0
+	for i in leaf_series.size():
+		for v in leaf_series[i]:
+			lpeak = maxf(lpeak, absf(v))
+		if i > 0:
+			lr += absf(_corr(leaf_series[i], leaf_series[i - 1]))
+			ln += 1
+	lr /= maxi(ln, 1)
+	var mats_ok := true
+	for bi in g.balls.size():
+		var blb: LevelBuilder = g.balls[bi].get_meta("builder")
+		mats_ok = mats_ok and float(blb.leaf_mat.get_shader_parameter("flutter")) > 0.0 and bool(blb.leaf_mat.get_shader_parameter("leaf_data")) \
+				and (blb.stem_mat.get_shader_parameter("flutter") == null or float(blb.stem_mat.get_shader_parameter("flutter")) == 0.0)
+	var n_leaves: int = (ladder.get_meta("leaves") as Array).size()
+	t.check("ladder_leaves_each_move_on_their_own", phases.size() == n_leaves and ups_ok and lr < 0.4 and lpeak > 0.02 and lpeak < 0.1 and mats_ok,
+			"%d leaves, %d phases; neighbour |r| %.2f; tip flap up to %.3f m; every ball's leaves flutter, stems rigid %s" % [n_leaves, phases.size(), lr, lpeak, mats_ok])
+	# Disturbance adds to the ambient motion, which carries on once the wake has passed.
+	var probe_base := bases[3]
+	var ambient := Vegetation.ambient_bend(probe_base, centre, 0.9, 1.0, 0.13, 1.3)
+	var up3 := (probe_base - centre).normalized()
+	g.wake.set_process(false)
+	p.set_physics_process(false)
+	place_at(0, probe_base + up3 * 0.2 + MossBall.frame_at(up3, 0).x * 0.4, MossBall.frame_at(up3, 0).z)
+	p.velocity = MossBall.frame_at(up3, 0).z * -4.0
+	for k in 6:
+		g.wake.update(1.0 / 60.0)
+	var disturbed := g.wake.bend_at(b, probe_base, 0.95)
+	place_at(0, b.surface_point(MossBall.dir_ll(-10, -40), 0.2), Vector3.FORWARD)
+	p.velocity = Vector3.ZERO
+	for k in 60 * 4:
+		g.wake.update(1.0 / 60.0)
+	var after := g.wake.bend_at(b, probe_base, 0.95)
+	p.set_physics_process(true)
+	g.wake.set_process(true)
+	var src := (load("res://shaders/vegetation.gdshader") as Shader).code
+	var adds := src.find("bend += wake_bend(") > 0 and src.find("VERTEX += bend * w * len") > src.find("bend += wake_bend(") and src.find("float bph") > 0
+	t.check("disturbance_adds_to_ambient_then_settles_back", disturbed.length() > ambient.length() and after.length() < 0.02 and ambient.length() > 0.01 and adds,
+			"ambient %.3f; wake while he passes %.3f; wake 4 s later %.3f (plants back to their own sway); shader adds both %s" % [ambient.length(), disturbed.length(), after.length(), adds])
+	# Bounded: all of it in the two shaders. No vegetation node has a script; every vegetation
+	# node is instanced; the leaf and root motion is a material setting.
+	var scripted := 0
+	var not_instanced := 0
+	for bb in g.balls:
+		for n in bb.find_child("Vegetation", false, false).find_children("*", "", true, false):
+			if n.get_script() != null:
+				scripted += 1
+			if n is MeshInstance3D:
+				not_instanced += 1
+	t.check("ambient_motion_bounded_gpu_only", scripted == 0 and not_instanced == 0, "%d scripted vegetation nodes, %d non-instanced" % [scripted, not_instanced])
+
+
+func _corr(a: Array, c: Array) -> float:
+	var n := a.size()
+	var ma := 0.0
+	var mc := 0.0
+	for i in n:
+		ma += a[i]
+		mc += c[i]
+	ma /= n
+	mc /= n
+	var sab := 0.0
+	var saa := 0.0
+	var scc := 0.0
+	for i in n:
+		sab += (a[i] - ma) * (c[i] - mc)
+		saa += (a[i] - ma) * (a[i] - ma)
+		scc += (c[i] - mc) * (c[i] - mc)
+	return sab / sqrt(maxf(saa * scc, 1e-12))
 
 
 ## Expansion 6: a parasite is one continuous body (no bead chain), and a defeated one does not

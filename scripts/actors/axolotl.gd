@@ -73,6 +73,7 @@ var _last_land_variant := -1
 var _landing_speed := 0.0
 var _jumped_this_frame := false
 var _stream_t := 0.0
+var _acted := false               # a jump, swipe or lunge was pressed this frame
 
 var model: AxolotlModel
 var blob_shadow: MeshInstance3D
@@ -196,6 +197,7 @@ func body_center() -> Vector3:
 
 func _physics_process(dt: float) -> void:
 	if ball == null or state != "normal":
+		model.idle_ok = false
 		_update_shadow()
 		return
 	_jumped_this_frame = false
@@ -220,6 +222,7 @@ func _physics_process(dt: float) -> void:
 	var want_jump := controls_enabled and Input.is_action_just_pressed("jump")
 	var want_swipe := controls_enabled and Input.is_action_just_pressed("swipe")
 	var want_lunge := controls_enabled and Input.is_action_just_pressed("lunge")
+	_acted = want_jump or want_swipe or want_lunge
 
 	var vup := velocity.dot(up)
 	var vh := velocity - up * vup
@@ -575,8 +578,25 @@ func _update_model(_dt: float) -> void:
 	model.swipe_t = swipe_t
 	model.lunge_t = lunge_t
 	model.brace = move_toward(model.brace, 1.0 if fall_danger else 0.0, 0.1)
+	model.idle_ok = idle_allowed()
 	if cam:
 		model.camera_pos = cam.global_position
+
+
+## Whether the model may play an idle: he is standing still on the ground under the player's
+## control with nothing else going on (no input, action, landing, hit, fall, current pull, cinematic).
+## Idles are cosmetic (AxolotlModel); this only says when they may start and makes them stop.
+func idle_allowed() -> bool:
+	if state != "normal" or not controls_enabled or not grounded or _acted:
+		return false
+	if swipe_t >= 0.0 or lunge_t >= 0.0 or hurt_lock > 0.0 or land_lock > 0.0 or fall_danger or invuln_t > 0.0:
+		return false
+	if move_input.length() > 0.05 or ext_vel.length() > 0.05:
+		return false
+	var vh := velocity - up * velocity.dot(up)
+	if vh.length() > 0.3:
+		return false
+	return Game.inst == null or Game.inst.cinematic == ""
 
 
 func _update_shadow() -> void:

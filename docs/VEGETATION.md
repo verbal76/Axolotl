@@ -12,7 +12,8 @@ and no collision.
 | Piece | File | Role |
 |---|---|---|
 | Wake | `scripts/world/wake.gd` (`Wake`, a node under `Game`) | Each frame, builds up to 24 wake points and sends them to the current ball's vegetation materials |
-| Vegetation shader | `shaders/vegetation.gdshader` (`wake_bend`) | Bends each plant from its base, one value for the whole plant |
+| Vegetation shader | `shaders/vegetation.gdshader` (`wake_bend`) | Bends each plant from its base (the wake: one value for the whole plant; the ambient flutter: per blade) |
+| Plant shader | `shaders/plant.gdshader` (`flutter`) | Ambient flap of the platform and ladder leaves and the hanging roots; stems and cave shells stay rigid |
 | Families and placement | `scripts/world/vegetation.gd` (`Vegetation`) | Short, medium and tall families; `field`, `corridor`, `family_params` |
 | Meshes | `MeshLib.reed_clump`, `MeshLib.reed`, `MeshLib.tuft_mesh` | Creased reeds (a midrib V, not flat cards) and tufts |
 | Keep-clear rule | `Levels._veg_keep_clear` | Keeps growth off blooms, motes, holes, cave mouths, platforms, brittle moss and vortex mouths |
@@ -48,9 +49,38 @@ The shader, per plant:
 
 ### Ambient motion
 
-Each plant has its own sway phase and pace, from a hash of its position, so the field never waves
-in unison. Slow gusts roll across the ball, and the aquarium current still moves plants on ball 2.
-All of this is subtle next to the wake.
+Everything that should bend in water moves a little on its own, even with nothing near it. It stays
+subtle next to the wake. The dev-000024 physical playtest found the tank still looking static:
+- clumps swayed as one rigid piece;
+- a swell rolled across the whole ball in step;
+- the platform and climbing leaves did not move at all.
+
+- **Instanced vegetation** (`shaders/vegetation.gdshader`: grass, reeds, rosettes, ferns, corals,
+  sprouted stem plants, trailing roots, cave strands). Each plant takes its own phase, pace, size
+  (±25%) and sway direction from a hash of its position. Inside a plant, every blade, leaf or stem
+  also flutters on its own phase: the meshes give each blade a slightly different random tint, and
+  the shader derives the phase from it. Slow swells come and go per plant rather than as one wave
+  across the ball. The aquarium current still moves plants on ball 2.
+- **Platform and climbing leaves** (`shaders/plant.gdshader`, `flutter`: Giant Stems' ladders and
+  canopy, the Canopy Spire, every leaf platform, flexible and current-swayed leaves). Each leaf
+  flaps along its own up, about 3–7 cm at the tip, while its stalk and base stay put.
+  - A ladder is one merged mesh per stem, so each leaf carries its own up and phase in its vertices
+    (`CUSTOM0`, `MeshLib._leaf_into`).
+  - A standalone leaf adds its node's position to that phase.
+  - Where Gill stands (the middle of a leaf) the flap is about a centimetre. The collision does not
+    move.
+- **Hanging roots** under the big canopy leaves: they hang from their tops and swing slowly
+  sideways, each on its own.
+- **Rigid on purpose:** stems and trunks you climb, the terrain and moss, stone, caves, cave shells
+  and mounds.
+
+Nothing here uses a script or the gameplay random sequence. It is all vertex-shader work on the
+existing instances. The CPU mirrors used by the tests (`Vegetation.ambient_bend`,
+`Vegetation.leaf_flutter`) are kept in step with the shaders.
+
+**With disturbance.** The wake, water impulses and the current add to the ambient bend in the same
+sum, so a disturbed plant leans away and keeps its own flutter. Once the wake has passed and
+decayed (a few seconds), each plant is back to its own gentle motion, never frozen.
 
 ### Families
 
@@ -169,5 +199,14 @@ Thermal scaling (`QualityScaler`) thins the new patches along with the rest.
   - `wake_tail_whip_sweeps`: 0.31 standing, 1.6 in a whip
   - `wake_parasites_disturb_plants`
   - `wake_frame_rate_independent`: the same walk at 30 and 60 fps leaves the same wake
+
+`_test_ambient_sway` (dev-000024 physical playtest polish):
+- `neighbour_plants_sway_out_of_step`: 24 neighbouring reeds within 0.7 m, mean |correlation| 0.33
+- `blades_in_a_plant_not_in_lockstep`
+- `ambient_sway_small`: a medium reed's tip swings about 0.1 m at most
+- `ladder_leaves_each_move_on_their_own`: one phase per leaf; neighbours uncorrelated; tip flap
+  within 2–10 cm; every ball's leaves flutter while their stems stay rigid
+- `disturbance_adds_to_ambient_then_settles_back`
+- `ambient_motion_bounded_gpu_only`: no scripted vegetation nodes, everything instanced
 
 The run save doesn't hold vegetation, so the relaunch test covers save/load.

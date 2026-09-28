@@ -4,10 +4,11 @@ render_mode cull_disabled, world_vertex_coords, diffuse_lambert, specular_disabl
 // Instanced moss-ball vegetation. Mesh convention: UV.y = 0 at the base, 1 at the tip.
 // Health comes from the same splat field as the moss, so restored areas regrow colour,
 // height and motion together.
-// Movement (docs/VEGETATION.md): gentle ambient sway with each plant's own phase and slow gusts
-// crossing the field; the aquarium current; water impulses; and the wake of movers (the
+// Movement (docs/VEGETATION.md): gentle ambient sway, each plant with its own phase, pace, size
+// and direction, each blade in it fluttering on its own phase, and slow swells; the aquarium current; water impulses; and the wake of movers (the
 // axolotl's head, body, tail and trail, and nearby parasites): plants near a wake point bend
-// away from it and along its motion. Per plant, from its base (one value for the whole plant).
+// away from it and along its motion. The wake is per plant, from its base; the ambient part is kept
+// in step with Vegetation.ambient_bend (the CPU mirror the tests use).
 
 #include "res://shaders/variegation.gdshaderinc"
 #include "res://shaders/health_field.gdshaderinc"
@@ -93,15 +94,17 @@ void vertex() {
 	float len = length(off) * shrink;
 	VERTEX = base + off * shrink;
 	float w = t * t;
-	// Each plant its own phase and pace (no field waving in unison), plus slow gusts that roll
-	// across the ball.
+	// Each plant its own phase and pace (no field waving in unison).
 	float hsh = fract(sin(dot(base, vec3(12.9898, 78.233, 37.719))) * 43758.5453);
 	float ph = hsh * 6.2832;
 	float pace = sway_speed * mix(0.8, 1.25, fract(hsh * 7.31));
-	vec3 side = normalize(cross(up, normalize(vec3(0.31, 0.87, 0.42))));
+	// Each plant also sways its own way and by its own amount.
+	vec3 side = normalize(cross(up, normalize(vec3(0.31 + hsh, 0.87, 0.42 - hsh))));
 	vec3 side2 = cross(up, side);
-	float gust = 0.55 + 0.45 * sin(dot(base, vec3(0.21, 0.17, 0.23)) - TIME * 0.7);
-	vec3 bend = (side * sin(TIME * pace + ph) + side2 * cos(TIME * pace * 0.73 + ph * 1.7) * 0.5) * sway * mix(0.35, 1.0, hlt) * gust;
+	float amp = mix(0.75, 1.25, fract(hsh * 13.7));
+	// Slow swells, each plant on its own phase (no wave rolling across the whole ball in step).
+	float gust = 0.8 + 0.2 * sin(dot(base, vec3(0.21, 0.17, 0.23)) - TIME * 0.45 + hsh * 2.5);
+	vec3 bend = (side * sin(TIME * pace + ph) + side2 * cos(TIME * pace * 0.73 + ph * 1.7) * 0.5) * sway * amp * mix(0.35, 1.0, hlt) * gust;
 	// Aquarium current: a band of flow around current_axis (Moss Ball #2).
 	vec3 flow = cross(current_axis, up);
 	float band = 1.0 - smoothstep(0.45, 0.8, abs(dot(up, current_axis)));
@@ -110,6 +113,10 @@ void vertex() {
 	// The wake: this plant's own height (the instance's scale times the family's height).
 	bend += wake_bend(base, up, plant_height * length(MODEL_MATRIX[1].xyz)) * wake_gain;
 	bend += side * (1.0 - hlt) * 0.35;
+	// Within a plant, every blade, leaf or stem flutters on its own phase too, from its own tint
+	// (the meshes give each blade a slightly different random shade: MeshLib).
+	float bph = fract(COLOR.r * 41.3) * 6.2832 + ph;
+	bend += (side * sin(TIME * pace * 1.7 + bph) + side2 * cos(TIME * pace * 1.35 + bph * 1.3)) * sway * 0.45 * mix(0.35, 1.0, hlt);
 	VERTEX += bend * w * len * 0.6;
 	VERTEX -= up * min(dot(bend, bend), 1.2) * w * len * 0.22;
 	v_health = hlt;

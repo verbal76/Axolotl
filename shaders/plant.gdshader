@@ -25,12 +25,40 @@ uniform vec4 motes[6];
 uniform int mote_count = 0;
 uniform vec3 mote_color : source_color = vec3(0.55, 1.0, 0.75);
 uniform float cam_fade = 0.0;
+// Ambient underwater motion (dev-000024 playtest: leaves looked static). A small flap, each leaf
+// on its own phase, pace and size; the attachment stays put. Leaves (leaf_data): UV.y runs base
+// to tip and CUSTOM0 holds the leaf's up (mesh space) and its phase (MeshLib._leaf_into).
+// Otherwise (hanging roots) the mesh hangs from its origin and swings sideways, reaching full
+// swing `flutter_reach` from it. `flutter` is the tip's swing in metres; 0 is rigid (stems).
+// Keep in step with Vegetation.leaf_flutter (the CPU mirror the tests use).
+uniform float flutter = 0.0;
+uniform float flutter_speed = 1.1;
+uniform bool leaf_data = false;
+uniform float flutter_reach = 5.0;
 
 varying float v_health;
 varying vec3 v_wpos;
 varying vec3 v_wnorm;
 
+float flutter_wave(float ph, float pace, float t) {
+	return sin(t * pace + ph * 6.2832) * 0.75 + sin(t * pace * 2.37 + ph * 17.1) * 0.25;
+}
+
 void vertex() {
+	if (flutter > 0.0) {
+		vec3 o = MODEL_MATRIX[3].xyz;
+		float node_ph = fract(sin(dot(o, vec3(12.9898, 78.233, 37.719))) * 43758.5453);
+		if (leaf_data) {
+			float ph = fract(CUSTOM0.w + node_ph);
+			float pace = flutter_speed * mix(0.75, 1.3, fract(ph * 7.31));
+			float amp = flutter * mix(0.6, 1.25, fract(ph * 3.17));
+			VERTEX += CUSTOM0.xyz * flutter_wave(ph, pace, TIME) * amp * UV.y * UV.y;
+		} else {
+			float k = clamp(length(VERTEX) / flutter_reach, 0.0, 1.0);
+			float pace = flutter_speed * mix(0.75, 1.3, fract(node_ph * 7.31));
+			VERTEX.xz += vec2(flutter_wave(node_ph, pace, TIME), flutter_wave(fract(node_ph + 0.37), pace * 0.83, TIME)) * flutter * k * k;
+		}
+	}
 	vec3 wp = (MODEL_MATRIX * vec4(VERTEX, 1.0)).xyz;
 	v_health = clamp(health_at(normalize(wp - ball_center)) + health_bias, 0.0, 1.0);
 	v_wpos = wp;

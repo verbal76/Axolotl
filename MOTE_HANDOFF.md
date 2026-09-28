@@ -231,6 +231,39 @@ darters included.
 - **Tail swipe:** a 270° arc (`SWIPE_FRONT_DOT = 0.7071`). Aim assist (`Game.swipe_aim`) turns Gill up
   to 60° so that the nearest parasite falls inside the arc. Parasite wiggle uses a simulated clock,
   so playthroughs are deterministic.
+- **Tail whip animation (dev-000024 playtest polish).** The phone playtest found a huge arc over a
+  barely moving tail. The whip now runs on its own 0.55 s clock (`AxolotlModel.whip_curve`):
+  - a short cock to one side;
+  - the strike: the hips twist (about 0.4 of the sweep) and the bend travels down the tail, each
+    bone a little behind the one before;
+  - an overshoot, a settle, and a recovery to his normal pose.
+
+  The tail tip sweeps about 210° and passes straight behind him on the hit frame.
+  - The water arc is drawn over the real hit area: the 270° behind and beside, out to `SWIPE_REACH`
+    (1.95 m) from his body centre. It was 1.55 m before. Its bright head rides the tail tip.
+  - The gameplay is unchanged:
+    - `SWIPE_TIME` 0.3 s;
+    - the hit on frame 6 (0.09 s);
+    - reach 1.95 m plus the target's body;
+    - one stage of damage;
+    - cooldown 0.38 s;
+    - aim assist 60°/80°.
+  - Tests: `_test_tail_whip`.
+- **Idles (dev-000024 playtest polish).** Standing still, Gill now and then plays one of four
+  (`AxolotlModel.Idle`):
+  - he rises onto his back legs, looks one way then the other, and drops back to all fours;
+  - a little scoot to one side, one to the other, and back to the same spot;
+  - a curious head tilt with a blink;
+  - a long stretch with a yawn, then a shake from gills to tail.
+
+  The first comes 4–8 s after he stops, then one every 7–16 s. The choice is random, never the same
+  one twice running. Any input, action or other animation ends an idle at once. The controller
+  allows idles only when nothing else is going on (`Axolotl.idle_allowed`: no jump, burst, lunge or
+  feeding, swipe, hit, landing, fall, current pull, cinematic, vortex, death or respawn). Idles are
+  cosmetic only:
+  - they move the drawn rig, never the gameplay body, its collision or the camera;
+  - choice and timing use the model's own random generator, which also runs blinks now;
+  - tests: `_test_gill_idles`.
 
 ## 7. World
 

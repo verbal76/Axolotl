@@ -334,16 +334,32 @@ static func leaf_thickness(s: float) -> float:
 ## (+Z, rising slightly as it enters the stem), so the leaf is seen to grow out of it: nothing but
 ## the drawn leaf collides (MeshLib.leaf_collision_shapes); the stalk never snags.
 static func platform_leaf_mesh(length: float, width: float, petiole := false) -> ArrayMesh:
-	var st := SurfaceTool.new()
-	st.begin(Mesh.PRIMITIVE_TRIANGLES)
+	var st := leaf_surface()
 	_leaf_into(st, Transform3D.IDENTITY, length, width, petiole, 0)
 	st.generate_normals()
 	return st.commit()
 
 
+## A SurfaceTool for platform leaves: each leaf's vertices carry, in CUSTOM0, the leaf's up and its
+## own phase for the plant shader's ambient flutter (so leaves merged into one mesh still move
+## independently).
+static func leaf_surface() -> SurfaceTool:
+	var st := SurfaceTool.new()
+	st.begin(Mesh.PRIMITIVE_TRIANGLES)
+	st.set_custom_format(0, SurfaceTool.CUSTOM_RGBA_FLOAT)
+	return st
+
+
+## A leaf's flutter phase (0..1) from where it sits: steady, and never the gameplay random sequence.
+static func leaf_phase(at: Vector3) -> float:
+	return fposmod(sin(at.dot(Vector3(12.9898, 78.233, 37.719))) * 43758.5453, 1.0)
+
+
 ## Appends a platform leaf (as platform_leaf_mesh) transformed by `xf` to `st` (indexed), whose
 ## vertices so far number `base`; returns the new count. Call generate_normals() once at the end.
 static func _leaf_into(st: SurfaceTool, xf: Transform3D, length: float, width: float, petiole: bool, p_base: int) -> int:
+	var lup := xf.basis.y.normalized()
+	st.set_custom(0, Color(lup.x, lup.y, lup.z, leaf_phase(xf.origin)))
 	var rows := 10
 	var cols := [-1.0, -0.55, 0.0, 0.55, 1.0]
 	var base := p_base

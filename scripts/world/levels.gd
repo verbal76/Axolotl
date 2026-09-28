@@ -162,10 +162,16 @@ static func _accent_flora(lb: LevelBuilder, i: int) -> void:
 		b.coral_nodes += b.scatter(MeshLib.coral_mesh(5 + k * 2, 0.75 + k * 0.15, 900 + i * 10 + k), mat, per, 900 + i * 10 + k, 0.9, 1.8, ok, 70.0)
 
 
+## Ambient flap of platform and ladder leaves at the tip, in metres (dev-000024 playtest polish).
+const LEAF_FLUTTER := 0.06
+
+
 static func _materials(lb: LevelBuilder, stem_a: Color, stem_b: Color, leaf_a: Color, leaf_b: Color) -> void:
 	var b := lb.ball
 	lb.stem_mat = b.make_plant_material(stem_a, stem_b)
-	lb.leaf_mat = b.make_plant_material(leaf_a, leaf_b, {"vein": 1.0, "variegate": 0.45, "vari_style": 1.0, "vari_stripe": Color(0.9, 0.95, 0.78)})
+	# (Leaves flap a few centimetres at the tip, each on its own; the stems stay rigid.)
+	lb.leaf_mat = b.make_plant_material(leaf_a, leaf_b, {"vein": 1.0, "variegate": 0.45, "vari_style": 1.0, "vari_stripe": Color(0.9, 0.95, 0.78),
+			"flutter": LEAF_FLUTTER, "flutter_speed": 1.1, "leaf_data": true})
 	lb.shell_mat = b.make_moss_material({"fuzz": 0.0})
 	lb.strand_mat = b.make_veg_material(b.palette["moss_healthy_a"], b.palette["moss_healthy_b"], {"sway": 0.08, "impulse_gain": 2.2, "cam_fade": 1.2,
 			"wake_gain": 1.0, "plant_height": 2.4})
@@ -596,8 +602,10 @@ static func _ball3(lb: LevelBuilder) -> void:
 	C.stem_top(T3.x, T3.y, 8.2, 0.5, 0.35)
 	var f1 := lb.flex_xf(C.on_stem(T3.x, T3.y, 8.2, 7.6, -1, 0, 0.45), 3.4, 2.6, true)
 	var f2 := lb.flex_xf(C.on_stem(T3.x, T3.y, 8.2, 4.6, 0, 1, 0.4), 3.2, 2.4, false)
-	# Hanging roots under the big canopy leaves (visual).
-	var root_mat := lb.stem_mat
+	# Hanging roots under the big canopy leaves (visual). Each hangs from its top and swings a
+	# little in the water on its own (the plant shader's ambient flutter).
+	var root_mat := b.make_plant_material(lb.stem_mat.get_shader_parameter("healthy_a"), lb.stem_mat.get_shader_parameter("healthy_b"),
+			{"flutter": 0.14, "flutter_speed": 0.7, "flutter_reach": 6.0})
 	for xf in [c1, c2, c3]:
 		for k in 5:
 			var off := Vector3(randf_range(-1.0, 1.0), 0, -randf_range(1.0, 4.0))
@@ -606,7 +614,7 @@ static func _ball3(lb: LevelBuilder) -> void:
 			var len := randf_range(2.5, 6.0)
 			var node := Node3D.new()
 			lb.root.add_child(node)
-			node.global_transform = Transform3D(MossBall.frame_at(up, 0), top - up * len)
+			node.global_transform = Transform3D(MossBall.frame_at(-up, 0), top)
 			var mi := MeshInstance3D.new()
 			mi.mesh = MeshLib.stem_mesh(0.05, 0.03, len, 5)
 			mi.material_override = root_mat

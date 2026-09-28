@@ -379,6 +379,20 @@ stylised undersea game (the healed look), and a sprouted moss ball.
 | E6-15 | Owner: leafy plants not solid green (terrarium earth star, fire-and-ice hosta) | I+V / needs phone | `shaders/variegation.gdshaderinc` on the rosettes, ferns and climbing leaves (`docs/VEGETATION.md`) | shots `feedback`, `review` |
 | E6-16 | Addendum: parasite combat and AI (sizes, retreat, pack alert, spitter, fairness, sight, determinism, cost) | I+V / needs phone | `scripts/actors/parasite.gd`, `parasite_glob.gd` (`docs/ECOSYSTEM.md` Parasites) | `_test_parasite_combat` (27); playthroughs on both seeds and 100% by play rerun after it; defects it exposed fixed: a parasite climbing a stem out of reach, damage during the vortex-connection shot, latching onto an invulnerable axolotl, stacking while waiting |
 
+## PT — dev-000024 physical playtest polish (owner, 2026-09-28)
+
+The owner reports dev-000024 **physically active and boot-healthy** on the real b22 app. From playing it,
+three findings, fixed in a tightly bounded pass (no gameplay rule, progression, completion id, save format,
+runtime, native code, collision, attack range, damage or timing changed; not Expansion 7).
+
+| ID | Requirement | Status | Implementation | Evidence |
+|---|---|---|---|---|
+| PT-01 | Gill needs several natural idles (rear-leg lookaround and side scoot required, two more chosen); occasional, random, no immediate repeat, cancelled by any input, never in incompatible states, cosmetic only, no gameplay RNG | I+V / needs phone | `AxolotlModel` idles (lookaround, scoot, head tilt, stretch with yawn and shake), `Axolotl.idle_allowed` (MOTE_HANDOFF §6) | `_test_gill_idles` (7); shots `gillanim` |
+| PT-02 | The tail whip must visibly follow the drawn arc; the arc must agree with the real hit area; combat unchanged | I+V / needs phone | `AxolotlModel.whip_curve`: cock, hip-led strike travelling down the tail, overshoot, recovery; arc drawn to `SWIPE_REACH` from the body centre (was 1.55 m) with its head on the tail tip | `_test_tail_whip` (5): timing (frame 6), reach, damage, rules unchanged, tip sweeps 210°; shots `gillanim` |
+| PT-03 | Constant subtle independent sway of all appropriate vegetation (not terrain, stems, stone, caves); neighbours out of step; disturbance still adds; GPU-bounded | I+V / needs phone | per-plant phase, pace, size and direction plus per-blade flutter (`vegetation.gdshader`); per-leaf flap with per-leaf data in ladder meshes, swinging hanging roots (`plant.gdshader`) (`docs/VEGETATION.md` Ambient motion) | `_test_ambient_sway` (6); shots `sway` (motion maps) |
+| PT-04 | Performance not undone | PENDING | vertex-shader only; no shadows or casters changed | PENDING |
+| PT-05 | Ships by OTA, no APK | PENDING | game layer only; runtime r5 | PENDING |
+
 ## Precedence notes
 
 - The reconciliation prompt's floor list repeats two items that the owner changed earlier today: "diegetic
