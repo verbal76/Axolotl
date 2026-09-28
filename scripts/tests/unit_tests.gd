@@ -14,7 +14,7 @@ func run(runner) -> void:
 	p.use_bot_input = true
 	await t.seconds(0.5)
 	var only: String = Settings.test_args.get("only", "")
-	for name_ in ["_test_startup", "_test_ota_and_version", "_test_mesh_winding", "_test_terrain", "_test_terrain_grounded", "_test_no_floating_platforms", "_test_parasite_locomotion", "_test_parasite_body_and_death", "_test_parasite_combat", "_test_gill_look", "_test_gill_idles", "_test_gill_colours", "_test_gill_patterns", "_test_tail_whip", "_test_ambient_sway", "_test_placements", "_test_tutorial_route", "_test_sphere_walk", "_test_jump_and_burst", "_test_coyote_and_buffer", "_test_swipe_direction_and_stages", "_test_hard_landing", "_test_food", "_test_food_reach", "_test_darter_and_burrower", "_test_food_repopulates", "_test_motes", "_test_checkpoint_and_regen", "_test_crumble", "_test_restoration_continuity", "_test_vortex", "_test_current", "_test_canopy", "_test_canopy_plain_jumps", "_test_climbs_physical", "_test_jungle_ladders_physical", "_test_leaf_geometry", "_test_leaf_footing", "_test_caves", "_test_mounds", "_test_vegetation", "_test_vortex_mouths_clear", "_test_route_audit", "_test_new_areas", "_test_ecosystem", "_test_music", "_test_run_clock", "_test_completion_catalog", "_test_completion_frozen", "_test_run_save_file", "_test_run_timer_live", "_test_run_continue", "_test_timer_integrity", "_test_resume_points_safe", "_phase_continue_write", "_phase_continue_read", "_test_upgrades", "_test_ui", "_test_all_clear"]:
+	for name_ in ["_test_startup", "_test_ota_and_version", "_test_mesh_winding", "_test_terrain", "_test_ravines", "_test_terrain_grounded", "_test_no_floating_platforms", "_test_parasite_locomotion", "_test_parasite_body_and_death", "_test_parasite_combat", "_test_gill_look", "_test_gill_idles", "_test_gill_colours", "_test_gill_patterns", "_test_tail_whip", "_test_ambient_sway", "_test_placements", "_test_tutorial_route", "_test_sphere_walk", "_test_jump_and_burst", "_test_coyote_and_buffer", "_test_swipe_direction_and_stages", "_test_hard_landing", "_test_food", "_test_food_reach", "_test_darter_and_burrower", "_test_food_repopulates", "_test_motes", "_test_checkpoint_and_regen", "_test_crumble", "_test_restoration_continuity", "_test_vortex", "_test_current", "_test_canopy", "_test_canopy_plain_jumps", "_test_climbs_physical", "_test_jungle_ladders_physical", "_test_leaf_geometry", "_test_leaf_footing", "_test_caves", "_test_mounds", "_test_vegetation", "_test_vortex_mouths_clear", "_test_route_audit", "_test_new_areas", "_test_ecosystem", "_test_music", "_test_run_clock", "_test_completion_catalog", "_test_completion_frozen", "_test_run_save_file", "_test_run_timer_live", "_test_run_continue", "_test_timer_integrity", "_test_resume_points_safe", "_phase_continue_write", "_phase_continue_read", "_test_upgrades", "_test_ui", "_test_all_clear"]:
 		# "_phase_*" tests are halves of a relaunch test: they run only when asked for by name
 		# (in a child process started by _test_run_continue).
 		if name_.begins_with("_phase") and only != name_:
@@ -1668,6 +1668,91 @@ func _test_mesh_winding() -> void:
 	t.check("cave_faces_correct_side", wrong == [0, 0, 0], "wrong faces outer %d, inner %d, jambs %d of %d" % [wrong[0], wrong[1], wrong[2], parts["total"]])
 
 
+## World expansion: a ravine cut through a plateau. Its floor is the ball's base surface; the
+## collision is the drawn ground; coming down on the floor costs one frond and puts Gill back on
+## the rim he left; on his last frond it is a death (re-forming at the bloom); the floor is never
+## taken for safe footing. (Built for the test on open meadow ground, then taken away again.)
+func _test_ravines() -> void:
+	var b := g.balls[0]
+	var at := MossBall.dir_ll(-10, -40)
+	var fr := MossBall.frame_at(at, 0.0)
+	var n_hills := b.hills.size()
+	# (Sized in metres: 12 m of plateau either side, a ravine 3.2 m across with 1.4 m walls.)
+	var m2a := func(m: float) -> float: return m / b.radius
+	b.add_plateau(at, m2a.call(14.0), 3.0, 2.5)
+	var r0 := at.rotated(fr.z, m2a.call(10.0))
+	var r1 := at.rotated(fr.z, -m2a.call(10.0))
+	b.add_ravine([r0, at, r1], 3.2, 3.0, 1.4, "test.ravine")
+	b.finalize_terrain()
+	await t.frames(2)
+	var side := at.rotated(fr.x, m2a.call(5.5))
+	var floor_h := b.terrain_height(at)
+	var top_h := b.terrain_height(side)
+	t.check("ravine_shape", floor_h < 0.01 and absf(top_h - 3.0) < 0.05 and b.ravine_at(at) == "test.ravine" and b.ravine_at(side) == "",
+			"floor %.2f m, plateau %.2f m; floor is ravine %s" % [floor_h, top_h, b.ravine_at(at)])
+	var space := g.get_world_3d().direct_space_state
+	var worst := 0.0
+	var flat_worst := 0.0
+	for k in 25:
+		var x := -6.0 + k * 0.5
+		var d := at.rotated(fr.x, m2a.call(x)).normalized()
+		var hit := space.intersect_ray(PhysicsRayQueryParameters3D.create(b.surface_point(d, 4.0), b.global_position, 1))
+		var gap := 9.0 if hit.is_empty() else absf(b.altitude(hit.position))
+		if absf(x) < 1.4 or absf(x) > 3.2:
+			flat_worst = maxf(flat_worst, gap)
+		else:
+			worst = maxf(worst, gap)
+	# (On the floor and the plateau the ground is the smooth shape to a centimetre; on the steep
+	# walls the 0.8 m triangles cut its curve by up to about a tenth of a metre, and collision is
+	# those same triangles.)
+	t.check("ravine_collision_is_drawn_ground", flat_worst < 0.03 and worst < 0.15, "floor and top within %.3f m, walls within %.3f m" % [flat_worst, worst])
+	# Walk off the rim into it.
+	var release := _hold_threats(b)
+	var earned_before := g.run_save.earned().size()
+	var fall := func(hp: int) -> Array:
+		place_at(0, b.surface_point(side, 0.3), -fr.x)
+		p.invuln_t = 0.0
+		p.health = hp
+		p.model.set_health(hp, p.max_health, false)
+		await t.seconds(0.8)
+		var rim := p.global_position
+		var falls0 := int(g.stats.get("ravine_falls", 0))
+		var deaths0: int = g.stats["deaths"]
+		var across := b.surface_point(at.rotated(fr.x, -m2a.call(4.0)))
+		var safe_in_ravine := false
+		for i in 60 * 4:
+			stick_toward(across - p.global_position)
+			await t.frames(1)
+			if b.ravine_at(b.up_at(p.last_safe_pos)) != "":
+				safe_in_ravine = true
+			if g.cinematic != "":
+				break
+		p.bot_input = Vector2.ZERO
+		var kind := g.cinematic
+		for i in 60 * 5:
+			await t.frames(1)
+			if g.cinematic == "" and p.state == "normal":
+				break
+		await t.seconds(0.5)
+		return [kind, int(g.stats.get("ravine_falls", 0)) - falls0, g.stats["deaths"] - deaths0, rim, safe_in_ravine]
+	var r: Array = await fall.call(3)
+	var back := p.global_position
+	var back_ok: bool = b.ravine_carve(b.up_at(back)) < 0.05 and b.altitude(back) < 0.3 and b.terrain_height(b.up_at(back)) > 2.9 and back.distance_to(r[3]) < 4.0
+	t.check("ravine_fall_costs_one_frond_back_to_rim", r[0] == "ravine" and r[1] == 1 and r[2] == 0 and p.health == 2 and back_ok and p.state == "normal" and not r[4],
+			"shot %s; falls %d, deaths %d; health %d of 3; back on the rim %s (%.1f m from where he left it; ground %.2f m up, %.2f m above it, ravine '%s'); safe spot ever in the ravine %s" % [r[0], r[1], r[2], p.health, back_ok, back.distance_to(r[3]), b.terrain_height(b.up_at(back)), b.altitude(back), b.ravine_at(b.up_at(back)), r[4]])
+	var r2: Array = await fall.call(1)
+	t.check("ravine_fall_on_last_frond_is_a_death", r2[0] == "regen" and r2[2] == 1 and p.state == "normal" and p.health == p.max_health
+			and g.run_save.earned().size() >= earned_before, "shot %s; deaths %d; re-formed with %d of %d" % [r2[0], r2[2], p.health, p.max_health])
+	release.call()
+	# Take the test ground away again.
+	b.hills.resize(n_hills)
+	b.carves.clear()
+	b._cells_dirty = true
+	b.finalize_terrain()
+	await t.frames(2)
+	p.restore_full()
+
+
 ## Rolling hills: smooth, walkable, and the collision matches what is drawn.
 ## Every structure that rises from a moss ball (moss cushions, cave domes, stems) must meet the
 ## ground all the way round its base: no floating caps with a gap Gill can walk into. Measures
@@ -2036,17 +2121,20 @@ func _test_terrain() -> void:
 		var hit := g.get_world_3d().direct_space_state.intersect_ray(q)
 		worst = maxf(worst, 9.0 if hit.is_empty() else absf(b.altitude(hit.position)))
 	t.check("terrain_collision_matches_surface", worst < 0.08, "worst gap %.3f" % worst)
-	# The drawn surface faces outward.
-	var mesh: ArrayMesh = b.get_node("MossSurface").mesh
-	var arr := mesh.surface_get_arrays(0)
-	var v: PackedVector3Array = arr[Mesh.ARRAY_VERTEX]
-	var idx: PackedInt32Array = arr[Mesh.ARRAY_INDEX]
+	# The drawn surface faces outward: every ground chunk and the far mesh.
 	var inward := 0
-	for i in range(0, idx.size(), 3):
-		var nrm := (v[idx[i + 2]] - v[idx[i]]).cross(v[idx[i + 1]] - v[idx[i]])
-		if nrm.length_squared() > 1e-10 and nrm.dot(v[idx[i]]) <= 0.0:
-			inward += 1
-	t.check("terrain_surface_faces_outward", inward == 0, "%d inward faces" % inward)
+	var meshes: Array = [b.get_node("MossSurface").mesh]
+	for ch in b.terrain_chunks:
+		meshes.append(ch.mesh)
+	for mesh: ArrayMesh in meshes:
+		var arr := mesh.surface_get_arrays(0)
+		var v: PackedVector3Array = arr[Mesh.ARRAY_VERTEX]
+		var idx: PackedInt32Array = arr[Mesh.ARRAY_INDEX]
+		for i in range(0, idx.size(), 3):
+			var nrm := (v[idx[i + 2]] - v[idx[i]]).cross(v[idx[i + 1]] - v[idx[i]])
+			if nrm.length_squared() > 1e-10 and nrm.dot(v[idx[i]]) <= 0.0:
+				inward += 1
+	t.check("terrain_surface_faces_outward", inward == 0 and b.terrain_chunks.size() == 24, "%d inward faces over %d chunks and the far mesh" % [inward, b.terrain_chunks.size()])
 	# He can walk up and over a hill (and stays on the ground doing it).
 	var start := c.rotated(axis, -ang * 1.25)
 	place(0, rad_to_deg(asin(start.y)), rad_to_deg(atan2(start.x, start.z)))

@@ -176,24 +176,155 @@ func surface_point(dir: Vector3, h := 0.0) -> Vector3:
 
 
 # --- Terrain -------------------------------------------------------------------------------
+#
+# Ground height above the base sphere is the sum of authored features (hills, plateaus) minus the
+# ravines carved into them, never below 0: the base sphere stays the floor of every ravine and the
+# safety floor under everything (world expansion, docs/WORLD_EXPANSION.md). Features are bucketed
+# by direction so a lookup only visits the few that reach it.
 
-## Registers a rolling hill. Register every hill before placing anything on the ball.
+const CELL_DEG := 6.0
+## Carved ravines: [points (directions), half width m, depth m, wall m, id].
+var carves: Array = []
+var _cells := {}
+var _cells_dirty := true
+
+
+## Registers a rolling hill (a cosine bell). Register every feature before placing anything.
 func add_hill(dir: Vector3, angular_radius: float, height: float) -> void:
 	hills.append([dir.normalized(), angular_radius, height])
+	_cells_dirty = true
 
 
-## Ground height above the base sphere: a sum of cosine bells, flat at the crest and at the
-## foot, so hills blend into each other and into the ball without creases.
+## A plateau: flat on top at `height`, falling away over its outer `edge_deg`.
+func add_plateau(dir: Vector3, angular_radius: float, height: float, edge_deg := 3.0) -> void:
+	hills.append([dir.normalized(), angular_radius, height, "plateau", deg_to_rad(edge_deg)])
+	_cells_dirty = true
+
+
+## A ravine cut along `points` (directions from the ball's centre): `width_m` across its floor,
+## `depth_m` deep (never below the base sphere), walls `wall_m` wide.
+func add_ravine(points: Array, width_m: float, depth_m: float, wall_m := 1.5, id := "") -> void:
+	var pts := PackedVector3Array()
+	for pt in points:
+		pts.append((pt as Vector3).normalized())
+	carves.append([pts, width_m * 0.5, depth_m, wall_m, id if id != "" else "ravine.%d" % carves.size()])
+	_cells_dirty = true
+
+
+static func _cell_key(dir: Vector3) -> int:
+	var lat := rad_to_deg(asin(clampf(dir.y, -1.0, 1.0))) + 90.0
+	var lon := rad_to_deg(atan2(dir.x, dir.z)) + 180.0
+	var n_lon := int(ceil(360.0 / CELL_DEG))
+	return mini(int(lat / CELL_DEG), int(180.0 / CELL_DEG) - 1) * n_lon + mini(int(lon / CELL_DEG), n_lon - 1)
+
+
+func _build_cells() -> void:
+	_cells.clear()
+	var n_lat := int(180.0 / CELL_DEG)
+	var n_lon := int(ceil(360.0 / CELL_DEG))
+	var pad := deg_to_rad(CELL_DEG) * 1.5
+	for i in n_lat:
+		for j in n_lon:
+			var d := dir_ll(-90.0 + (i + 0.5) * CELL_DEG, -180.0 + (j + 0.5) * CELL_DEG)
+			var hs: Array[int] = []
+			for k in hills.size():
+				var hl: Array = hills[k]
+				if (hl[0] as Vector3).angle_to(d) <= float(hl[1]) + pad:
+					hs.append(k)
+			var cs: Array[int] = []
+			for k in carves.size():
+				var cv: Array = carves[k]
+				if _polyline_angle(d, cv[0]) <= (float(cv[1]) + float(cv[3])) / radius + pad:
+					cs.append(k)
+			if not hs.is_empty() or not cs.is_empty():
+				_cells[i * n_lon + j] = [hs, cs]
+	_cells_dirty = false
+
+
+## Smallest angle from `d` to a polyline of directions (great-circle segments).
+static func _polyline_angle(d: Vector3, pts: PackedVector3Array) -> float:
+	var best := INF
+	if pts.size() == 1:
+		return d.angle_to(pts[0])
+	for i in pts.size() - 1:
+		var a := pts[i]
+		var b := pts[i + 1]
+		var n := a.cross(b)
+		var ang := INF
+		if n.length_squared() > 1e-12:
+			n = n.normalized()
+			var q := (d - n * d.dot(n))
+			if q.length_squared() > 1e-12:
+				q = q.normalized()
+				if absf(a.angle_to(q) + q.angle_to(b) - a.angle_to(b)) < 1e-4:
+					ang = d.angle_to(q)
+		best = minf(best, minf(ang, minf(d.angle_to(a), d.angle_to(b))))
+	return best
+
+
+## Ground height above the base sphere at `dir` (features minus ravines, never below 0).
 func terrain_height(dir: Vector3) -> float:
+	if hills.is_empty() and carves.is_empty():
+		return 0.0
+	if _cells_dirty:
+		_build_cells()
+	var cell = _cells.get(_cell_key(dir))
+	if cell == null:
+		return 0.0
 	var h := 0.0
-	for hl in hills:
+	for k in cell[0]:
+		var hl: Array = hills[k]
 		var c: float = (hl[0] as Vector3).dot(dir)
 		var ang: float = hl[1]
 		if c <= cos(ang):
 			continue
-		var x := acos(minf(c, 1.0)) / ang
-		h += float(hl[2]) * (0.5 + 0.5 * cos(PI * x))
-	return h
+		var a := acos(minf(c, 1.0))
+		if hl.size() > 3 and hl[3] == "plateau":
+			var edge: float = hl[4]
+			h += float(hl[2]) * (1.0 - smoothstep(ang - edge, ang, a))
+		else:
+			h += float(hl[2]) * (0.5 + 0.5 * cos(PI * a / ang))
+	var carve := 0.0
+	for k in cell[1]:
+		var cv: Array = carves[k]
+		var dist := _polyline_angle(dir, cv[0]) * radius
+		var hw: float = cv[1]
+		var wall: float = cv[3]
+		carve = maxf(carve, float(cv[2]) * (1.0 - smoothstep(hw, hw + wall, dist)))
+	return maxf(0.0, h - carve)
+
+
+## How deep the ravines cut at `dir` (0 on untouched ground; their full depth on a floor).
+func ravine_carve(dir: Vector3) -> float:
+	if carves.is_empty():
+		return 0.0
+	if _cells_dirty:
+		_build_cells()
+	var cell = _cells.get(_cell_key(dir.normalized()))
+	if cell == null:
+		return 0.0
+	var carve := 0.0
+	for k in cell[1]:
+		var cv: Array = carves[k]
+		var dist := _polyline_angle(dir.normalized(), cv[0]) * radius
+		carve = maxf(carve, float(cv[2]) * (1.0 - smoothstep(float(cv[1]), float(cv[1]) + float(cv[3]), dist)))
+	return carve
+
+
+## The ravine whose floor `dir` is on (within its floor, deeper than half its depth), or "".
+func ravine_at(dir: Vector3) -> String:
+	if carves.is_empty():
+		return ""
+	if _cells_dirty:
+		_build_cells()
+	var cell = _cells.get(_cell_key(dir.normalized()))
+	if cell == null:
+		return ""
+	for k in cell[1]:
+		var cv: Array = carves[k]
+		if _polyline_angle(dir.normalized(), cv[0]) * radius <= float(cv[1]) + float(cv[3]) * 0.35:
+			return cv[4]
+	return ""
 
 
 func ground_radius(dir: Vector3) -> float:
@@ -218,25 +349,146 @@ func _ground_normal(d: Vector3) -> Vector3:
 	return n if n.dot(d) > 0.0 else -n
 
 
-## Rebuilds the visible moss surface and adds hill collision once the level is laid out.
-## The base sphere collider stays; each hill gets a matching collision patch on top.
+# --- Terrain mesh and collision --------------------------------------------------------------
+#
+# The ground is built as a cube-sphere of tiles about TILE_M across with TILE_Q quads a side
+# (under 1 m apart at any radius). Tiles with raised ground get concave collision that is the
+# drawn surface; flat ground keeps the base sphere collider. Tiles are drawn merged into a few
+# chunks per cube face; from afar the ball swaps to one light whole-ball mesh (FAR_LOD_M).
+
+const TILE_M := 8.0
+const TILE_Q := 10
+const CHUNKS_PER_EDGE := 2
+const FACES := [[Vector3.RIGHT, Vector3.BACK, Vector3.UP], [Vector3.LEFT, Vector3.FORWARD, Vector3.UP],
+		[Vector3.UP, Vector3.RIGHT, Vector3.BACK], [Vector3.DOWN, Vector3.RIGHT, Vector3.FORWARD],
+		[Vector3.BACK, Vector3.LEFT, Vector3.UP], [Vector3.FORWARD, Vector3.RIGHT, Vector3.UP]]
+## Beyond this distance from the ball's surface the far mesh is drawn instead of the tiles.
+const FAR_LOD_M := 70.0
+var terrain_chunks: Array[MeshInstance3D] = []
+var _terrain_shapes: Array[CollisionShape3D] = []
+var terrain_tile_count := 0
+var terrain_collision_tiles := 0
+
+
+static func _cube_dir(face: Array, u: float, v: float) -> Vector3:
+	# (Equal-angle warp, so tiles are about the same size across a face.)
+	var a := tan(u * PI * 0.25)
+	var b := tan(v * PI * 0.25)
+	return ((face[0] as Vector3) + (face[1] as Vector3) * a + (face[2] as Vector3) * b).normalized()
+
+
+## Rebuilds the visible ground and its collision once the level is laid out.
 func finalize_terrain() -> void:
-	if hills.is_empty():
-		return
-	var seg := 176
-	var rings := 88
+	if _cells_dirty:
+		_build_cells()
+	var tiles := maxi(2, int(ceil(radius * PI * 0.5 / TILE_M)))
+	tiles = int(ceil(float(tiles) / CHUNKS_PER_EDGE)) * CHUNKS_PER_EDGE
+	var per := tiles / CHUNKS_PER_EDGE
+	for c in terrain_chunks:
+		c.queue_free()
+	terrain_chunks.clear()
+	for cs in _terrain_shapes:
+		cs.queue_free()
+	_terrain_shapes.clear()
+	terrain_tile_count = 0
+	terrain_collision_tiles = 0
+	for f in FACES.size():
+		for cx in CHUNKS_PER_EDGE:
+			for cy in CHUNKS_PER_EDGE:
+				var st_v := PackedVector3Array()
+				var st_n := PackedVector3Array()
+				var st_i := PackedInt32Array()
+				for tx in range(cx * per, (cx + 1) * per):
+					for ty in range(cy * per, (cy + 1) * per):
+						_build_tile(FACES[f], tx, ty, tiles, st_v, st_n, st_i)
+				var arr := []
+				arr.resize(Mesh.ARRAY_MAX)
+				arr[Mesh.ARRAY_VERTEX] = st_v
+				arr[Mesh.ARRAY_NORMAL] = st_n
+				arr[Mesh.ARRAY_INDEX] = st_i
+				var am := ArrayMesh.new()
+				am.add_surface_from_arrays(Mesh.PRIMITIVE_TRIANGLES, arr)
+				var mi := MeshInstance3D.new()
+				mi.name = "Ground_%d_%d_%d" % [f, cx, cy]
+				mi.mesh = am
+				mi.material_override = moss_material
+				mi.cast_shadow = GeometryInstance3D.SHADOW_CASTING_SETTING_OFF
+				mi.visibility_range_end = radius + FAR_LOD_M
+				mi.visibility_range_end_margin = 4.0
+				add_child(mi)
+				terrain_chunks.append(mi)
+	# The far mesh: the whole ball, light (hills and ravines at a coarse spacing).
+	_surface.mesh = _far_mesh()
+	_surface.visibility_range_begin = radius + FAR_LOD_M
+	_surface.visibility_range_begin_margin = 4.0
+
+
+## One tile's quads into a chunk's arrays; collision for it when it has raised ground.
+func _build_tile(face: Array, tx: int, ty: int, tiles: int, verts: PackedVector3Array, norms: PackedVector3Array, idx: PackedInt32Array) -> void:
+	var q := TILE_Q
+	var n := q + 3   # one sample of border each side, for the normals
+	var pos := PackedVector3Array()
+	pos.resize(n * n)
+	var raised := false
+	for j in n:
+		for i in n:
+			var u := -1.0 + 2.0 * (tx + float(i - 1) / q) / tiles
+			var v := -1.0 + 2.0 * (ty + float(j - 1) / q) / tiles
+			var d := _cube_dir(face, u, v)
+			var h := terrain_height(d)
+			if h > 0.01 and i > 0 and j > 0 and i < n - 1 and j < n - 1:
+				raised = true
+			pos[j * n + i] = d * (radius + h)
+	var base := verts.size()
+	for j in range(1, n - 1):
+		for i in range(1, n - 1):
+			var p := pos[j * n + i]
+			var nrm := (pos[j * n + i + 1] - pos[j * n + i - 1]).cross(pos[(j + 1) * n + i] - pos[(j - 1) * n + i]).normalized()
+			if nrm.dot(p) < 0.0:
+				nrm = -nrm
+			verts.append(p)
+			norms.append(nrm)
+	var w := q + 1
+	# Front faces are clockwise seen from outside: pick the order from the tile's own geometry.
+	var p00 := pos[1 * n + 1]
+	var flip := (pos[1 * n + 2] - p00).cross(pos[2 * n + 1] - p00).dot(p00) > 0.0
+	var faces := PackedVector3Array()
+	for j in q:
+		for i in q:
+			var a := base + j * w + i
+			var b := a + 1
+			var c := a + w
+			var d := c + 1
+			if flip:
+				idx.append_array([a, c, b, b, c, d])
+			else:
+				idx.append_array([a, b, c, b, d, c])
+			if raised:
+				faces.append_array([verts[a], verts[b], verts[c], verts[b], verts[d], verts[c]])
+	terrain_tile_count += 1
+	if raised:
+		var shape := ConcavePolygonShape3D.new()
+		shape.set_faces(faces)
+		shape.backface_collision = true
+		var cs := CollisionShape3D.new()
+		cs.shape = shape
+		static_body.add_child(cs)
+		_terrain_shapes.append(cs)
+		terrain_collision_tiles += 1
+
+
+func _far_mesh() -> ArrayMesh:
+	var seg := 96
+	var rings := 48
 	var verts := PackedVector3Array()
 	var norms := PackedVector3Array()
-	var uvs := PackedVector2Array()
 	for r in rings + 1:
 		var th := PI * r / rings
 		for sg in seg + 1:
 			var ph := TAU * sg / seg
 			var d := Vector3(sin(th) * cos(ph), cos(th), sin(th) * sin(ph))
-			var th_h := terrain_height(d)
-			verts.append(d * (radius + th_h))
-			norms.append(_ground_normal(d) if th_h > 0.0001 else d)
-			uvs.append(Vector2(float(sg) / seg, float(r) / rings))
+			verts.append(d * (radius + terrain_height(d)))
+			norms.append(d)
 	var idx := PackedInt32Array()
 	for r in rings:
 		for sg in seg:
@@ -244,49 +496,15 @@ func finalize_terrain() -> void:
 			var i01 := i00 + 1
 			var i10 := i00 + seg + 1
 			var i11 := i10 + 1
-			# Clockwise seen from outside (Godot front faces).
 			idx.append_array([i00, i11, i01, i00, i10, i11])
 	var arr := []
 	arr.resize(Mesh.ARRAY_MAX)
 	arr[Mesh.ARRAY_VERTEX] = verts
 	arr[Mesh.ARRAY_NORMAL] = norms
-	arr[Mesh.ARRAY_TEX_UV] = uvs
 	arr[Mesh.ARRAY_INDEX] = idx
 	var am := ArrayMesh.new()
 	am.add_surface_from_arrays(Mesh.PRIMITIVE_TRIANGLES, arr)
-	_surface.mesh = am
-	for hl in hills:
-		_hill_collider(hl[0], hl[1])
-
-
-## Polar grid over one hill's footprint following the full terrain (so overlaps agree).
-func _hill_collider(center: Vector3, ang: float) -> void:
-	var k_rings := 14
-	var segs := 40
-	var e1 := center.cross(Vector3.UP if absf(center.y) < 0.9 else Vector3.RIGHT).normalized()
-	var e2 := center.cross(e1)
-	var grid: Array = []
-	for k in k_rings + 1:
-		var r := ang * 1.03 * float(k) / k_rings
-		var row := PackedVector3Array()
-		for sg in segs:
-			var ph := TAU * sg / segs
-			var d := (center * cos(r) + (e1 * cos(ph) + e2 * sin(ph)) * sin(r)).normalized()
-			row.append(d * ground_radius(d))
-		grid.append(row)
-	var faces := PackedVector3Array()
-	for k in k_rings:
-		var a: PackedVector3Array = grid[k]
-		var b: PackedVector3Array = grid[k + 1]
-		for sg in segs:
-			var s1 := (sg + 1) % segs
-			faces.append_array([a[sg], b[sg], b[s1], a[sg], b[s1], a[s1]])
-	var shape := ConcavePolygonShape3D.new()
-	shape.set_faces(faces)
-	shape.backface_collision = true
-	var cs := CollisionShape3D.new()
-	cs.shape = shape
-	static_body.add_child(cs)
+	return am
 
 
 func up_at(world_pos: Vector3) -> Vector3:

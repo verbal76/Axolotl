@@ -862,6 +862,28 @@ func respawn_target() -> Array:
 	return [checkpoint.ball, checkpoint.respawn_point(), checkpoint]
 
 
+## Gill came down on a ravine's floor (world expansion): one frond, then a quick dissolve and he
+## re-forms at the edge he fell from (Axolotl.ravine_return_point). On his last frond it is a
+## death like any other: he re-forms at the last bloom, progress kept.
+func ravine_fall(p: Axolotl) -> void:
+	if cinematic != "" or p.state != "normal":
+		return
+	stats["ravine_falls"] = int(stats.get("ravine_falls", 0)) + 1
+	if p.health <= 1:
+		p.health = 0
+		p.model.set_health(0, p.max_health, true)
+		p.health_changed.emit(0, p.max_health)
+		p.died.emit()
+		return
+	p.health -= 1
+	p.model.set_health(p.health, p.max_health, true)
+	p.health_changed.emit(p.health, p.max_health)
+	Settings.haptic("hurt")
+	Sfx.play("hurt", p.global_position)
+	WaterFX.inst.impulse(p.global_position, 1.5, 0.5)
+	_start_cinematic("ravine", {"to": p.ravine_return_point()})
+
+
 func _on_player_died() -> void:
 	stats["deaths"] += 1
 	_start_cinematic("regen", {})
@@ -936,6 +958,10 @@ func _start_cinematic(kind: String, data: Dictionary) -> void:
 			_regen_from = player.global_position
 			cam.cinematic = true
 			Sfx.play("dissolve", player.global_position)
+		"ravine":
+			player.state = "cinematic"
+			player.velocity = Vector3.ZERO
+			Sfx.play("dissolve", player.global_position, -6.0)
 
 
 func _end_cinematic() -> void:
@@ -952,6 +978,7 @@ func _update_cinematic(dt: float) -> void:
 		"connect": _cine_connect()
 		"travel": _cine_travel(dt)
 		"regen": _cine_regen()
+		"ravine": _cine_ravine()
 
 
 func _cine_frame() -> void:
@@ -1044,6 +1071,27 @@ func _cine_travel(dt: float) -> void:
 		Sfx.play("vortex_exit", player.global_position)
 		cam.snap_behind()
 		_end_cinematic()
+
+
+## A quick fade out of the ravine and back in at its edge (about 0.9 s; the camera follows).
+func _cine_ravine() -> void:
+	if cine_t < 0.35:
+		player.model.dissolve = cine_t / 0.35
+		if int(cine_t * 30.0) % 3 == 0:
+			WaterFX.inst.sparkle(player.body_center(), Color(0.45, 1.0, 0.85, 0.9), 3, 1.0, 0.06, 0.6)
+	elif not cine_data.has("placed"):
+		cine_data["placed"] = true
+		var to: Array = cine_data["to"]
+		player.place(to[0], to[1])
+		Sfx.play("reform", to[1], -6.0)
+		cam.snap_behind()
+	else:
+		var k := clampf((cine_t - 0.35) / 0.55, 0.0, 1.0)
+		player.model.dissolve = 1.0 - k
+		if k >= 1.0:
+			player.state = "normal"
+			player.invuln_t = 1.2
+			_end_cinematic()
 
 
 func _cine_regen() -> void:

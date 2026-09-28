@@ -74,6 +74,7 @@ var _landing_speed := 0.0
 var _jumped_this_frame := false
 var _stream_t := 0.0
 var _acted := false               # a jump, swipe or lunge was pressed this frame
+var _fell_at := Vector3.ZERO      # where he last came down in a ravine
 
 var model: AxolotlModel
 var blob_shadow: MeshInstance3D
@@ -345,6 +346,11 @@ func _physics_process(dt: float) -> void:
 			fc.stepped()
 		if not was_grounded:
 			_on_land(-pre_vup, r)
+		# Down on a ravine's floor: one frond, and he is put back at its edge (world expansion).
+		if ball.ravine_at(up) != "":
+			_fell_at = global_position
+			Game.inst.ravine_fall(self)
+			return
 		apex_r = r
 		coyote_t = 0.0
 		if _floor_is_stable():
@@ -383,6 +389,9 @@ func _physics_process(dt: float) -> void:
 
 
 func _floor_is_stable() -> bool:
+	# (Never in a ravine or on its walls: he is put back where he stood before it, on the rim.)
+	if ball.ravine_carve(up) > 0.15:
+		return false
 	for i in get_slide_collision_count():
 		var c := get_slide_collision(i)
 		var col := c.get_collider()
@@ -434,6 +443,9 @@ func _do_burst(wish: Vector3) -> Array:
 
 func _on_land(impact: float, r: float) -> void:
 	burst_available = true
+	# (A ravine floor is its own penalty, one frond, handled by Game.ravine_fall.)
+	if ball.ravine_at(up) != "":
+		return
 	var fall := apex_r - r
 	var col := _floor_collider()
 	if col and col.has_method("absorb"):
@@ -581,6 +593,26 @@ func _update_model(_dt: float) -> void:
 	model.idle_ok = idle_allowed()
 	if cam:
 		model.camera_pos = cam.global_position
+
+
+## Where to put him back after a ravine fall: his last safe footing, stepped a little further from
+## the ravine (away from where he came down), on ground that is not itself in a ravine.
+func ravine_return_point() -> Array:
+	var b: MossBall = last_safe_ball if last_safe_ball else ball
+	var safe := last_safe_pos
+	var away := safe - _fell_at
+	var u := b.up_at(safe)
+	away -= u * away.dot(u)
+	if away.length() > 0.01:
+		# Out to untouched ground (clear of the ravine's cut), then a little more.
+		for k in range(1, 12):
+			var d := b.up_at(safe + away.normalized() * 0.4 * k)
+			if b.ravine_carve(d) < 0.02 and b.ravine_at(d) == "":
+				var d2 := b.up_at(safe + away.normalized() * (0.4 * k + 0.6))
+				if b.ravine_carve(d2) < 0.02:
+					d = d2
+				return [b, b.surface_point(d, 0.3)]
+	return [b, safe + u * 0.3]
 
 
 ## Whether the model may play an idle: he is standing still on the ground under the player's
