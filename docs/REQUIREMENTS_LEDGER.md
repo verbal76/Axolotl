@@ -239,12 +239,12 @@ consolidate everything into ONE Mote app and ONE current APK (retire Mote Dev; k
 | P-05 | CI builds a new APK only when the native layer changes | I+V | `build.yml` `native` job gates `android` | Build & Verify #23: "Android APK" skipped; tests green |
 | P-06 | Moss Ball 3 canopy: the spiral climb can be started from the ground and climbed with plain jumps (owner: "my daughter couldn't get to any of the higher leaves, the double jump isn't enough") | I+V / needs phone | `Levels._ball3` spiral: 16 leaves, 72° apart (5 per turn), first leaf 0.8 m + 1.0 m per step (was 10 leaves, 1.5 m + 1.6 m per step, 60° apart) | Root cause: first leaf ~1.6 m up and 1.6 m steps vs a 1.85 m plain-jump apex, so every step needed a precise jump + burst. Now first leaf 0.89 m, steps 1.00 m, headroom 1.87 m; `canopy_climb_with_plain_jumps` climbs all 16 leaves with one plain jump each; playthrough 12/12 (seeds 4242, 7). Delivered by OTA dev-000016 (source `346a0bc`, PCK `4ac0e085…2a4681`, 4,861,880 bytes, baked; verified from public URLs; a b22 client downloads it); Build & Verify #24 skipped the APK |
 
-## M — Owner's music (owner, 2026-09-28)
+## M — Owner's music (owner, 2026-09-28; delivered by OTA dev-000017)
 
 | ID | Requirement | Status | Implementation | Evidence |
 |---|---|---|---|---|
 | M-01 | The owner's two songs, *Aquarium Whimsy* (106.7 s) and *Bubbly Underworld* (98.8 s), are the background music: they alternate on the title and every moss ball, replacing the generated layers | I+V / needs phone | `AudioDirector`: one `Music`-bus player, `SONGS`, `next_song` on `finished`; travelling keeps the current song; the lowpass still opens as the current ball heals. Files: `assets/audio/music_aquarium_whimsy.ogg`, `music_bubbly_underworld.ogg` (Ogg Vorbis, 48 kHz stereo, full length, no loop). The 15 generated `music_b*_l*.wav` layers and their generator are removed | `music_owner_songs_load`, `music_generated_layers_removed`, `music_travel_keeps_song`, `music_songs_alternate`, `music_on_the_music_bus`, `music_next_song_starts_when_one_ends` (a real song end hands over to the other) |
-| M-02 | Keep the OTA small (owner chose Ogg Vorbis over WAV) | I+V | Encoded from the owner's WAVs (39 MB) at Vorbis ~q7: 2.71 MB + 2.55 MB, same sample count as the originals | |
+| M-02 | Keep the OTA small (owner chose Ogg Vorbis over WAV) | I+V | Encoded from the owner's WAVs (39 MB) at Vorbis ~q7: 2.71 MB + 2.55 MB, same sample count as the originals | dev-000017 (OTA publish #17, source `618dcf3`, PCK `3ffcb6b1…a9fcc8`, 8,736,680 bytes, baked): signature, hash, inspector verified from public URLs; no `music_b*` layers in the pack; the `music_*` tests pass run from the pack; a b22 client downloads it; Build & Verify #25 skipped the APK |
 
 ## Precedence notes
 
