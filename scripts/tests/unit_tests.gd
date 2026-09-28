@@ -20,7 +20,11 @@ func run(runner) -> void:
 		if name_.begins_with("_phase") and only != name_:
 			continue
 		if only == "" or name_.contains(only):
+			# A test that stops on a script error reports nothing; count that as a failure.
+			var before: int = t.results.size()
 			await call(name_)
+			if t.results.size() == before:
+				t.check("test_completed:" + name_, false, "reported no checks (stopped on a script error?)")
 
 
 # --- startup ------------------------------------------------------------------------------
@@ -2609,11 +2613,25 @@ func _climb(b: MossBall, h: Dictionary) -> int:
 func _test_upgrades() -> void:
 	p.max_health = 3
 	p.health = 3
+	# The original caves' heart upgrades (balls 1-3): each adds a gill.
 	for b in g.balls:
-		var u = b.upgrades[0]
-		place_at(b.index, u._leaf.global_position - b.up_at(u._leaf.global_position) * 0.3, MossBall.frame_at(b.up_at(u.global_position), 0).z)
-		await t.seconds(0.4)
+		for u in b.upgrades:
+			if u.kind == "health":
+				place_at(b.index, u._leaf.global_position - b.up_at(u._leaf.global_position) * 0.3, MossBall.frame_at(b.up_at(u.global_position), 0).z)
+				await t.seconds(0.4)
 	t.check("three_cave_upgrades_to_six", p.max_health == 6 and p.health == 6, "max %d" % p.max_health)
+	# The new grottoes' pearls: each refills health and adds no gill.
+	var pearls := 0
+	var ok := true
+	for b in g.balls:
+		for u in b.upgrades:
+			if u.kind == "pearl":
+				p.health = 2
+				place_at(b.index, u._leaf.global_position - b.up_at(u._leaf.global_position) * 0.3, MossBall.frame_at(b.up_at(u.global_position), 0).z)
+				await t.seconds(0.4)
+				ok = ok and u.taken and p.health == p.max_health and p.max_health == 6
+				pearls += 1
+	t.check("pearls_refill_health_not_max", pearls == 4 and ok, "%d pearls, max %d" % [pearls, p.max_health])
 
 
 func _test_ui() -> void:
