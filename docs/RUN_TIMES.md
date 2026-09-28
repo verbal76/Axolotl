@@ -15,7 +15,8 @@ CI times come from GitHub Actions.
 | 2026-09-28 | dev-000025 | OTA end-to-end (local) | 21:07:56 | 21:17:28 | 9 min 32 s | 42/42 | includes an offline playthrough |
 | 2026-09-28 | dev-000025 | Performance views (15) | 21:17:50 | 21:22:11 | 4 min 21 s | within noise of dev-000024 | nothing else running |
 | 2026-09-28 | expansion prep | Read-only world architecture audit | — | — | 5 min 17 s | brief | background agent |
-| 2026-09-28 | dev-000025 | CI Build & Verify #33 (PR) | 21:22:53 | about 21:32 | about 10 min | green; APK job skipped | GitHub Actions |
+| 2026-09-28 | dev-000025 | CI Build & Verify #33 (PR, `969e4bb`) | 21:22:53 | 21:32:40 | 9 min 47 s | green; APK job skipped | GitHub Actions |
+| 2026-09-28 | dev-000025 | CI Build & Verify #35 (PR, `8c92e5b`) | 21:33:33 | 21:39:56 | 6 min 23 s | green; APK job skipped | GitHub Actions |
 | 2026-09-28 | dev-000025 | OTA publish #25 (push) | 21:33:27 | 21:42:05 | 8 min 38 s | success | GitHub Actions: tests, export, sign, publish, re-verify, pointer |
 | 2026-09-28 | dev-000025 | b22 client staging check | 21:42:47 | 21:42:50 | 3 s | staged, hash matches | |
 | 2026-09-28 | dev-000025 | Tests run from the published pack | 21:42:58 | 21:43:15 | 17 s | 50/50 | |
