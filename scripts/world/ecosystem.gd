@@ -74,7 +74,8 @@ func _populate_ball(b: MossBall) -> void:
 			if caves.size() > 0:
 				_eel(b, caves[0], 0)
 		2:
-			_stalker(b, MossBall.dir_ll(-22, 170), 10.0, 0)
+			# (Well away from the parasites' zones: a stalker should not harass a required fight.)
+			_stalker(b, MossBall.dir_ll(-55, 95), 10.0, 0)
 			var hc := {}
 			for h in lb.bot_hints:
 				if h.has("canopy"):

@@ -182,6 +182,15 @@ func tick() -> void:
 		t.log_line("heartbeat %.0fs ball %d h %.1f act '%s' R %.2f %.2f %.2f hp %d cine '%s' state %s %s" % [sim_time, p.ball.index + 1,
 				(p.global_position - p.ball.global_position).length() - p.ball.radius, activity, g.balls[0].restoration,
 				g.balls[1].restoration, g.balls[2].restoration, p.health, g.cinematic, p.state, goto_info])
+		if Settings.test_args.has("trace_stuck"):
+			var near: Parasite = null
+			for par in p.ball.parasites:
+				if par.is_alive() and (near == null or par.global_position.distance_to(p.global_position) < near.global_position.distance_to(p.global_position)):
+					near = par
+			if near:
+				t.log_line("  STUCK nearest parasite %s kind %d state %s dist %.2f dh %.2f alt %.2f on %s; me grounded %s floor %s" % [near.zone_id, near.kind, near.state,
+						near.global_position.distance_to(p.global_position), height_of(near.global_position), p.ball.altitude(near.global_position),
+						near.standing_on.name if near.standing_on else "-", p.grounded, str(p.get_last_slide_collision().get_collider().name) if p.get_last_slide_collision() else "-"])
 
 
 func set_stick(v: Vector2) -> void:
@@ -518,7 +527,7 @@ func _critter_threat() -> Critter:
 			return c
 		if c is CaveEel and c.state == "alert" and (c as CaveEel).mouth.distance_to(p.body_center()) < CaveEel.STRIKE_REACH + 1.0:
 			return c
-		if c is ReedStalker and c.state == "telegraph" and d < 6.0:
+		if c is ReedStalker and (c.state == "telegraph" or (c.state in ["stalk", "recover"] and d < 4.5)):
 			return c
 		if c is Pufferfish and c.puffed and d < c.radius() + 1.6:
 			return c
@@ -530,7 +539,26 @@ func _critter_threat() -> Critter:
 ## (hit it while it warns or after its charge, sidestep the charge).
 func handle_critter(c: Critter) -> void:
 	var up := p.up
-	if c is ReedStalker:
+	if c is ReedStalker and c.state != "telegraph":
+		# It is shadowing him (or lying low after a pounce): turn on it and drive it off.
+		var el := 0.0
+		while not c.defeated and c.state != "telegraph" and el < 4.0:
+			var to := c.global_position - p.global_position
+			to -= up * to.dot(up)
+			if to.length() > 1.8:
+				set_stick(stick_for(to.normalized()))
+				await tick()
+				el += 1.0 / 60.0
+				continue
+			for k in 5:
+				set_stick(stick_for(-to.normalized(), 0.35))
+				await tick()
+			set_stick(Vector2.ZERO)
+			await press("swipe")
+			await wait(0.35)
+			el += 0.45
+		set_stick(Vector2.ZERO)
+	elif c is ReedStalker:
 		var lock: Vector3 = (c as ReedStalker)._lock
 		var side := lock.cross(up).normalized()
 		if side.dot(p.global_position - c.global_position) < 0.0:
