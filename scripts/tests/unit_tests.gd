@@ -222,6 +222,13 @@ func _test_caves() -> void:
 	# reach up under the vault); every frame the head stays out of the walls and ceiling.
 	var frames_in := 0
 	var frames := 0
+	# (Walking at the walls must not collect the caves' hearts and pearls: _test_upgrades does that.)
+	var pickups: Array[Node] = []
+	for b in g.balls:
+		for u in b.upgrades:
+			if u.process_mode != Node.PROCESS_MODE_DISABLED:
+				u.process_mode = Node.PROCESS_MODE_DISABLED
+				pickups.append(u)
 	for c in caves:
 		var b: MossBall = c[0]
 		var h: Dictionary = c[1]
@@ -246,6 +253,8 @@ func _test_caves() -> void:
 					frames_in += 1
 			Input.action_release("jump")
 	p.bot_input = Vector2.ZERO
+	for u in pickups:
+		u.process_mode = Node.PROCESS_MODE_INHERIT
 	t.check("cave_head_stays_out_of_walls", frames > 1000 and frames_in == 0, "%d of %d frames with the head in the rock" % [frames_in, frames])
 
 
@@ -547,6 +556,19 @@ func _test_vortex_mouths_clear() -> void:
 	t.check("vortex_mouths_clear", g.vortices.size() == Levels.LINKS.size() and bad.is_empty(), "%d vortices; %s" % [g.vortices.size(), ", ".join(bad)])
 
 
+## The floor under a point, as his feet find it: a ray down the middle and four 6 cm off it, the
+## first that lands (one ray alone can slip through a seam between two triangles of a concave mesh).
+func _floor_probe(space: PhysicsDirectSpaceState3D, at: Vector3, up: Vector3) -> Dictionary:
+	var side := up.cross(Vector3.RIGHT if absf(up.x) < 0.9 else Vector3.FORWARD).normalized()
+	var side2 := up.cross(side)
+	for o in [Vector3.ZERO, side, -side, side2, -side2]:
+		var from: Vector3 = at + o * 0.06
+		var hit := space.intersect_ray(PhysicsRayQueryParameters3D.create(from + up * 0.6, from - up * 1.0, p.collision_mask))
+		if not hit.is_empty():
+			return hit
+	return {}
+
+
 ## Reachability audit (geometric): every registered climb (terraces, arch, ridge, bridge, spire,
 ## shelves) steps only between real standable surfaces, each within a plain jump (or jump + water
 ## burst) of the last, with headroom above; its elevated motes are within reach of its top.
@@ -566,8 +588,7 @@ func _test_route_audit() -> void:
 			for k in range(1, pts.size()):
 				var tp: Vector3 = pts[k]
 				var up := b.up_at(tp)
-				var q := PhysicsRayQueryParameters3D.create(tp + up * 0.6, tp - up * 1.0, p.collision_mask)
-				var hit := space.intersect_ray(q)
+				var hit := _floor_probe(space, tp, up)
 				var floor_ok := not hit.is_empty() and rad_to_deg((hit["normal"] as Vector3).angle_to(up)) < 52.0
 				var qh := PhysicsRayQueryParameters3D.create(tp + up * 0.2, tp + up * 1.4, p.collision_mask)
 				var head_ok := space.intersect_ray(qh).is_empty()
@@ -593,7 +614,8 @@ func _test_route_audit() -> void:
 					plain_ok = true
 					reach = INF
 				if not floor_ok or not head_ok or rise > 2.6 or not plain_ok or gap > reach:
-					bad.append("ball %d %s step %d: floor %s headroom %s rise %.2f gap %.2f" % [b.index + 1, h["route"], k, floor_ok, head_ok, rise, gap])
+					var what := "nothing" if hit.is_empty() else "%s at %.0f°" % [(hit["collider"] as Node).name, rad_to_deg((hit["normal"] as Vector3).angle_to(up))]
+					bad.append("ball %d %s step %d: floor %s (%s) headroom %s rise %.2f gap %.2f" % [b.index + 1, h["route"], k, floor_ok, what, head_ok, rise, gap])
 				prev = tp
 			var end: Vector3 = pts[pts.size() - 1]
 			for m in b.motes:
@@ -1708,6 +1730,11 @@ func _test_restoration_gates() -> void:
 	var at := MossBall.dir_ll(-10, -40)
 	var fr := MossBall.frame_at(at, 0.0)
 	var saved := [b.events_total, b.events_done, b.restoration, b.completed]
+	# (The probes heal a zone, which eases the aquarium and the vortices along; put those back too.)
+	var eased := [g.g_disp, g.ball_disp[0]]
+	var vortex_eased := {}
+	for v in g.vortices:
+		vortex_eased[v] = v.strength
 	var release := _hold_threats(b)
 	var make := func(zone: String, kind: String, offset_m: float) -> RestorationGate:
 		b.add_zone(zone, at, 4.0)
@@ -1771,6 +1798,10 @@ func _test_restoration_gates() -> void:
 	b.events_done = saved[1]
 	b.restoration = saved[2]
 	b.completed = saved[3]
+	g.g_disp = eased[0]
+	g.ball_disp[0] = eased[1]
+	for v in vortex_eased:
+		v.strength = vortex_eased[v]
 	release.call()
 
 
@@ -4934,12 +4965,15 @@ func _test_upgrades() -> void:
 	p.max_health = 3
 	p.health = 3
 	# The original caves' heart upgrades (balls 1-3): each adds a gill.
+	var got: Array[String] = []
 	for b in g.balls:
 		for u in b.upgrades:
 			if u.kind == "health":
+				var was := p.max_health
 				place_at(b.index, u._leaf.global_position - b.up_at(u._leaf.global_position) * 0.3, MossBall.frame_at(b.up_at(u.global_position), 0).z)
 				await t.seconds(0.4)
-	t.check("three_cave_upgrades_to_six", p.max_health == 6 and p.health == 6, "max %d" % p.max_health)
+				got.append("ball %d %s (taken %s, state %s)" % [b.index + 1, "+1" if p.max_health > was else "nothing", u.taken, g.state])
+	t.check("three_cave_upgrades_to_six", p.max_health == 6 and p.health == 6, "max %d; %s" % [p.max_health, ", ".join(got)])
 	# The new grottoes' pearls: each refills health and adds no gill.
 	var pearls := 0
 	var ok := true
