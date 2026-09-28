@@ -55,6 +55,27 @@ func run(runner) -> void:
 		t.check("debug_reached_ball3", p.ball == g.balls[2], "")
 		_report()
 		return
+	if Settings.test_args.get("start", "") == "caves":
+		# Debug scenario: every hidden cave entered and its reward reached, starting outside.
+		g.start_play(true)
+		for b in g.balls:
+			if Settings.test_args.has("ball") and int(Settings.test_args["ball"]) != b.index + 1:
+				continue
+			for h in (b.get_meta("builder") as LevelBuilder).bot_hints:
+				if h.has("cave"):
+					var out: Vector3 = h["entry"] + ((h["entry"] as Vector3) - (h["door"] as Vector3)).normalized() * 6.0
+					p.place(b, b.surface_point(b.up_at(out), 0.3), Vector3.FORWARD)
+					p.restore_full()
+					g.audio.set_ball(b.index, false)
+					if Settings.test_args.has("noeel"):
+						for c in b.critters:
+							if c is CaveEel:
+								(c as CaveEel).restore_defeated()
+					await wait(1.0)
+					await cave(b, h)
+					t.check("debug_cave_b%d_%s" % [b.index + 1, str(b.upgrades.find(h["reward"]))], h["reward"].taken, "")
+		_report()
+		return
 	if Settings.test_args.get("start", "") == "eels":
 		# Debug scenario: each cave eel fought with the 100% tactic, starting at its cave's entry.
 		g.start_play(true)
@@ -340,6 +361,7 @@ var _last_us := 0
 var _perf_max := 0.0
 var _hb := 0.0
 var _last_hp := 99
+var _last_eat_try := -99.0
 
 
 func _nearest_threat() -> String:
@@ -489,8 +511,13 @@ func goto(target: Variant, radius := 0.9, timeout := 45.0, allow_vortex: Vortex 
 		var ct := _critter_threat()
 		if ct:
 			await handle_critter(ct)
-		if p.health <= 1 and p.max_health > 1:
+		if p.health <= 1 and p.max_health > 1 and sim_time - _last_eat_try > 12.0:
+			# (At most every 12 s, and counted against the timeout: with no food in reach this
+			# once stalled a goto for good.)
+			_last_eat_try = sim_time
+			var t0 := sim_time
 			await eat_nearby(8.0)
+			el += sim_time - t0
 		var dir := flat.normalized()
 		if not _in_cave_escape and not _cave_of(p.global_position).is_empty() and _cave_of(tgt).is_empty():
 			var cave := _cave_of(p.global_position)
@@ -664,7 +691,13 @@ func hop_chain(tops: Array, retries := 4, start_back: Variant = null, no_settle:
 					if c._state == "solid":
 						break
 					await tick()
+		# A parasite on him at the foot of a climb: deal with it first, as a player would.
+		var threat := _threat()
+		if threat:
+			await fight_parasite(threat, 6.0)
 		var ok := await hop_toward(tgt, true)
+		if Settings.test_args.has("hoplog"):
+			t.log_line("hop %d -> %s: ok %s, now %.2f m up, %.2f m from the target" % [i, str(tp.round()), str(ok), height_of(p.global_position), p.global_position.distance_to(tp)])
 		if ok:
 			# Centre on the platform before the next hop (never linger on brittle moss).
 			if not i in no_settle:
@@ -1274,6 +1307,8 @@ func cave(b: MossBall, h: Dictionary) -> void:
 			var u = h["reward"]
 			await goto(u._leaf.global_position, 0.3, 5.0)
 			await wait(0.5)
+			if not u.taken:
+				t.log_line("cave b%d: on the last ledge, reward %.2f m away (%.2f m above him)" % [b.index + 1, p.global_position.distance_to(u._leaf.global_position), height_of(u._leaf.global_position) - height_of(p.global_position)])
 			if u.taken:
 				mark("upgrade collected: max health %d" % p.max_health)
 				# Leave the cave the way we came in.

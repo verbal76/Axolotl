@@ -138,6 +138,15 @@ func _test_caves() -> void:
 		for k in range(0, verts.size(), 97):
 			agree = agree and verts[k].is_equal_approx(faces[k])
 	t.check("cave_mouths_arched_not_rectangular", caves.size() == 7 and arched, ", ".join(dims))
+	# Expansion 6: each reward rests on its top ledge (a small grotto's pearl had been on the ceiling).
+	var off_ledge: Array[String] = []
+	for c in caves:
+		var h: Dictionary = c[1]
+		var u = h["reward"]
+		var d: float = (u.global_position as Vector3).distance_to(h["upgrade"])
+		if d > 0.35:
+			off_ledge.append("b%d: %.2f m from its ledge top" % [(c[0] as MossBall).index + 1, d])
+	t.check("cave_rewards_on_their_top_ledge", off_ledge.is_empty(), ", ".join(off_ledge))
 	t.check("cave_mouth_clearance", clear, "the axolotl is 0.6 m wide and about 0.6 m tall")
 	var uniq := {}
 	for d in dims:

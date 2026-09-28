@@ -246,6 +246,8 @@ class Upgrade extends Node3D:
 	var ball: MossBall
 	var dir := Vector3.UP
 	var h_hint := 0.0
+	## A point on the ledge it rests on (caves), or null: then it drops onto the terrain from h_hint.
+	var anchor: Variant = null
 	var taken := false
 	## "health" (the original caves: +1 gill) or "pearl" (new grottoes: a discovery that refills
 	## health; the six gills are already reachable from the original caves).
@@ -255,10 +257,11 @@ class Upgrade extends Node3D:
 	var _mat: StandardMaterial3D
 	var _leaf: MeshInstance3D
 
-	func setup(p_ball: MossBall, p_dir: Vector3, h: float) -> void:
+	func setup(p_ball: MossBall, p_dir: Vector3, h: float, p_anchor: Variant = null) -> void:
 		ball = p_ball
 		dir = p_dir
 		h_hint = h
+		anchor = p_anchor
 
 	func _ready() -> void:
 		_mat = StandardMaterial3D.new()
@@ -286,7 +289,9 @@ class Upgrade extends Node3D:
 	func _process(dt: float) -> void:
 		_t += dt
 		if not _placed:
-			var top := ball.surface_point(dir, h_hint + 1.5)
+			# From just above its ledge when it has one (Expansion 6: in a small grotto a ray from
+			# h + 1.5 m over the terrain started inside the dome and found the ceiling).
+			var top: Vector3 = (anchor as Vector3) + ball.up_at(anchor) * 0.5 if anchor != null else ball.surface_point(dir, h_hint + 1.5)
 			var q := PhysicsRayQueryParameters3D.create(top, ball.global_position, 1 | 2)
 			var hit := get_world_3d().direct_space_state.intersect_ray(q)
 			if not hit.is_empty() or Engine.get_physics_frames() > 2:

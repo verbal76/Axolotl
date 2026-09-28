@@ -569,7 +569,7 @@ func cave(lat: float, lon: float, heading: float, radius := 8.0, reward := "heal
 	var u := Platforms.Upgrade.new()
 	u.kind = reward
 	var dir := ball.up_at(up_xf.origin)
-	u.setup(ball, dir, 3.9)
+	u.setup(ball, dir, 3.9, up_xf.origin)
 	ball.add_child(u)
 	ball.upgrades.append(u)
 	# Concentrated atmosphere: glowing spores and a soft teal light.

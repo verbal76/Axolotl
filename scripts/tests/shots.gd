@@ -291,6 +291,22 @@ func run(runner) -> void:
 				await t.seconds(1.0)
 				await t.shot("wr_b%d_%d_%s" % [bi + 1, k, str(h["route"]).replace(" ", "_")])
 				k += 1
+	if only == "balls":
+		# Whole moss balls from the side (owner reference: a sprouted moss ball), murky then healed,
+		# and a close look at the healed moss.
+		await _ball_shots(g, "murky_")
+		for b in g.balls:
+			b.add_heal(Vector3.UP, 340.0, 0.0)
+		g.g_disp = 1.0
+		g.aquarium.apply(1.0)
+		await _ball_shots(g, "clear_")
+	if only == "vortex":
+		await _vortex_shots(g, "murky_")
+		for b in g.balls:
+			b.add_heal(Vector3.UP, 340.0, 0.0)
+		g.g_disp = 1.0
+		g.aquarium.apply(1.0)
+		await _vortex_shots(g, "clear_")
 	if only == "feedback":
 		await _feedback(g, "")
 		for b in g.balls:
@@ -335,6 +351,65 @@ func run(runner) -> void:
 		g.cam.pitch = -0.1
 		await t.seconds(1.5)
 		await t.shot("07_restored_under")
+
+
+func _ball_shots(g: Game, tag: String) -> void:
+	g.player.invuln_t = 9999
+	for bi in [0, 2, 3, 5]:
+		var b := g.balls[bi]
+		_look(g, bi, b.surface_point(Vector3.UP, 0.2), Vector3.FORWARD)
+		g.cam.cinematic = true
+		var side := Vector3(0.8, 0.12, 0.6).normalized()
+		g.cam.cine_pos = b.global_position + side * b.radius * 2.7
+		g.cam.cine_look = b.global_position + Vector3.UP * b.radius * 0.1
+		g.cam.cine_up = Vector3.UP
+		await t.seconds(1.5)
+		await t.shot("mb_%sb%d_side" % [tag, bi + 1])
+		g.cam.cine_pos = b.global_position + Vector3(0.5, 0.75, 0.45).normalized() * b.radius * 1.35
+		g.cam.cine_look = b.surface_point(Vector3(0.3, 0.9, 0.3).normalized())
+		await t.seconds(1.0)
+		await t.shot("mb_%sb%d_top" % [tag, bi + 1])
+	g.cam.cinematic = false
+
+
+## The vortex (Expansion 6 owner review): growing, open from afar and close, its tidal pool, the
+## corkscrew ride, and the arrival pool.
+func _vortex_shots(g: Game, tag: String) -> void:
+	var p := g.player
+	p.invuln_t = 9999
+	var b0 := g.balls[0]
+	var v: Vortex = b0.vortex_out
+	var vd := v.dir_a
+	var fr := MossBall.frame_at(vd, 0.0)
+	v.connected = false
+	v.strength = 0.45
+	var off := vd.rotated(fr.x, deg_to_rad(20.0))
+	_look(g, 0, b0.surface_point(off, 0.2), b0.surface_point(vd) - b0.surface_point(off), 0.12)
+	await t.seconds(1.2)
+	await t.shot("vx_%s1_growing" % tag)
+	v.connected = true
+	v.strength = 1.0
+	await t.seconds(2.0)
+	await t.shot("vx_%s2_open_far" % tag)
+	off = vd.rotated(fr.x, deg_to_rad(11.0))
+	_look(g, 0, b0.surface_point(off, 0.2), b0.surface_point(vd) - b0.surface_point(off), 0.3)
+	await t.seconds(1.0)
+	await t.shot("vx_%s3_pool" % tag)
+	off = vd.rotated(fr.z, deg_to_rad(9.0))
+	_look(g, 0, b0.surface_point(off, 0.2), b0.surface_point(vd) - b0.surface_point(off), -0.25)
+	await t.seconds(1.0)
+	await t.shot("vx_%s4_up_the_spiral" % tag)
+	g._start_cinematic("travel", {"v": v, "reverse": false})
+	for k in [0.9, 1.6, 2.4, 3.3, 4.2, 5.4]:
+		await t.seconds(k - g.cine_t)
+		await t.shot("vx_%s5_ride_%.1f" % [tag, k])
+	await t.seconds(1.5)
+	var b1 := v.ball_b
+	var bd := v.dir_b
+	var off2 := bd.rotated(MossBall.frame_at(bd, 0).x, deg_to_rad(14.0))
+	_look(g, b1.index, b1.surface_point(off2, 0.2), b1.surface_point(bd) - b1.surface_point(off2), 0.25)
+	await t.seconds(1.0)
+	await t.shot("vx_%s6_arrival_pool" % tag)
 
 
 func _look(g: Game, bi: int, pos: Vector3, face: Vector3, pitch := 0.32) -> void:

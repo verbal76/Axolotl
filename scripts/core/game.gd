@@ -985,41 +985,43 @@ func _cine_travel(dt: float) -> void:
 	var k := clampf(cine_t / dur, 0.0, 1.0)
 	var e := k * k * (3.0 - 2.0 * k)
 	var t := 1.0 - e if rev else e
-	var s: Array = v.sample(t)
+	# Corkscrew round the path beside a jet as the spiral revolves (Expansion 6), belly to the
+	# jet, head toward the middle, banking into the turn.
+	var s: Array = v.ride_pose(t)
+	var pos: Vector3 = s[0]
 	var fwd: Vector3 = s[1] * (-1.0 if rev else 1.0)
-	var u: Vector3 = s[2]
-	var side := fwd.cross(u).normalized()
-	u = side.cross(fwd).normalized()
-	# Surf the spiral: orbit inside the tube and bank into the turns.
-	var phi := k * TAU * 2.2
-	var bank := sin(phi) * 0.8
-	var r := 0.9 * sin(k * PI)
-	var pos: Vector3 = s[0] + (u * cos(phi) + side * sin(phi)) * r
-	var surf_up := u.rotated(fwd, bank)
+	var surf_up: Vector3 = s[2]
+	var axis_p: Vector3 = s[3]
+	var axis_f: Vector3 = s[4] * (-1.0 if rev else 1.0)
+	var side := fwd.cross(surf_up).normalized()
+	var bank := sin(k * TAU * 2.0) * 0.5
 	player.global_position = pos
-	player.global_basis = Basis(fwd.cross(surf_up).normalized(), surf_up, -fwd).orthonormalized()
+	player.global_basis = Basis(side, surf_up, -fwd).orthonormalized()
 	player.model.surf = 1.0
 	player.model.surf_bank = bank * 0.6
 	player.model.grounded = false
 	player.model.speed = 1.3
 	if randf() < 0.6:
 		WaterFX.inst._spawn_puff(pos + Vector3(randf() - 0.5, randf() - 0.5, randf() - 0.5) * 3.0, -fwd * 12.0, 0.4, 0.06, Color(0.8, 0.95, 1.0, 0.6), 0.5)
-	# Camera: pull back as it grabs him, follow, move alongside, then ahead to see his face.
+	# Camera: from the middle of the spiral, so he circles round it through the jets. Behind as it
+	# grabs him, then alongside, then ahead to see his face, then behind again for the landing.
+	var mid := axis_p.lerp(pos, 0.25)
+	var cam_up := (surf_up * 0.35 + (v.sample(t)[2] as Vector3) * 0.65).normalized()
 	var cp: Vector3
 	var look := pos
 	if k < 0.15:
 		cp = pos - fwd * 3.0 + surf_up * 2.5 + side * 1.5
 	elif k < 0.5:
-		cp = pos - fwd * 3.5 + surf_up * 1.0
+		cp = mid - axis_f * 4.0
 	elif k < 0.72:
-		cp = pos + side * 2.6 + surf_up * 0.6 - fwd * 0.5
+		cp = mid - axis_f * 1.5 + surf_up * 0.8
 	elif k < 0.9:
-		cp = pos + fwd * 2.6 + surf_up * 0.5
+		cp = mid + axis_f * 3.2
 	else:
 		cp = pos - fwd * 3.5 + surf_up * 1.5
 	cam.cine_pos = cam.cine_pos.lerp(cp, minf(1.0, dt * 4.0)) if cine_t > 0.05 else cp
 	cam.cine_look = look
-	cam.cine_up = surf_up
+	cam.cine_up = cam_up
 	if k >= 1.0:
 		var dest: MossBall = v.ball_a if rev else v.ball_b
 		var ddir: Vector3 = v.dir_a if rev else v.dir_b
