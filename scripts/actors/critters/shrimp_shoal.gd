@@ -45,7 +45,7 @@ func place(p_ball: MossBall, p_home: Vector3, p_deg: float, seed_v: int) -> void
 	_mm.instance_count = COUNT
 	var mmi := MultiMeshInstance3D.new()
 	mmi.multimesh = _mm
-	mmi.material_override = Critter.mat(Color(0.95, 0.55, 0.45), Color(0.25, 0.08, 0.05), 0.3)
+	mmi.material_override = _shrimp_mat()
 	mmi.cast_shadow = GeometryInstance3D.SHADOW_CASTING_SETTING_OFF
 	mmi.visibility_range_end = 45.0
 	mmi.top_level = true
@@ -54,40 +54,101 @@ func place(p_ball: MossBall, p_home: Vector3, p_deg: float, seed_v: int) -> void
 	_pose(0.0)
 
 
-## A curled shrimp: a tapering bent tube with a fanned tail and feelers, 0.22 m long.
+## A shrimp (Expansion 6: it read as a red hook): an arched, banded body with a carapace, a
+## rostrum, eyes, long swept-back antennae, little legs underneath and a fanned tail; translucent
+## coral with a paler belly (vertex colours). About 0.22 m long, head toward -Z.
 static func _shrimp_mesh() -> ArrayMesh:
 	var st := SurfaceTool.new()
 	st.begin(Mesh.PRIMITIVE_TRIANGLES)
-	var rings := 7
-	var sides := 6
+	var rings := 13
+	var sides := 8
+	var body := Color(0.98, 0.52, 0.42)
+	var band := Color(0.86, 0.36, 0.3)
+	var belly := Color(1.0, 0.78, 0.66)
 	var pts: Array = []
+	var centres: Array = []
 	for i in rings:
 		var t := float(i) / (rings - 1)
-		var ang := t * 1.6
-		var centre_ := Vector3(0, sin(ang) * 0.07, -cos(ang) * 0.11 + 0.05)
-		var r := lerpf(0.035, 0.012, t)
+		# Head at t = 0; the back arches, the tail curls a little under.
+		var z := lerpf(-0.1, 0.11, t)
+		var y := sin(t * PI) * 0.028 - pow(t, 3.0) * 0.03
+		var c := Vector3(0, y, z)
+		centres.append(c)
+		var r := 0.03 if t < 0.35 else lerpf(0.029, 0.011, (t - 0.35) / 0.65)
+		r *= 1.0 - 0.3 * pow(1.0 - t, 6.0)
 		var ring: Array = []
 		for k in sides:
 			var a := TAU * k / sides
-			ring.append(centre_ + Vector3(cos(a) * r, sin(a) * r * 0.8, 0))
+			ring.append(c + Vector3(cos(a) * r * 0.85, sin(a) * r, 0))
 		pts.append(ring)
 	for i in rings - 1:
+		var t := float(i) / (rings - 1)
+		var col := band if t > 0.35 and i % 2 == 0 else body
 		for k in sides:
 			var a: Vector3 = pts[i][k]
 			var b: Vector3 = pts[i][(k + 1) % sides]
 			var c: Vector3 = pts[i + 1][k]
 			var d: Vector3 = pts[i + 1][(k + 1) % sides]
+			var under := sin(TAU * (k + 0.5) / sides) < -0.3
 			for v in [a, c, b, b, c, d]:
+				st.set_color(belly if under else col)
 				st.add_vertex(v)
-	# Tail fan and two long feelers (thin triangles).
-	var tail: Vector3 = (pts[rings - 1][0] + pts[rings - 1][3]) * 0.5
-	for v in [tail, tail + Vector3(-0.04, 0.03, 0.03), tail + Vector3(0.04, 0.03, 0.03)]:
+	var head: Vector3 = centres[0]
+	# Rostrum (a spike forward), eyes, antennae.
+	for v in [head + Vector3(0, 0.02, 0.0), head + Vector3(0, 0.016, -0.06), head + Vector3(0.006, 0.012, 0.0)]:
+		st.set_color(band)
 		st.add_vertex(v)
 	for side in [-1.0, 1.0]:
-		for v in [Vector3(side * 0.01, 0.01, -0.06), Vector3(side * 0.08, 0.05, -0.2), Vector3(side * 0.012, 0.0, -0.06)]:
+		var e := head + Vector3(side * 0.022, 0.018, 0.012)
+		for tri in [[Vector3(0, 0.008, 0), Vector3(side * 0.008, 0, 0), Vector3(0, 0, -0.008)], [Vector3(0, -0.008, 0), Vector3(0, 0, -0.008), Vector3(side * 0.008, 0, 0)]]:
+			for v in tri:
+				st.set_color(Color(0.05, 0.03, 0.03))
+				st.add_vertex(e + v)
+		var root := head + Vector3(side * 0.012, 0.01, -0.02)
+		var ant := [root, root + Vector3(side * 0.07, 0.05, 0.02), root + Vector3(side * 0.13, 0.06, 0.16), root + Vector3(side * 0.15, 0.04, 0.28)]
+		for q in 3:
+			var a0: Vector3 = ant[q]
+			var a1: Vector3 = ant[q + 1]
+			var w := Vector3(0, 0.0025, 0)
+			for v in [a0 - w, a1, a0 + w]:
+				st.set_color(body)
+				st.add_vertex(v)
+		# Little legs under the body.
+		for l in 5:
+			var lc: Vector3 = centres[3 + l]
+			var lr := lc + Vector3(side * 0.012, -0.018, 0)
+			for v in [lr, lr + Vector3(side * 0.014, -0.022, 0.006), lr + Vector3(0, 0, 0.008)]:
+				st.set_color(belly)
+				st.add_vertex(v)
+	# Tail fan: five blades spread from the last segment.
+	var tail: Vector3 = centres[rings - 1]
+	for f in 5:
+		var a := lerpf(-0.9, 0.9, float(f) / 4.0)
+		var dirv := Vector3(sin(a) * 0.035, -0.005, cos(a) * 0.04)
+		var sidev := Vector3(cos(a), 0, -sin(a)) * 0.009
+		for v in [tail, tail + dirv - sidev, tail + dirv + sidev]:
+			st.set_color(band)
 			st.add_vertex(v)
 	st.generate_normals()
 	return st.commit()
+
+
+static var _smat: StandardMaterial3D
+
+
+## Vertex-coloured, soft and a little translucent-looking (back-lit glow), faintly self-lit so the
+## shoal reads in murky water.
+static func _shrimp_mat() -> StandardMaterial3D:
+	if _smat == null:
+		_smat = StandardMaterial3D.new()
+		_smat.vertex_color_use_as_albedo = true
+		_smat.roughness = 0.45
+		_smat.cull_mode = BaseMaterial3D.CULL_DISABLED
+		_smat.emission_enabled = true
+		_smat.emission = Color(0.3, 0.1, 0.07)
+		_smat.backlight_enabled = true
+		_smat.backlight = Color(0.6, 0.3, 0.25)
+	return _smat
 
 
 func _pick_target() -> void:

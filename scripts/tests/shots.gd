@@ -271,6 +271,8 @@ func run(runner) -> void:
 			e.fog_density = v[5]
 			await t.seconds(0.3)
 			await t.shot("light_side_%s" % v[0])
+	if only == "critterclose":
+		await _critter_close(g)
 	if only == "parasite":
 		await _parasite_shots(g)
 	if only == "gill":
@@ -581,6 +583,38 @@ func _review(g: Game) -> void:
 		await t.seconds(1.5)
 		await t.shot("r_ball3_stems_%s" % stage[0])
 		await _leaf_close(g, b2, "r_leaf_close_%s" % stage[0])
+
+
+## Each Expansion 5 species close up (judging silhouettes and construction), then as the player
+## first meets it.
+func _critter_close(g: Game) -> void:
+	g.player.invuln_t = 9999
+	var seen := {}
+	for c in g.ecosystem.all_critters():
+		if seen.has(c.species):
+			continue
+		seen[c.species] = true
+		var b: MossBall = c.ball
+		var pt: Vector3 = c.discover_point()
+		var up := b.up_at(pt)
+		var away := MossBall.frame_at(up, 30.0).z
+		if c is CaveEel:
+			away = (c as CaveEel).normal
+		elif c is CrabGuardian:
+			away = (c as CrabGuardian).facing
+		var stand := b.surface_point(b.up_at(pt + away * 6.0), 0.3)
+		if c is GlowWorms:
+			stand = b.surface_point(b.up_at((c as GlowWorms).cave_centre), 0.3)
+		_look(g, b.index, stand, pt - stand, 0.2)
+		await t.seconds(1.0)
+		var d := 1.6 if c is ShrimpShoal or c is CanopySnail or c is LeafHopper else 2.6
+		if c is GlowWorms:
+			d = 3.0
+		var side := away.cross(up).normalized()
+		_close(g, pt + away * d + side * d * 0.5 + up * d * 0.45, pt, up)
+		await t.seconds(0.8 if not c is CaveEel else 1.5)
+		await t.shot("cc_%s" % c.species)
+		_open(g)
 
 
 ## Parasites of each size close up, crawling; then a large one struck and drifting away.

@@ -65,13 +65,30 @@ func _build() -> void:
 				[Critter.sphere(0.2, 10), shell, Critter.xf(Vector3(side * 0.2, 0.02, -0.46), Vector3(0.9, 0.7, 1.3))],
 				[Critter.sphere(0.1, 8), under, Critter.xf(Vector3(side * 0.28, -0.04, -0.66), Vector3(0.6, 0.5, 1.4))]]), _shell_mat, shoulder)
 		_claws.append(shoulder)
-		for k in 3:
-			legs.append([Critter.sphere(0.05, 6), shell, Critter.xf(Vector3(side * 0.68, 0.16, -0.12 + k * 0.2), Vector3(3.2, 0.9, 0.9))])
+		# Four jointed walking legs a side (Expansion 6; they were loose ellipsoids): up to a knee,
+		# then down to a pointed foot on the ground.
+		for k in 4:
+			var z := -0.14 + k * 0.17
+			var hip := Vector3(side * 0.5, 0.26, z)
+			var knee := Vector3(side * 0.82, 0.44, z + 0.04 * (k - 1.5))
+			var foot := Vector3(side * 1.0, 0.0, z + 0.1 * (k - 1.5))
+			legs.append([Critter.sphere(0.05, 6), shell, _seg(hip, knee, 0.055)])
+			legs.append([Critter.sphere(0.05, 6), shell, _seg(knee, foot, 0.04)])
 	Critter.part(Critter.merge(body), _shell_mat, _rig)
 	var leg_node := Node3D.new()
 	_rig.add_child(leg_node)
 	Critter.part(Critter.merge(legs), _shell_mat, leg_node)
 	_legs.append(leg_node)
+
+
+## A sphere stretched into a limb segment from `a` to `b`, `r` thick.
+static func _seg(a: Vector3, b: Vector3, r: float) -> Transform3D:
+	var d := b - a
+	var z := d.normalized()
+	var x := z.cross(Vector3.UP if absf(z.y) < 0.95 else Vector3.RIGHT).normalized()
+	var y := x.cross(z)
+	var len := d.length()
+	return Transform3D(Basis(x * (r / 0.05), y * (r / 0.05), z * (len * 0.55 / 0.05)), (a + b) * 0.5)
 
 
 func _snap(pos: Vector3) -> void:

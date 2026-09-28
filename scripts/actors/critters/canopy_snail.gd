@@ -47,27 +47,46 @@ func _build() -> void:
 		parts.append([Critter.sphere(0.012, 5), skin, Critter.xf(Vector3(side * 0.03, 0.09, -0.19), Vector3(1.0, 5.0, 1.0))])
 		parts.append([Critter.sphere(0.016, 5), Color(0.1, 0.08, 0.06), Critter.xf(Vector3(side * 0.03, 0.15, -0.19))])
 	Critter.part(Critter.merge(parts), Critter.vc_mat(), _body)
-	_shell = Critter.part(_shell_mesh(), Critter.mat(Color(0.55, 0.3, 0.2)), self, Vector3(0, 0.1, 0.04))
+	_shell = Critter.part(_shell_mesh(), Critter.vc_mat(), self, Vector3(0, 0.1, 0.04))
 
 
-## A coiled shell: a flattened spiral of shrinking spheres merged into one mesh.
+## A coiled shell (Expansion 6: it read as a ball): a tube swept along a logarithmic spiral in the
+## shell's YZ plane, widening toward the mouth, a little conical (the coil rises to one side), with
+## growth bands (vertex colours).
 static func _shell_mesh() -> ArrayMesh:
 	var st := SurfaceTool.new()
 	st.begin(Mesh.PRIMITIVE_TRIANGLES)
-	var sph := SphereMesh.new()
-	sph.radial_segments = 8
-	sph.rings = 5
-	for k in 9:
-		var ang := k * 0.75
-		var r := 0.085 * pow(0.86, k)
-		var c := Vector3(0, cos(ang) * (0.09 - r) * 0.8, sin(ang) * (0.09 - r) * 0.8)
-		sph.radius = r
-		sph.height = r * 2.0
-		var arr := sph.get_mesh_arrays()
-		var v: PackedVector3Array = arr[Mesh.ARRAY_VERTEX]
-		var idx: PackedInt32Array = arr[Mesh.ARRAY_INDEX]
-		for i in idx:
-			st.add_vertex(c + v[i] * Vector3(0.75, 1.0, 1.0))
+	var steps := 44
+	var sides := 9
+	var turns := 2.6
+	var rings: Array = []
+	var cols: Array = []
+	for i in steps + 1:
+		var u := float(i) / steps
+		var th := u * turns * TAU
+		var grow := exp((u - 1.0) * 2.4)
+		var rad := 0.075 * grow
+		var c := Vector3((1.0 - u) * 0.03, cos(th) * rad, sin(th) * rad)
+		var tube := 0.052 * grow + 0.004
+		var tan := Vector3(-0.03 / steps, -sin(th), cos(th)).normalized()
+		var n1 := Vector3(1, 0, 0).cross(tan).normalized()
+		var n2 := tan.cross(n1).normalized()
+		var ring: Array = []
+		for k in sides:
+			var a := TAU * k / sides
+			ring.append(c + (n1 * cos(a) + n2 * sin(a)) * tube)
+		rings.append(ring)
+		var stripe := 0.5 + 0.5 * sin(th * 3.0)
+		cols.append(Color(0.5, 0.28, 0.17).lerp(Color(0.86, 0.72, 0.52), stripe * 0.7))
+	for i in steps:
+		for k in sides:
+			var a: Vector3 = rings[i][k]
+			var b: Vector3 = rings[i][(k + 1) % sides]
+			var c: Vector3 = rings[i + 1][k]
+			var d: Vector3 = rings[i + 1][(k + 1) % sides]
+			for q in [[a, i], [c, i + 1], [b, i], [b, i], [c, i + 1], [d, i + 1]]:
+				st.set_color(cols[q[1]])
+				st.add_vertex(q[0])
 	st.generate_normals()
 	return st.commit()
 
