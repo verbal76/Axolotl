@@ -3244,20 +3244,26 @@ func _test_parasite_combat() -> void:
 	var healed := med.hp
 	await t.seconds(12.0)
 	t.check("escaped_parasite_recovers_once", healed == 2 and med.hp == 2, "hp %d after 11.5 s, %d after 23.5 s (max %d)" % [healed, med.hp, med.max_hp])
-	# Back to him: the next blow again drives it off; killing it goes to the twitch and limp drift.
+	# Killed while fleeing, it goes to the twitch and the limp drift. (A temporary twin in the same
+	# zone: its own registration balances its kill, so the world's parasites stay as they were.)
+	park.call()
 	hero.call(at.call(0.0, 0.0), fr.z * -1.0)
-	put.call(med, at.call(0.0, 1.6), 9.0)
-	med.hp = 1
-	med._want_retreat = true
-	med._set_state("retreat")
+	var twin_f := Parasite.new()
+	twin_f.setup(b, Parasite.Kind.MEDIUM, med.zone_id, b.up_at(at.call(0.0, 1.6)), 9.0)
+	b.add_child(twin_f)
+	await t.frames(2)
+	put.call(twin_f, at.call(0.0, 1.6), 9.0)
+	twin_f.hp = 1
+	twin_f._set_state("retreat")
 	await t.frames(20)
-	med.hit(1, p.global_position)
-	var died := med.state == "dying"
+	twin_f.hit(1, p.global_position)
+	var died := twin_f.state == "dying"
 	var drifted := false
 	for i in 90:
 		await t.frames(1)
-		drifted = drifted or med.state == "drifting"
+		drifted = drifted or twin_f.state == "drifting"
 	t.check("fleeing_parasite_dies_limp", died and drifted, "dying %s, then drifting %s" % [died, drifted])
+	twin_f.queue_free()
 	var brave := smalls[1] as Parasite
 	t.check("small_parasites_never_flee", brave._brave, "")
 	park.call()
@@ -3313,7 +3319,8 @@ func _test_parasite_combat() -> void:
 		most = maxi(most, n)
 		if i >= 60 and i % 10 == 0:
 			# Those closing in, holding at reach or winding up (a lunging one is briefly on top of him).
-			var closing: Array = group.filter(func(q): return q.state in ["chase", "windup"])
+			# (Ones right at him have just lunged through him: he stands still and cannot be hurt here.)
+			var closing: Array = group.filter(func(q): return q.state in ["chase", "windup"] and q.global_position.distance_to(p.global_position) > 1.0)
 			var crowded := false
 			for x in closing.size():
 				for y in range(x + 1, closing.size()):
@@ -3337,7 +3344,7 @@ func _test_parasite_combat() -> void:
 	for k in range(1, starts.size()):
 		tight = mini(tight, starts[k] - starts[k - 1])
 	# (Darting ones may cross close for a moment; they must not bunch up.)
-	t.check("group_spreads_round_him", samples > 20 and crowd <= samples / 10 and spread > deg_to_rad(50.0),
+	t.check("group_spreads_round_him", samples > 20 and crowd <= samples / 15 and spread > deg_to_rad(50.0),
 			"a pair within 0.6 m in %d of %d samples (closest %.2f m), spread %.0f deg round him" % [crowd, samples, min_gap, rad_to_deg(spread)])
 	t.check("group_attack_budget", most <= Parasite.MAX_COMMITTED and starts.size() >= 2 and tight >= Parasite.COMMIT_GAP_FRAMES,
 			"at most %d committed at once, %d attacks, closest starts %d frames apart" % [most, starts.size(), tight])

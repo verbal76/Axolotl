@@ -527,6 +527,10 @@ func _update_crawl(dt: float, pl: Axolotl) -> void:
 							_circled = true
 			if d < attack_reach * 0.8 and _mode != "circle":
 				spd = 0.0
+			# Steer round close neighbours as well as shuffling apart (darting ones move fast).
+			var sep := _separation()
+			if sep.length() > 0.001 and dir.length() > 0.001:
+				dir = dir.normalized() + sep * 2.0
 			_spread_apart(dt)
 	else:
 		spd = speed * 0.35
