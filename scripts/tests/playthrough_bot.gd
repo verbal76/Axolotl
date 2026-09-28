@@ -55,6 +55,25 @@ func run(runner) -> void:
 		t.check("debug_reached_ball3", p.ball == g.balls[2], "")
 		_report()
 		return
+	if Settings.test_args.get("start", "") == "fight":
+		# Debug scenario: fight one parasite (--ball=N --zone=Z [--kind=K]) from 8 m off.
+		g.start_play(true)
+		var fb := g.balls[int(Settings.test_args.get("ball", "3")) - 1]
+		var zone := str(Settings.test_args.get("zone", "far"))
+		var kind := int(Settings.test_args.get("kind", "2"))
+		for par in fb.parasites:
+			if par.zone_id == zone and par.kind == kind:
+				var u := fb.up_at(par.global_position)
+				var off := MossBall.frame_at(u, 0).x * 8.0
+				p.place(fb, fb.surface_point(fb.up_at(par.global_position + off), 0.3), -off)
+				g.audio.set_ball(fb.index, false)
+				await wait(1.0)
+				var ok := await fight_parasite(par, 60.0)
+				t.log_line("fight %s %s: %s, hp %d, state %s, variant %s" % [zone, kind, ok, par.hp, par.state, par.variant])
+				t.check("debug_fight", ok, "")
+				break
+		_report()
+		return
 	if Settings.test_args.get("start", "") == "caves":
 		# Debug scenario: every hidden cave entered and its reward reached, starting outside.
 		g.start_play(true)
@@ -892,6 +911,10 @@ func fight_parasite(par: Parasite, timeout := 25.0) -> bool:
 		await wait(0.35)
 		el += 0.45
 	set_stick(Vector2.ZERO)
+	if par.is_alive():
+		t.log_line("fight timed out: %s %s kind %d %s at %s (%.1f m up), state %s hp %d; he is at %s (%.1f m up), %.1f m apart" % [par.zone_id, par.variant, par.kind,
+				str(par.get_meta("completion_id", "")), str(Levels._latlon(par.ball.up_at(par.global_position)).snapped(Vector2.ONE * 0.1)), par.ball.altitude(par.global_position), par.state, par.hp,
+				str(Levels._latlon(p.ball.up_at(p.global_position)).snapped(Vector2.ONE * 0.1)), p.ball.altitude(p.global_position), par.global_position.distance_to(p.global_position)])
 	return not par.is_alive()
 
 
