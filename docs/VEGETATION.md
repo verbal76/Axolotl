@@ -87,6 +87,23 @@ Every existing grass, leaf and strand material now uses it.
 - **Balls 2 and 3.** Their long grass (3.0 m and 4.2 m) now grows in dense stands with open
   clearings instead of an even carpet, with the same number of plants. All of it reacts.
 
+## Expansion 6: owner review and the restored reef
+
+- **Rosettes and ferns** (`MeshLib.broadleaf_mesh`, balls 1, 2 and 3). The owner found them
+  "too blocky" and too sharp. Each leaf is now a smooth, arching ovate blade with a rounded tip,
+  indexed with smooth normals. They sway gently in the current: sway 0.22 (ball 1), 0.2 (ball 2)
+  and 0.16 for the jungle ferns, with their wake response unchanged.
+- **Stems** (`MeshLib.stem_mesh`) are organic: a flared root, a node every 1.7 m, a slight
+  wobble, and bark UVs.
+- **Reef corals** (`Levels._accent_flora`). Clusters of flared tube coral grow on every ball
+  (`MeshLib.coral_mesh`), about 120 per ball of radius 24 m, scaled with the ball's area. Each
+  ball has its own two-colour palette (`Levels.ACCENTS`). They are grey and dead while the moss
+  is neglected and take their colour as it heals, so the restored tank ends vivid, the way the
+  art direction asks. They are hidden beyond 70 m.
+- **Near-camera fade** uses an ordered 4×4 (Bayer) dither in place of per-pixel random noise. The
+  random pattern read as a shimmering stipple, which looked like a shadow defect.
+- **Caustics** are added to the plant and grass shaders (`docs/LIGHTING.md`).
+
 ## Performance
 
 Measured with `--test=shots --only=perf`, the axolotl walking during every measurement, under a

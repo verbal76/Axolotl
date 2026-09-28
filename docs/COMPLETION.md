@@ -57,6 +57,41 @@ You can finish below 100%: finishing needs only the restoration (and the milesto
 The hidden caves, the blooms and the wildlife are what's left. Finishing with none of them is **58.5%**
 (65% before catalog version 3).
 
+## Balance review (Expansion 6)
+
+The finishing floor stays at **58.5%** (restoration 45% + milestones 13.5%). The reasons:
+
+- **Finishing is the speedrun; 100% is the completionist's goal.** A finish must never require
+  optional content. The floor is what a player gets if they skip all of it. It sits well below
+  100% on purpose, so the percentage keeps meaning something after the credits.
+- **Real finishes land far above the floor.** The route to restore each ball passes blooms,
+  grotto mouths and creatures. The playthrough bot earns only what its route touches, and it still
+  finishes at 85–88% (table below). The gap from there to 100% is the hidden caves, the out-of-the-
+  way blooms and the guarded eels, which is the intended completionist content.
+- **Nothing can be farmed.** Each id counts once. Stalkers and puffers, which return, earn
+  nothing. Only species discovered and guardians and eels defeated count.
+- **Raising the floor** would mean moving share from caves, blooms or wildlife into restoration.
+  That would make the optional content worth less and change the ids' weights for existing runs.
+  **Lowering it** would make an ordinary finish look incomplete. Neither is needed.
+
+The highest first step in the game (the ball 2 mesa's swaying leaves, 1.5 m, with a 3 m/s
+current) was reviewed. It stays: it is the game's one timing climb, and its mote is restoration,
+not optional.
+
+## 100% by play (Expansion 6)
+
+After ALL CLEAR, the playthrough bot (`scripts/tests/playthrough_bot.gd`, `hundred()`) goes after
+every catalog id still missing and earns each one by play, the way a player would. It travels by
+vortex, walks or climbs to each bloom, enters each remaining cave, looks at each undiscovered
+species, and fights each remaining crab and eel from in front of its crevice, entering its grotto
+by the door. Nothing is granted directly. Checks:
+
+- `normal_finish_below_100`: the run finishes below 100%.
+- `hundred_percent_by_play`: afterwards every id is earned and the display reads 100%.
+- `finish_time_kept_through_100`: the finish time is frozen and unchanged by the later play.
+
+RESULTS_PLACEHOLDER
+
 ## Completion catalog (catalog version 3)
 
 - **Version 3** came with Expansion 5 (the ecosystem): a Wildlife category, 172 entries (was 157).
@@ -161,4 +196,6 @@ In `scripts/tests/unit_tests.gd`:
 - `_test_run_save_file`: migration from no progress, write and reload, best time, New Run keeps records, damaged file uses the backup, newer format untouched, partial data completed, outside OTA storage.
 - `_test_run_timer_live`: starts at play, advances in play, paused by the pause menu and in the background, saved when backgrounded, Diagnostics, HUD timer toggle, pause menu and title.
 - `_test_run_continue`: a real relaunch (from an exported pack, pass `--pack=<its file>`). A child process plays (clears a parasite, returns a mote, finds a bloom and a cave) and saves. A second child continues: same run and ids, timer continues, restoration, cleared things, cave and health all restored, resumed at the last bloom, and the timer keeps running.
+- `_test_timer_integrity`: the timer keeps running through death and respawn and through vortex travel, and an unfinished run records no best finish.
+- `_test_resume_points_safe`: every bloom is a safe place to re-form, using the real death and respawn (no hit within the first seconds, no slide).
 - `_test_all_clear`: the run finishes when every ball is restored; the finish time stays frozen after more play and is on disk; ALL CLEAR shows it.

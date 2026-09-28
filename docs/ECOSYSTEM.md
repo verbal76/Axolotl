@@ -32,7 +32,7 @@ after a while; ambient life is never saved.
 | **Reed stalker** | hidden hunter | tall reeds (Mossy Meadow reed bed, Reed Canyon floor ×2, Giant Stems far jungle) | Prowls low in its patch, lower than the reeds. Stalks him a few metres off when he is in its patch. Then rears and hisses while the reeds thrash (0.9 s), and pounces along the line it locked. Lies low afterwards. Gives up when he leaves the patch | Watch the reeds. Sidestep the pounce, strike while it lies low (2 hits), or leave its patch. Driven off, it returns after 2 minutes |
 | **Crab guardian** | territorial | grotto mouths (Terrace Steps, Reed Canyon, Hollow Grotto) | Rests at its post. When he enters its territory (5 m) it faces him, raises its claws and clacks (1.2 s). If he stays within 3.8 m it charges sideways; only the charge hurts. Never leaves its territory, and walks back to its post | Back off after the warning, or fight it: 3 hits, sidestep the charge. Beaten, it stays beaten (a completion entry) |
 | **Cave eel** | ambush | grotto walls (Current Hollows, Reed Canyon, Hollow Grotto ×2) | Hidden in a dark cleft, eyes faintly glowing. When he is near, in front and in its line of sight, its eyes brighten and bubbles rise (0.9 s), then it strikes up to 2.3 m and pulls back. It never leaves the crevice; the strike stops short of rock or a ledge; it never notices him through the wall | Read the bubbles and step out of reach, or swipe it while it is out (2 hits). Beaten, it stays beaten (a completion entry) |
-| **Pufferfish** | avoid | open water at jump height over ridges and open ground (Current Hollows ×2, Terrace Steps, Reed Canyon, Hollow Grotto) | Drifts slowly (the current carries it on Current Hollows). Near him it puffs up over 0.6 s (grows, spikes out, yellows) and stays puffed a while | Go round it or wait for it to drift clear. Touching it puffed hurts; a swipe only bats it away |
+| **Pufferfish** | avoid | open water at jump height over ridges and open ground (Current Hollows ×2, Terrace Steps, Reed Canyon, Hollow Grotto) | Drifts slowly (the current carries it on Current Hollows). Calm, it is an elongated spotted fish with fins. Near him it puffs up over 0.6 s into a round ball, its spines standing out, and stays puffed a while | Go round it or wait for it to drift clear. Touching it puffed hurts; a swipe only bats it away |
 | **Shrimp shoal** | ambient | open moss and terraces (7 shoals of 9) | Graze and flick about together, drifting round their patch. Scatter in all directions when he rushes at them; drift back together | Life to run through |
 | **Canopy snail** | ambient | leaves and shelves: the Giant Stems canopy and jungle ladders, the Canopy Spire, shelves, the arch top (17) | Creeps back and forth along its leaf; tucks into its shell when he comes close | Life up high |
 | **Leaf hopper** | skittish | climbs: the Giant Stems canopy spiral and three jungle ladders, the Canopy Spire, the terraces (6) | Springs one or two steps up its climb whenever he comes near, then waits at the top and leaps back down | Following it shows the way up |
@@ -47,6 +47,21 @@ after a while; ambient life is never saved.
 - Nothing strikes or notices through rock.
 - No threat can reach a bloom's respawn point or a vortex arrival point.
 - The stalker pounces along a line locked when its telegraph starts, so a sidestep avoids it.
+
+## Look (Expansion 6)
+
+The owner reviewed each creature against reference photos. Each was remodelled so it reads as the
+animal. Their behaviour, collision and timings are unchanged.
+
+| Creature | Before | Now |
+|---|---|---|
+| Crab guardian | a smooth red balloon | a wide serrated carapace with a dark speckled dome, a red rim and a cream underside (`shaders/crab_shell.gdshader`); eight jointed legs, pincer claws and eye stalks. It flashes when hit |
+| Pufferfish | a sphere that grew | one mesh with two shapes (`shaders/puffer_body.gdshader`). Calm, an elongated tan porcupinefish with spots, fins, eyes and lips, its 170 spines lying flat. Puffed, the body morphs onto a sphere and the spines stand straight out |
+| Cave eel | a chain of beads | a moray: one continuous spotted body on the parasites' body shader, with a heavy head and a jaw. It sits in the grotto wall on the side away from the ledges, so its strike guards the floor and never knocks him off the optional climb |
+| Burrowers (food) | hollow, clipped shapes on the sand | garden eels: a spotted, curled body rising out of a sand mound with a dark hole, swaying in the current |
+| Shrimp | simple primitive shapes | arched, banded shrimp |
+| Canopy snail | a simple primitive shell | a log-spiral shell with growth bands |
+| Parasites | a chain of beads | one continuous tapering body with faint rings (`shaders/parasite_body.gdshader`), drawn along a smooth curve through the segments. Defeated, it twitches and goes limp, and the body drifts down as a slack, rippling curve |
 
 ## Vegetation
 

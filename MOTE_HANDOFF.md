@@ -563,7 +563,16 @@ These are implemented but lack automated evidence. They are **not** unimplemente
     - Shrimp shoals scatter when you run at them; snails tuck in on the leaves; leaf hoppers spring up the climbs ahead of you.
     - Each new species shows "New species: …" once; the pause menu's completion has a Wildlife line.
 
-Record results in the ledger (O-19, A-05, R-01, R-14, R-19, S-03, S-06, S-14, F-07, F-09, P-01, P-03, P-06, M-01, M-03, E1-01, E1-07, E1-09, E2-01, E2-02, E2-04, E2-05, E3-01, E3-02, E3-04, E4-01..E4-05, E5-02..E5-06) only with the owner's evidence.
+15. **After the Expansion 6 OTA is active (final integration pass):**
+    - **Leaves:** Giant Stems' canopy spiral and the Canopy Spire. Each leaf grows out of the stem on a curved stalk and is broad enough to land on, turn round on and aim from. Where you see leaf is where you can stand, and there are no invisible edges. The leaves go round a quarter turn each, so none hides the next. Climb a jungle ladder or two, and climb down again.
+    - **Gill:** soft pink skin with freckles, a paler belly, feathery gills. Moist, not shiny plastic.
+    - **Parasites:** one smooth bending body, not beads. Defeated, one twitches, then drifts down limp.
+    - **Creatures:** the crab has a speckled shell with a red rim, legs and claws. The pufferfish is a calm spotted fish that puffs into a spiny ball. The eels are morays in the grotto walls. The burrowers are garden eels rising from sand mounds. The motes have trailing tentacles. The rosette plants and ferns are smooth and sway.
+    - **Light:** at the start the tank is murky and dull (on purpose). As balls heal, the water clears toward aqua, the ceiling light warms, light shafts and moving caustics appear, and the corals take their colour. At ALL CLEAR the tank should look bright and alive. Caves stay dark with glow-worms.
+    - **Frame rate:** watch for stutter in the restored tank, especially with light shafts in view.
+    - **100%:** after finishing, the pause menu's completion keeps counting. Everything (blooms, caves, crabs, eels, species) can be earned, and the finish time never changes.
+
+Record results in the ledger (O-19, A-05, R-01, R-14, R-19, S-03, S-06, S-14, F-07, F-09, P-01, P-03, P-06, M-01, M-03, E1-01, E1-07, E1-09, E2-01, E2-02, E2-04, E2-05, E3-01, E3-02, E3-04, E4-01..E4-05, E5-02..E5-06, E6) only with the owner's evidence.
 
 ## 17. Repository isolation
 

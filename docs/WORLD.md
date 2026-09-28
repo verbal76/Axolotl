@@ -130,6 +130,35 @@ Other fixes found by the audit:
 - A Hollow Grotto bloom was on a cave's flank, where a resumed run slid 1.4 m
   (`new_blooms_resume_standing`).
 
+## Leaf platforms (Expansion 6)
+
+The leaves of the spirals and ladders were flat, detached-looking paddles, stacked so closely that
+some overlapped. Every climbing leaf was rebuilt and every climb re-audited.
+
+- **Shape.** A broad leaf blade with a narrow neck, a raised midrib and a gentle droop at the tip.
+  A petiole (a curved stalk) grows out of the stem into the blade, so the leaf attaches to the
+  stem. The blade is one merged mesh per stem (`MeshLib.platform_leaf_mesh`).
+- **Collision matches the art.** `MeshLib.leaf_collision_shapes` builds two convex pieces
+  (neck and blade) from the drawn outline, at 0.97 of the drawn width. It is cached by size.
+  A straight stem's collision now reaches its drawn top. It used to stop 0.5 m short, so the
+  top leaves' stalks rooted in nothing.
+- **Staging.** The Giant Stems canopy spiral and the Canopy Spire both turn **90°** per leaf
+  (was 72°, which left 2–6° between the leaves two apart). The spiral starts at 55°, so the last
+  jump lands on the canopy's C3 shelf instead of passing under it. Leaves stand
+  `LEAF_CLEAR` (0.15 m) off the stem surface. Climbs start 4.4 m along the first leaf, past its
+  broad tip, and every landing target is 1.5 m along a leaf, on the flat of the blade.
+- **The canopy route.** The route runs spiral top → C3 → C1 → C2. The spiral's mote is on leaf 7.
+
+Tests (`_test_leaf_geometry`, and `_test_leaf_footing` with real touch input):
+
+| Check | What it proves |
+|---|---|
+| `leaf_collision_is_the_drawn_leaf` | on every climbing leaf (> 950), rays across the drawn blade hit its own collision within 0.06 m of the drawn surface, and nothing is solid beyond the drawn edge |
+| `leaves_grow_from_their_stems` | every stalk's root is inside a stem |
+| `leaves_have_room_to_turn` | a 0.7 m circle of footing round every landing point |
+| `spiral_leaves_distinct` | neighbouring leaves round every stem and spiral are ≥ 12° apart in plan view (> 900 pairs) |
+| `turning_on_a_leaf_keeps_footing`, `edge_landings_hold`, `jump_beside_the_stem_clear`, `underneath_leaves_clear`, `climb_down_never_wedges`, `ladders_climbed_twice` | physical: turning round on a leaf, landing near its edge, jumping beside the stem, walking under leaves, climbing down, and two jungle ladders climbed twice in a row (turning tried on > 140 leaves) |
+
 ## Caves
 
 Seven caves in all (three before). All use the Expansion 2 generator (arched mouths, jambs,
