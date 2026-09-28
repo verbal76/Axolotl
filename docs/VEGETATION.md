@@ -112,6 +112,19 @@ Every existing grass, leaf and strand material now uses it.
   - leafy fern clumps among them;
   - fine roots trailing from each ball's underside (`MeshLib.root_strands_mesh`).
   They are kept off routes, blooms and vortex mouths like the rest of the vegetation.
+- **Variegated leaves** (owner reference: an earth star growing in their terrarium, and a "fire
+  and ice" hosta; `shaders/variegation.gdshaderinc`). Living leaves are not flat green:
+  - Mossy Meadow's rosettes and the jungle ferns have a pastel-pink margin and soft, wavering
+    cream stripes running the length of the leaf, over a slight pink blush (earth star);
+  - Current Hollows' rosettes have a white centre fading out to green margins (fire and ice);
+  - the sprout ferns alternate between the two styles from ball to ball;
+  - the climbing leaves have a subtle pale centre (45%), so their edges stay easy to read.
+
+  It is computed in the shader from the position across the leaf (no extra geometry). Neglected
+  leaves stay grey and dull: the variegation shows only as the moss heals.
+- **Cost.** Sprouts are not drawn at all until a ball is a quarter restored (zero-size plants still
+  cost their triangles). Sprout clumps and corals use lean meshes, with shorter draw distances for
+  the small ones.
 - **Caustics** are added to the plant and grass shaders (`docs/LIGHTING.md`).
 
 ## Performance

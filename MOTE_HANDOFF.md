@@ -571,6 +571,8 @@ These are implemented but lack automated evidence. They are **not** unimplemente
     - **Light:** at the start the tank is murky and dull (on purpose). As balls heal, the water clears toward aqua, the ceiling light warms, light shafts and moving caustics appear, and the corals take their colour. At ALL CLEAR the tank should look bright and alive. Caves stay dark with glow-worms.
     - **Vortex:** a spiral of water jets revolving over a swirling pool on the moss (no tube, no cone). Sand and bubbles spiral up from the pool. Ride it: Gill corkscrews round inside the spinning jets. The far end is another pool.
     - **Healed balls:** as a ball heals, red-tipped stem plants and ferns sprout over its top like a crown, and roots trail beneath it. Neglected balls have none.
+    - **Parasites:** small ones dart in and latch; medium ones circle before they strike; a large one coils (rumbling, scraping) and charges. Sidestep it, then hit it while it rests, head low. Hurt ones may flee and come back healed if left alone. One that spots you alerts its neighbours, and they spread round you. In the far zones of Current Hollows, Giant Stems, Terrace Steps and Reed Canyon, spitters keep their distance and lob glowing globs: dodge them, or swipe one back at its spitter.
+    - **Leaves:** healed rosettes and ferns are variegated: pink margins and cream stripes like an earth star, or white-centred like a fire-and-ice hosta.
     - **Frame rate:** watch for stutter in the restored tank, especially with light shafts in view.
     - **100%:** after finishing, the pause menu's completion keeps counting. Everything (blooms, caves, crabs, eels, species) can be earned, and the finish time never changes.
 

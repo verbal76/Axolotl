@@ -130,6 +130,39 @@ Other fixes found by the audit:
 - A Hollow Grotto bloom was on a cave's flank, where a resumed run slid 1.4 m
   (`new_blooms_resume_standing`).
 
+## Performance, Expansion 6
+
+Measured the same way (`--test=shots --only=perf`, software Vulkan renderer, two runs each,
+averaged, the axolotl walking). The baseline is Expansion 5 (dev-000023). The frame times are
+a relative proxy: this renderer rasterises the shadow map on the CPU, so shadow and fill costs
+weigh far more here than on a phone GPU.
+
+| View | Before (E5) | First E6 build | Final E6 | Triangles before → final |
+|---|---|---|---|---|
+| Ball 1 tutorial (first view, includes warm-up) | 498 ms | 584 ms | 549 ms | 442k → 550k |
+| Ball 1 meadow | 220 ms | 233 ms | 202 ms | 309k → 413k |
+| Ball 2 east | 119 ms | 262 ms | 228 ms | 272k → 274k |
+| Ball 3 jungle | 106 ms | 256 ms | 189 ms | 109k → 241k |
+| Ball 1 reed bed | 139 ms | 172 ms | 153 ms | 330k → 388k |
+| Ball 2 mesa side | 109 ms | 162 ms | 134 ms | 530k → 572k |
+| Ball 1 cave | 117 ms | 168 ms | 130 ms | 312k → 371k |
+| Ball 4 terraces | 74 ms | 194 ms | 150 ms | 218k → 248k |
+| Ball 5 bridge | 94 ms | 139 ms | 106 ms | 134k → 153k |
+| Ball 6 spire | 66 ms | 118 ms | 87 ms | 367k → 253k |
+| Ball 7 high shelf | 78 ms | 124 ms | 91 ms | 114k → 129k |
+| Ball 7 grotto | 89 ms | 133 ms | 103 ms | 199k → 204k |
+| Restored meadow | 104 ms | 151 ms | 126 ms | 173k → 394k |
+| Restored jungle | 101 ms | 197 ms | 133 ms | 109k → 254k |
+| Restored open water | 115 ms | 169 ms | 136 ms | 320k → 339k |
+
+- Video memory: 71 MB → 81 MB (vortex jets, sprouts, corals, creature meshes).
+- Where the rest goes (`perfsplit`): with shadows off, the Expansion 6 world costs 13–25% more than
+  Expansion 5 in this renderer (caustics, variegation, the richer vegetation). The shadows are
+  the remainder, and on a phone that cannot hold its frame rate `QualityScaler` turns them off
+  first.
+- The parasites' combat reasoning costs about 40 µs per engaged parasite per frame (desktop,
+  `parasite_combat_cheap`).
+
 ## Leaf platforms (Expansion 6)
 
 The leaves of the spirals and ladders were flat, detached-looking paddles, stacked so closely that

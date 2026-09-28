@@ -39,10 +39,16 @@ their telegraphs, and the ambient never drops below 0.55.
   beside each moss ball, where the player is, and five cross open water. They are additive with soft
   edges and drifting streaks, fade with depth, and fade out within 34 m of the camera, so they never
   read as a solid cone in the face.
-- **Selective shadows**: the ceiling light casts two PSSM splits out to 42 m on a 2048 map, with hard
-  sampling (soft filters dither without temporal smoothing). The atlas size and filter are set at
-  runtime. Terrain, stems, leaves, the axolotl and creatures cast shadows; grass, particles and
-  effects do not. Big leaves and canopies shade what is under them.
+- **Selective shadows.** The ceiling light casts shadows only from a dedicated visual layer
+  (`MossBall.SHADOW_CASTER_LAYER`, via `Light3D.shadow_caster_mask`). On that layer are Gill,
+  the parasites' bodies, the creatures, the stems and the climbing leaves. The ~950 detailed
+  climbing leaves cast through flat 8-triangle outlines of themselves (`MeshLib.leaf_shadow_proxy`,
+  shadow-only). Terrain, formations and vegetation receive shadows but cast none. It uses one
+  1024 shadow map over the near 30 m with hard sampling (soft filters dither without temporal
+  smoothing). The atlas size and filter are set at runtime. Big leaves and canopies shade what is
+  under them.
+- **Quality scaling.** On a phone that cannot hold 54 fps, `QualityScaler`'s first step turns the
+  shadows off (they were most of the lighting's cost), before resolution and density.
 - **Depth**: AgX tone mapping with a light grade (saturation 0.9, contrast 1.06). The glass
   composites the water column with a vertical gradient: brighter and greener near the surface,
   deeper and bluer toward the gravel. Less than half of the bedroom shows through it.
@@ -52,4 +58,10 @@ their telegraphs, and the ambient never drops below 0.55.
 
 ## Cost
 
-See the performance table in `MOTE_HANDOFF.md` §E6 and the ledger (E6-19).
+Measured with `--test=shots --only=perfsplit` (each Expansion 6 feature switched off in turn, and a
+tally of shadow casters). In the first build, the shadow pass was nearly all of the added frame
+time. Every ball's surface and every formation was redrawn into two shadow splits (about 650k
+triangles in a Terrace Steps view, against about 250k without shadows). The vortices, sprouts,
+corals and light shafts each cost little. With selective casters, stand-ins and one smaller map,
+triangle counts are back near the pre-Expansion 6 figures. The before/after table is in
+`docs/WORLD.md` (Performance, Expansion 6).

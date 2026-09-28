@@ -374,8 +374,10 @@ stylised undersea game (the healed look), and a sprouted moss ball.
 | E6-10 | Balance review | I+V | finish floor kept at 58.5% (`docs/COMPLETION.md` Balance review) | normal finishes 88.4% on both seeds |
 | E6-11 | Timer integrity | I+V | unchanged model | `_test_timer_integrity` (3), `finish_time_kept_through_100` |
 | E6-12 | Resume points safe; save and migration | I+V | bloom pulse startles parasites on re-forming | `_test_resume_points_safe`, `_test_run_save_file`, relaunch test |
-| E6-13 | Performance | see Performance in `MOTE_HANDOFF.md` §11 | | shots `perf` before/after |
+| E6-13 | Performance is a hard requirement | I+V (proxy) / needs phone | selective shadow casters (a caster layer, flat leaf stand-ins), one 1024 map over 30 m, shadows first to go in `QualityScaler`; sprouts not drawn on neglected balls; lean sprout and coral meshes | `docs/WORLD.md` Performance, Expansion 6 (before/after, 15 views); shots `perfsplit`; `shadows_first_to_scale_down`, `parasite_combat_cheap` |
 | E6-14 | Ships by OTA, no APK | pending | game layer only; runtime r5 | (filled in on publish) |
+| E6-15 | Owner: leafy plants not solid green (terrarium earth star, fire-and-ice hosta) | I+V / needs phone | `shaders/variegation.gdshaderinc` on the rosettes, ferns and climbing leaves (`docs/VEGETATION.md`) | shots `feedback`, `review` |
+| E6-16 | Addendum: parasite combat and AI (sizes, retreat, pack alert, spitter, fairness, sight, determinism, cost) | I+V / needs phone | `scripts/actors/parasite.gd`, `parasite_glob.gd` (`docs/ECOSYSTEM.md` Parasites) | `_test_parasite_combat` (27); playthroughs on both seeds and 100% by play rerun after it; defects it exposed fixed: a parasite climbing a stem out of reach, damage during the vortex-connection shot, latching onto an invulnerable axolotl, stacking while waiting |
 
 ## Precedence notes
 
