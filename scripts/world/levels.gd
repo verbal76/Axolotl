@@ -109,7 +109,7 @@ static func _sprouts(lb: LevelBuilder, i: int) -> void:
 	nodes += b.scatter(MeshLib.stem_plant_mesh(5, 1.2, 700 + i, 7), stems, int(90 * area), 700 + i, 0.8, 1.6, crown, 45.0)
 	# (Variegated: an earth star's pink margins and cream stripes, or a fire-and-ice white centre.)
 	var fern_p := Vegetation.family_params("short", 0.6).merged({"sway": 0.18, "wake_gain": 0.7, "cam_fade": 1.2, "sprout": 1.0,
-			"variegate": 1.0, "vari_style": float(i % 2), "vari_edge": Color(0.95, 0.46, 0.62), "vari_stripe": Color(0.96, 0.94, 0.82)}, true)
+			"variegate": 1.0, "vari_style": float(i % 2), "vari_edge": Color(0.96, 0.58, 0.72), "vari_stripe": Color(0.95, 0.94, 0.84)}, true)
 	var ferns := b.make_veg_material(Color(0.12, 0.42, 0.1), Color(0.55, 0.85, 0.25), fern_p)
 	nodes += b.scatter(MeshLib.broadleaf_mesh(5, 1.0, 720 + i), ferns, int(45 * area), 720 + i, 0.8, 1.5, crown, 45.0)
 	# The crown itself: tall stem plants and big fern clumps over the top of the ball, large enough
@@ -342,7 +342,7 @@ static func _ball1(lb: LevelBuilder) -> void:
 	b.scatter(MeshLib.tuft_mesh(5, 0.07, 0.34, 0.12, 1, 3, 0.3), veg, 5200, 11, 0.8, 1.35)
 	var leaves := b.make_veg_material(Color(0.1, 0.36, 0.1), Color(0.35, 0.7, 0.22), Vegetation.family_params("short", 0.5).merged({"sway": 0.22, "wake_gain": 0.6,
 			# (Owner reference: variegated like an earth star, pink margins and cream stripes.)
-			"variegate": 1.0, "vari_style": 0.0, "vari_edge": Color(0.95, 0.46, 0.62), "vari_stripe": Color(0.96, 0.93, 0.8)}, true))
+			"variegate": 1.0, "vari_style": 0.0, "vari_edge": Color(0.96, 0.58, 0.72), "vari_stripe": Color(0.94, 0.92, 0.82)}, true))
 	b.scatter(MeshLib.broadleaf_mesh(4, 0.7, 2), leaves, 380, 12, 0.7, 1.25)
 	var stalks := b.make_veg_material(Color(0.1, 0.36, 0.1), Color(0.35, 0.7, 0.22), Vegetation.family_params("medium", 1.7).merged({"sway": 0.14}, true))
 	b.scatter(MeshLib.tuft_mesh(3, 0.1, 1.7, 0.1, 3, 5, 0.25), stalks, 160, 13, 0.8, 1.3)
@@ -687,7 +687,7 @@ static func _ball3(lb: LevelBuilder) -> void:
 	var tall := b.make_veg_material(Color(0.06, 0.3, 0.06), Color(0.4, 0.7, 0.16), Vegetation.family_params("tall", 4.2).merged({"cam_fade": 2.4}, true))
 	b.scatter(MeshLib.tuft_mesh(3, 0.18, 4.2, 0.2, 5, 6, 0.25), tall, 1300, 31, 0.8, 1.4, ok_tall)
 	var fern := b.make_veg_material(Color(0.05, 0.28, 0.06), Color(0.3, 0.62, 0.14), Vegetation.family_params("medium", 1.2).merged({"sway": 0.16, "cam_fade": 1.6, "wake_gain": 0.8,
-			"variegate": 0.8, "vari_style": 0.0, "vari_edge": Color(0.8, 0.22, 0.3), "vari_stripe": Color(0.85, 0.92, 0.62)}, true))
+			"variegate": 0.8, "vari_style": 0.0, "vari_edge": Color(0.9, 0.42, 0.55), "vari_stripe": Color(0.88, 0.93, 0.7)}, true))
 	b.scatter(MeshLib.broadleaf_mesh(7, 1.4, 6), fern, 520, 32, 1.0, 1.8, ok)
 	var short := b.make_veg_material(Color(0.05, 0.26, 0.05), Color(0.3, 0.6, 0.14), Vegetation.family_params("short", 0.4))
 	b.scatter(MeshLib.tuft_mesh(5, 0.07, 0.4, 0.12, 8, 3, 0.3), short, 3200, 34, 0.8, 1.3)
