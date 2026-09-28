@@ -67,6 +67,7 @@ static func build_ball(i: int, game: Node) -> MossBall:
 		5: WorldExpansion.canopy_spire(lb)
 		6: WorldExpansion.hollow_grotto(lb)
 	_accent_flora(lb, i)
+	_sprouts(lb, i)
 	b.finalize_terrain()
 	b.set_meta("builder", lb)
 	return b
@@ -83,6 +84,42 @@ const ACCENTS := [
 	[[Color(0.95, 0.5, 0.15), Color(1.0, 0.8, 0.45)], [Color(0.9, 0.3, 0.5), Color(1.0, 0.7, 0.8)]],
 	[[Color(0.35, 0.35, 0.85), Color(0.7, 0.75, 1.0)], [Color(0.2, 0.75, 0.7), Color(0.7, 1.0, 0.9)]],
 ]
+
+
+## Stem-plant tips per ball (Expansion 6, owner reference "a sprouted moss ball"): most ends red to
+## orange, some deep red or pink, like Rotala crowning the moss.
+const SPROUT_TIPS := [Color(0.95, 0.4, 0.14), Color(0.85, 0.18, 0.2), Color(1.0, 0.5, 0.25), Color(0.9, 0.3, 0.45),
+		Color(0.95, 0.45, 0.12), Color(0.8, 0.2, 0.28), Color(1.0, 0.55, 0.3)]
+
+
+## What sprouts as a ball heals (Expansion 6, owner reference photo of a sprouted moss ball): clusters
+## of red-tipped stem plants and bright leafy fern clumps, thickest on the ball's top like a crown,
+## and fine roots trailing from its underside. All are `sprout` plants: none on neglected moss; they
+## grow in with the moss's health. Kept off routes, blooms and mouths like the rest.
+static func _sprouts(lb: LevelBuilder, i: int) -> void:
+	var b := lb.ball
+	var keep := _veg_keep_clear(lb)
+	var area := pow(float(RADII[i]) / 24.0, 2.0)
+	# A steady, seedless pick per direction (the plants must not use gameplay's random sequence).
+	var pick := func(d: Vector3) -> float: return fposmod(sin(d.x * 91.7 + d.y * 37.3 + d.z * 53.9) * 437.58, 1.0)
+	var crown := func(d: Vector3) -> bool: return not keep.call(d) and (d.y > 0.25 or pick.call(d) < 0.35 * (d.y + 1.0))
+	var stems := b.make_veg_material(Color(0.22, 0.46, 0.12), SPROUT_TIPS[i],
+			Vegetation.family_params("medium", 1.0).merged({"sway": 0.2, "wake_gain": 0.8, "cam_fade": 1.4, "sprout": 1.0}, true))
+	b.scatter(MeshLib.stem_plant_mesh(7, 1.2, 700 + i), stems, int(110 * area), 700 + i, 0.8, 1.6, crown, 70.0)
+	var ferns := b.make_veg_material(Color(0.12, 0.42, 0.1), Color(0.55, 0.85, 0.25),
+			Vegetation.family_params("short", 0.6).merged({"sway": 0.18, "wake_gain": 0.7, "cam_fade": 1.2, "sprout": 1.0}, true))
+	b.scatter(MeshLib.broadleaf_mesh(6, 1.0, 720 + i), ferns, int(70 * area), 720 + i, 0.8, 1.5, crown, 70.0)
+	# The crown itself: tall stem plants and big fern clumps over the top of the ball, large enough
+	# to shape its outline from across the tank (he walks through them like tall reeds).
+	var top := func(d: Vector3) -> bool: return not keep.call(d) and d.y > 0.5 and pick.call(d * 1.7) < smoothstep(0.5, 0.9, d.y)
+	var tall := b.make_veg_material(Color(0.2, 0.44, 0.1), SPROUT_TIPS[i],
+			Vegetation.family_params("tall", 4.0).merged({"sway": 0.16, "sway_speed": 0.9, "wake_gain": 0.9, "cam_fade": 2.4, "sprout": 1.0}, true))
+	b.scatter(MeshLib.stem_plant_mesh(11, 1.2, 760 + i), tall, int(60 * area), 760 + i, 3.0, 5.5, top, 140.0)
+	b.scatter(MeshLib.broadleaf_mesh(7, 1.0, 780 + i), ferns, int(22 * area), 780 + i, 2.0, 3.0, top, 140.0)
+	var roots := b.make_veg_material(Color(0.22, 0.3, 0.12), Color(0.5, 0.45, 0.3),
+			Vegetation.family_params("tall", 2.0).merged({"sway": 0.3, "sway_speed": 0.8, "wake_gain": 0.9, "cam_fade": 2.0, "sprout": 1.0}, true))
+	var under := func(d: Vector3) -> bool: return not keep.call(d) and d.y < -0.65
+	b.scatter(MeshLib.root_strands_mesh(6, 2.2, 740 + i), roots, int(60 * area), 740 + i, 1.8, 3.0, under, 140.0)
 
 
 static func _accent_flora(lb: LevelBuilder, i: int) -> void:

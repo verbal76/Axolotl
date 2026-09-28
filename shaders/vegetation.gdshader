@@ -32,6 +32,9 @@ uniform vec4 wake_bounds = vec4(0.0);
 // How strongly this family answers the wake, and its full height (for movers passing over it).
 uniform float wake_gain = 1.0;
 uniform float plant_height = 0.5;
+// 1 for plants that sprout only as the moss heals (Expansion 6: stem plants, ferns and trailing
+// roots of the "sprouted moss ball"): absent on neglected moss, growing in as it recovers.
+uniform float sprout = 0.0;
 uniform vec4 motes[6];
 uniform int mote_count = 0;
 uniform vec3 mote_color : source_color = vec3(0.55, 1.0, 0.75);
@@ -79,7 +82,7 @@ void vertex() {
 	float hlt = health_at(up);
 	float t = UV.y;
 	vec3 off = VERTEX - base;
-	float shrink = mix(0.62, 1.0, hlt);
+	float shrink = sprout > 0.5 ? smoothstep(0.3, 0.95, hlt) : mix(0.62, 1.0, hlt);
 	float len = length(off) * shrink;
 	VERTEX = base + off * shrink;
 	float w = t * t;

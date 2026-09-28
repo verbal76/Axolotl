@@ -105,6 +105,107 @@ static func broadleaf_mesh(leaves: int, size: float, seed_v: int) -> ArrayMesh:
 	return st.commit()
 
 
+## A cluster of stem plants (Expansion 6, owner reference "a sprouted moss ball": Rotala-like red
+## stems crowning the healed moss). `stems` thin upright stems of up to `height`, leaning a little
+## outward, each with pairs of narrow leaves turning a quarter turn up the stem, longer below and
+## shorter toward the tip. UV.y runs base to tip (the material's colour runs green to red by it).
+static func stem_plant_mesh(stems: int, height: float, seed_v: int) -> ArrayMesh:
+	var rng := RandomNumberGenerator.new()
+	rng.seed = seed_v
+	var st := SurfaceTool.new()
+	st.begin(Mesh.PRIMITIVE_TRIANGLES)
+	var base := 0
+	for i in stems:
+		var a := TAU * i / stems + rng.randf() * 0.8
+		var lean := rng.randf_range(0.04, 0.3)
+		var dirv := Vector3(sin(a) * sin(lean), cos(lean), cos(a) * sin(lean))
+		var bow := Vector3(cos(a), 0, -sin(a)) * rng.randf_range(-0.08, 0.08)
+		var root := Vector3(sin(a), 0, cos(a)) * height * rng.randf_range(0.0, 0.12)
+		var len := height * rng.randf_range(0.6, 1.0)
+		var tint := Color.WHITE.darkened(rng.randf() * 0.15)
+		var at := func(t: float) -> Vector3: return root + dirv * len * t + bow * len * t * t
+		# The stem: a thin three-sided tube.
+		var r0 := height * 0.012
+		var rings := 5
+		var start := base
+		var x := dirv.cross(Vector3.RIGHT if absf(dirv.x) < 0.9 else Vector3.FORWARD).normalized()
+		var y := dirv.cross(x).normalized()
+		for j in rings:
+			var t := float(j) / (rings - 1)
+			var c: Vector3 = at.call(t)
+			for k in 3:
+				var ang := TAU * k / 3.0
+				st.set_color(tint)
+				st.set_uv(Vector2(float(k) / 3.0, t))
+				st.add_vertex(c + (x * cos(ang) + y * sin(ang)) * r0 * (1.0 - 0.6 * t))
+				base += 1
+		for j in rings - 1:
+			for k in 3:
+				var i0 := start + j * 3 + k
+				var i1 := start + j * 3 + (k + 1) % 3
+				for q in [i0, i1, i0 + 3, i1, i1 + 3, i0 + 3]:
+					st.add_index(q)
+		# Leaf pairs: narrow lance-shaped leaves, arching out and a little down.
+		var pairs := 10
+		for j in pairs:
+			var t := 0.12 + 0.86 * float(j) / (pairs - 1)
+			var c: Vector3 = at.call(t)
+			var ll := height * lerpf(0.2, 0.11, t)
+			var lw := ll * 0.3
+			for side in [-1.0, 1.0]:
+				var la := a + j * PI * 0.5 + (0.0 if side > 0.0 else PI) + rng.randf_range(-0.2, 0.2)
+				var out := Vector3(sin(la), 0, cos(la))
+				var tip: Vector3 = c + out * ll * 0.85 + dirv * ll * lerpf(0.45, 0.1, t) - Vector3.UP * ll * 0.1
+				var mid: Vector3 = c + out * ll * 0.45 + dirv * ll * 0.35
+				var wv := out.cross(dirv).normalized() * lw
+				for v in [c, mid + wv, tip, mid - wv]:
+					st.set_color(tint.lightened(0.05))
+					st.set_uv(Vector2(0.5, t))
+					st.add_vertex(v)
+				for q in [base, base + 1, base + 2, base, base + 2, base + 3]:
+					st.add_index(q)
+				base += 4
+	st.generate_normals()
+	return st.commit()
+
+
+## Fine roots and strands trailing from the underside of a healed moss ball (Expansion 6, the
+## "sprouted moss ball" reference): `n` thin wavering ribbons of up to `length`, crossed in pairs so
+## they read from any side. UV.y runs from the moss to the free end.
+static func root_strands_mesh(n: int, length: float, seed_v: int) -> ArrayMesh:
+	var rng := RandomNumberGenerator.new()
+	rng.seed = seed_v
+	var st := SurfaceTool.new()
+	st.begin(Mesh.PRIMITIVE_TRIANGLES)
+	var base := 0
+	for i in n:
+		var a := rng.randf() * TAU
+		var root := Vector3(sin(a), 0, cos(a)) * length * rng.randf_range(0.0, 0.15)
+		var len := length * rng.randf_range(0.5, 1.0)
+		var ph := rng.randf() * TAU
+		var drift := Vector3(sin(a), 0, cos(a)) * rng.randf_range(0.05, 0.25)
+		var w := length * 0.03
+		var segs := 8
+		var tint := Color.WHITE.darkened(rng.randf() * 0.25)
+		for cross_k in 2:
+			var wd := Vector3(cos(a + cross_k * PI * 0.5), 0, -sin(a + cross_k * PI * 0.5)) * w
+			var start := base
+			for j in segs + 1:
+				var t := float(j) / segs
+				var c := root + Vector3.UP * len * t + drift * len * t * t + Vector3(sin(t * 7.0 + ph), 0, cos(t * 5.0 + ph)) * len * 0.04 * t
+				for sgn in [-1.0, 1.0]:
+					st.set_color(tint)
+					st.set_uv(Vector2(0.5 + sgn * 0.5, t))
+					st.add_vertex(c + wd * sgn * (1.0 - 0.7 * t))
+					base += 1
+			for j in segs:
+				var i0 := start + j * 2
+				for q in [i0, i0 + 1, i0 + 2, i0 + 1, i0 + 3, i0 + 2]:
+					st.add_index(q)
+	st.generate_normals()
+	return st.commit()
+
+
 ## Tube coral / anemone cluster (Expansion 6, the healed tank's colour): `tubes` soft tapering
 ## tubes rising from one spot, leaning outward, each ending in a flared rounded mouth. UV.y runs base
 ## to tip (the vegetation material colours and sways by it).

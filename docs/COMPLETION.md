@@ -90,7 +90,15 @@ by the door. Nothing is granted directly. Checks:
 - `hundred_percent_by_play`: afterwards every id is earned and the display reads 100%.
 - `finish_time_kept_through_100`: the finish time is frozen and unchanged by the later play.
 
-RESULTS_PLACEHOLDER
+| Seed | Normal finish | Finish time | What the 100% phase earned | 100% reached at | Deaths | Checks |
+|---|---|---|---|---|---|---|
+| 7 | 88.4% | 1875.02 s | 16 blooms, 4 eels, the eel species | 2935.9 s (game time) | 0 | 23/23 |
+| 4242 | 88.4% | 1678.60 s | 16 blooms, 4 eels, the eel species | 2661.5 s (game time) | 0 | 23/23 |
+
+The finish time was unchanged through the 100% phase on both seeds. The proof found two real
+defects, both fixed in Expansion 6. One was a pearl in the small Hollow Grotto cave that rested on
+the cave's ceiling, out of reach (now `cave_rewards_on_their_top_ledge`). The other was a stall in
+the bot itself.
 
 ## Completion catalog (catalog version 3)
 
