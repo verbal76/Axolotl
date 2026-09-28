@@ -180,6 +180,33 @@ on the CPU, so it overstates vertex cost next to a phone GPU.
 
 Thermal scaling (`QualityScaler`) thins the new patches along with the rest.
 
+## Performance: dev-000024 playtest polish
+
+Measured with `--test=shots --only=perf` (software Vulkan, a relative proxy), dev-000024 against the
+final commit of the pass, on the same machine with nothing else running. The ambient sway is vertex
+work on existing instances, so geometry and draw calls are unchanged.
+- **Frame time:** every view is within ±11% of before, the median about 1% faster. This is the run-to-run
+  noise of this renderer.
+- **Video memory:** 93.7 → 98.2 MB, from the colour page's preview target and pattern textures.
+
+| View | dev-000024 | This pass | Change |
+|---|---|---|---|
+| ball1_66_0 | 528 ms, 503k tris, 303 dc | 550 ms, 503k tris, 303 dc | +4% |
+| ball1_10_30 | 228 ms, 301k tris, 276 dc | 207 ms, 295k tris, 274 dc | -9% |
+| ball2_10_70 | 238 ms, 275k tris, 214 dc | 227 ms, 168k tris, 224 dc | -5% |
+| ball3_10_110 | 200 ms, 235k tris, 213 dc | 206 ms, 236k tris, 201 dc | +3% |
+| ball1_-59_31 | 168 ms, 390k tris, 240 dc | 152 ms, 394k tris, 242 dc | -10% |
+| ball2_30_-20 | 118 ms, 593k tris, 470 dc | 130 ms, 582k tris, 442 dc | +11% |
+| cave_b1 | 125 ms, 373k tris, 206 dc | 129 ms, 374k tris, 203 dc | +3% |
+| ball4_terraces | 147 ms, 248k tris, 211 dc | 149 ms, 278k tris, 228 dc | +2% |
+| ball5_bridge | 102 ms, 255k tris, 134 dc | 104 ms, 256k tris, 134 dc | +2% |
+| ball6_spire_mid | 78 ms, 388k tris, 293 dc | 72 ms, 388k tris, 289 dc | -8% |
+| ball7_high_shelf | 95 ms, 137k tris, 165 dc | 93 ms, 138k tris, 171 dc | -1% |
+| cave_b7 | 104 ms, 204k tris, 134 dc | 99 ms, 203k tris, 132 dc | -5% |
+| restored_ball1_10_30 | 132 ms, 402k tris, 267 dc | 126 ms, 400k tris, 265 dc | -4% |
+| restored_ball3_10_110 | 130 ms, 236k tris, 214 dc | 126 ms, 240k tris, 216 dc | -3% |
+| restored_open_water | 132 ms, 338k tris, 226 dc | 128 ms, 368k tris, 225 dc | -3% |
+
 ## Tests
 
 `_test_vegetation` in `scripts/tests/unit_tests.gd`:
