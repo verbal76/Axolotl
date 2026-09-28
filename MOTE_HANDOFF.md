@@ -598,7 +598,7 @@ repository. Do not name, open or use any other game repository in Mote developme
   [ ] 6. Full expansion integration + progression/balance/100%/speedrun reconciliation
 
   New completion-bearing content must extend the catalog as `docs/COMPLETION.md` describes.
-- **Expansion list:** items 1–5 of 6 are done (dev-000018, dev-000019, dev-000020, dev-000021/22, dev-000023). Item 6's prompt is received; it starts in a later session when the owner says so.
+- **Expansion list:** items 1–5 of 6 are done (dev-000018, dev-000019, dev-000020, dev-000021/22, dev-000023). Item 6 (the final integration pass, with the owner's review items and the parasite combat addendum) is released by OTA from this commit; it is ticked once the published OTA is verified. Do not begin Expansion 7.
 - **Next task:** the owner's phone checks (§16), including the dev-000015..18 changes.
 - **After that:** continue from the owner's feedback. Game-layer changes reach b22 by OTA on push
   (that push is also the first OTA a b22 phone downloads). Native changes need `--bump` and a new APK.
