@@ -236,6 +236,16 @@ func _physics_process(dt: float) -> void:
 	if land_lock > 0.0:
 		control = 0.5
 	var target := wish * RUN_SPEED * control
+	# Turning to aim on the ground (Expansion 6, owner phone report): from a standstill he turns on
+	# the spot until he faces (within about 25 degrees) where the stick points, then sets off; so
+	# landing, turning and lining up the next jump on a leaf does not walk him off it. Running, a
+	# sharp change of direction only eases off while he swings round; curving is unaffected.
+	if grounded and wish.length() > 0.08 and lunge_t < 0.0:
+		var align := facing.dot(wish.normalized())
+		if vh.length() < 1.5:
+			target *= smoothstep(0.55, 0.92, align)
+		else:
+			target *= lerpf(0.15, 1.0, smoothstep(-0.2, 0.75, align))
 	var accel := (ACCEL if wish.length() > 0.05 else DECEL) if grounded else AIR_ACCEL
 	if lunge_t >= 0.0:
 		lunge_t += dt / LUNGE_TIME

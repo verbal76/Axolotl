@@ -14,7 +14,7 @@ func run(runner) -> void:
 	p.use_bot_input = true
 	await t.seconds(0.5)
 	var only: String = Settings.test_args.get("only", "")
-	for name_ in ["_test_startup", "_test_ota_and_version", "_test_mesh_winding", "_test_terrain", "_test_terrain_grounded", "_test_no_floating_platforms", "_test_parasite_locomotion", "_test_placements", "_test_tutorial_route", "_test_sphere_walk", "_test_jump_and_burst", "_test_coyote_and_buffer", "_test_swipe_direction_and_stages", "_test_hard_landing", "_test_food", "_test_food_reach", "_test_darter_and_burrower", "_test_food_repopulates", "_test_motes", "_test_checkpoint_and_regen", "_test_crumble", "_test_restoration_continuity", "_test_vortex", "_test_current", "_test_canopy", "_test_canopy_plain_jumps", "_test_climbs_physical", "_test_jungle_ladders_physical", "_test_caves", "_test_mounds", "_test_vegetation", "_test_vortex_mouths_clear", "_test_route_audit", "_test_new_areas", "_test_ecosystem", "_test_music", "_test_run_clock", "_test_completion_catalog", "_test_run_save_file", "_test_run_timer_live", "_test_run_continue", "_phase_continue_write", "_phase_continue_read", "_test_upgrades", "_test_ui", "_test_all_clear"]:
+	for name_ in ["_test_startup", "_test_ota_and_version", "_test_mesh_winding", "_test_terrain", "_test_terrain_grounded", "_test_no_floating_platforms", "_test_parasite_locomotion", "_test_placements", "_test_tutorial_route", "_test_sphere_walk", "_test_jump_and_burst", "_test_coyote_and_buffer", "_test_swipe_direction_and_stages", "_test_hard_landing", "_test_food", "_test_food_reach", "_test_darter_and_burrower", "_test_food_repopulates", "_test_motes", "_test_checkpoint_and_regen", "_test_crumble", "_test_restoration_continuity", "_test_vortex", "_test_current", "_test_canopy", "_test_canopy_plain_jumps", "_test_climbs_physical", "_test_jungle_ladders_physical", "_test_leaf_geometry", "_test_leaf_footing", "_test_caves", "_test_mounds", "_test_vegetation", "_test_vortex_mouths_clear", "_test_route_audit", "_test_new_areas", "_test_ecosystem", "_test_music", "_test_run_clock", "_test_completion_catalog", "_test_run_save_file", "_test_run_timer_live", "_test_run_continue", "_phase_continue_write", "_phase_continue_read", "_test_upgrades", "_test_ui", "_test_all_clear"]:
 		# "_phase_*" tests are halves of a relaunch test: they run only when asked for by name
 		# (in a child process started by _test_run_continue).
 		if name_.begins_with("_phase") and only != name_:
@@ -2855,6 +2855,7 @@ func _test_canopy_plain_jumps() -> void:
 	var prev := 0.0
 	var worst_step := 0.0
 	var low_head := INF
+	var low_where := ""
 	for xf in spiral:
 		var top := b.altitude(Levels.leaf_mid(xf, 1.5, 0.0).origin)
 		worst_step = maxf(worst_step, top - prev)
@@ -2865,9 +2866,11 @@ func _test_canopy_plain_jumps() -> void:
 				var up := b.up_at(m.origin)
 				var hit := space.intersect_ray(PhysicsRayQueryParameters3D.create(m.origin + up * 0.2, m.origin + up * 3.0, 1 | 2))
 				if not hit.is_empty() and xf != spiral[spiral.size() - 1]:
+					if (hit.position - m.origin).dot(up) < low_head:
+						low_where = "leaf %d along %.1f side %.1f under %s at h %.2f" % [spiral.find(xf), along, side, str(hit["collider"]), b.altitude(hit.position)]
 					low_head = minf(low_head, (hit.position - m.origin).dot(up))
 	t.check("canopy_steps_within_a_plain_jump", worst_step <= 1.1 and b.altitude(Levels.leaf_mid(spiral[0], 1.5, 0.0).origin) <= 1.0, "first leaf %.2f m, largest step %.2f m (jump apex 1.85 m)" % [b.altitude(Levels.leaf_mid(spiral[0], 1.5, 0.0).origin), worst_step])
-	t.check("canopy_spiral_headroom", low_head >= 1.5, "lowest headroom above a spiral leaf %.2f m" % low_head)
+	t.check("canopy_spiral_headroom", low_head >= 1.5, "lowest headroom above a spiral leaf %.2f m (%s)" % [low_head, low_where])
 	# Physically: from the ground beside the first leaf, plain jumps only, all the way up.
 	p.invuln_t = 999
 	var ground := b.surface_point(b.up_at(Levels.leaf_mid(spiral[0], 4.4, 0.0).origin), 0.1)
@@ -2942,6 +2945,283 @@ func _test_jungle_ladders_physical() -> void:
 			bad.append("%s %d/%d" % [h["route"], reached, tops.size()])
 	p.invuln_t = 0.0
 	t.check("jungle_ladders_climbed_with_plain_jumps", n == 70 and bad.is_empty(), "%d stems, %d leaves; short: %s" % [n, leaves, str(bad)])
+
+
+## Every climb leaf in the game (owner phone report, Expansion 6): [ball, body, xform, length, width].
+func _all_climb_leaves() -> Array:
+	var out := []
+	for b in g.balls:
+		var lb: LevelBuilder = b.get_meta("builder")
+		for n in lb.root.get_children():
+			if n is CollisionObject3D and n.has_meta("leaves"):
+				for e in n.get_meta("leaves"):
+					out.append([b, n, e[0], e[1], e[2]])
+		for f in b.flex_leaves:
+			for e in f.get_meta("leaves", []):
+				out.append([b, f, e[0], e[1], e[2]])
+	return out
+
+
+## Expansion 6, owner phone report (spiral leaves): every climb leaf, checked geometrically:
+## - its collision is the drawn leaf: rays onto the drawn upper surface hit it within 6 cm, and
+##   nothing solid lies just beyond its drawn edge;
+## - it grows from its stem: its stalk's root is inside the stem;
+## - it is broad: around its landing point a 0.7 m circle (the axolotl turning) is all leaf;
+## - consecutive leaves of a spiral are distinct: a clear angular gap between them.
+func _test_leaf_geometry() -> void:
+	var space := g.get_world_3d().direct_space_state
+	var leaves := _all_climb_leaves()
+	var mismatch: Array[String] = []
+	var beside: Array[String] = []
+	var floating: Array[String] = []
+	var narrow: Array[String] = []
+	var worst_dev := 0.0
+	for e in leaves:
+		var b: MossBall = e[0]
+		var body: CollisionObject3D = e[1]
+		var xf: Transform3D = e[2]
+		var len: float = e[3]
+		var w: float = e[4]
+		var up := xf.basis.y.normalized()
+		for tt in [0.15, 0.3, 0.5, 0.7, 0.85]:
+			var hw := w * 0.5 * MeshLib.leaf_profile(tt)
+			# (Just off the midrib: a ray exactly on the collision's crest can graze it.)
+			for s in [-0.8, -0.4, 0.04, 0.4, 0.8]:
+				var pt := xf * Vector3(s * hw, MeshLib.leaf_top_y(tt, s, w), -tt * len)
+				var q := PhysicsRayQueryParameters3D.create(pt + up * 0.25, pt - up * 0.25, body.collision_layer)
+				var hit := space.intersect_ray(q)
+				if hit.is_empty() or hit["collider"] != body:
+					mismatch.append("b%d %s t%.2f s%.2f: no collision under the drawn leaf (hit %s)" % [b.index + 1, body.name, tt, s, "nothing" if hit.is_empty() else str(hit["collider"])])
+				else:
+					worst_dev = maxf(worst_dev, (hit.position as Vector3).distance_to(pt))
+					if (hit.position as Vector3).distance_to(pt) > 0.06:
+						mismatch.append("b%d t%.2f s%.1f: %.2f m off the drawn surface" % [b.index + 1, tt, s, (hit.position as Vector3).distance_to(pt)])
+			for s in [-1.2, 1.2]:
+				var pt := xf * Vector3(s * hw, MeshLib.leaf_top_y(tt, 1.0, w), -tt * len)
+				var hit := space.intersect_ray(PhysicsRayQueryParameters3D.create(pt + up * 0.25, pt - up * 0.3, body.collision_layer))
+				if not hit.is_empty() and hit["collider"] == body:
+					beside.append("b%d t%.2f: solid beyond the drawn edge" % [b.index + 1, tt])
+		# Its stalk's root, inside the stem it grows from (flex leaves are on their own thin stem).
+		var root_pt := xf * Vector3(0, 0.3, 0.45)
+		var pq := PhysicsPointQueryParameters3D.new()
+		pq.position = root_pt
+		pq.collision_mask = 1
+		if space.intersect_point(pq, 4).is_empty():
+			floating.append("b%d leaf at h %.1f: stalk root not in a stem" % [b.index + 1, b.altitude(xf.origin)])
+		# Room to turn round at the landing point.
+		var land := Levels.leaf_mid(xf, minf(1.4, len * 0.5), 0.0).origin
+		for k in 12:
+			var a := TAU * k / 12.0
+			var off := (xf.basis.x.normalized() * cos(a) + xf.basis.z.normalized() * sin(a)) * 0.7
+			var hit := space.intersect_ray(PhysicsRayQueryParameters3D.create(land + off + up * 0.4, land + off - up * 0.5, body.collision_layer))
+			if hit.is_empty() or hit["collider"] != body:
+				narrow.append("b%d leaf at h %.1f (%.1f x %.1f m): edge within 0.7 m of the landing point" % [b.index + 1, b.altitude(xf.origin), len, w])
+				break
+	for x in mismatch.slice(0, 12) + beside.slice(0, 12) + floating.slice(0, 12) + narrow.slice(0, 12):
+		t.log_line(x)
+	t.check("leaf_collision_is_the_drawn_leaf", mismatch.is_empty() and beside.is_empty() and leaves.size() > 950,
+			"%d climb leaves; worst gap between drawn surface and collision %.3f m; %d off, %d solid beyond an edge" % [leaves.size(), worst_dev, mismatch.size(), beside.size()])
+	t.check("leaves_grow_from_their_stems", floating.is_empty(), "%d leaves whose stalk does not reach a stem" % floating.size())
+	t.check("leaves_have_room_to_turn", narrow.is_empty(), "%d leaves with less than a 0.7 m circle of footing at the landing point" % narrow.size())
+	# Spiral staging: the plan-view angular gap between consecutive leaves round each stem.
+	var min_gap := INF
+	var n_pairs := 0
+	for b in g.balls:
+		for n in (b.get_meta("builder") as LevelBuilder).root.get_children():
+			if not (n is StaticBody3D and n.has_meta("leaves") and (n as StaticBody3D).collision_layer == LevelBuilder.CLIMB_LAYER):
+				continue
+			var ls: Array = n.get_meta("leaves")
+			for i in ls.size() - 1:
+				var gap := _leaf_angle_gap(b, ls[i], ls[i + 1])
+				if gap < 12.0:
+					t.log_line("b%d ladder leaves %d-%d at h %.1f: %.1f degrees apart (%s, %s)" % [b.index + 1, i, i + 1, b.altitude((ls[i][0] as Transform3D).origin), gap, str(ls[i].slice(1)), str(ls[i + 1].slice(1))])
+				min_gap = minf(min_gap, gap)
+				n_pairs += 1
+	for sp in _spirals():
+		for i in (sp[1] as Array).size() - 1:
+			var gap := _leaf_angle_gap(sp[0], sp[1][i], sp[1][i + 1])
+			if gap < 12.0:
+				t.log_line("b%d spiral leaves %d-%d: %.1f degrees apart" % [sp[0].index + 1, i, i + 1, gap])
+			min_gap = minf(min_gap, gap)
+			n_pairs += 1
+	t.check("spiral_leaves_distinct", min_gap >= 12.0 and n_pairs > 900, "%d consecutive pairs; smallest clear angle between neighbours %.1f degrees" % [n_pairs, min_gap])
+
+
+## The two spirals built from single leaves (Giant Stems canopy, Canopy Spire): [ball, [[xf, len, w], ...]].
+func _spirals() -> Array:
+	var out := []
+	var b2 := g.balls[2]
+	for h in (b2.get_meta("builder") as LevelBuilder).bot_hints:
+		if h.has("canopy"):
+			var ls := []
+			for xf in h["spiral"]:
+				ls.append([xf, 3.0, Levels.SPIRAL_LEAF_W])
+			out.append([b2, ls])
+	var b5 := g.balls[5]
+	var sp := []
+	for n in (b5.get_meta("builder") as LevelBuilder).root.get_children():
+		if n is StaticBody3D and n.has_meta("leaves") and (n as StaticBody3D).collision_layer == 2:
+			var e: Array = n.get_meta("leaves")[0]
+			if is_equal_approx(e[1], 3.0):
+				sp.append(e)
+	sp.sort_custom(func(a, c): return b5.altitude((a[0] as Transform3D).origin) < b5.altitude((c[0] as Transform3D).origin))
+	out.append([b5, sp])
+	return out
+
+
+## Clear angle (degrees, in plan round the stem the leaves grow from) between two leaves' outlines.
+func _leaf_angle_gap(b: MossBall, la: Array, lb_: Array) -> float:
+	var xa: Transform3D = la[0]
+	var xb: Transform3D = lb_[0]
+	var up := b.up_at(xa.origin)
+	# The stem axis: back along each leaf from its base, where the two base directions meet.
+	var centre := (xa.origin + xa.basis.z.normalized() * 0.6 + xb.origin + xb.basis.z.normalized() * 0.6) * 0.5
+	var spans := []
+	for e in [la, lb_]:
+		var xf: Transform3D = e[0]
+		var len: float = e[1]
+		var w: float = e[2]
+		var mid := -xf.basis.z
+		mid -= up * mid.dot(up)
+		var half := 0.0
+		for k in 11:
+			var tt := 0.1 + 0.08 * k
+			var pt := xf * Vector3(w * 0.5 * MeshLib.leaf_profile(tt), 0, -tt * len)
+			var v := pt - centre
+			v -= up * v.dot(up)
+			half = maxf(half, rad_to_deg(absf(mid.signed_angle_to(v, up))))
+		spans.append([mid, half])
+	var between := rad_to_deg((spans[0][0] as Vector3).angle_to(spans[1][0]))
+	return between - float(spans[0][1]) - float(spans[1][1])
+
+
+## Expansion 6, owner phone report: on the leaves themselves, as a player does it. On every leaf of
+## both leaf spirals and of a spread of jungle ladders: land in the middle and near the edge,
+## turn to aim in four directions (never walked off), jump straight up beside the stem (not
+## blocked, not wedged), pass underneath the lowest leaf (never touched), and climb back down
+## to the ground (never wedged between leaf and stem). Then two ladders climbed twice over.
+func _test_leaf_footing() -> void:
+	p.invuln_t = 999
+	var sets := []
+	for sp in _spirals():
+		sets.append(sp)
+	var b2 := g.balls[2]
+	var k := 0
+	for n in (b2.get_meta("builder") as LevelBuilder).root.get_children():
+		if n is StaticBody3D and (n as StaticBody3D).collision_layer == LevelBuilder.CLIMB_LAYER and n.has_meta("leaves"):
+			if k % 9 == 0:
+				sets.append([b2, n.get_meta("leaves"), n])
+			k += 1
+	var tried := 0
+	var off_turn: Array[String] = []
+	var off_edge: Array[String] = []
+	var blocked: Array[String] = []
+	for st in sets:
+		var b: MossBall = st[0]
+		for e in st[1]:
+			var xf: Transform3D = e[0]
+			var len: float = e[1]
+			var w: float = e[2]
+			var land := Levels.leaf_mid(xf, minf(1.4, len * 0.5), 0.0).origin
+			var out := -xf.basis.z
+			tried += 1
+			place_at(b.index, land + xf.basis.y * 0.3, out)
+			await wait_grounded()
+			var h0 := height()
+			# Aim: swing round to each direction in turn, pushing the stick until he faces it (as a
+			# player lines up a jump), then letting go.
+			for a in [PI * 0.5, PI, -PI * 0.5, 0.0]:
+				var aim := out.rotated(xf.basis.y.normalized(), a)
+				for fr in 30:
+					stick_toward(aim)
+					await t.frames(1)
+					var fl := aim - p.up * aim.dot(p.up)
+					if p.facing.dot(fl.normalized()) > cos(deg_to_rad(20.0)):
+						break
+				p.bot_input = Vector2.ZERO
+				await t.frames(10)
+			await t.frames(20)
+			if not p.grounded or absf(height() - h0) > 0.2:
+				off_turn.append("b%d leaf h %.1f: after turning at h %.2f (was %.2f)" % [b.index + 1, h0, height(), h0])
+			# Near the edge.
+			var edge := xf * Vector3(w * 0.5 * MeshLib.leaf_profile(0.5) * 0.7, MeshLib.leaf_top_y(0.5, 0.7, w), -0.5 * len)
+			place_at(b.index, edge + xf.basis.y * 0.3, out)
+			await wait_grounded()
+			if absf(height() - b.altitude(edge)) > 0.2:
+				off_edge.append("b%d leaf h %.1f: edge landing ended at h %.2f" % [b.index + 1, b.altitude(edge), height()])
+			# Straight up beside the stem.
+			var near := Levels.leaf_mid(xf, len * 0.16, 0.0).origin
+			place_at(b.index, near + xf.basis.y * 0.3, out)
+			await wait_grounded()
+			var hs := height()
+			var peak := hs
+			await press("jump")
+			for i in 90:
+				await t.frames(1)
+				peak = maxf(peak, height())
+				if p.grounded and i > 10:
+					break
+			var settled := await wait_grounded(3.0)
+			if peak - hs < 1.2 or not settled:
+				blocked.append("b%d leaf h %.1f: jump by the stem rose %.2f m, landed %s" % [b.index + 1, hs, peak - hs, settled])
+	t.check("turning_on_a_leaf_keeps_footing", off_turn.is_empty() and tried > 140, "%d leaves; %s" % [tried, str(off_turn.slice(0, 6))])
+	t.check("edge_landings_hold", off_edge.is_empty(), str(off_edge.slice(0, 6)))
+	t.check("jump_beside_the_stem_clear", blocked.is_empty(), str(blocked.slice(0, 6)))
+	# Underneath the lowest leaf of each sampled ladder, and back down from its top.
+	var touched: Array[String] = []
+	var stuck: Array[String] = []
+	for st in sets:
+		if st.size() < 3:
+			continue
+		var b: MossBall = st[0]
+		var body: CollisionObject3D = st[2]
+		var ls: Array = st[1]
+		var first: Transform3D = ls[0][0]
+		var tip := Levels.leaf_mid(first, float(ls[0][1]) + 0.6, 0.0).origin
+		var ground := b.surface_point(b.up_at(tip), 0.15)
+		place_at(b.index, ground, first.basis.z)
+		await wait_grounded()
+		for i in 60:
+			stick_toward(first.basis.z)
+			await t.frames(1)
+			for c in p.get_slide_collision_count():
+				if p.get_slide_collision(c).get_collider() == body:
+					touched.append("b%d %s" % [b.index + 1, body.name])
+		p.bot_input = Vector2.ZERO
+		# Down from the top leaf: walk off outward, and keep walking out until on the ground.
+		var top: Transform3D = ls[ls.size() - 1][0]
+		place_at(b.index, Levels.leaf_mid(top, 1.3, 0.0).origin + top.basis.y * 0.3, -top.basis.z)
+		await wait_grounded()
+		var still := 0.0
+		var ok := false
+		for i in 60 * 14:
+			var outward := p.global_position - body.global_position
+			stick_toward(outward)
+			await t.frames(1)
+			if height() < 0.5 and p.grounded:
+				ok = true
+				break
+			still = still + 1.0 / 60.0 if (not p.grounded and p.velocity.length() < 0.3) else 0.0
+			if still > 1.0:
+				break
+		p.bot_input = Vector2.ZERO
+		if not ok:
+			stuck.append("b%d %s: descent ended at h %.2f (%s)" % [b.index + 1, body.name, height(), "wedged" if still > 1.0 else "timed out"])
+	t.check("underneath_leaves_clear", touched.is_empty(), str(touched.slice(0, 6)))
+	t.check("climb_down_never_wedges", stuck.is_empty(), str(stuck.slice(0, 6)))
+	# Repeated traversal: two ladders, up, down (above), and up again.
+	var again := []
+	var kk := 0
+	for h in (b2.get_meta("builder") as LevelBuilder).bot_hints:
+		if h.has("route") and str(h["route"]).begins_with("jungle") and kk < 2:
+			kk += 1
+			var r1: int = await _climb(b2, h)
+			var r2: int = await _climb(b2, h)
+			again.append("%s %d,%d/%d" % [h["route"], r1, r2, (h["tops"] as Array).size()])
+			if r1 < (h["tops"] as Array).size() or r2 < (h["tops"] as Array).size():
+				again.append("SHORT")
+	t.check("ladders_climbed_twice", not "SHORT" in again and kk == 2, ", ".join(again))
+	p.invuln_t = 0.0
 
 
 ## Climbs `h` (a route hint on `b`) from its start with plain touch jumps; returns how many of its

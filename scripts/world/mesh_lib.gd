@@ -125,33 +125,153 @@ static func _leaf_blade(st: SurfaceTool, xf: Transform3D, half_w: float, length:
 				st.add_vertex(tri[k * 2])
 
 
-## A single large flat leaf used as a platform, lying in the XZ plane, pointing along -Z from
-## the origin (the stem attachment). Mesh thickness is visual only.
-static func platform_leaf_mesh(length: float, width: float) -> ArrayMesh:
+## Platform leaf outline (Expansion 6, owner phone report): narrow where it joins its stalk, broad
+## through the middle so there is room to land, settle, turn and aim, then a natural taper to a
+## rounded point. t = 0 at the base, 1 at the tip; returns the half-width as a fraction of half the
+## leaf's width. The drawn leaf and its collision both follow this.
+static func leaf_profile(t: float) -> float:
+	var tc := clampf(t, 0.0, 1.0)
+	var neck := 0.22 + 0.78 * smoothstep(0.0, 0.2, tc)
+	return neck * pow(sin(PI * tc), 0.42) * (1.0 - 0.12 * tc)
+
+
+## Height of a platform leaf's upper surface above its base plane at (t along, s across in -1..1):
+## a gentle crown along the midrib, edges curling a little down, the tip drooping slightly. Nearly
+## level where the axolotl stands (the middle).
+static func leaf_top_y(t: float, s: float, width: float) -> float:
+	return 0.06 - 0.15 * pow(clampf(t, 0.0, 1.0), 2.4) - 0.08 * s * s * minf(width / 2.2, 1.4)
+
+
+## Visual thickness of a platform leaf at s across (thickest at the midrib, a thin edge).
+static func leaf_thickness(s: float) -> float:
+	return 0.02 + 0.07 * (1.0 - s * s)
+
+
+## A large leaf used as a platform, lying in the XZ plane, pointing along -Z from the origin (where
+## it joins its stalk). It is a lens (upper and under surfaces meeting in a thin edge), not a flat
+## card. With `petiole`, a curved stalk runs from the leaf's base back into the stem it grows from
+## (+Z, rising slightly as it enters the stem), so the leaf is seen to grow out of it: nothing but
+## the drawn leaf collides (MeshLib.leaf_collision_shapes); the stalk never snags.
+static func platform_leaf_mesh(length: float, width: float, petiole := false) -> ArrayMesh:
 	var st := SurfaceTool.new()
 	st.begin(Mesh.PRIMITIVE_TRIANGLES)
-	var segs := 10
-	var rows: Array = []
-	for i in range(segs + 1):
-		var t := float(i) / segs
-		var w := width * 0.5 * pow(sin(PI * clampf(t * 0.92 + 0.08, 0.0, 1.0)), 0.8)
-		var droop := -0.35 * pow(t, 2.0)
-		var z := -t * length
-		rows.append([Vector3(-w, droop - w * 0.08, z), Vector3(0, droop + 0.06, z), Vector3(w, droop - w * 0.08, z), t])
-	for i in range(segs):
-		var a: Array = rows[i]
-		var b: Array = rows[i + 1]
-		for side in [0, 1]:
-			var o := a[side * 2] as Vector3
-			var m := a[1] as Vector3
-			var o2 := b[side * 2] as Vector3
-			var m2 := b[1] as Vector3
-			var quad := [m, o, o2, m, o2, m2] if side == 0 else [m, o2, o, m, m2, o2]
-			for v in quad:
-				st.set_uv(Vector2(0.5 + (v as Vector3).x / width, float(i) / segs))
-				st.add_vertex(v)
+	_leaf_into(st, Transform3D.IDENTITY, length, width, petiole, 0)
 	st.generate_normals()
 	return st.commit()
+
+
+## Appends a platform leaf (as platform_leaf_mesh) transformed by `xf` to `st` (indexed), whose
+## vertices so far number `base`; returns the new count. Call generate_normals() once at the end.
+static func _leaf_into(st: SurfaceTool, xf: Transform3D, length: float, width: float, petiole: bool, p_base: int) -> int:
+	var rows := 10
+	var cols := [-1.0, -0.55, 0.0, 0.55, 1.0]
+	var base := p_base
+	var top := []
+	for i in rows + 1:
+		var t := float(i) / rows
+		var hw := width * 0.5 * leaf_profile(t)
+		var row := []
+		for s in cols:
+			var v := Vector3(s * hw, leaf_top_y(t, s, width), -t * length)
+			st.set_uv(Vector2(0.5 + s * hw / width, t))
+			st.add_vertex(xf * v)
+			row.append(base)
+			base += 1
+		top.append(row)
+	# The under surface shares the edge vertices (the edge is thin, its shading rounded).
+	var bot := []
+	for i in rows + 1:
+		var t := float(i) / rows
+		var hw := width * 0.5 * leaf_profile(t)
+		var row := []
+		for j in cols.size():
+			var s: float = cols[j]
+			if j == 0 or j == cols.size() - 1:
+				row.append(top[i][j])
+				continue
+			var v := Vector3(s * hw, leaf_top_y(t, s, width) - leaf_thickness(s), -t * length)
+			st.set_uv(Vector2(0.5 + s * hw / width, t))
+			st.add_vertex(xf * v)
+			row.append(base)
+			base += 1
+		bot.append(row)
+	for i in rows:
+		for j in cols.size() - 1:
+			var a: int = top[i][j]
+			var b: int = top[i][j + 1]
+			var c: int = top[i + 1][j]
+			var d: int = top[i + 1][j + 1]
+			for k in [a, c, b, b, c, d]:
+				st.add_index(k)
+			a = bot[i][j]
+			b = bot[i][j + 1]
+			c = bot[i + 1][j]
+			d = bot[i + 1][j + 1]
+			for k in [a, b, c, b, d, c]:
+				st.add_index(k)
+	if petiole:
+		# The stalk: from inside the stem (0.55 m back, a little higher) arcing down and out into
+		# the leaf's narrow base, thickest where it leaves the stem.
+		var r_scale := clampf(width / 2.2, 0.8, 1.5)
+		var p0 := Vector3(0, 0.3, 0.55)
+		var p1 := Vector3(0, 0.28, 0.12)
+		var p2 := Vector3(0, 0.1, -0.08)
+		var p3 := Vector3(0, 0.02, -0.34)
+		var rings := 6
+		var sides := 6
+		var ring_start := base
+		for i in rings:
+			var t := float(i) / (rings - 1)
+			var u := 1.0 - t
+			var c := p0 * u * u * u + p1 * 3.0 * u * u * t + p2 * 3.0 * u * t * t + p3 * t * t * t
+			var tan := (p1 - p0) * 3.0 * u * u + (p2 - p1) * 6.0 * u * t + (p3 - p2) * 3.0 * t * t
+			tan = tan.normalized()
+			var side := Vector3.RIGHT
+			var nrm := tan.cross(side).normalized()
+			var r := lerpf(0.085, 0.045, t) * r_scale
+			for k in sides:
+				var a := TAU * k / sides
+				var v := c + (side * cos(a) + nrm * sin(a)) * r
+				st.set_uv(Vector2(float(k) / sides, 0.0))
+				st.add_vertex(xf * v)
+		for i in rings - 1:
+			for k in sides:
+				var a := ring_start + i * sides + k
+				var b := ring_start + i * sides + (k + 1) % sides
+				var c := a + sides
+				var d := b + sides
+				for q in [a, b, c, b, d, c]:
+					st.add_index(q)
+		base += rings * sides
+	return base
+
+
+## Collision for a platform leaf (as platform_leaf_mesh, same length and width): its upper surface
+## exactly as drawn (sampled), and an under side just below the drawn one. Two convex pieces, so
+## the narrow base does not grow invisible corners beside the stalk. Cached per size.
+static var _leaf_shapes := {}
+
+
+static func leaf_collision_shapes(length: float, width: float) -> Array:
+	var key := "%.3f_%.3f" % [length, width]
+	if _leaf_shapes.has(key):
+		return _leaf_shapes[key]
+	var out := []
+	for piece in [[0.0, 0.22], [0.18, 1.0]]:
+		var pts := PackedVector3Array()
+		var n := 6 if piece[0] == 0.0 else 12
+		for i in n + 1:
+			var t: float = lerpf(piece[0], piece[1], float(i) / n)
+			var hw := width * 0.5 * leaf_profile(t) * 0.97
+			for s in [-1.0, -0.5, 0.0, 0.5, 1.0]:
+				var y := leaf_top_y(t, s, width)
+				pts.append(Vector3(s * hw, y, -t * length))
+				pts.append(Vector3(s * hw, y - leaf_thickness(s) - 0.03, -t * length))
+		var shape := ConvexPolygonShape3D.new()
+		shape.points = pts
+		out.append(shape)
+	_leaf_shapes[key] = out
+	return out
 
 
 ## Rounded moss cushion (squashed cylinder with soft top edge). Base extends below y=0 so it

@@ -154,14 +154,13 @@ class FlexLeaf extends AnimatableBody3D:
 		collision_layer = 2
 		collision_mask = 0
 		sync_to_physics = true
-		var cs := CollisionShape3D.new()
-		var b := BoxShape3D.new()
-		b.size = Vector3(width * 0.8, 0.25, length * 0.9)
-		cs.shape = b
-		cs.position = Vector3(0, -0.05, -length * 0.5)
-		add_child(cs)
+		# Collision is the drawn leaf (Expansion 6).
+		for shape in MeshLib.leaf_collision_shapes(length, width):
+			var cs := CollisionShape3D.new()
+			cs.shape = shape
+			add_child(cs)
 		var mi := MeshInstance3D.new()
-		mi.mesh = MeshLib.platform_leaf_mesh(length, width)
+		mi.mesh = MeshLib.platform_leaf_mesh(length, width, true)
 		mi.material_override = mat
 		mi.cast_shadow = GeometryInstance3D.SHADOW_CASTING_SETTING_OFF
 		add_child(mi)
@@ -224,12 +223,12 @@ class SwayLeaf extends AnimatableBody3D:
 		stem.mesh = MeshLib.stem_mesh(0.12, 0.08, stem_len, 6)
 		stem.material_override = stem_mat
 		add_child(stem)
-		var cs := CollisionShape3D.new()
-		var b := BoxShape3D.new()
-		b.size = Vector3(leaf_w * 0.85, 0.25, leaf_len * 0.9)
-		cs.shape = b
-		cs.position = Vector3(0, stem_len, 0)
-		add_child(cs)
+		# Collision is the drawn leaf (Expansion 6), centred on the stalk's top like the leaf.
+		for shape in MeshLib.leaf_collision_shapes(leaf_len, leaf_w):
+			var cs := CollisionShape3D.new()
+			cs.shape = shape
+			cs.position = Vector3(0, stem_len + 0.1, leaf_len * 0.5)
+			add_child(cs)
 		var leaf := MeshInstance3D.new()
 		leaf.mesh = MeshLib.platform_leaf_mesh(leaf_len, leaf_w)
 		leaf.position = Vector3(0, stem_len + 0.1, leaf_len * 0.5)

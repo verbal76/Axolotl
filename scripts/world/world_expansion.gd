@@ -13,6 +13,9 @@ class_name WorldExpansion
 ## Positions are authored relative to where the vortex arrives (the "arrival" lat/lon), so each
 ## ball reads from its entrance.
 
+## The Canopy Spire's leaf spiral: a quarter turn per leaf (Expansion 6; was 72 degrees).
+const SPIRE_TURN := 90.0
+
 
 ## lat/lon of the point `dlat`/`dlon` degrees from where the vortex from `parent` arrives.
 static func _rel(i: int, parent: int, dlat: float, dlon: float) -> Vector2:
@@ -259,12 +262,13 @@ static func canopy_spire(lb: LevelBuilder) -> void:
 
 	# The spire: one great stem, a spiral of leaves (one plain jump each) to a crown.
 	var sxf := b.xform_on_dir(_dir(sz), 0.0, 0.0)
-	var spiral: Array = lb.canopy_spiral(sxf, 13, 0.8, 1.0, 72.0, 15.5, 0.9)
+	# A quarter turn per leaf (Expansion 6; was 72 degrees): the broad leaves stand clear of each other.
+	var spiral: Array = lb.canopy_spiral(sxf, 13, 0.8, 1.0, SPIRE_TURN, 15.5, 0.9)
 	var top: Transform3D = spiral[spiral.size() - 1]
 	# The crown: two broad leaves out from the top of the stem.
 	var crown := []
 	for k in 2:
-		var a := deg_to_rad(72.0 * spiral.size() + 150.0 * k)
+		var a := deg_to_rad(SPIRE_TURN * spiral.size() + 150.0 * k)
 		var dir := Vector3(cos(a), 0.0, sin(a))
 		var cx := sxf * Transform3D(Basis(Vector3.UP, atan2(dir.x, dir.z) + PI), Vector3(dir.x, 13.4 + 0.3 * k, dir.z))
 		lb.leaf_xf(cx, 3.6, 2.6)
@@ -277,10 +281,10 @@ static func canopy_spire(lb: LevelBuilder) -> void:
 	lb.bloom_xf(Levels.leaf_mid(c0, 1.6, 0.0))
 	var tops := []
 	for xf in spiral:
-		tops.append(Levels.leaf_mid(xf, 2.0, 0.0).origin + (xf as Transform3D).basis.y * 0.1)
+		tops.append(Levels.leaf_mid(xf, 1.5, 0.0).origin + (xf as Transform3D).basis.y * 0.1)
 	tops.append(Levels.leaf_mid(c0, 1.6, 0.0).origin + c0.basis.y * 0.1)
 	var s0: Transform3D = spiral[0]
-	var start := b.surface_point(b.up_at(Levels.leaf_mid(s0, 3.6, 0.0).origin), 0.0)
+	var start := b.surface_point(b.up_at(Levels.leaf_mid(s0, 4.4, 0.0).origin), 0.0)
 	lb.route("spire mid", start, tops.slice(0, 6), ["spire"], "spire, half way")
 	lb.route("spire", start, tops, ["spire"], "canopy crown")
 	# The second crown leaf, a hop across from the first (audit only: nothing to collect there).

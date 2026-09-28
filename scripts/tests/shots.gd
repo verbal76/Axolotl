@@ -182,6 +182,21 @@ func run(runner) -> void:
 				g.cam.snap_behind()
 				await _perf_view("cave_b7")
 				break
+		# The fully restored, clear tank (Expansion 6): the same first views.
+		for b in g.balls:
+			b.add_heal(Vector3.UP, 340.0, 0.0)
+		g.g_disp = 1.0
+		g.aquarium.apply(1.0)
+		for v in [views[1], views[3]]:
+			var b := g.balls[v[0]]
+			g.player.place(b, b.surface_point(MossBall.dir_ll(v[1], v[2]), 0.2), Vector3.FORWARD)
+			g.cam.snap_behind()
+			await _perf_view("restored_ball%d_%d_%d" % [v[0] + 1, v[1], v[2]])
+		var ob := g.balls[0]
+		g.player.place(ob, ob.surface_point(MossBall.dir_ll(40, 90), 0.2), ob.surface_point(MossBall.dir_ll(25, 95)) - ob.surface_point(MossBall.dir_ll(40, 90)))
+		g.cam.snap_behind()
+		g.cam.pitch = -0.05
+		await _perf_view("restored_open_water")
 	if only == "b2out":
 		var b := g.balls[1]
 		var v: Vortex = b.vortex_out
@@ -227,6 +242,15 @@ func run(runner) -> void:
 			g.cam.pitch = 0.18
 			await t.seconds(1.5)
 			await t.shot("terrain_%s" % v[4])
+	if only == "review":
+		await _review(g)
+	if only == "leafclose":
+		await _leaf_close(g, g.balls[2], "leaf_close")
+		for b in g.balls:
+			b.add_heal(Vector3.UP, 340.0, 0.0)
+		g.g_disp = 1.0
+		g.aquarium.apply(1.0)
+		await _leaf_close(g, g.balls[2], "leaf_close_restored")
 	if only == "" or only == "moments":
 		await _moments(g)
 	if only == "" or only == "restored":
@@ -350,6 +374,215 @@ func _moments(g: Game) -> void:
 	g.hud.show_all_clear()
 	await t.seconds(3.0)
 	await t.shot("23_all_clear")
+
+
+## A fixed-camera close shot (the follow camera's cinematic override, fully weighted).
+func _close(g: Game, pos: Vector3, look: Vector3, up: Vector3) -> void:
+	g.cam.cinematic = true
+	g.cam.cine_pos = pos
+	g.cam.cine_look = look
+	g.cam.cine_up = up
+	g.cam._cine_weight = 1.0
+
+
+func _open(g: Game) -> void:
+	g.cam.cinematic = false
+	g.cam._cine_weight = 0.0
+
+
+## Expansion 6's whole-game visual review: the same views before and after, so the change can be
+## judged side by side. Unrestored views first, then the tank part and fully restored.
+func _review(g: Game) -> void:
+	var p := g.player
+	p.invuln_t = 9999
+	var names := ["meadow", "hollows", "stems", "terraces", "canyon", "spire", "grotto"]
+	# Each ball, from the player's camera at a characteristic spot (Expansion 4 balls: the first climb).
+	var spots := [[0, 10.0, 30.0], [1, 10.0, 70.0], [2, 10.0, 110.0]]
+	for s in spots:
+		var b := g.balls[s[0]]
+		_look(g, s[0], b.surface_point(MossBall.dir_ll(s[1], s[2]), 0.2), Vector3.FORWARD)
+		await t.seconds(1.5)
+		await t.shot("r_ball%d_%s" % [s[0] + 1, names[s[0]]])
+	for bi in range(3, g.balls.size()):
+		var b := g.balls[bi]
+		for h in (b.get_meta("builder") as LevelBuilder).bot_hints:
+			if h.has("route"):
+				var st: Vector3 = h["start"]
+				var first: Vector3 = (h["tops"] as Array)[0]
+				var back := st - (first - st).normalized() * 5.0
+				_look(g, bi, b.surface_point(b.up_at(back), 0.2), first - back, 0.3)
+				await t.seconds(1.5)
+				await t.shot("r_ball%d_%s" % [bi + 1, names[bi]])
+				break
+	# Open water: from high on ball 1 looking out across the tank at the other balls.
+	var b0 := g.balls[0]
+	_look(g, 0, b0.surface_point(MossBall.dir_ll(40, 90), 0.2), b0.surface_point(MossBall.dir_ll(25, 95)) - b0.surface_point(MossBall.dir_ll(40, 90)), -0.05)
+	await t.seconds(1.5)
+	await t.shot("r_open_water")
+	# Dense reeds; the jungle; the high canopy; a spiral climb from below and a jungle ladder.
+	_look(g, 0, b0.surface_point(MossBall.dir_ll(-59, 31), 0.2), -MossBall.frame_at(MossBall.dir_ll(-59, 31), 0.0).z, 0.2)
+	await t.seconds(1.5)
+	await t.shot("r_reeds")
+	var b2 := g.balls[2]
+	var lb2: LevelBuilder = b2.get_meta("builder")
+	for h in lb2.bot_hints:
+		if h.has("route") and h["route"] == "jungle stem 20":
+			var st: Vector3 = h["start"]
+			var first: Vector3 = (h["tops"] as Array)[0]
+			var back := st - (first - st).normalized() * 3.5
+			_look(g, 2, b2.surface_point(b2.up_at(back), 0.2), first - back, 0.45)
+			await t.seconds(1.5)
+			await t.shot("r_jungle_ladder")
+			# Standing on a mid-ladder leaf, looking at the next one (the footing a player has).
+			var tops: Array = h["tops"]
+			var k := tops.size() / 2
+			var here: Vector3 = tops[k]
+			_look(g, 2, here + b2.up_at(here) * 0.15, (tops[k + 1] as Vector3) - here, 0.55)
+			await t.seconds(1.5)
+			await t.shot("r_ladder_leaf_footing")
+			await _leaf_close(g, b2, "r_leaf_close")
+	for h in lb2.bot_hints:
+		if h.has("canopy"):
+			var c2: Transform3D = h["c2"]
+			_look(g, 2, Levels.leaf_mid(c2, 2.0, 0.0).origin + b2.up_at(c2.origin) * 0.3, -c2.basis.z, 0.25)
+			await t.seconds(1.5)
+			await t.shot("r_high_canopy")
+			var sp: Transform3D = h["spiral"][0]
+			_look(g, 2, b2.surface_point(b2.up_at(sp.origin + sp.basis.z * -5.0), 0.2), sp.origin - (sp.origin + sp.basis.z * -5.0), 0.6)
+			await t.seconds(1.5)
+			await t.shot("r_spiral_climb")
+	var b5 := g.balls[5]
+	for h in (b5.get_meta("builder") as LevelBuilder).bot_hints:
+		if h.has("route") and h["route"] == "spire":
+			var st: Vector3 = h["start"]
+			var first: Vector3 = (h["tops"] as Array)[0]
+			var back := st - (first - st).normalized() * 6.0
+			_look(g, 5, b5.surface_point(b5.up_at(back), 0.2), first - back, 0.55)
+			await t.seconds(1.5)
+			await t.shot("r_spire_spiral")
+	# A cave: the mouth from outside and the interior.
+	for h in lb2.bot_hints:
+		if h.has("cave"):
+			var door: Vector3 = h["door"]
+			var inward := (door - (h["entry"] as Vector3)).normalized()
+			_look(g, 2, h["entry"] + b2.up_at(h["entry"]) * 0.3 - inward * 3.0, inward, 0.2)
+			await t.seconds(1.5)
+			await t.shot("r_cave_mouth")
+			_look(g, 2, door + inward * 1.5 + b2.up_at(door) * 0.3, inward, 0.35)
+			await t.seconds(1.5)
+			await t.shot("r_cave_inside")
+	# Gill close up: three-quarter front, and side on.
+	var gp := b0.surface_point(MossBall.dir_ll(12, 30), 0.1)
+	_look(g, 0, gp, Vector3.FORWARD)
+	await t.seconds(1.5)
+	var gu := p.up
+	var gf := p.facing
+	var gr := gf.cross(gu).normalized()
+	var head := p.global_position + gu * 0.35 + gf * 0.35
+	_close(g, head + gf * 1.5 + gr * 0.9 + gu * 0.5, head, gu)
+	await t.seconds(0.5)
+	await t.shot("r_gill_front")
+	_close(g, p.global_position + gu * 0.4 + gr * 2.0 + gf * 0.2, p.global_position + gu * 0.3, gu)
+	await t.seconds(0.4)
+	await t.shot("r_gill_side")
+	_close(g, p.global_position + gu * 2.2 - gf * 1.0, p.global_position + gu * 0.2 + gf * 0.2, gu)
+	await t.seconds(0.4)
+	await t.shot("r_gill_top")
+	_open(g)
+	# Parasites: a large one crawling, close; then struck and drifting away limp.
+	var large: Parasite = null
+	for par in b0.parasites:
+		if par.kind == Parasite.Kind.LARGE and par.is_alive():
+			large = par
+			break
+	if large != null:
+		var up := b0.up_at(large.global_position)
+		var side := MossBall.frame_at(up, 0).x
+		_look(g, 0, b0.surface_point(b0.up_at(large.global_position + side * 6.0), 0.2), -side)
+		await t.seconds(1.0)
+		var lp := large.global_position
+		_close(g, lp + up * 1.1 + side * 2.2, lp + up * 0.2, up)
+		await t.seconds(0.8)
+		await t.shot("r_parasite_close")
+		_open(g)
+		while large.is_alive():
+			large.hit_cd = 0.0
+			large.hit(3, large.global_position - side, 1.0)
+			await t.frames(1)
+		await t.seconds(0.4)
+		_close(g, lp + up * 1.6 + side * 3.2, large.global_position, up)
+		await t.shot("r_parasite_death_0_4s")
+		await t.seconds(0.8)
+		_close(g, lp + up * 2.2 + side * 4.0, large.global_position, up)
+		await t.shot("r_parasite_death_1_2s")
+		await t.seconds(1.3)
+		_close(g, lp + up * 3.0 + side * 5.0, large.global_position, up)
+		await t.shot("r_parasite_drift_2_5s")
+		_open(g)
+	# Expansion 5 creatures.
+	var seen := {}
+	for c in g.ecosystem.all_critters():
+		if seen.has(c.species) or not (c.species in ["crab", "stalker", "eel", "puffer", "snail", "shrimp"]):
+			continue
+		seen[c.species] = true
+		var b: MossBall = c.ball
+		var pt: Vector3 = c.discover_point()
+		var up := b.up_at(pt)
+		var away := MossBall.frame_at(up, 30.0).z
+		if c is CaveEel:
+			away = (c as CaveEel).normal
+		elif c is CrabGuardian:
+			away = (c as CrabGuardian).facing
+		var dist := 3.2 if c is CaveEel else (2.4 if c is ShrimpShoal or c is CanopySnail else 4.0)
+		var stand := b.surface_point(b.up_at(pt + away * dist), 0.3)
+		_look(g, b.index, stand, pt - stand, 0.35 if c is CanopySnail or c is Pufferfish else 0.15)
+		await t.seconds(1.4 if c is CaveEel else 1.0)
+		await t.shot("r_critter_%s" % c.species)
+	# Restoration: the same two views unrestored (above), then part and fully restored.
+	for stage in [["half", 0.5], ["full", 1.0]]:
+		var k: float = stage[1]
+		for b in g.balls:
+			if k >= 1.0:
+				b.add_heal(Vector3.UP, 340.0, 0.0)
+			else:
+				var n := 0
+				for z in b.zones:
+					if n % 2 == 0:
+						b.add_heal(b.zones[z]["dir"], b.zones[z]["radius"] * 1.2, 0.0)
+					n += 1
+		g.g_disp = k
+		g.aquarium.apply(k)
+		_look(g, 0, b0.surface_point(MossBall.dir_ll(10, 30), 0.2), Vector3.FORWARD)
+		await t.seconds(1.5)
+		await t.shot("r_ball1_meadow_%s" % stage[0])
+		_look(g, 0, b0.surface_point(MossBall.dir_ll(40, 90), 0.2), b0.surface_point(MossBall.dir_ll(25, 95)) - b0.surface_point(MossBall.dir_ll(40, 90)), -0.05)
+		await t.seconds(1.5)
+		await t.shot("r_open_water_%s" % stage[0])
+		_look(g, 2, b2.surface_point(MossBall.dir_ll(10, 110), 0.2), Vector3.FORWARD)
+		await t.seconds(1.5)
+		await t.shot("r_ball3_stems_%s" % stage[0])
+		await _leaf_close(g, b2, "r_leaf_close_%s" % stage[0])
+
+
+## A jungle ladder's leaves side on from 3 m, half way up: how each leaf grows from the stem.
+func _leaf_close(g: Game, b: MossBall, name_: String) -> void:
+	var lb: LevelBuilder = b.get_meta("builder")
+	for n in lb.root.get_children():
+		if n is StaticBody3D and (n as StaticBody3D).collision_layer == LevelBuilder.CLIMB_LAYER and n.has_meta("leaves"):
+			var ls: Array = n.get_meta("leaves")
+			if ls.size() < 10:
+				continue
+			var xf: Transform3D = ls[4][0]
+			var up := b.up_at(xf.origin)
+			var side := xf.basis.x.normalized()
+			var base := xf.origin
+			_look(g, b.index, b.surface_point(b.up_at(base + side * 4.0), 0.2), -side, 0.3)
+			await t.seconds(0.6)
+			_close(g, base + side * 3.2 - xf.basis.z * 0.8 + up * 0.9, base - xf.basis.z * 0.9, up)
+			await t.seconds(0.6)
+			await t.shot(name_)
+			_open(g)
+			return
 
 
 func _perf_view(label: String) -> void:

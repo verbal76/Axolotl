@@ -138,20 +138,27 @@ const LADDER_RISE := 1.0
 ## (Each leaf a little more than a quarter turn round from the one below, so no leaf hangs over
 ## the one you jump from.)
 const LADDER_TURN := 108.0
+## A ladder leaf (Expansion 6, owner phone report): broad enough to land, turn and aim on (was 2.4 m
+## long by 1.6 m wide, narrow enough to fall off while lining up the next jump).
+const LADDER_LEAF_LEN := 2.6
+const LADDER_LEAF_W := 2.2
 
 
 static func _jungle_ladder(lb: LevelBuilder, sxf: Transform3D, h: float, r0: float, r1: float, bend: float, big: Array, k: int) -> void:
+	# Every leaf, the top one too, grows from the stem below its tip (its stalk enters the stem).
+	for bl in big:
+		bl[0] = minf(bl[0], h - 0.5)
 	big.sort_custom(func(a, b): return a[0] < b[0])
 	var top: float = big[big.size() - 1][0]
 	var n := ceili((top - LADDER_START) / LADDER_RISE - 0.001)
 	var rise := (top - LADDER_START) / maxf(n, 1)
 	var levels := []
 	for i in n + 1:
-		levels.append([LADDER_START + i * rise, 2.4, 1.6])
+		levels.append([LADDER_START + i * rise, LADDER_LEAF_LEN, LADDER_LEAF_W])
 	for bl in big:
 		var best := -1
 		for i in levels.size():
-			if levels[i][1] == 2.4 and (best < 0 or absf(levels[i][0] - bl[0]) < absf(levels[best][0] - bl[0])):
+			if levels[i][1] == LADDER_LEAF_LEN and (best < 0 or absf(levels[i][0] - bl[0]) < absf(levels[best][0] - bl[0])):
 				best = i
 		if best >= 0:
 			levels[best] = [levels[best][0], bl[1], bl[2]]
@@ -434,8 +441,14 @@ class Site:
 const SPIRAL_LEAVES := 16
 const SPIRAL_START := 0.8
 const SPIRAL_RISE := 1.0
-const SPIRAL_TURN := 72.0
-const SPIRAL_PHASE := 180.0
+## Expansion 6: a quarter turn per leaf (was 72 degrees), so the broad leaves stand clear of their
+## neighbours. The phase keeps the leaves at 5.8 and 6.8 m out from under the lower canopy's
+## flexible leaf F1 (it dips about 2 m when landed on), and ends the spiral at 58 degrees, in the
+## open gap between the canopy leaves C3 (20) and C1 (120).
+const SPIRAL_TURN := 90.0
+const SPIRAL_PHASE := 148.0
+## Expansion 6 (owner phone report): broad leaves, room to land, turn and aim (was 1.9 m).
+const SPIRAL_LEAF_W := 2.4
 
 
 static func _ball3(lb: LevelBuilder) -> void:
@@ -461,13 +474,15 @@ static func _ball3(lb: LevelBuilder) -> void:
 	C.stem_top(0, 0, 19.0, 1.1, 0.75)
 	var spiral := []
 	for i in SPIRAL_LEAVES:
-		# Five leaves per turn: a leaf is 5 m above the one below it, so no leaf hangs low over
-		# another (or over the lower canopy's flexible leaves); the last leaf ends at 180 degrees,
-		# where the old spiral ended, next to the canopy leaves C1 and C3.
+		# Four leaves per turn: a leaf is 4 m above the one below it, so no leaf hangs low over
+		# another (or under the lower canopy's flexible leaves); the last leaf ends between the
+		# canopy leaves C1 and C3.
 		var a := deg_to_rad(SPIRAL_PHASE + i * SPIRAL_TURN)
 		var h := SPIRAL_START + i * SPIRAL_RISE
-		var xf := C.p(cos(a) * 0.9, h, sin(a) * 0.9, Site.yaw_out(cos(a), sin(a)))
-		lb.leaf_xf(xf, 3.0, 1.9)
+		# Each leaf's base just clear of the tapering trunk, joined to it by its stalk.
+		var rr := lerpf(1.1, 0.75, h / 19.0) + LevelBuilder.LEAF_CLEAR
+		var xf := C.p(cos(a) * rr, h, sin(a) * rr, Site.yaw_out(cos(a), sin(a)))
+		lb.leaf_xf(xf, 3.0, SPIRAL_LEAF_W)
 		spiral.append(xf)
 	# C1 (canopy bloom), C3 (mote) branch from the giant stem; C1b/C2 from stem S2.
 	var c1 := C.p(cos(deg_to_rad(120)) * 0.9, 16.9, sin(deg_to_rad(120)) * 0.9, Site.yaw_out(cos(deg_to_rad(120)), sin(deg_to_rad(120))))
@@ -521,7 +536,7 @@ static func _ball3(lb: LevelBuilder) -> void:
 	# bot's path), and the lower canopy's flexible leaves, reached by dropping from the spiral.
 	var ctops := []
 	for xf in spiral:
-		ctops.append(leaf_mid(xf, 2.0, 0.0).origin)
+		ctops.append(leaf_mid(xf, 1.5, 0.0).origin)
 	for lm in [[c1, 1.2], [c1, 2.6], [c1, 0.6], [c3, 1.0], [c3, 3.2], [c3, 0.8], [c1, 0.8], [c1, 3.8], [c1b, 1.6], [c2, 1.2], [c2, 3.8]]:
 		ctops.append(leaf_mid(lm[0], lm[1], 0.0).origin)
 	var cstart := b.surface_point(b.up_at(leaf_mid(spiral[0], 3.5, 0.0).origin))

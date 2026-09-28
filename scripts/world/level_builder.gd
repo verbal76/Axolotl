@@ -13,6 +13,8 @@ var bot_hints: Array = []     # authored waypoints for the automated playtest bo
 ## Physics layer of climbing leaves on stem ladders: the axolotl stands on them, but the ground
 ## rays of creatures walking under them (parasites, food, motes) ignore them.
 const CLIMB_LAYER := 8
+## How far a climb leaf's base stands out from its stem's surface (its stalk bridges the gap).
+const LEAF_CLEAR := 0.15
 
 
 func _init(p_ball: MossBall, p_game: Node) -> void:
@@ -245,14 +247,15 @@ func terrace(lat: float, lon: float, tiers: Array) -> Array:
 ## A climbable spiral of leaves round a stem at `xf` (one plain jump per step): `count` leaves,
 ## the first `start` m up, then `rise` m and `turn_deg` degrees apart. Returns the leaf transforms.
 func canopy_spiral(xf: Transform3D, count: int, start: float, rise: float, turn_deg: float, stem_h: float, stem_r: float,
-		leaf_len := 3.0, leaf_w := 1.9) -> Array:
+		leaf_len := 3.0, leaf_w := 2.4) -> Array:
 	stem_xf(xf, stem_h, stem_r, stem_r * 0.7)
 	var leaves := []
 	for i in count:
 		var a := deg_to_rad(turn_deg * i)
 		var h := start + i * rise
 		var dir := Vector3(cos(a), 0.0, sin(a))
-		var lx := Transform3D(Basis(Vector3.UP, atan2(dir.x, dir.z) + PI), Vector3(dir.x * (stem_r + 0.1), h, dir.z * (stem_r + 0.1)))
+		var r := lerpf(stem_r, stem_r * 0.7, clampf(h / stem_h, 0.0, 1.0))
+		var lx := Transform3D(Basis(Vector3.UP, atan2(dir.x, dir.z) + PI), Vector3(dir.x * (r + LEAF_CLEAR), h, dir.z * (r + LEAF_CLEAR)))
 		var world := xf * lx
 		leaf_xf(world, leaf_len, leaf_w)
 		leaves.append(world)
@@ -261,9 +264,10 @@ func canopy_spiral(xf: Transform3D, count: int, start: float, rise: float, turn_
 
 ## A stem you can climb: leaves spiralling round it from `start` m up, `rise` m and `turn_deg`
 ## apart, each one plain jump from the last, up to the top. `levels` is [[height, length, width]]
-## per leaf (lowest first; the axis follows the stem's bend). One body (CLIMB_LAYER) holds every
-## leaf's collision and one MultiMesh draws them. Registers the climb (audit only: nothing on it
-## is a completion target). Returns the leaf transforms.
+## per leaf (lowest first; the axis follows the stem's bend). Each leaf grows from the stem on a
+## curved stalk (Expansion 6: no leaf floats beside its stem). One body (CLIMB_LAYER) holds every
+## leaf's collision, which follows the drawn leaf, and one merged mesh draws them all. Registers
+## the climb (audit only: nothing on it is a completion target). Returns the leaf transforms.
 func ladder_stem(stem_xf_: Transform3D, stem_h: float, r0: float, r1: float, bend: float, levels: Array, heading0: float, turn_deg: float, name_: String) -> Array:
 	var body := StaticBody3D.new()
 	body.collision_layer = CLIMB_LAYER
@@ -271,13 +275,12 @@ func ladder_stem(stem_xf_: Transform3D, stem_h: float, r0: float, r1: float, ben
 	root.add_child(body)
 	body.global_transform = stem_xf_
 	body.set_meta("floats_by_design", "leaves attached to a stem")
-	var mm := MultiMesh.new()
-	mm.transform_format = MultiMesh.TRANSFORM_3D
-	mm.mesh = MeshLib.platform_leaf_mesh(1.0, 1.0)
-	mm.instance_count = levels.size()
+	var st := SurfaceTool.new()
+	st.begin(Mesh.PRIMITIVE_TRIANGLES)
+	var nv := 0
 	var out := []
 	var tops := []
-	var leaf_xfs: Array[Transform3D] = []
+	var leaves := []
 	for i in levels.size():
 		var y: float = levels[i][0]
 		var len: float = levels[i][1]
@@ -288,46 +291,32 @@ func ladder_stem(stem_xf_: Transform3D, stem_h: float, r0: float, r1: float, ben
 		var t := (y + 0.5) / (stem_h + 0.5)
 		var axis := Vector3(bend * t * t * (stem_h + 0.5), y, 0.0)
 		var r := lerpf(r0, r1, clampf(y / stem_h, 0.0, 1.0))
-		var local := Transform3D(Basis(Vector3.UP, atan2(dir.x, dir.z) + PI), axis + dir * maxf(r - 0.1, 0.05))
-		mm.set_instance_transform(i, local.scaled_local(Vector3(w, 1.0, len)))
-		leaf_xfs.append(local.scaled_local(Vector3(w, 1.0, len)))
-		# Collision follows the leaf's drawn outline (narrow at the stem, widest in the middle), so
-		# no invisible corner hangs beside the stem over the leaf below.
-		var cs := CollisionShape3D.new()
-		cs.shape = _leaf_outline_shape(len, w)
-		cs.transform = local
-		body.add_child(cs)
+		# The leaf's base stands just clear of the stem; its stalk reaches back into it.
+		var local := Transform3D(Basis(Vector3.UP, atan2(dir.x, dir.z) + PI), axis + dir * (r + LEAF_CLEAR))
+		nv = MeshLib._leaf_into(st, local, len, w, true, nv)
+		for shape in MeshLib.leaf_collision_shapes(len, w):
+			var cs := CollisionShape3D.new()
+			cs.shape = shape
+			cs.transform = local
+			body.add_child(cs)
 		var world := stem_xf_ * local
 		out.append(world)
-		tops.append(Levels.leaf_mid(world, minf(1.5, len * 0.5), 0.0).origin)
-	var mmi := MultiMeshInstance3D.new()
-	mmi.multimesh = mm
-	# The placements, readable without a renderer (headless runs keep no instance data).
-	mmi.set_meta("leaf_transforms", leaf_xfs)
-	mmi.material_override = leaf_mat
-	mmi.visibility_range_end = 140.0
-	body.add_child(mmi)
+		leaves.append([world, len, w])
+		# The landing point: the broad middle of a ladder leaf, the broad inner part of a big one.
+		tops.append(Levels.leaf_mid(world, minf(1.4, len * 0.5), 0.0).origin)
+	# Each leaf's placement and size, for the footing and route audits: [world xform, length, width].
+	body.set_meta("leaves", leaves)
+	st.generate_normals()
+	var mi := MeshInstance3D.new()
+	mi.mesh = st.commit()
+	mi.material_override = leaf_mat
+	mi.visibility_range_end = 140.0
+	body.add_child(mi)
 	# The climb starts on the ground just past the first leaf's tip.
 	var first: Transform3D = out[0]
 	var start := ball.surface_point(ball.up_at(Levels.leaf_mid(first, float(levels[0][1]) + 1.4, 0.0).origin))
 	bot_hints.append({"route": name_, "audit": true, "start": start, "tops": tops, "zones": [], "goal": "top leaf"})
 	return out
-
-
-## A flat convex slab with a platform leaf's outline (MeshLib.platform_leaf_mesh), 0.25 m thick
-## with its top 0.075 m above the leaf's midrib plane.
-static func _leaf_outline_shape(length: float, width: float) -> ConvexPolygonShape3D:
-	var pts := PackedVector3Array()
-	for i in 11:
-		var t := float(i) / 10.0
-		var hw := width * 0.5 * 0.9 * pow(sin(PI * clampf(t * 0.92 + 0.08, 0.0, 1.0)), 0.8)
-		var z := -t * length * 0.95
-		for side in [-1.0, 1.0]:
-			pts.append(Vector3(side * hw, 0.075, z))
-			pts.append(Vector3(side * hw, -0.175, z))
-	var shape := ConvexPolygonShape3D.new()
-	shape.points = pts
-	return shape
 
 
 ## Registers a climb for the bot and the reachability audit: from `start` (on the ground) hop
@@ -354,9 +343,10 @@ func stem_xf(xf: Transform3D, height: float, r0: float, r1: float, collide := tr
 			var cs := CollisionShape3D.new()
 			var cyl := CylinderShape3D.new()
 			cyl.radius = lerpf(r0, r1, tm) if segs > 1 else (r0 + r1) * 0.5
-			cyl.height = total * (t1 - t0) if segs > 1 else height
+			# (The drawn stem runs from 0.5 m below its base to its full height: so does this.)
+			cyl.height = total * (t1 - t0) if segs > 1 else total
 			cs.shape = cyl
-			cs.position = Vector3(bend * tm * tm * total, total * tm, 0) if segs > 1 else Vector3(0, height * 0.5 - 0.5, 0)
+			cs.position = Vector3(bend * tm * tm * total, total * tm, 0) if segs > 1 else Vector3(0, total * 0.5, 0)
 			body.add_child(cs)
 		node = body
 	else:
@@ -376,18 +366,18 @@ func stem(lat: float, lon: float, height: float, r0: float, r1: float, collide :
 	return stem_xf(ball.xform_on_dir(d(lat, lon), 0.0, randf() * 360.0), height, r0, r1, collide)
 
 
-## Static leaf platform: attached at xf.origin, extending along xf's -Z.
-func leaf_xf(xf: Transform3D, length: float, width: float, collide := true) -> Node3D:
+## Static leaf platform: attached at xf.origin, extending along xf's -Z; with `petiole`, a curved
+## stalk reaches back (+Z) into the stem it grows from.
+func leaf_xf(xf: Transform3D, length: float, width: float, collide := true, petiole := true) -> Node3D:
 	var node: Node3D
 	if collide:
 		var body := StaticBody3D.new()
 		body.collision_layer = 2
-		var cs := CollisionShape3D.new()
-		var b := BoxShape3D.new()
-		b.size = Vector3(width * 0.8, 0.25, length * 0.9)
-		cs.shape = b
-		cs.position = Vector3(0, -0.05, -length * 0.5)
-		body.add_child(cs)
+		# Collision is the drawn leaf (Expansion 6), not a box wider than it.
+		for shape in MeshLib.leaf_collision_shapes(length, width):
+			var cs := CollisionShape3D.new()
+			cs.shape = shape
+			body.add_child(cs)
 		node = body
 	else:
 		node = Node3D.new()
@@ -397,10 +387,11 @@ func leaf_xf(xf: Transform3D, length: float, width: float, collide := true) -> N
 	# Where it can be stood on (the elevated-route audit), or that it is decoration.
 	if collide:
 		node.set_meta("top_point", Levels.leaf_mid(xf, length * 0.5, 0.0).origin)
+		node.set_meta("leaves", [[xf, length, width]])
 	else:
 		node.set_meta("decor_leaf", true)
 	var mi := MeshInstance3D.new()
-	mi.mesh = MeshLib.platform_leaf_mesh(length, width)
+	mi.mesh = MeshLib.platform_leaf_mesh(length, width, petiole)
 	mi.material_override = leaf_mat
 	mi.visibility_range_end = 140.0
 	node.add_child(mi)
@@ -413,6 +404,7 @@ func flex_xf(xf: Transform3D, length: float, width: float, bouncy: bool) -> Plat
 	f.build(ball, xf, length, width, leaf_mat, bouncy)
 	f.set_meta("floats_by_design", "flexible leaf attached to a stem")
 	f.set_meta("top_point", Levels.leaf_mid(xf, length * 0.5, 0.0).origin)
+	f.set_meta("leaves", [[xf, length, width]])
 	ball.flex_leaves.append(f)
 	return f
 
