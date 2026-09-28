@@ -19,7 +19,11 @@ func run(runner) -> void:
 		# (in a child process started by _test_run_continue).
 		if name_.begins_with("_phase") and only != name_:
 			continue
-		if only == "" or name_.contains(only):
+		# (--only may list several, comma-separated: to run tests together in one process.)
+		var picked := only == ""
+		for o in only.split(",", false):
+			picked = picked or name_.contains(o)
+		if picked:
 			# A test that stops on a script error reports nothing; count that as a failure.
 			var before: int = t.results.size()
 			await call(name_)
@@ -3108,9 +3112,12 @@ func _test_parasite_combat() -> void:
 		par._update_segments(0.0)
 		par.set_physics_process(true)
 	var park := func() -> void:
+		# (Back where each was before the test, well away from him: a parked parasite left beside
+		# him was killed by a later swipe, and restoring it afterwards double-counted its kill.)
 		for par in b.parasites:
 			par.set_physics_process(false)
 			if par.is_alive():
+				_par_restore(par, saved[par][0])
 				par._set_state("graze")
 		for gl in ParasiteGlob.live.duplicate():
 			gl.queue_free()
@@ -3502,7 +3509,7 @@ func _test_parasite_combat() -> void:
 		var twin_c := Parasite.new()
 		var st: Vector3 = lad["start"]
 		var leaf0: Vector3 = (lad["tops"] as Array)[0]
-		twin_c.setup(jb, Parasite.Kind.MEDIUM, jb.parasites[0].zone_id, jb.up_at(st), 20.0)
+		twin_c.setup(jb, Parasite.Kind.MEDIUM, jb.parasites[0].zone_id, jb.up_at(st), 20.0, 0.0, false)
 		jb.add_child(twin_c)
 		place_at(jb.index, jb.surface_point(jb.up_at(st - (leaf0 - st) * 3.0), 0.2), Vector3.FORWARD)
 		await t.frames(2)
@@ -3518,8 +3525,6 @@ func _test_parasite_combat() -> void:
 				highest = maxf(highest, jb.altitude(twin_c.global_position) - twin_c._ground_offset)
 		t.check("parasites_never_climb_stems", highest < Parasite.MAX_STEP + 0.1, "highest %.2f m off the ground (first leaf %.2f m up)" % [highest, jb.altitude(leaf0)])
 		twin_c.hp = 0
-		jb.zones[twin_c.zone_id]["total"] -= 1
-		jb.events_total -= 1
 		twin_c.queue_free()
 
 	# --- No hits while a cinematic has his controls (the vortex-connection shot): a parasite right
@@ -3546,10 +3551,10 @@ func _test_parasite_combat() -> void:
 	var r1 := randf()
 	seed(4242)
 	var twin := Parasite.new()
-	twin.setup(b, Parasite.Kind.MEDIUM, "far", med.spawn_dir, 10.0)
+	twin.setup(b, Parasite.Kind.MEDIUM, "far", med.spawn_dir, 10.0, 0.0, false)
 	var r2 := randf()
 	var twin2 := Parasite.new()
-	twin2.setup(b, Parasite.Kind.MEDIUM, "far", med.spawn_dir, 10.0)
+	twin2.setup(b, Parasite.Kind.MEDIUM, "far", med.spawn_dir, 10.0, 0.0, false)
 	var same := twin._brave == twin2._brave and twin._circle_dir == twin2._circle_dir and twin._rng.randf() == twin2._rng.randf()
 	t.check("parasite_decisions_deterministic", same and r1 == r2, "")
 	twin.free()
@@ -3578,6 +3583,12 @@ func _test_parasite_combat() -> void:
 	t.check("charge_stirs_the_plants", charge_w > graze_w and charge_w > 0.7, "wake strength charging %.2f, crawling %.2f" % [charge_w, graze_w])
 	park.call()
 
+	# No real parasite may die in this test (its kill would count; restoring it would count twice).
+	var killed := []
+	for par in saved:
+		if not par.is_alive() and saved[par][1] > 0:
+			killed.append(str(par.get_meta("completion_id", par.zone_id)))
+	t.check("combat_test_kills_no_real_parasite", killed.is_empty(), str(killed))
 	# Put everything back as it was.
 	for par in saved:
 		var sv: Array = saved[par]
@@ -4126,7 +4137,10 @@ func _test_all_clear() -> void:
 	var done := true
 	for b in g.balls:
 		done = done and b.completed and is_equal_approx(b.restoration, 1.0)
-	t.check("all_three_balls_reach_100", done, "%.2f %.2f %.2f" % [g.balls[0].restoration, g.balls[1].restoration, g.balls[2].restoration])
+	var rs := PackedStringArray()
+	for b in g.balls:
+		rs.append("%.2f%s" % [b.restoration, "" if b.completed else "*"])
+	t.check("all_three_balls_reach_100", done, " ".join(rs))
 	# Finishing: the run's time froze on the frame the last ball was restored.
 	var fin: float = g.clock.finish_s
 	var rec: Dictionary = g.run_save.run()["finish"]

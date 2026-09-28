@@ -115,7 +115,8 @@ var _wave_amp := 0.0
 var _last_head := Vector3.ZERO
 
 
-func setup(p_ball: MossBall, p_kind: int, p_zone: String, dir: Vector3, home_deg := 9.0, h := 0.0) -> void:
+## `register`: counts toward its zone's restoration (false only for test stand-ins never killed).
+func setup(p_ball: MossBall, p_kind: int, p_zone: String, dir: Vector3, home_deg := 9.0, h := 0.0, register := true) -> void:
 	ball = p_ball
 	kind = p_kind
 	zone_id = p_zone
@@ -135,7 +136,8 @@ func setup(p_ball: MossBall, p_kind: int, p_zone: String, dir: Vector3, home_deg
 			seg_count = 9; seg_radius = 0.24; speed = 1.6; attack_reach = 3.4; windup_time = 1.1; lunge_dist = 4.4
 	spacing = seg_radius * 1.45
 	_ground_offset = seg_radius * 0.85
-	ball.register_event(zone_id)
+	if register:
+		ball.register_event(zone_id)
 	# Its own generator, from where it lives (never the gameplay random sequence).
 	_rng.seed = hash([roundi(spawn_dir.x * 1000.0), roundi(spawn_dir.y * 1000.0), roundi(spawn_dir.z * 1000.0), kind, zone_id])
 	_brave = kind == Kind.SMALL or _rng.randf() < 0.35
