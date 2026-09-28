@@ -587,6 +587,19 @@ func hit(stages: int, from_pos: Vector3, knock := 1.0) -> bool:
 	return true
 
 
+## Startled back from `from_pos` (the bloom's pulse when the axolotl re-forms there), unhurt: it
+## scuttles a few metres off, then carries on.
+func startle(from_pos: Vector3) -> void:
+	if not state in ["graze", "chase", "windup", "recover"]:
+		return
+	var away := global_position - from_pos
+	away -= up * away.dot(up)
+	away = away.normalized() if away.length() > 0.01 else heading * -1.0
+	vel = away * 7.0
+	_latched = 0.0
+	_set_state("knocked")
+
+
 ## Thrown into open water by a rebounding plant (or a big impact).
 func fling(v: Vector3) -> void:
 	if hp <= 0 or state in ["dying", "drifting", "gone", "init"]:

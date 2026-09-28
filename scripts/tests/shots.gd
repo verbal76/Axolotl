@@ -702,6 +702,16 @@ func _critter_close(g: Game) -> void:
 		_close(g, pt + away * d + side * d * 0.5 + up * d * 0.45, pt, up)
 		await t.seconds(0.8 if not c is CaveEel else 1.5)
 		await t.shot("cc_%s" % c.species)
+		if c is CaveEel:
+			# Out of its crevice, mid-strike (its body).
+			var e := c as CaveEel
+			e.set_active(false)
+			e.ext = 1.6
+			e._dir = e.normal
+			e._pose()
+			await t.frames(2)
+			await t.shot("cc_eel_out")
+			e.set_active(true)
 		_open(g)
 
 

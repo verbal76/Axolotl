@@ -564,14 +564,16 @@ func apply(g: float) -> void:
 	var e := ease(g, 0.8)
 	# Even clear water keeps some haze, so the far glass and the room recede (Expansion 6).
 	env.fog_density = lerpf(0.017, 0.007, e)
-	env.fog_light_color = Color(0.2, 0.26, 0.17).lerp(Color(0.24, 0.45, 0.52), e)
+	# Healed, the water turns a rich aqua-blue (Expansion 6, owner's art-direction references):
+	# cool water and shade against warm light and the vivid life on the moss.
+	env.fog_light_color = Color(0.2, 0.26, 0.17).lerp(Color(0.1, 0.4, 0.55), e)
 	env.background_color = env.fog_light_color
-	env.ambient_light_color = Color(0.45, 0.5, 0.38).lerp(Color(0.5, 0.7, 0.75), e)
+	env.ambient_light_color = Color(0.45, 0.5, 0.38).lerp(Color(0.54, 0.66, 0.72), e)
 	# Healed, the light has a direction (Expansion 6): the ceiling light carries the image and the
 	# ambient stays low, so forms model and shade instead of glowing flat.
 	env.ambient_light_energy = lerpf(0.55, 0.62, e)
 	sun.light_energy = lerpf(0.75, 1.4, e)
-	sun.light_color = Color(0.85, 0.92, 0.75).lerp(Color(0.97, 1.0, 0.97), e)
+	sun.light_color = Color(0.85, 0.92, 0.75).lerp(Color(1.0, 0.96, 0.86), e)
 	# Clear water and glass: light carries further in, shadows read more crisply, and the window's
 	# daylight comes through the side glass.
 	sun.shadow_opacity = lerpf(0.4, 0.78, e)

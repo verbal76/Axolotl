@@ -105,6 +105,48 @@ static func broadleaf_mesh(leaves: int, size: float, seed_v: int) -> ArrayMesh:
 	return st.commit()
 
 
+## Tube coral / anemone cluster (Expansion 6, the healed tank's colour): `tubes` soft tapering
+## tubes rising from one spot, leaning outward, each ending in a flared rounded mouth. UV.y runs base
+## to tip (the vegetation material colours and sways by it).
+static func coral_mesh(tubes: int, height: float, seed_v: int) -> ArrayMesh:
+	var rng := RandomNumberGenerator.new()
+	rng.seed = seed_v
+	var st := SurfaceTool.new()
+	st.begin(Mesh.PRIMITIVE_TRIANGLES)
+	var base := 0
+	var sides := 7
+	for i in tubes:
+		var a := TAU * i / tubes + rng.randf() * 0.6
+		var lean := rng.randf_range(0.1, 0.45)
+		var dirv := Vector3(sin(a) * sin(lean), cos(lean), cos(a) * sin(lean))
+		var root := Vector3(sin(a), 0, cos(a)) * height * rng.randf_range(0.02, 0.1)
+		var len := height * rng.randf_range(0.55, 1.0)
+		var r0 := height * rng.randf_range(0.07, 0.1)
+		var tint := Color.WHITE.darkened(rng.randf() * 0.18)
+		var start := base
+		# Rings: the tube, then a flared lip and a rounded rim turning back in.
+		var profile := [[0.0, 1.0], [0.3, 0.8], [0.65, 0.72], [0.88, 0.85], [0.96, 1.35], [1.0, 1.2], [0.98, 0.7]]
+		var x := dirv.cross(Vector3.UP if absf(dirv.y) < 0.95 else Vector3.RIGHT).normalized()
+		var y := dirv.cross(x).normalized()
+		for pr in profile:
+			var t: float = pr[0]
+			var c: Vector3 = root + dirv * len * t
+			for k in sides:
+				var ang := TAU * k / sides
+				st.set_color(tint)
+				st.set_uv(Vector2(float(k) / sides, t))
+				st.add_vertex(c + (x * cos(ang) + y * sin(ang)) * r0 * float(pr[1]))
+				base += 1
+		for j in profile.size() - 1:
+			for k in sides:
+				var i0 := start + j * sides + k
+				var i1 := start + j * sides + (k + 1) % sides
+				for q in [i0, i1, i0 + sides, i1, i1 + sides, i0 + sides]:
+					st.add_index(q)
+	st.generate_normals()
+	return st.commit()
+
+
 ## One rosette leaf pointing out along the basis' +Z: `rise` radians up from level at the base,
 ## curving down toward the tip. Indexed from `base`; returns the new vertex count.
 static func _broad_leaf(st: SurfaceTool, rot: Basis, rise: float, half_w: float, length: float, tint: Color, base: int) -> int:

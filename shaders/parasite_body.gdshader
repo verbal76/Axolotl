@@ -18,6 +18,10 @@ uniform vec3 color_b : source_color = vec3(1.0, 0.6, 0.1);
 uniform vec3 spot : source_color = vec3(0.4, 1.0, 0.3);
 uniform float flash = 0.0;
 uniform float windup = 0.0;
+// Where the markings start in the noise (lower: more of the body marked).
+uniform float spot_lo = 0.62;
+// Self-glow of stolen vitality (parasites); low for creatures that do not glow.
+uniform float glow_gain = 1.0;
 uniform sampler2D noise_tex : filter_linear_mipmap, repeat_enable;
 
 varying float v_t;
@@ -77,7 +81,7 @@ void vertex() {
 void fragment() {
 	float n = texture(noise_tex, UV * vec2(3.0, 5.0)).r;
 	vec3 vivid = mix(color_a, color_b, v_t);
-	float spots = smoothstep(0.62, 0.7, n);
+	float spots = smoothstep(spot_lo, spot_lo + 0.08, n);
 	vivid = mix(vivid, spot, spots * 0.6);
 	// Darker along the back ridge and between the rings, paler underneath.
 	vivid *= mix(1.08, 0.84, sin(UV.x * 6.2832) * 0.5 + 0.5);
@@ -88,6 +92,6 @@ void fragment() {
 	vec3 col = mix(vivid, grey, g);
 	ALBEDO = col + vec3(flash);
 	ROUGHNESS = mix(0.45, 0.9, g);
-	float glow = (1.0 - g) * (0.25 + spots * 0.8 + windup * 1.5);
+	float glow = (1.0 - g) * (0.25 + spots * 0.8 + windup * 1.5) * glow_gain;
 	EMISSION = vivid * glow + vec3(flash * 0.8);
 }

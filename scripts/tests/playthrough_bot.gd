@@ -119,7 +119,146 @@ func run(runner) -> void:
 	await wander(20.0)
 	t.check("free_roam_continues", p.controls_enabled and p.state == "normal" and g.state == "play", "")
 	await t.shot("pt_60_free_roam")
+	# Expansion 6: 100% by legitimate play. The normal finish is below 100%; then the bot goes
+	# after everything the catalog still lists (blooms, species, cave eels...) the way a player
+	# would, and the finish time stays what it was.
+	await hundred()
 	_report()
+
+
+# --- 100% --------------------------------------------------------------------------------
+
+func _missing_ids() -> Array[String]:
+	var out: Array[String] = []
+	var e: Dictionary = g.run_save.earned()
+	for id in g.completion.order:
+		if not e.has(id):
+			out.append(id)
+	return out
+
+
+func hundred() -> void:
+	var before := g.completion_percent()
+	var fin: float = g.clock.finish_s
+	mark("normal finish: %.1f%% complete, finished in %.2f s" % [before, fin])
+	t.check("normal_finish_below_100", before < 100.0 and g.clock.state == "finished", "%.1f%%" % before)
+	t.log_line("missing after the normal finish: %s" % str(_missing_ids()))
+	for attempt in 3:
+		var missing := _missing_ids()
+		if missing.is_empty():
+			break
+		for id in missing:
+			if g.run_save.earned().has(id):
+				continue
+			await _complete(id)
+	var after := g.completion_percent()
+	var left := _missing_ids()
+	mark("completionist done: %.2f%%, %d left %s" % [after, left.size(), str(left)])
+	t.check("hundred_percent_by_play", left.is_empty() and after == 100.0, "%.2f%%; left %s" % [after, str(left)])
+	t.check("finish_time_kept_through_100", g.clock.finish_s == fin and g.clock.state == "finished", "%.2f -> %.2f" % [fin, g.clock.finish_s])
+
+
+## Goes and earns one catalog id by play.
+func _complete(id: String) -> void:
+	var bi := int(id.substr(1, id.find(".") - 1)) - 1 if id.begins_with("b") else -1
+	activity = "100%: " + id
+	if id.begins_with("species."):
+		var sp := id.substr(8)
+		for c in g.ecosystem.all_critters():
+			if c.species == sp:
+				await _see(c)
+				if g.run_save.earned().has(id):
+					return
+		return
+	if bi < 0:
+		return
+	if p.ball.index != bi:
+		await travel_to(bi)
+	var b := g.balls[bi]
+	if id.contains(".bloom."):
+		var bl: Bloom = b.blooms[int(id.get_slice(".", 2))]
+		for i in 3:
+			if g.run_save.earned().has(id):
+				break
+			await _reach(b, bl.global_position)
+			await goto(bl.global_position, 0.4, 8.0)
+	elif id.contains(".cave."):
+		var u = b.upgrades[int(id.get_slice(".", 2))]
+		for h in (b.get_meta("builder") as LevelBuilder).bot_hints:
+			if h.has("cave") and h["reward"] == u:
+				await cave(b, h)
+	elif id.contains(".eel."):
+		for c in b.critters:
+			if c is CaveEel and (c as CaveEel).threat_id == id:
+				await _fight_eel(c as CaveEel)
+	elif id.contains(".crab."):
+		for c in b.critters:
+			if c is CrabGuardian and (c as CrabGuardian).threat_id == id:
+				await goto(c.global_position, 3.0, 30.0)
+				await fight_crab(c as CrabGuardian, 25.0)
+	else:
+		t.log_line("100%%: no play handler for %s" % id)
+
+
+## Gets to `pos` on ball `b`: over the ground, or up the registered climb that ends nearest it.
+func _reach(b: MossBall, pos: Vector3) -> void:
+	if height_of(pos) < 1.2:
+		await goto(pos, 0.6, 40.0)
+		return
+	var best: Dictionary = {}
+	var bd := INF
+	for h in (b.get_meta("builder") as LevelBuilder).bot_hints:
+		if h.has("route"):
+			for tp in h["tops"]:
+				var d := (tp as Vector3).distance_to(pos)
+				if d < bd:
+					bd = d
+					best = h
+	if not best.is_empty():
+		var tops: Array = best["tops"]
+		var k := 0
+		for i in tops.size():
+			if (tops[i] as Vector3).distance_to(pos) < (tops[k] as Vector3).distance_to(pos):
+				k = i
+		await goto(best["start"], 1.0, 40.0)
+		await hop_chain(tops.slice(0, k + 1))
+	await goto(pos, 0.6, 10.0)
+
+
+## Stands where a player would see creature `c` (within its seen radius, a clear line of sight).
+func _see(c: Critter) -> void:
+	var b: MossBall = c.ball
+	if p.ball != b:
+		await travel_to(b.index)
+	var pt: Vector3 = c.discover_point()
+	var up := b.up_at(pt)
+	var away := MossBall.frame_at(up, 30.0).z
+	if c is CaveEel:
+		away = (c as CaveEel).normal
+	var stand := b.surface_point(b.up_at(pt + away * minf(c.seen_radius * 0.6, 3.0)), 0.1)
+	if height_of(pt) > 1.2 and not c is CaveEel:
+		await _reach(b, pt)
+	else:
+		await goto(stand, 0.8, 40.0)
+	await wait(1.0)
+
+
+## A cave eel: stand in front of its crevice just outside its reach and let it strike; fully out,
+## its head is within a swipe (the swipe turns to it), so swipe then; repeat until it is beaten.
+func _fight_eel(e: CaveEel) -> void:
+	var b: MossBall = e.ball
+	for round_ in 12:
+		if e.defeated:
+			return
+		var front := b.surface_point(b.up_at(e.mouth + e.normal * (CaveEel.STRIKE_REACH + 0.45)), 0.1)
+		await goto(front, 0.4, 25.0, null, false)
+		set_stick(Vector2.ZERO)
+		for i in 60 * 6:
+			await tick()
+			if e.hittable() and e.ext > e.reach * 0.8:
+				await press("swipe")
+				break
+		await wait(1.0)
 
 
 # --- reporting ---------------------------------------------------------------------------
@@ -1008,33 +1147,34 @@ func canopy(b: MossBall, h: Dictionary) -> void:
 	for xf in spiral:
 		chain.append(Levels.leaf_mid(xf, 2.0, 0.0).origin + (xf as Transform3D).basis.y * 0.1)
 	var base: Vector3 = b.surface_point(b.up_at((spiral[0] as Transform3D).origin))
-	var start := base + (Levels.leaf_mid(spiral[0], 3.5, 0.0).origin - (spiral[0] as Transform3D).origin)
+	var start := base + (Levels.leaf_mid(spiral[0], 4.4, 0.0).origin - (spiral[0] as Transform3D).origin)
 	start = b.surface_point(b.up_at(start))
 	for attempt in 4:
 		await goto(start, 0.8, 40.0)
-		if await hop_chain(chain.slice(0, 5), 3, start):
-			# Mote beside the 5th spiral leaf.
+		if await hop_chain(chain.slice(0, 7), 3, start):
+			# Mote beside the 7th spiral leaf.
 			for m in b.motes:
 				if m.zone_id == "canopy" and m.is_available() and m.global_position.distance_to(p.global_position) < 3.5:
 					await lunge_at(func(): return m.global_position, 8.0)
-			await settle_on(chain[4])
-			if await hop_chain(chain.slice(5), 3, start):
+			await settle_on(chain[6])
+			if await hop_chain(chain.slice(7), 3, start):
 				break
 	mark("top of spiral")
 	var c1: Transform3D = h["c1"]
 	var c1b: Transform3D = h["c1b"]
 	var c2: Transform3D = h["c2"]
 	var c3: Transform3D = h["c3"]
-	await hop_chain([Levels.leaf_mid(c1, 1.2, 0.0).origin], 3)
-	await goto(Levels.leaf_mid(c1, 2.6, 0.0).origin, 0.5, 6.0)   # canopy bloom
-	# C3 branch: mote near the tip.
-	await hop_chain([Levels.leaf_mid(c1, 0.6, 0.0).origin, Levels.leaf_mid(c3, 1.0, 0.0).origin], 3)
+	# The spiral ends beside C3 (Expansion 6): its mote near the tip first.
+	await hop_chain([Levels.leaf_mid(c3, 1.0, 0.0).origin], 3)
 	for m in b.motes:
 		if m.zone_id == "canopy" and m.is_available() and m.global_position.distance_to(Levels.leaf_mid(c3, 4.0, 0.0).origin) < 3.0:
 			await goto(Levels.leaf_mid(c3, 3.2, 0.0).origin, 0.5, 8.0)
 			await lunge_at(func(): return m.global_position, 10.0)
+	# Across to C1 and its bloom.
+	await hop_chain([Levels.leaf_mid(c3, 0.8, 0.0).origin, Levels.leaf_mid(c1, 0.8, 0.0).origin], 3)
+	await goto(Levels.leaf_mid(c1, 2.6, 0.0).origin, 0.5, 6.0)   # canopy bloom
 	# Back across to C2 via C1b, fight the medium parasite, grab the mote.
-	await hop_chain([Levels.leaf_mid(c3, 0.8, 0.0).origin, Levels.leaf_mid(c1, 0.8, 0.0).origin, Levels.leaf_mid(c1, 3.8, 0.0).origin,
+	await hop_chain([Levels.leaf_mid(c1, 3.8, 0.0).origin,
 			Levels.leaf_mid(c1b, 2.0, 0.0).origin, Levels.leaf_mid(c2, 1.2, 1.0).origin], 3)
 	for par in b.parasites:
 		if par.zone_id == "canopy" and par.kind == Parasite.Kind.MEDIUM and par.is_alive():

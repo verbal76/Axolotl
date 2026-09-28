@@ -26,8 +26,8 @@ var ext := 0.0
 var reach := STRIKE_REACH
 var _dir := Vector3.FORWARD
 var _hurt := false
-var _mm: MultiMesh
-var _segs_mi: MultiMeshInstance3D
+var _body_mat: ShaderMaterial
+var _segs_mi: MeshInstance3D
 var _head: Node3D
 var _eye_mat: StandardMaterial3D
 var _bubble_t := 0.0
@@ -75,29 +75,46 @@ func _build() -> void:
 	add_child(cleft)
 	cleft.global_transform = Transform3D(Basis(normal.cross(up).normalized(), up, normal).orthonormalized(), mouth - normal * 0.02)
 	Critter.part(Critter.sphere(0.3, 10), Critter.mat(Color(0.02, 0.02, 0.02)), cleft, Vector3.ZERO, Vector3(0.9, 1.3, 0.12))
-	_mm = MultiMesh.new()
-	_mm.transform_format = MultiMesh.TRANSFORM_3D
-	_mm.use_colors = true
-	_mm.mesh = Critter.sphere(0.13, 8)
-	_mm.instance_count = SEGS
-	for i in SEGS:
-		_mm.set_instance_color(i, Color(0.2, 0.26, 0.22) if i % 2 == 0 else Color(0.5, 0.56, 0.4))
-	var mmi := MultiMeshInstance3D.new()
-	mmi.multimesh = _mm
-	mmi.material_override = Critter.vc_mat()
-	mmi.top_level = true
-	mmi.cast_shadow = GeometryInstance3D.SHADOW_CASTING_SETTING_OFF
-	mmi.visibility_range_end = 60.0
-	add_child(mmi)
-	_segs_mi = mmi
+	# One continuous body (Expansion 6: it was a chain of balls), laid along the head-to-tail points by
+	# the same body shader as the parasites, in the eel's own mottled olive.
+	_body_mat = ShaderMaterial.new()
+	_body_mat.shader = Parasite.BODY_SHADER
+	_body_mat.set_shader_parameter("noise_tex", Parasite.NOISE)
+	# A moray (owner reference photos): dark olive-brown with pale reticulated markings.
+	_body_mat.set_shader_parameter("color_a", Color(0.16, 0.14, 0.08))
+	_body_mat.set_shader_parameter("color_b", Color(0.22, 0.2, 0.11))
+	_body_mat.set_shader_parameter("spot", Color(0.8, 0.74, 0.44))
+	_body_mat.set_shader_parameter("spot_lo", 0.47)
+	_body_mat.set_shader_parameter("glow_gain", 0.15)
+	_body_mat.set_shader_parameter("npts", SEGS + 1)
+	var mi := MeshInstance3D.new()
+	mi.mesh = Parasite._body_tube()
+	mi.material_override = _body_mat
+	mi.top_level = true
+	mi.custom_aabb = AABB(Vector3.ONE * -4.0, Vector3.ONE * 8.0)
+	mi.cast_shadow = GeometryInstance3D.SHADOW_CASTING_SETTING_OFF
+	mi.visibility_range_end = 60.0
+	add_child(mi)
+	_segs_mi = mi
 	_head = Node3D.new()
 	_head.top_level = true
 	add_child(_head)
-	Critter.part(Critter.merge([[Critter.sphere(0.17, 10), Color(0.2, 0.26, 0.22), Critter.xf(Vector3.ZERO, Vector3(0.9, 0.75, 1.5))]]), Critter.vc_mat(), _head)
+	# A moray's head: a long skull tapering to a blunt snout, the lower jaw hanging a little open
+	# over a dark mouth, pale markings round the jaw.
+	var hc := Color(0.2, 0.18, 0.1)
+	var pale := Color(0.72, 0.66, 0.4)
+	var jaw_xf := Transform3D(Basis(Vector3.RIGHT, 0.2).scaled(Vector3(0.78, 0.42, 1.65)), Vector3(0, -0.075, -0.1))
+	Critter.part(Critter.merge([
+			[Critter.sphere(0.17, 12), hc, Critter.xf(Vector3(0, 0.02, 0.02), Vector3(0.95, 0.85, 1.7))],
+			[Critter.sphere(0.1, 10), hc, Critter.xf(Vector3(0, 0.0, -0.24), Vector3(0.9, 0.75, 1.3))],
+			[Critter.sphere(0.12, 8), Color(0.08, 0.02, 0.02), Critter.xf(Vector3(0, -0.04, -0.12), Vector3(0.75, 0.3, 1.5))],
+			[Critter.sphere(0.13, 10), pale, jaw_xf],
+			[Critter.sphere(0.05, 6), pale, Critter.xf(Vector3(0.09, -0.02, -0.06), Vector3(1.0, 0.6, 1.6))],
+			[Critter.sphere(0.05, 6), pale, Critter.xf(Vector3(-0.09, -0.02, -0.06), Vector3(1.0, 0.6, 1.6))]]), Critter.vc_mat(), _head)
 	_eye_mat = Critter.mat(Color(0.9, 0.95, 0.5), Color(0.8, 1.0, 0.3))
 	var eyes := []
 	for side in [-1.0, 1.0]:
-		eyes.append([Critter.sphere(0.045, 6), Color(1, 1, 1), Critter.xf(Vector3(side * 0.1, 0.07, -0.12))])
+		eyes.append([Critter.sphere(0.04, 6), Color(1, 1, 1), Critter.xf(Vector3(side * 0.1, 0.1, -0.14))])
 	Critter.part(Critter.merge(eyes), _eye_mat, _head)
 
 
@@ -194,13 +211,21 @@ func _pose() -> void:
 	var up := ball.up_at(mouth)
 	var tail := mouth - normal * 0.5
 	var head := mouth + _dir * ext - normal * (0.12 if ext < 0.05 else 0.0)
-	for i in SEGS:
-		var k := float(i + 1) / (SEGS + 1)
+	# Head first, then back into the crevice (the body shader runs head to tail).
+	var pts := PackedVector4Array()
+	var ups := PackedVector4Array()
+	pts.resize(Parasite.MAX_SEGS)
+	ups.resize(Parasite.MAX_SEGS)
+	for i in SEGS + 1:
+		var k := 1.0 - float(i) / SEGS
 		var p := tail.lerp(head, k)
 		# A sideways ripple along the body while it is out.
-		p += _dir.cross(up).normalized() * sin(k * 9.0 - state_t * 12.0) * 0.06 * clampf(ext, 0.0, 1.0)
-		var sc := lerpf(1.1, 0.75, k)
-		_mm.set_instance_transform(i, Transform3D(Basis().scaled(Vector3.ONE * sc), p))
+		p += _dir.cross(up).normalized() * sin(k * 9.0 - state_t * 12.0) * 0.06 * clampf(ext, 0.0, 1.0) * (1.0 - k * 0.6)
+		pts[i] = Vector4(p.x, p.y, p.z, 0.15 * lerpf(1.05, 0.85, float(i) / SEGS))
+		ups[i] = Vector4(up.x, up.y, up.z, 0.0)
+	_segs_mi.global_position = head
+	_body_mat.set_shader_parameter("pts", pts)
+	_body_mat.set_shader_parameter("ups", ups)
 	_segs_mi.visible = ext > 0.05 and not defeated
 	var look := _dir if ext > 0.05 else normal
 	_head.global_transform = Transform3D(Basis(look.cross(up).normalized(), up, -look).orthonormalized(), head)

@@ -66,9 +66,34 @@ static func build_ball(i: int, game: Node) -> MossBall:
 		4: WorldExpansion.reed_canyon(lb)
 		5: WorldExpansion.canopy_spire(lb)
 		6: WorldExpansion.hollow_grotto(lb)
+	_accent_flora(lb, i)
 	b.finalize_terrain()
 	b.set_meta("builder", lb)
 	return b
+
+
+## Each ball's accent colours (Expansion 6): tube corals and anemones that are grey and dead in the
+## neglected tank and bloom into vivid colour as the moss round them is healed. [base, tip] pairs.
+const ACCENTS := [
+	[[Color(0.8, 0.25, 0.42), Color(1.0, 0.72, 0.8)], [Color(0.9, 0.62, 0.12), Color(1.0, 0.9, 0.45)]],
+	[[Color(0.95, 0.4, 0.2), Color(1.0, 0.75, 0.5)], [Color(0.45, 0.25, 0.75), Color(0.8, 0.62, 1.0)]],
+	[[Color(0.75, 0.2, 0.6), Color(1.0, 0.6, 0.9)], [Color(0.95, 0.55, 0.1), Color(1.0, 0.85, 0.35)]],
+	[[Color(0.95, 0.72, 0.15), Color(1.0, 0.95, 0.6)], [Color(0.95, 0.38, 0.32), Color(1.0, 0.7, 0.6)]],
+	[[Color(0.5, 0.28, 0.8), Color(0.85, 0.7, 1.0)], [Color(0.15, 0.7, 0.75), Color(0.6, 0.98, 0.95)]],
+	[[Color(0.95, 0.5, 0.15), Color(1.0, 0.8, 0.45)], [Color(0.9, 0.3, 0.5), Color(1.0, 0.7, 0.8)]],
+	[[Color(0.35, 0.35, 0.85), Color(0.7, 0.75, 1.0)], [Color(0.2, 0.75, 0.7), Color(0.7, 1.0, 0.9)]],
+]
+
+
+static func _accent_flora(lb: LevelBuilder, i: int) -> void:
+	var b := lb.ball
+	var keep := _veg_keep_clear(lb)
+	var ok := func(d: Vector3) -> bool: return not keep.call(d)
+	var per := int(120.0 * pow(float(RADII[i]) / 24.0, 2.0))
+	for k in 2:
+		var col: Array = ACCENTS[i][k]
+		var mat := b.make_veg_material(col[0], col[1], Vegetation.family_params("short", 0.45).merged({"sway": 0.12, "wake_gain": 0.7, "cam_fade": 1.0}, true))
+		b.scatter(MeshLib.coral_mesh(5 + k * 2, 0.75 + k * 0.15, 900 + i * 10 + k), mat, per, 900 + i * 10 + k, 0.9, 1.8, ok, 70.0)
 
 
 static func _materials(lb: LevelBuilder, stem_a: Color, stem_b: Color, leaf_a: Color, leaf_b: Color) -> void:
@@ -443,10 +468,11 @@ const SPIRAL_START := 0.8
 const SPIRAL_RISE := 1.0
 ## Expansion 6: a quarter turn per leaf (was 72 degrees), so the broad leaves stand clear of their
 ## neighbours. The phase keeps the leaves at 5.8 and 6.8 m out from under the lower canopy's
-## flexible leaf F1 (it dips about 2 m when landed on), and ends the spiral at 58 degrees, in the
-## open gap between the canopy leaves C3 (20) and C1 (120).
+## flexible leaf F1 (it dips about 2 m when landed on), and keeps the last two jumps clear of the
+## big canopy leaves above (C3 spans about -10..50 degrees, C1 87..153): the spiral ends at 325
+## degrees, one hop from C3, and C1 is one hop on from C3.
 const SPIRAL_TURN := 90.0
-const SPIRAL_PHASE := 148.0
+const SPIRAL_PHASE := 55.0
 ## Expansion 6 (owner phone report): broad leaves, room to land, turn and aim (was 1.9 m).
 const SPIRAL_LEAF_W := 2.4
 
@@ -475,8 +501,7 @@ static func _ball3(lb: LevelBuilder) -> void:
 	var spiral := []
 	for i in SPIRAL_LEAVES:
 		# Four leaves per turn: a leaf is 4 m above the one below it, so no leaf hangs low over
-		# another (or under the lower canopy's flexible leaves); the last leaf ends between the
-		# canopy leaves C1 and C3.
+		# another (or under the lower canopy's flexible leaves); the last leaf ends beside C3.
 		var a := deg_to_rad(SPIRAL_PHASE + i * SPIRAL_TURN)
 		var h := SPIRAL_START + i * SPIRAL_RISE
 		# Each leaf's base just clear of the tapering trunk, joined to it by its stalk.
@@ -519,7 +544,8 @@ static func _ball3(lb: LevelBuilder) -> void:
 	lb.parasite_xf(Parasite.Kind.SMALL, "canopy", leaf_mid(f1._pivot_xf, 2.0, 0.0), 1.2)
 	lb.mote_xf("canopy", leaf_mid(c2, 1.8, -0.5), 0.5)
 	lb.mote_xf("canopy", leaf_mid(c3, 3.6, 0.0), 0.5)
-	lb.mote_xf("canopy", leaf_mid(spiral[4], 2.2, 0.0), 0.6)
+	# Beside the 7th spiral leaf, away from the lower canopy (Expansion 6's quarter-turn spiral).
+	lb.mote_xf("canopy", leaf_mid(spiral[6], 2.2, 0.0), 0.6)
 	lb.bloom_xf(leaf_mid(c1, 2.6, 0.0))
 	lb.bloom_xf(C.p(-2.6, 0, -3.2))
 
@@ -537,9 +563,9 @@ static func _ball3(lb: LevelBuilder) -> void:
 	var ctops := []
 	for xf in spiral:
 		ctops.append(leaf_mid(xf, 1.5, 0.0).origin)
-	for lm in [[c1, 1.2], [c1, 2.6], [c1, 0.6], [c3, 1.0], [c3, 3.2], [c3, 0.8], [c1, 0.8], [c1, 3.8], [c1b, 1.6], [c2, 1.2], [c2, 3.8]]:
+	for lm in [[c3, 1.0], [c3, 3.2], [c3, 0.8], [c1, 0.8], [c1, 2.6], [c1, 3.8], [c1b, 1.6], [c2, 1.2], [c2, 3.8]]:
 		ctops.append(leaf_mid(lm[0], lm[1], 0.0).origin)
-	var cstart := b.surface_point(b.up_at(leaf_mid(spiral[0], 3.5, 0.0).origin))
+	var cstart := b.surface_point(b.up_at(leaf_mid(spiral[0], 4.4, 0.0).origin))
 	lb.bot_hints.append({"route": "canopy", "audit": true, "start": cstart, "tops": ctops, "zones": ["canopy"], "goal": "canopy"})
 	var fl := [leaf_mid(f1._pivot_xf, 1.7, 0.0).origin, leaf_mid(f2._pivot_xf, 1.6, 0.0).origin]
 	var near_leaf: Vector3 = ctops[0]

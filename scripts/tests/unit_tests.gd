@@ -14,7 +14,7 @@ func run(runner) -> void:
 	p.use_bot_input = true
 	await t.seconds(0.5)
 	var only: String = Settings.test_args.get("only", "")
-	for name_ in ["_test_startup", "_test_ota_and_version", "_test_mesh_winding", "_test_terrain", "_test_terrain_grounded", "_test_no_floating_platforms", "_test_parasite_locomotion", "_test_parasite_body_and_death", "_test_gill_look", "_test_placements", "_test_tutorial_route", "_test_sphere_walk", "_test_jump_and_burst", "_test_coyote_and_buffer", "_test_swipe_direction_and_stages", "_test_hard_landing", "_test_food", "_test_food_reach", "_test_darter_and_burrower", "_test_food_repopulates", "_test_motes", "_test_checkpoint_and_regen", "_test_crumble", "_test_restoration_continuity", "_test_vortex", "_test_current", "_test_canopy", "_test_canopy_plain_jumps", "_test_climbs_physical", "_test_jungle_ladders_physical", "_test_leaf_geometry", "_test_leaf_footing", "_test_caves", "_test_mounds", "_test_vegetation", "_test_vortex_mouths_clear", "_test_route_audit", "_test_new_areas", "_test_ecosystem", "_test_music", "_test_run_clock", "_test_completion_catalog", "_test_run_save_file", "_test_run_timer_live", "_test_run_continue", "_phase_continue_write", "_phase_continue_read", "_test_upgrades", "_test_ui", "_test_all_clear"]:
+	for name_ in ["_test_startup", "_test_ota_and_version", "_test_mesh_winding", "_test_terrain", "_test_terrain_grounded", "_test_no_floating_platforms", "_test_parasite_locomotion", "_test_parasite_body_and_death", "_test_gill_look", "_test_placements", "_test_tutorial_route", "_test_sphere_walk", "_test_jump_and_burst", "_test_coyote_and_buffer", "_test_swipe_direction_and_stages", "_test_hard_landing", "_test_food", "_test_food_reach", "_test_darter_and_burrower", "_test_food_repopulates", "_test_motes", "_test_checkpoint_and_regen", "_test_crumble", "_test_restoration_continuity", "_test_vortex", "_test_current", "_test_canopy", "_test_canopy_plain_jumps", "_test_climbs_physical", "_test_jungle_ladders_physical", "_test_leaf_geometry", "_test_leaf_footing", "_test_caves", "_test_mounds", "_test_vegetation", "_test_vortex_mouths_clear", "_test_route_audit", "_test_new_areas", "_test_ecosystem", "_test_music", "_test_run_clock", "_test_completion_catalog", "_test_run_save_file", "_test_run_timer_live", "_test_run_continue", "_test_timer_integrity", "_test_resume_points_safe", "_phase_continue_write", "_phase_continue_read", "_test_upgrades", "_test_ui", "_test_all_clear"]:
 		# "_phase_*" tests are halves of a relaunch test: they run only when asked for by name
 		# (in a child process started by _test_run_continue).
 		if name_.begins_with("_phase") and only != name_:
@@ -2919,7 +2919,7 @@ func _test_climbs_physical() -> void:
 	var picks := []
 	for b in g.balls:
 		for h in (b.get_meta("builder") as LevelBuilder).bot_hints:
-			if h.has("route") and h["route"] in ["spire", "terraces", "shelves", "high shelf", "tower"]:
+			if h.has("route") and h["route"] in ["spire", "terraces", "shelves", "high shelf", "tower", "canopy"]:
 				picks.append([b, h])
 	var results := []
 	var all_ok := true
@@ -2931,7 +2931,7 @@ func _test_climbs_physical() -> void:
 		all_ok = all_ok and reached == tops.size()
 		results.append("b%d %s %d/%d" % [e[0].index + 1, h["route"], reached, tops.size()])
 	p.invuln_t = 0.0
-	t.check("climbs_with_plain_jumps", all_ok and picks.size() >= 6, ", ".join(results))
+	t.check("climbs_with_plain_jumps", all_ok and picks.size() >= 7, ", ".join(results))
 
 
 ## Every jungle-stem ladder on Giant Stems (the owner's phone report), climbed from the ground to
@@ -2953,6 +2953,80 @@ func _test_jungle_ladders_physical() -> void:
 			bad.append("%s %d/%d" % [h["route"], reached, tops.size()])
 	p.invuln_t = 0.0
 	t.check("jungle_ladders_climbed_with_plain_jumps", n == 70 and bad.is_empty(), "%d stems, %d leaves; short: %s" % [n, leaves, str(bad)])
+
+
+## Expansion 6 (timer integrity): dying and respawning, and travelling by vortex, never reset or
+## rewind the run timer; an unfinished run never records a best finish.
+func _test_timer_integrity() -> void:
+	var clock: RunClock = g.clock
+	var best0: float = g.run_save.records()["best_finish_s"]
+	place_at(0, g.balls[0].surface_point(MossBall.dir_ll(10, 30), 0.2), Vector3.FORWARD)
+	await t.seconds(1.0)
+	var before := clock.play_s
+	p.invuln_t = 0.0
+	for i in 12:
+		p.invuln_t = 0.0
+		p.take_damage(1, p.global_position + Vector3(0.5, 0, 0))
+		await t.frames(2)
+	await t.seconds(4.0)
+	var after_death := clock.play_s
+	t.check("timer_keeps_running_through_death", after_death > before + 2.0 and clock.state == "running" and g.stats["deaths"] >= 1,
+			"%.2f -> %.2f s, deaths %d, state %s" % [before, after_death, g.stats["deaths"], clock.state])
+	var v: Vortex = g.balls[0].vortex_out
+	v.connected = true
+	var t0 := clock.play_s
+	g._start_cinematic("travel", {"v": v, "reverse": false})
+	var mono := true
+	var last := t0
+	for i in 60 * 8:
+		await t.frames(1)
+		mono = mono and clock.play_s >= last
+		last = clock.play_s
+		if g.cinematic == "" and i > 30:
+			break
+	t.check("timer_continues_through_vortex_travel", mono and clock.play_s > t0 + 1.0 and clock.state == "running", "%.2f -> %.2f s on ball %d" % [t0, clock.play_s, p.ball.index + 1])
+	t.check("unfinished_run_sets_no_best", g.run_save.records()["best_finish_s"] == best0 and clock.state != "finished", "best %.2f (was %.2f)" % [g.run_save.records()["best_finish_s"], best0])
+	p.invuln_t = 0.0
+
+
+## Expansion 6 (resume positions): every bloom is where a run resumes and where the axolotl comes
+## back after losing: there he lands on solid footing, stays put (no sliding off), is not inside
+## anything, and nothing hurts him in his first seconds there.
+func _test_resume_points_safe() -> void:
+	var bad: Array[String] = []
+	var n := 0
+	for b in g.balls:
+		for bl in b.blooms:
+			if not bl.is_placed():
+				continue
+			n += 1
+			var rp: Vector3 = bl.respawn_point()
+			# The game's own respawn: lost near this bloom, re-formed at it (Game._cine_regen).
+			place_at(b.index, b.surface_point(b.up_at(rp), 0.2), Vector3.FORWARD)
+			g.audio.set_ball(b.index, false)
+			g.checkpoint = bl
+			p.state = "dead"
+			g._on_player_died()
+			for i in 60 * 6:
+				await t.frames(1)
+				if g.cinematic == "":
+					break
+			p.bot_input = Vector2.ZERO
+			var hp := p.health
+			await t.seconds(0.6)
+			var settled := p.global_position
+			var grounded := p.grounded
+			await t.seconds(1.4)
+			var slid := p.global_position.distance_to(settled)
+			# (Current Hollows' current drifts him a little by design.)
+			var allow := 1.2 if b.index == 1 else 0.3
+			if p.global_position.distance_to(rp) > 5.0:
+				t.log_line("far: b%d bloom %s -> now ball %d at %s, state %s, cinematic '%s', vortex conn %s" % [b.index + 1, str(rp), p.ball.index + 1, str(p.global_position), p.state, g.cinematic, str(g.balls[b.index].vortex_out.connected if g.balls[b.index].vortex_out else "-")])
+			if not grounded or slid > allow or p.health < hp or p.global_position.distance_to(rp) > allow + 0.9:
+				bad.append("b%d bloom at %s: grounded %s, slid %.2f m, hurt %s, %.2f m from its point" % [b.index + 1, str(rp.snapped(Vector3.ONE * 0.1)), grounded, slid, p.health < hp, p.global_position.distance_to(rp)])
+	for x in bad:
+		t.log_line(x)
+	t.check("resume_points_safe", bad.is_empty() and n >= 20, "%d blooms; %s" % [n, str(bad.slice(0, 4))])
 
 
 ## Expansion 6: Gill reads as a soft, freckled axolotl, not shiny pink plastic, and none of it

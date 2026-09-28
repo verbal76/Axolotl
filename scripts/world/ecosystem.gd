@@ -181,7 +181,9 @@ func _crab(b: MossBall, h: Dictionary, i: int) -> void:
 	CrabGuardian.new().place(b, post, out, _seed(b, "crab", i + b.critters.size()))
 
 
-## An eel in a crevice of the grotto's side wall, on the side of the first ledge, near the door.
+## An eel in a crevice of the grotto's side wall near the door, on the side away from the ledges
+## (Expansion 6: its strike beside the climb knocked the axolotl off the ledges; it guards the
+## floor, not the optional climb).
 func _eel(b: MossBall, h: Dictionary, i: int) -> void:
 	var centre: Vector3 = h["centre"]
 	var up := b.up_at(centre)
@@ -191,7 +193,7 @@ func _eel(b: MossBall, h: Dictionary, i: int) -> void:
 	to_door = to_door.normalized()
 	var right := to_door.cross(up).normalized()
 	var l1: Vector3 = (h["ledges"][0] as Node3D).global_position
-	var side := signf((l1 - centre).dot(right))
+	var side := -signf((l1 - centre).dot(right))
 	if side == 0.0:
 		side = 1.0
 	var dir := (right * side + to_door * 0.2).normalized()

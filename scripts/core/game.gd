@@ -1069,6 +1069,11 @@ func _cine_regen() -> void:
 		player.place(b, dest_pos)
 		if target[2]:
 			(target[2] as Bloom).brighten()
+			# The bloom's pulse startles parasites off (Expansion 6): he never re-forms into an
+			# attack he cannot answer.
+			for par in b.parasites:
+				if par.is_alive() and par.global_position.distance_to(dest_pos) < 6.0:
+					par.startle(dest_pos)
 		audio.set_ball(b.index, true)
 		Sfx.play("reform", dest_pos)
 		cine_data["t_placed"] = cine_t
