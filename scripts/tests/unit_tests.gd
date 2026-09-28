@@ -80,6 +80,19 @@ func _test_music() -> void:
 		order.append(a.song_index)
 	t.check("music_songs_alternate", order[0] != order[1] and order[1] != order[2] and order[0] == order[2] and order[1] == order[3], str(order))
 	t.check("music_on_the_music_bus", a._song.bus == "Music", "")
+	# Muffling: a murky ball stays recognisable, a healed one is clear, and the cutoff glides.
+	var lp: AudioEffectLowPassFilter = AudioServer.get_bus_effect(AudioServer.get_bus_index("Music"), 0)
+	var rs: Array[float] = [0.0, 0.0, 0.0]
+	a.update_mix(rs, 0.0, 0)
+	var murky: float = a.cutoff_target
+	rs[0] = 1.0
+	a.update_mix(rs, 0.3, 0)
+	var clear: float = a.cutoff_target
+	lp.cutoff_hz = AudioDirector.MURKY_HZ
+	a._glide_cutoff(1.0 / 60.0)
+	var step: float = lp.cutoff_hz
+	t.check("music_murky_still_recognisable", murky >= 2000.0 and clear >= 17000.0 and step > AudioDirector.MURKY_HZ and step < 2500.0,
+			"murky %.0f Hz, healed %.0f Hz, one frame of glide %.0f Hz" % [murky, clear, step])
 	# The real handover: near the end of a song, the next one starts by itself.
 	var before: int = a.song_index
 	a._song.seek(a.current_song().get_length() - 0.4)

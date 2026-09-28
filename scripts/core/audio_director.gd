@@ -11,10 +11,16 @@ const SONGS: Array[String] = [
 	"res://assets/audio/music_bubbly_underworld.ogg",
 ]
 const SONG_DB := -1.5
+## Music lowpass: clear on the title; in play it runs from MURKY_HZ on a murky ball to CLEAR_HZ
+## on a healed one. The songs stay recognisable when murky (the old 750 Hz floor hid them).
+const CLEAR_HZ := 18000.0
+const MURKY_HZ := 2200.0
 
 var song_index := 0
 var _song: AudioStreamPlayer
 var _songs: Array[AudioStream] = []
+## Where the music lowpass is heading; the cutoff glides there (see _glide_cutoff).
+var cutoff_target := CLEAR_HZ
 var _lowpass: AudioEffectLowPassFilter
 var _out_lowpass: AudioEffectLowPassFilter
 var _water: AudioStreamPlayer
@@ -41,7 +47,7 @@ func _setup_buses() -> void:
 		AudioServer.set_bus_name(i, bus_name)
 		AudioServer.set_bus_send(i, "Master" if bus_name in ["Music", "SFX"] else "SFX")
 	_lowpass = AudioEffectLowPassFilter.new()
-	_lowpass.cutoff_hz = 900.0
+	_lowpass.cutoff_hz = CLEAR_HZ
 	AudioServer.add_bus_effect(AudioServer.get_bus_index("Music"), _lowpass)
 	_out_lowpass = AudioEffectLowPassFilter.new()
 	_out_lowpass.cutoff_hz = 1600.0
@@ -125,8 +131,7 @@ func update_mix(ball_r: Array[float], g: float, current: int) -> void:
 	_g = g
 	# Clarity: the music is muffled while the current ball is murky and opens up as it heals.
 	var rc: float = ball_r[current]
-	if _lowpass:
-		_lowpass.cutoff_hz = lerpf(750.0, 18000.0, pow(rc, 1.4))
+	cutoff_target = lerpf(MURKY_HZ, CLEAR_HZ, pow(rc, 1.4))
 	# The aquarium's own soundscape grows; outside sounds recede.
 	_water.volume_db = lerpf(-13.0, -10.0, g)
 	_life.volume_db = linear_to_db(maxf(0.0001, g * 0.55))
@@ -137,7 +142,18 @@ func update_mix(ball_r: Array[float], g: float, current: int) -> void:
 		_out_lowpass.cutoff_hz = lerpf(1600.0, 900.0, g)
 
 
+## Glides the music lowpass toward cutoff_target (on a log scale, ~1.5 s for the full range), so
+## leaving the title or arriving on another ball never snaps the sound.
+func _glide_cutoff(dt: float) -> void:
+	if _lowpass == null:
+		return
+	var target := cutoff_target if Game.inst != null and Game.inst.state == "play" else CLEAR_HZ
+	var l := log(_lowpass.cutoff_hz)
+	_lowpass.cutoff_hz = exp(move_toward(l, log(target), dt * 1.4))
+
+
 func _process(dt: float) -> void:
+	_glide_cutoff(dt)
 	if not _started or Game.inst == null or Game.inst.state != "play":
 		return
 	_out_timer -= dt
