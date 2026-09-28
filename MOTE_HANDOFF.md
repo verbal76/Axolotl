@@ -265,16 +265,26 @@ darters included.
   - they move the drawn rig, never the gameplay body, its collision or the camera;
   - choice and timing use the model's own random generator, which also runs blinks now;
   - tests: `_test_gill_idles`, `stretch_yawns_once`.
-- **Colours (owner request).** The pause menu's "Gill's colours" page (`scripts/ui/gill_page.gd`,
-  `GillLook`) has:
+- **Colours and patterns (owner requests).** "Gill's colours" (`scripts/ui/gill_page.gd`, `GillLook`)
+  opens from the pause menu and straight from the title screen. It has:
   - seven real axolotl morphs as swatches: Pink (the original), Golden, Wild, Melanoid, Copper,
     Lavender, Glow;
   - hue and shade sliders for his body and his freckles;
+  - a Pattern section:
+    - a built-in pattern (Spots, Stripes, Hearts, Stars, Leopard), drawn in code and tileable, or
+      "Upload a picture…";
+    - uploads use the phone's own file picker (`DisplayServer.file_dialog_show`; Godot's file
+      dialog where there is none). The picture's centre square is shrunk to 256 px and kept as
+      `user://gill_pattern.png`;
+    - the pattern replaces his freckles, either as markings in the freckle colour (a stencil: the
+      picture's see-through or dark parts) or in its own colours ("Full colour");
+    - it repeats 1–8 times round his body (whole repeats, so no seam) and as often along it; head and
+      limbs take it by a three-way projection;
   - a live preview in its own small viewport, drawn only while the page is open.
 
-  Every model recolours at once. The choice is kept per device in `user://settings.cfg` under
-  `[gill]`: additive keys, save schema 1 unchanged, and older files keep the pink. The gill fronds
-  keep their health colours. Tests: `_test_gill_colours`.
+  Every model updates at once. The choice is kept per device in `user://settings.cfg` under `[gill]`:
+  additive keys, save schema 1 unchanged, and older files keep the pink with freckles. The gill fronds
+  keep their health colours. Tests: `_test_gill_colours`, `_test_gill_patterns`.
 
 ## 7. World
 
@@ -628,6 +638,25 @@ These are implemented but lack automated evidence. They are **not** unimplemente
     - **Leaves:** healed rosettes and ferns are variegated: pink margins and cream stripes like an earth star, or white-centred like a fire-and-ice hosta.
     - **Frame rate:** watch for stutter in the restored tank, especially with light shafts in view.
     - **100%:** after finishing, the pause menu's completion keeps counting. Everything (blooms, caves, crabs, eels, species) can be earned, and the finish time never changes.
+
+16. **After the playtest-polish OTA (ledger PT) is active:**
+    - **Idles:** put the controller down for half a minute. Now and then, with no fixed order and never the same one twice running, Gill:
+      - rises onto his back legs and looks one way, then the other;
+      - scoots a little to each side and back;
+      - tilts his head and blinks;
+      - stretches with a tiny yawn (listen for it), then shakes;
+      - looks up at something drifting past.
+
+      Touch the stick or a button during any of them: he responds at once, with no delay.
+    - **Tail whip:** swipe near a parasite. His hips twist and the tail visibly sweeps round behind him, under the water arc. The arc now reaches as far as the swipe really hits (a little bigger than before). Hits, damage and timing feel exactly as before.
+    - **Plants:** stand still somewhere quiet (a reed bed, a jungle ladder, a healed ball's crown). Everything that should bend moves a little, each plant and leaf in its own time, never all together. Stems, rock and moss stay still. Walk through: plants still part round you, then settle back into their own sway.
+    - **Gill's colours:** from the title screen and from the pause menu:
+      - try each morph and the four sliders;
+      - try each pattern, "Full colour" on and off, and the repeats slider;
+      - Upload a picture: the phone's picker opens, and the picture ends up on Gill;
+      - close and reopen Mote: his colours and pattern are kept;
+      - check the page shows his face in the little preview.
+    - **Frame rate:** jungle, terraces and a healed ball, with the plants moving.
 
 Record results in the ledger (O-19, A-05, R-01, R-14, R-19, S-03, S-06, S-14, F-07, F-09, P-01, P-03, P-06, M-01, M-03, E1-01, E1-07, E1-09, E2-01, E2-02, E2-04, E2-05, E3-01, E3-02, E3-04, E4-01..E4-05, E5-02..E5-06, E6) only with the owner's evidence.
 
