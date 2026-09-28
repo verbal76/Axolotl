@@ -655,6 +655,9 @@ func _commit(dir: Vector3) -> void:
 ## Whether the ball's attack budget has room: at most MAX_COMMITTED attackers (and globs in flight)
 ## at once, and attacks starting at least COMMIT_GAP_FRAMES apart.
 func _may_commit() -> bool:
+	# Never while a cinematic has his controls.
+	if Game.inst.cinematic != "":
+		return false
 	var n := ParasiteGlob.incoming_on(ball)
 	for q in ball.parasites:
 		if q != self and q.is_alive() and q.state in ["windup", "attack"]:

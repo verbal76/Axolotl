@@ -3513,6 +3513,24 @@ func _test_parasite_combat() -> void:
 		jb.events_total -= 1
 		twin_c.queue_free()
 
+	# --- No hits while a cinematic has his controls (the vortex-connection shot): a parasite right
+	# by him holds off, and nothing can hurt him until he can act again.
+	hero.call(at.call(0.0, 0.0), fr.z * -1.0)
+	p.invuln_t = 0.0
+	var hp_c := p.health
+	put.call(med, at.call(0.0, 1.2))
+	med.variant = ""
+	g._start_cinematic("connect", {"v": b.vortices[0]})
+	var committed_c := false
+	for i in 60 * 3:
+		await t.frames(1)
+		committed_c = committed_c or med.state in ["windup", "attack"]
+	p.take_damage(1, med.global_position)
+	var hurt_c := p.health < hp_c
+	g._end_cinematic()
+	t.check("no_attacks_while_controls_taken", not committed_c and not hurt_c, "committed %s, hurt %s" % [committed_c, hurt_c])
+	park.call()
+
 	# --- Determinism: the same parasite set up twice decides the same way, and setting one up
 	# never draws from the gameplay random sequence. ---
 	seed(4242)

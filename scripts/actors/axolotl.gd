@@ -487,7 +487,9 @@ var last_hit_from := Vector3.ZERO
 
 
 func take_damage(amount: int, from_pos: Vector3) -> void:
-	if state != "normal" or invuln_t > 0.0:
+	# (Never while his controls are taken away, e.g. the vortex-connection shot: the playthrough
+	# found a parasite hitting him four times while he could not move.)
+	if state != "normal" or invuln_t > 0.0 or not controls_enabled:
 		return
 	health = maxi(0, health - amount)
 	last_hit_from = from_pos

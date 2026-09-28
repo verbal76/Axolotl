@@ -930,7 +930,7 @@ func fight_parasite(par: Parasite, timeout := 25.0) -> bool:
 			el += 0.2
 			continue
 		if Settings.test_args.has("trace_fight"):
-			t.log_line("fight t=%.1f dist %.2f dh %.2f par %s hp %d pgrounded %s" % [sim_time, dist, height_of(cp), par.state, par.hp, p.grounded])
+			t.log_line("fight t=%.1f dist %.2f dh %.2f par %s hp %d pgrounded %s controls %s" % [sim_time, dist, height_of(cp), par.state, par.hp, p.grounded, p.controls_enabled])
 		# Turn away so the parasite is behind, then swipe.
 		for k in 5:
 			set_stick(stick_for(-flat, 0.35))
