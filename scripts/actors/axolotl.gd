@@ -30,6 +30,11 @@ const SWIPE_TIME := 0.3
 const HARD_FALL := 3.4
 const EXTREME_FALL := 13.0
 const BODY_RADIUS := 0.3
+## The head: the axolotl's body collides as one sphere, but his head reaches HEAD_REACH ahead of it.
+## After each move the head guard keeps this sphere out of walls and ceilings (see _guard_head).
+const HEAD_REACH := 0.4
+const HEAD_HEIGHT := 0.28
+const HEAD_RADIUS := 0.17
 
 var ball: MossBall
 var cam: Node3D                  # FollowCam
@@ -125,6 +130,56 @@ func _r() -> float:
 
 func _lunge_target_valid() -> bool:
 	return _lunge_food != null and is_instance_valid(_lunge_food) and _lunge_food.is_catchable()
+
+
+var _head_q: PhysicsShapeQueryParameters3D
+
+
+## Centre of the head's collision sphere.
+func head_center() -> Vector3:
+	return global_position + up * HEAD_HEIGHT + facing * HEAD_REACH
+
+
+## Keeps the head out of walls and ceilings: its sphere is tested after each move and, where it
+## overlaps solid terrain, he is moved back out along the contact (and stops moving into it).
+## Walkable floors and slopes under the head are left to the body (a slope rising ahead is walked
+## up, not pushed away from), so traversal is unchanged; only the visible head no longer enters walls.
+func _guard_head() -> void:
+	var space := get_world_3d().direct_space_state
+	if _head_q == null:
+		_head_q = PhysicsShapeQueryParameters3D.new()
+		var sph := SphereShape3D.new()
+		sph.radius = HEAD_RADIUS
+		_head_q.shape = sph
+		_head_q.collision_mask = collision_mask
+		_head_q.exclude = [get_rid()]
+	var q := _head_q
+	for i in 3:
+		q.transform = Transform3D(Basis(), head_center())
+		var pts := space.collide_shape(q, 8)
+		var push := Vector3.ZERO
+		for k in range(0, pts.size(), 2):
+			# Pairs: the deepest point of the head inside the terrain, and the terrain surface.
+			var out: Vector3 = pts[k + 1] - pts[k]
+			if out.length() < 0.001:
+				continue
+			var n := out.normalized()
+			if n.dot(up) > cos(floor_max_angle):
+				continue   # ground he can stand on: the body handles floors and slopes
+			if n.dot(up) < -0.3:
+				# Ceiling: back away from it rather than into the floor.
+				var back := -facing
+				out = back * out.length() / maxf(0.35, -n.dot(up))
+				n = back
+			if out.length() > push.length():
+				push = out
+		if push == Vector3.ZERO:
+			return
+		global_position += push
+		var pn := push.normalized()
+		var into := velocity.dot(pn)
+		if into < 0.0:
+			velocity -= pn * into
 
 
 func head_position() -> Vector3:
@@ -262,6 +317,7 @@ func _physics_process(dt: float) -> void:
 	var was_grounded := grounded
 	var pre_vup := vup
 	move_and_slide()
+	_guard_head()
 	velocity -= cur
 	grounded = is_on_floor()
 	if _jumped_this_frame:

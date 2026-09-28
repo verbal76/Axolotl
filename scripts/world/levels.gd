@@ -7,11 +7,14 @@ const RADII := [24.0, 28.0, 30.0]
 
 const PALETTES := [
 	{"moss_healthy_a": Color(0.1, 0.34, 0.08), "moss_healthy_b": Color(0.36, 0.66, 0.2),
-		"moss_dead_a": Color(0.34, 0.33, 0.3), "moss_dead_b": Color(0.54, 0.52, 0.46)},
+		"moss_dead_a": Color(0.34, 0.33, 0.3), "moss_dead_b": Color(0.54, 0.52, 0.46),
+		"stone_a": Color(0.25, 0.2, 0.15), "stone_b": Color(0.47, 0.41, 0.32), "moss_tint": Color(0.44, 0.58, 0.14)},
 	{"moss_healthy_a": Color(0.05, 0.3, 0.16), "moss_healthy_b": Color(0.26, 0.62, 0.36),
-		"moss_dead_a": Color(0.33, 0.33, 0.31), "moss_dead_b": Color(0.52, 0.51, 0.47)},
+		"moss_dead_a": Color(0.33, 0.33, 0.31), "moss_dead_b": Color(0.52, 0.51, 0.47),
+		"stone_a": Color(0.2, 0.21, 0.21), "stone_b": Color(0.42, 0.44, 0.43), "moss_tint": Color(0.12, 0.5, 0.42)},
 	{"moss_healthy_a": Color(0.05, 0.24, 0.05), "moss_healthy_b": Color(0.3, 0.56, 0.12),
-		"moss_dead_a": Color(0.32, 0.31, 0.27), "moss_dead_b": Color(0.5, 0.48, 0.42)},
+		"moss_dead_a": Color(0.32, 0.31, 0.27), "moss_dead_b": Color(0.5, 0.48, 0.42),
+		"stone_a": Color(0.19, 0.14, 0.1), "stone_b": Color(0.38, 0.3, 0.22), "moss_tint": Color(0.5, 0.56, 0.1)},
 ]
 
 

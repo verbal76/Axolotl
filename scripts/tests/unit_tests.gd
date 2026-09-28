@@ -14,7 +14,7 @@ func run(runner) -> void:
 	p.use_bot_input = true
 	await t.seconds(0.5)
 	var only: String = Settings.test_args.get("only", "")
-	for name_ in ["_test_startup", "_test_ota_and_version", "_test_mesh_winding", "_test_terrain", "_test_terrain_grounded", "_test_no_floating_platforms", "_test_parasite_locomotion", "_test_placements", "_test_tutorial_route", "_test_sphere_walk", "_test_jump_and_burst", "_test_coyote_and_buffer", "_test_swipe_direction_and_stages", "_test_hard_landing", "_test_food", "_test_food_reach", "_test_darter_and_burrower", "_test_food_repopulates", "_test_motes", "_test_checkpoint_and_regen", "_test_crumble", "_test_restoration_continuity", "_test_vortex", "_test_current", "_test_canopy", "_test_canopy_plain_jumps", "_test_music", "_test_run_clock", "_test_completion_catalog", "_test_run_save_file", "_test_run_timer_live", "_test_run_continue", "_phase_continue_write", "_phase_continue_read", "_test_upgrades", "_test_ui", "_test_all_clear"]:
+	for name_ in ["_test_startup", "_test_ota_and_version", "_test_mesh_winding", "_test_terrain", "_test_terrain_grounded", "_test_no_floating_platforms", "_test_parasite_locomotion", "_test_placements", "_test_tutorial_route", "_test_sphere_walk", "_test_jump_and_burst", "_test_coyote_and_buffer", "_test_swipe_direction_and_stages", "_test_hard_landing", "_test_food", "_test_food_reach", "_test_darter_and_burrower", "_test_food_repopulates", "_test_motes", "_test_checkpoint_and_regen", "_test_crumble", "_test_restoration_continuity", "_test_vortex", "_test_current", "_test_canopy", "_test_canopy_plain_jumps", "_test_caves", "_test_mounds", "_test_music", "_test_run_clock", "_test_completion_catalog", "_test_run_save_file", "_test_run_timer_live", "_test_run_continue", "_phase_continue_write", "_phase_continue_read", "_test_upgrades", "_test_ui", "_test_all_clear"]:
 		# "_phase_*" tests are halves of a relaunch test: they run only when asked for by name
 		# (in a child process started by _test_run_continue).
 		if name_.begins_with("_phase") and only != name_:
@@ -55,6 +55,261 @@ func _test_startup() -> void:
 			net_before = true
 	t.check("startup_no_ota_check_before_usable", usable >= 0.0 and not net_before and not Boot.auto_check("start"), "")
 	t.check("startup_summary_for_pause_menu", StartupTrace.summary().begins_with("Last launch: Mote on screen after"), StartupTrace.summary())
+
+
+# --- caves (Expansion 2) -------------------------------------------------------------------
+
+func _cave_list() -> Array:
+	var out := []
+	for b in g.balls:
+		for h in (b.get_meta("builder") as LevelBuilder).bot_hints:
+			if h.has("cave"):
+				out.append([b, h])
+	return out
+
+
+## Whether the head sphere (a little smaller than the guard's, so resting against a wall does not
+## count) is in `body`'s walls or ceiling. Ground he can stand on is not a wall: walking up a
+## slope, the upright head meets the rising ground, as it always has.
+func _head_in(body: Node, shrink := 0.03) -> bool:
+	var q := PhysicsShapeQueryParameters3D.new()
+	var sph := SphereShape3D.new()
+	sph.radius = Axolotl.HEAD_RADIUS - shrink
+	q.shape = sph
+	q.transform = Transform3D(Basis(), p.head_center())
+	q.collision_mask = 1 | 2
+	var space := g.get_world_3d().direct_space_state
+	var mine := false
+	for hit in space.intersect_shape(q, 8):
+		mine = mine or hit["collider"] == body
+	if not mine:
+		return false
+	var pts := space.collide_shape(q, 16)
+	for k in range(0, pts.size(), 2):
+		var out: Vector3 = pts[k + 1] - pts[k]
+		if out.length() > 0.001 and out.normalized().dot(p.up) <= cos(p.floor_max_angle):
+			return true
+	return false
+
+
+## Caves (phone-found defects): an arched natural mouth instead of a doorway, the axolotl walks in and
+## out, his head never enters the walls or ceiling, collision is exactly what is drawn, the
+## ceiling is high enough over the whole floor, and each cave is its own shape.
+func _test_caves() -> void:
+	var caves := _cave_list()
+	var arched := true
+	var clear := true
+	var dims: Array[String] = []
+	var agree := true
+	for c in caves:
+		var h: Dictionary = c[1]
+		var info: Dictionary = h["shape"]
+		var widest := 0.0
+		var top := 0.0
+		for o in info["outline"]:
+			widest = maxf(widest, o[1])
+			if o[1] > 0.0:
+				top = maxf(top, o[0])
+		# A doorway is full width all the way up; an arch narrows toward a rounded crown.
+		var full := 0
+		var open := 0
+		var high_w := 0.0
+		for o in info["outline"]:
+			if o[1] > 0.0:
+				open += 1
+				if o[1] >= widest * 0.9:
+					full += 1
+				if o[0] >= top * 0.85:
+					high_w = maxf(high_w, o[1])
+		arched = arched and high_w < widest * 0.6 and full < open * 0.6
+		clear = clear and widest * 2.0 >= 2.3 and top >= 2.1
+		dims.append("%.2f m wide x %.2f m high" % [widest * 2.0, top])
+		# Collision is the drawn triangles, exactly.
+		var body: StaticBody3D = h["body"]
+		var mesh: ArrayMesh = (body.get_child(1) as MeshInstance3D).mesh
+		var verts: PackedVector3Array = mesh.surface_get_arrays(0)[Mesh.ARRAY_VERTEX]
+		var faces: PackedVector3Array = ((body.get_child(0) as CollisionShape3D).shape as ConcavePolygonShape3D).get_faces()
+		agree = agree and verts.size() == faces.size() and verts.size() > 0
+		for k in range(0, verts.size(), 97):
+			agree = agree and verts[k].is_equal_approx(faces[k])
+	t.check("cave_mouths_arched_not_rectangular", caves.size() == 3 and arched, ", ".join(dims))
+	t.check("cave_mouth_clearance", clear, "the axolotl is 0.6 m wide and about 0.6 m tall")
+	var uniq := {}
+	for d in dims:
+		uniq[d] = true
+	t.check("caves_vary", uniq.size() == caves.size(), "")
+	t.check("cave_collision_is_drawn_mesh", agree, "")
+	# Ceiling over every floor point inside (away from the walls by the axolotl's body): at least 1.8 m.
+	var low := INF
+	var where := ""
+	for c in caves:
+		var b: MossBall = c[0]
+		var h: Dictionary = c[1]
+		var body: StaticBody3D = h["body"]
+		var centre: Vector3 = h["centre"]
+		var up := b.up_at(centre)
+		var fx := MossBall.frame_at(up, 0.0)
+		var r_in: float = h["shape"]["interior_radius"] - 0.35
+		for gx in range(-8, 9):
+			for gz in range(-8, 9):
+				var off := (fx.x * gx + fx.z * gz) * 0.5
+				if off.length() > r_in:
+					continue
+				var fp := b.surface_point(b.up_at(centre + off), 0.05)
+				var q := PhysicsRayQueryParameters3D.create(fp, fp + b.up_at(fp) * 8.0, 1)
+				var excl: Array[RID] = []
+				for k in 6:
+					q.exclude = excl
+					var hit := g.get_world_3d().direct_space_state.intersect_ray(q)
+					if hit.is_empty():
+						break
+					if hit["collider"] == body:
+						var hgt: float = (hit["position"] - fp).length()
+						if hgt < low:
+							low = hgt
+							where = "ball %d" % (b.index + 1)
+						break
+					excl.append(hit["rid"])
+	t.check("cave_ceiling_clear_over_floor", low >= 1.8, "lowest ceiling over the floor %.2f m (%s)" % [low, where])
+	# Walk in through the mouth and back out.
+	var through := true
+	for c in caves:
+		var b: MossBall = c[0]
+		var h: Dictionary = c[1]
+		var centre: Vector3 = h["centre"]
+		var entry: Vector3 = h["entry"]
+		var door: Vector3 = h["door"]
+		p.invuln_t = 999
+		place_at(b.index, b.surface_point(b.up_at(entry), 0.2), door - entry)
+		var inside := false
+		for f in 420:
+			stick_toward(centre - p.global_position)
+			await t.frames(1)
+			if p.global_position.distance_to(centre) < float(h["shape"]["interior_radius"]) - 2.0:
+				inside = true
+				break
+		var outside := false
+		for f in 480:
+			stick_toward(entry - p.global_position)
+			await t.frames(1)
+			if p.global_position.distance_to(entry) < 1.2:
+				outside = true
+				break
+		p.bot_input = Vector2.ZERO
+		through = through and inside and outside
+		if not (inside and outside):
+			t.log_line("cave ball %d: in %s out %s" % [b.index + 1, inside, outside])
+	t.check("cave_walk_in_and_out", through, "")
+	# Head containment: from the middle, walk straight at the wall in ten directions (jumping to
+	# reach up under the vault); every frame the head stays out of the walls and ceiling.
+	var frames_in := 0
+	var frames := 0
+	for c in caves:
+		var b: MossBall = c[0]
+		var h: Dictionary = c[1]
+		var body: StaticBody3D = h["body"]
+		var centre: Vector3 = h["centre"]
+		var up := b.up_at(centre)
+		var mouth: Vector3 = (h["door"] as Vector3) - centre
+		for k in 10:
+			var dir := MossBall.frame_at(up, 0.0).z.rotated(up, TAU * k / 10.0)
+			if dir.angle_to(mouth - up * mouth.dot(up)) < deg_to_rad(25.0):
+				continue
+			place_at(b.index, b.surface_point(up, 0.2), dir)
+			for f in 200:
+				stick_toward(dir)
+				if f % 50 == 30:
+					Input.action_press("jump")
+				elif f % 50 == 40:
+					Input.action_release("jump")
+				await t.frames(1)
+				frames += 1
+				if _head_in(body):
+					frames_in += 1
+			Input.action_release("jump")
+	p.bot_input = Vector2.ZERO
+	t.check("cave_head_stays_out_of_walls", frames > 1000 and frames_in == 0, "%d of %d frames with the head in the rock" % [frames_in, frames])
+
+
+## Mounds (the platforms, owner phone feedback "walls too straight, a perfect 90 into the
+## ground"): tops exactly at their designed height, sides that sweep into the ground, and the sweep
+## only standable in its lowest part (so it is no step up); the head stays out of their walls too.
+func _test_mounds() -> void:
+	var space := g.get_world_3d().direct_space_state
+	var n := 0
+	var top_ok := true
+	var bad_tops: Array[String] = []
+	var worst_step := 0.0
+	var worst_at := ""
+	for b in g.balls:
+		var lb: LevelBuilder = b.get_meta("builder")
+		for body in _grounded_nodes(lb.root):
+			if body.get_meta("grounded") != "cushion":
+				continue
+			n += 1
+			var centre: Vector3 = body.global_position
+			var up := b.up_at(centre)
+			var top: float = body.get_meta("top")
+			var radius: float = body.get_meta("radius")
+			# The top, straight down onto the middle (looking past anything above it, like a cave roof).
+			var hit := _ray_to(space, centre + up * (top + 2.0), centre, body)
+			if hit.is_empty() or absf((hit["position"] - centre).dot(up) - top) > 0.08:
+				top_ok = false
+				bad_tops.append("ball %d top %.2f" % [b.index + 1, top])
+			# The flanks, on eight sides outside the top: any point Gill could stand on (slope under
+			# 52 degrees) must be low, so the sweep into the ground is no step up.
+			for k in 8:
+				var side := MossBall.frame_at(up, 0.0).x.rotated(up, TAU * k / 8.0)
+				for step in 30:
+					var r := radius * 2.2 - step * 0.05
+					if r <= radius * 1.02:
+						break
+					var from := centre + side * r + up * (top + 2.0)
+					var rh := _ray_to(space, from, from - up * (top + 4.0), body)
+					if rh.is_empty():
+						continue
+					var slope := rad_to_deg((rh["normal"] as Vector3).angle_to(b.up_at(rh["position"])))
+					if slope < 52.0:
+						# Height above the mound's own base (it may stand on a rolling hill).
+						var hh: float = b.altitude(rh["position"]) - b.altitude(centre)
+						if hh > worst_step:
+							worst_step = hh
+							worst_at = "ball %d mound r %.1f top %.1f, %.2f m out, slope %.0f" % [b.index + 1, radius, top, r, slope]
+	t.check("mounds_tops_at_design_height", n >= 10 and top_ok, "%d mounds %s" % [n, ", ".join(bad_tops)])
+	t.check("mounds_flare_not_a_step", worst_step < 0.35, "highest standable point on a flank %.2f m above the ground (%s)" % [worst_step, worst_at])
+	# Walk straight at the tutorial mound M2 (open ground): the head stops at its wall.
+	var b0 := g.balls[0]
+	var m2_dir := MossBall.dir_ll(57.5, 0)
+	var m2: StaticBody3D = null
+	for body in _grounded_nodes((b0.get_meta("builder") as LevelBuilder).root):
+		if body.get_meta("grounded") == "cushion" and (m2 == null or b0.up_at(body.global_position).angle_to(m2_dir) < b0.up_at(m2.global_position).angle_to(m2_dir)):
+			m2 = body
+	var up0 := b0.up_at(m2.global_position)
+	var side0 := MossBall.frame_at(up0, 0.0).x
+	place_at(0, b0.surface_point(b0.up_at(m2.global_position + side0 * 5.0), 0.2), -side0)
+	var inside := 0
+	var touched := false
+	for f in 180:
+		stick_toward(m2.global_position - p.global_position)
+		await t.frames(1)
+		if _head_in(m2):
+			inside += 1
+		touched = touched or _head_in(m2, -0.08)
+	p.bot_input = Vector2.ZERO
+	t.check("head_stays_out_of_mound_walls", touched and inside == 0, "reached the wall %s; head in it %d of 180 frames" % [touched, inside])
+
+
+## First hit on `body` along a ray, looking past anything else in the way.
+func _ray_to(space: PhysicsDirectSpaceState3D, from: Vector3, to: Vector3, body: Node) -> Dictionary:
+	var q := PhysicsRayQueryParameters3D.create(from, to, 1 | 2)
+	var excl: Array[RID] = []
+	for k in 8:
+		q.exclude = excl
+		var hit := space.intersect_ray(q)
+		if hit.is_empty() or hit["collider"] == body:
+			return hit
+		excl.append(hit["rid"])
+	return {}
 
 
 # --- run timer, completion, run save ----------------------------------------------------
@@ -510,12 +765,35 @@ func _front_faces_out(mesh: ArrayMesh, interior: Callable) -> int:
 func _test_mesh_winding() -> void:
 	var cushion := _front_faces_out(MeshLib.cushion_mesh(1.4, 2.8, 1.5), func(_c: Vector3) -> Vector3: return Vector3(0, 1.0, 0))
 	t.check("cushion_faces_outward", cushion == 0, "%d inward faces" % cushion)
+	var mound: ArrayMesh = MeshLib.mound(1.4, 2.8, 1.5, 7)[0]
+	var mound_bad := _front_faces_out(mound, func(c: Vector3) -> Vector3: return Vector3(0, minf(c.y, 0.0) - 1.0, 0))
+	t.check("mound_faces_outward", mound_bad == 0, "%d inward faces" % mound_bad)
 	var stem := _front_faces_out(MeshLib.stem_mesh(0.3, 0.2, 3.0, 9), func(c: Vector3) -> Vector3: return Vector3(0, c.y, 0))
 	t.check("stem_faces_outward", stem == 0, "%d inward faces" % stem)
-	# Dome: outer layer faces out, inner layer faces into the cave.
-	var dome: ArrayMesh = MeshLib.dome_shell(8.0, 0.9, 0.9, 2.6, 1.8)[0]
-	var dome_bad := _front_faces_out(dome, func(c: Vector3) -> Vector3: return Vector3.ZERO if Vector3(c.x, c.y / 0.9, c.z).length() > 7.55 else c * 2.0)
-	t.check("cave_dome_faces_correct_side", dome_bad == 0, "%d wrong faces" % dome_bad)
+	# Cave: the outside faces out, the inside faces into the cave, the jambs face into the mouth.
+	var cave: Array = MeshLib.cave_mound({"seed": 3})
+	var f: PackedVector3Array = cave[1]
+	var parts: Dictionary = cave[2]
+	var wrong := [0, 0, 0]
+	for k in range(0, f.size(), 3):
+		var n := (f[k + 2] - f[k]).cross(f[k + 1] - f[k])
+		if n.length_squared() < 1e-10:
+			continue
+		var c := (f[k] + f[k + 1] + f[k + 2]) / 3.0
+		var ti := k / 3
+		var part := 0 if ti < parts["inner"] else (1 if ti < parts["jamb"] else 2)
+		var axis := Vector3(0.0, c.y, 0.0)
+		if part == 2:
+			# Jambs face into the mouth (toward its centre line), or down where the two meet over
+			# it as the roof; faces lying on the centre line itself have no side.
+			var nn := n.normalized()
+			if not (nn.y < -0.2 or nn.x * c.x < 0.0 or absf(c.x) < 0.005):
+				wrong[part] += 1
+			continue
+		var want: Vector3 = [c - axis, axis - c][part]
+		if want.length_squared() > 1e-6 and n.dot(want) <= 0.0:
+			wrong[part] += 1
+	t.check("cave_faces_correct_side", wrong == [0, 0, 0], "wrong faces outer %d, inner %d, jambs %d of %d" % [wrong[0], wrong[1], wrong[2], parts["total"]])
 
 
 ## Rolling hills: smooth, walkable, and the collision matches what is drawn.
@@ -1125,7 +1403,17 @@ func _test_coyote_and_buffer() -> void:
 	p.invuln_t = 0.0
 
 
+## Waits out any cinematic (e.g. the tutorial's framing shot after its patch is cleared), which
+## takes the controls away for a few seconds, so an input test is not decided by timing.
+func controls_ready() -> void:
+	for i in 60 * 8:
+		if g.cinematic == "" and p.controls_enabled:
+			return
+		await t.frames(1)
+
+
 func _swipe_at(par: Parasite, behind: bool) -> void:
+	await controls_ready()
 	var b := par.ball
 	var up := b.up_at(par.global_position)
 	var fwd := MossBall.frame_at(up, 0).z * -1.0
@@ -1140,6 +1428,7 @@ func _swipe_at(par: Parasite, behind: bool) -> void:
 
 ## Stand 1.1 from the parasite, facing `fwd`, with the parasite `deg` degrees off that facing.
 func _place_at_angle(par: Parasite, deg: float) -> void:
+	await controls_ready()
 	var b := par.ball
 	var up := b.up_at(par.global_position)
 	var fwd := MossBall.frame_at(up, 0).z * -1.0

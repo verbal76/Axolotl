@@ -37,6 +37,42 @@ func run(runner) -> void:
 			g.cam.snap_behind()
 			await t.seconds(1.5)
 			await t.shot("05_ball%d" % (i + 1))
+	if only == "" or only == "caves":
+		# Every cave: its entrance from outside, and its interior from the door.
+		for b in g.balls:
+			var lb: LevelBuilder = b.get_meta("builder")
+			for h in lb.bot_hints:
+				if not h.has("cave"):
+					continue
+				var entry: Vector3 = h["entry"]
+				var door: Vector3 = h["door"]
+				var out_dir := b.up_at(entry)
+				var back := (entry - door)
+				back -= out_dir * back.dot(out_dir)
+				g.player.place(b, b.surface_point(b.up_at(entry + back.normalized() * 2.5), 0.2), door - entry)
+				g.cam.snap_behind()
+				await t.seconds(1.2)
+				await t.shot("cave_b%d_entrance" % (b.index + 1))
+				g.player.place(b, b.surface_point(b.up_at(door), 0.2), door - entry)
+				g.cam.snap_behind()
+				await t.seconds(1.2)
+				await t.shot("cave_b%d_inside" % (b.index + 1))
+	if only == "perf":
+		# Rendering cost at fixed views: frame time (software renderer here, so a proxy for GPU
+		# fill cost, not phone numbers), draw calls, triangles and video memory.
+		var views := [[0, 66.0, 0.0, 50.0], [0, 10.0, 30.0, 0.0], [1, 10.0, 70.0, 0.0], [2, 10.0, 110.0, 0.0]]
+		for v in views:
+			var b := g.balls[v[0]]
+			var at := MossBall.dir_ll(v[1], v[2])
+			g.player.place(b, b.surface_point(at, 0.2), Vector3.FORWARD if v[3] == 0.0 else b.surface_point(MossBall.dir_ll(v[3], v[2])) - b.surface_point(at))
+			g.cam.snap_behind()
+			await _perf_view("ball%d_%d_%d" % [v[0] + 1, v[1], v[2]])
+		var lb: LevelBuilder = g.balls[0].get_meta("builder")
+		for h in lb.bot_hints:
+			if h.has("cave"):
+				g.player.place(g.balls[0], g.balls[0].surface_point(g.balls[0].up_at(h["door"]), 0.2), (h["door"] as Vector3) - (h["entry"] as Vector3))
+				g.cam.snap_behind()
+				await _perf_view("cave_b1")
 	if only == "b2out":
 		var b := g.balls[1]
 		var v: Vortex = b.vortex_out
@@ -205,3 +241,16 @@ func _moments(g: Game) -> void:
 	g.hud.show_all_clear()
 	await t.seconds(3.0)
 	await t.shot("23_all_clear")
+
+
+func _perf_view(label: String) -> void:
+	await t.seconds(1.0)
+	await RenderingServer.frame_post_draw
+	var t0 := Time.get_ticks_usec()
+	for i in 60:
+		await RenderingServer.frame_post_draw
+	var ms := (Time.get_ticks_usec() - t0) / 1000.0 / 60.0
+	t.log_line("PERF %s  %.1f ms/frame  draw calls %d  triangles %d  video mem %.1f MB" % [label, ms,
+			Performance.get_monitor(Performance.RENDER_TOTAL_DRAW_CALLS_IN_FRAME),
+			Performance.get_monitor(Performance.RENDER_TOTAL_PRIMITIVES_IN_FRAME),
+			Performance.get_monitor(Performance.RENDER_VIDEO_MEM_USED) / 1048576.0])

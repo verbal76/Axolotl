@@ -110,6 +110,9 @@ func make_moss_material(extra := {}) -> ShaderMaterial:
 	for k in ["healthy_a", "healthy_b", "dead_a", "dead_b"]:
 		if palette.has("moss_" + k):
 			m.set_shader_parameter(k, palette["moss_" + k])
+	for k in ["stone_a", "stone_b", "moss_tint"]:
+		if palette.has(k):
+			m.set_shader_parameter(k, palette[k])
 	for k in extra:
 		m.set_shader_parameter(k, extra[k])
 	return register_material(m)

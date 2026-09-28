@@ -42,23 +42,29 @@ func hill(lat: float, lon: float, rs: float, h: float) -> void:
 	ball.add_hill(d(lat, lon), footprint * 1.5 / ball.radius, h)
 
 
-## Moss cushion: rounded, steep-sided platform. Returns the body; `top` height in meta.
+## Moss cushion (platform/ledge): a natural mound with a flat top. Returns the body; `top` height in meta.
 func cushion(lat: float, lon: float, radius: float, height: float, xf_override: Variant = null) -> StaticBody3D:
 	var xf: Transform3D = xf_override if xf_override != null else ball.xform_on_dir(d(lat, lon))
 	var body := StaticBody3D.new()
 	body.collision_layer = 1
 	root.add_child(body)
 	body.global_transform = xf
+	# A natural mound (MeshLib.mound): flared into the ground, irregular outline, collision = mesh.
+	var inv := xf.affine_inverse()
+	var ground := func(x: float, z: float) -> float:
+		return (inv * ball.surface_point(ball.up_at(xf * Vector3(x, 0.0, z)), 0.0)).y
+	var res := MeshLib.mound(radius, height, 1.5, hash(xf.origin.snapped(Vector3.ONE * 0.01)), 28, ground)
 	var cs := CollisionShape3D.new()
-	var hull := ConvexPolygonShape3D.new()
-	hull.points = MeshLib.cushion_hull(radius, height, 1.5)
-	cs.shape = hull
+	var shape := ConcavePolygonShape3D.new()
+	shape.set_faces(res[1])
+	cs.shape = shape
 	body.add_child(cs)
 	var mi := MeshInstance3D.new()
-	mi.mesh = MeshLib.cushion_mesh(radius, height, 1.5)
+	mi.mesh = res[0]
 	mi.material_override = ball.moss_material
 	body.add_child(mi)
 	body.set_meta("top", height)
+	body.set_meta("radius", radius)
 	body.set_meta("grounded", "cushion")
 	return body
 
@@ -242,8 +248,14 @@ func strands(xf: Transform3D, width: float, depth: float, height: float, count: 
 ## Inside: a short optional climb to one permanent health upgrade.
 func cave(lat: float, lon: float, heading: float, radius := 8.0) -> void:
 	var xf := at(lat, lon, heading, 0, 0, 0)
-	# Rim skirt deep enough for the ball's curvature under the dome, plus a margin for slopes.
-	var res := MeshLib.dome_shell(radius, 0.9, 0.9, 2.6, 1.8, 1.2 + radius * radius / (2.0 * ball.radius) + 0.4)
+	# Each cave is its own formation: size, mouth and lumps vary with a seed from its site, within
+	# ranges that keep the interior climb, the mouth clearance and the ceiling height (MeshLib.cave_mound).
+	var rng := RandomNumberGenerator.new()
+	rng.seed = hash(Vector2i(roundi(lat * 10.0), roundi(lon * 10.0)))
+	var res := MeshLib.cave_mound({"radius": radius * rng.randf_range(0.98, 1.05), "height": rng.randf_range(7.0, 7.5),
+			"thickness": 1.3, "door_w": rng.randf_range(2.5, 2.9), "door_h": rng.randf_range(2.3, 2.6), "wall_h": 1.9,
+			# Base deep enough for the ball's curvature under the mound, plus a margin for slopes.
+			"sink": 1.2 + radius * radius / (2.0 * ball.radius) + 0.4, "ball_radius": ball.radius, "seed": rng.randi()})
 	var body := StaticBody3D.new()
 	body.collision_layer = 1
 	root.add_child(body)
@@ -289,7 +301,6 @@ func cave(lat: float, lon: float, heading: float, radius := 8.0) -> void:
 	spore_mat.emission_enabled = true
 	spore_mat.emission = Color(0.5, 1.0, 0.8)
 	spore_mat.emission_energy_multiplier = 3.0
-	var rng := RandomNumberGenerator.new()
 	rng.seed = int(lon * 10)
 	var sm := SphereMesh.new()
 	sm.radius = 0.04
@@ -310,5 +321,5 @@ func cave(lat: float, lon: float, heading: float, radius := 8.0) -> void:
 	mmi.material_override = spore_mat
 	mmi.top_level = true
 	root.add_child(mmi)
-	bot_hints.append({"cave": true, "entry": at(lat, lon, heading, 0, 0, -radius - 2.5).origin, "door": at(lat, lon, heading, 0, 0, -radius + 1.0).origin,
+	bot_hints.append({"cave": true, "body": body, "shape": res[2], "centre": xf.origin, "entry": at(lat, lon, heading, 0, 0, -radius - 2.5).origin, "door": at(lat, lon, heading, 0, 0, -radius + 1.0).origin,
 			"ledges": [l1, l2, l3], "upgrade": up_xf.origin})

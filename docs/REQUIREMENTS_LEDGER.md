@@ -279,6 +279,22 @@ a pause-menu toggle; completion weighted by category.
 | E1-10 | Diagnostics: timer state, run time, finished, frozen time, completion, run save format and origin, catalog version | I+V | `Game.run_diagnostics_text` through `StartupTrace.timeline_text` (the r5 bootstrap's game-layer hook; no native change) | `diagnostics_show_run_timer` |
 | E1-11 | Ships by OTA, no APK | I+V | Game layer only (no `scripts/boot/`, `project.godot`, `export_presets.cfg` or runtime lock changes); runtime r5 unchanged | dev-000018 (OTA publish #18, source `27d6d44`, PCK `2d980e7e…20e66a`, 8,773,516 bytes, baked, save schema 1): signature with the pinned key (a003a45c…), hash, size, inspector verified from public URLs; a b22 client downloads and stages it; the relaunch phases pass run from the pack; Build & Verify #26: Android APK skipped |
 
+## E2 — Expansion 2: living terrain + cave repair (owner, 2026-09-28)
+
+Design: `docs/TERRAIN.md`. Owner decisions (2026-09-28): add a head collider to Gill; "moss over
+stone" look; organic mounds instead of cylinders. Owner phone feedback during the work: "Walls are
+too straight, it's a perfect 90 into the ground" (the platforms).
+
+| ID | Requirement | Status | Implementation | Evidence |
+|---|---|---|---|---|
+| E2-01 | Cave entrance: natural irregular arched mouth integrated into the terrain, rounded sides, a brow, clear to enter | I+V / needs phone | `MeshLib.cave_mound`: rows × columns warped round the arch; jamb strips with a bullnose; a brow; the base flares into the ground. Root cause: `dome_shell` deleted quads inside a box, making a rectangular stair-stepped hole with an open slot inside the wall. All 3 caves used it; all 3 are repaired | `cave_mouths_arched_not_rectangular` (2.97–3.00 m wide, 2.21–2.41 m high), `cave_mouth_clearance`, `cave_walk_in_and_out`, `cave_faces_correct_side` |
+| E2-02 | Cave interior: the head never enters walls or ceiling; collision matches what is drawn | I+V / needs phone | Root cause: Gill collides as one 0.3 m sphere with his head 0.4–0.55 m ahead, and the old dome's ceiling tapered to the floor. Fix: `Axolotl._guard_head` (the head sphere is kept out of walls and ceilings everywhere, body unchanged); interior walls vertical for 1.9 m before the vault; collision = drawn triangles | `cave_head_stays_out_of_walls` (0 of 5000 frames; 3199 of 5000 with the guard disabled), `head_stays_out_of_mound_walls`, `cave_collision_is_drawn_mesh`, `cave_ceiling_clear_over_floor` (lowest 3.87 m) |
+| E2-03 | Reusable cave vocabulary with variation | I+V | Seeded per site: size, height, mouth width and height, lumps | `caves_vary` |
+| E2-04 | Terrain material: moss over earth/stone, no stretching, organic transitions, variation, per-ball palettes | I+V / needs phone | `shaders/moss.gdshader` (slope-driven moss cover, biplanar, strata, tufts, macro tint; 8 fetches, down from 9); `Levels.PALETTES` stone/tint | visual review of rendered shots; all terrain tests |
+| E2-05 | Platforms: organic mounds, no 90° walls into the ground, routes preserved | I+V / needs phone | `MeshLib.mound`: rounded rim, sides leaning out at 75°, concave sweep into the ground following the real terrain; irregular outline; top exact; collision = mesh | `mounds_tops_at_design_height`, `mounds_flare_not_a_step` (0.23 m), `mound_faces_outward`; tutorial, jump/burst, canopy and placement tests; playthroughs |
+| E2-06 | No new floating terrain or gaps; previous protections kept | I+V | | `terrain_structures_meet_the_ground` (132 structures), `terrain_no_unsupported_platforms` |
+| E2-07 | Mobile performance measured | I+V | `--test=shots --only=perf` | `docs/TERRAIN.md` Performance |
+
 ## Precedence notes
 
 - The reconciliation prompt's floor list repeats two items that the owner changed earlier today: "diegetic
