@@ -274,7 +274,7 @@ func eaten() -> void:
 
 func _physics_process(dt: float) -> void:
 	var g := Game.inst
-	if g == null or g.player.ball != ball:
+	if g == null or g.player.ball != ball or not g.near_player(global_position):
 		return
 	_t += dt
 	_cd = maxf(0.0, _cd - dt)

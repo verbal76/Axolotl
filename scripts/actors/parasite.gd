@@ -322,6 +322,9 @@ func _physics_process(dt: float) -> void:
 	# Parasites on other moss balls sleep (they don't respawn and keep their state).
 	if state != "drifting" and g.player.ball != ball:
 		return
+	# Far from him on his own ball they pause too (world expansion: only his region runs).
+	if state not in ["drifting", "dying"] and not g.near_player(global_position):
+		return
 	state_t += dt
 	hit_cd = maxf(0.0, hit_cd - dt)
 	_shaken = maxf(0.0, _shaken - dt)

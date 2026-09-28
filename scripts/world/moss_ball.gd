@@ -367,6 +367,9 @@ const FACES := [[Vector3.RIGHT, Vector3.BACK, Vector3.UP], [Vector3.LEFT, Vector
 ## Beyond this distance from the ball's surface the far mesh is drawn instead of the tiles.
 const FAR_LOD_M := 70.0
 var terrain_chunks: Array[MeshInstance3D] = []
+## Per ground chunk: its centre direction and angular radius (for horizon culling).
+var _chunk_dirs: Array[Vector3] = []
+var _chunk_ang: Array[float] = []
 var _terrain_shapes: Array[CollisionShape3D] = []
 var terrain_tile_count := 0
 var terrain_collision_tiles := 0
@@ -389,6 +392,8 @@ func finalize_terrain() -> void:
 	for c in terrain_chunks:
 		c.queue_free()
 	terrain_chunks.clear()
+	_chunk_dirs.clear()
+	_chunk_ang.clear()
 	for cs in _terrain_shapes:
 		cs.queue_free()
 	_terrain_shapes.clear()
@@ -419,6 +424,10 @@ func finalize_terrain() -> void:
 				mi.visibility_range_end_margin = 4.0
 				add_child(mi)
 				terrain_chunks.append(mi)
+				var cd := _cube_dir(FACES[f], -1.0 + (2.0 * cx + 1.0) / CHUNKS_PER_EDGE, -1.0 + (2.0 * cy + 1.0) / CHUNKS_PER_EDGE)
+				var corner := _cube_dir(FACES[f], -1.0 + 2.0 * cx / CHUNKS_PER_EDGE, -1.0 + 2.0 * cy / CHUNKS_PER_EDGE)
+				_chunk_dirs.append(cd)
+				_chunk_ang.append(cd.angle_to(corner) * 1.15)
 	# The far mesh: the whole ball, light (hills and ravines at a coarse spacing).
 	_surface.mesh = _far_mesh()
 	_surface.visibility_range_begin = radius + FAR_LOD_M
@@ -438,6 +447,7 @@ func _build_tile(face: Array, tx: int, ty: int, tiles: int, verts: PackedVector3
 			var v := -1.0 + 2.0 * (ty + float(j - 1) / q) / tiles
 			var d := _cube_dir(face, u, v)
 			var h := terrain_height(d)
+			terrain_max_h = maxf(terrain_max_h, h)
 			if h > 0.01 and i > 0 and j > 0 and i < n - 1 and j < n - 1:
 				raised = true
 			pos[j * n + i] = d * (radius + h)
@@ -477,6 +487,32 @@ func _build_tile(face: Array, tx: int, ty: int, tiles: int, verts: PackedVector3
 		static_body.add_child(cs)
 		_terrain_shapes.append(cs)
 		terrain_collision_tiles += 1
+
+
+## Horizon culling: ground and vegetation chunks wholly below the camera's horizon (seen over the
+## ball's bulge, allowing for the tallest ground and plants) are not drawn.
+var terrain_max_h := 0.0
+var chunks_hidden := 0
+
+
+func update_visibility(cam_pos: Vector3) -> void:
+	var to_cam := cam_pos - global_position
+	var dist := to_cam.length()
+	chunks_hidden = 0
+	if dist < radius + 1.0:
+		return
+	var cam_dir := to_cam / dist
+	# The camera sees over the bulge to this angle; tall things beyond it still show their tops.
+	var horizon := acos(clampf(radius / dist, -1.0, 1.0)) + acos(clampf(radius / (radius + terrain_max_h + 8.0), -1.0, 1.0))
+	for i in terrain_chunks.size():
+		var vis := cam_dir.angle_to(_chunk_dirs[i]) < horizon + _chunk_ang[i]
+		terrain_chunks[i].visible = vis
+		if not vis:
+			chunks_hidden += 1
+	for c in _veg_parent.get_children():
+		if c is Node3D and c.has_meta("chunk_dir"):
+			var vis2: bool = cam_dir.angle_to(c.get_meta("chunk_dir")) < horizon + float(c.get_meta("chunk_ang", 0.9))
+			(c as Node3D).visible = vis2
 
 
 func _far_mesh() -> ArrayMesh:
@@ -859,9 +895,26 @@ func scatter(mesh: Mesh, mat: Material, count: int, seed_v: int, scale_min: floa
 		mmi.visibility_range_end = vis_end
 		mmi.visibility_range_end_margin = 10.0
 		mmi.visibility_range_fade_mode = GeometryInstance3D.VISIBILITY_RANGE_FADE_SELF
+		tag_chunk(mmi, list)
 		_veg_parent.add_child(mmi)
 		out.append(mmi)
 	return out
+
+
+## Marks an instanced node with the direction and angular spread of its instances (ball-local
+## transforms), for horizon culling.
+static func tag_chunk(node: Node3D, xforms: Array) -> void:
+	var c := Vector3.ZERO
+	for x in xforms:
+		c += (x as Transform3D).origin.normalized()
+	if c.length_squared() < 1e-8:
+		return
+	c = c.normalized()
+	var spread := 0.0
+	for x in xforms:
+		spread = maxf(spread, c.angle_to((x as Transform3D).origin))
+	node.set_meta("chunk_dir", c)
+	node.set_meta("chunk_ang", spread + 0.05)
 
 
 ## Adds an instanced vegetation node (Vegetation.field and friends) to this ball's vegetation,

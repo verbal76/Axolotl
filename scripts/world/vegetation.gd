@@ -142,6 +142,7 @@ static func _plant(ball: MossBall, family: String, dirs: Array[Vector3], rng: Ra
 		mmi.visibility_range_end_margin = 10.0
 		mmi.visibility_range_fade_mode = GeometryInstance3D.VISIBILITY_RANGE_FADE_SELF
 		mmi.set_meta("veg_family", family)
+		MossBall.tag_chunk(mmi, list)
 		# The placements, readable without a renderer (tests; headless runs keep no instance data).
 		var xfs: Array[Transform3D] = []
 		xfs.assign(list)

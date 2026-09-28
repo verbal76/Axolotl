@@ -170,6 +170,8 @@ func _physics_process(dt: float) -> void:
 	_t += dt
 	if Game.inst.player.ball != ball:
 		return
+	if state == "wander" and not Game.inst.near_player(global_position):
+		return
 	match state:
 		"wander":
 			_update_wander(dt)

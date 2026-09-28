@@ -432,7 +432,7 @@ func _test_vegetation() -> void:
 	t.check("wake_follows_axolotl", run > 0.8 and far < 0.01 and ahead > 0.3, "around him %.2f, 5 m away %.3f, just ahead %.2f" % [run, far, ahead])
 	t.check("wake_grows_with_speed", rest < creep and creep < run * 0.85 and rest < 0.6, "standing %.2f, creeping %.2f, running %.2f" % [rest, creep, run])
 	# Behind him the plants recover progressively; when he stops, the wake settles and stays settled.
-	var passed := p.global_position - p.facing * 1.2
+	var passed := p.global_position - p.facing * 2.0
 	var just := g.wake.bend_at(b, b.surface_point(b.up_at(passed), 0.0), 2.2).length()
 	p.bot_input = Vector2.ZERO
 	await t.seconds(0.6)
@@ -445,7 +445,7 @@ func _test_vegetation() -> void:
 	g.ecosystem.set_physics_process(true)
 	for pp in held:
 		pp.set_physics_process(true)
-	t.check("wake_recovers_behind", just > 0.3 and mid < just and later < just * 0.15, "passed %.2f, 0.6 s %.2f, 2 s %.2f" % [just, mid, later])
+	t.check("wake_recovers_behind", just > 0.3 and mid < just and later < just * 0.15, "passed %.2f, 0.6 s %.2f, 2 s %.2f (he stopped %.2f m from that spot)" % [just, mid, later, p.global_position.distance_to(passed)])
 	t.check("wake_settles_when_stopped", g.wake._trail.is_empty() and absf(settled2 - settled1) < 0.02 and settled2 <= rest + 0.05,
 			"%.2f then %.2f (standing level %.2f)" % [settled1, settled2, rest])
 	# The tail: a swipe sweeps the plants beside the tail far harder than standing still.

@@ -506,7 +506,23 @@ func tank_flow() -> Vector3:
 
 # --- Main loop ---------------------------------------------------------------------------
 
+## World expansion, regional activation: parasites, motes and food further than this from him
+## (on his own ball) pause, as creatures do beyond Critter.ACTIVE_RANGE.
+const ACTIVE_RADIUS := 55.0
+var _region_t := 0.0
+
+
+func near_player(pos: Vector3) -> bool:
+	return pos.distance_squared_to(player.global_position) < ACTIVE_RADIUS * ACTIVE_RADIUS
+
+
 func _process(dt: float) -> void:
+	_region_t -= dt
+	if _region_t <= 0.0 and cam != null:
+		# Four times a second: each ball draws only what can be above the camera's horizon.
+		_region_t = 0.25
+		for b in balls:
+			b.update_visibility(cam.global_position)
 	_resume_position()
 	clock.tick(dt, state == "play")
 	if state == "play":
