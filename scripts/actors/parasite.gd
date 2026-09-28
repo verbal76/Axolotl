@@ -38,6 +38,8 @@ var attack_reach := 1.4
 var windup_time := 0.45
 var lunge_dist := 1.2
 var hit_cd := 0.0
+## Seconds it holds off attacking after the bloom's pulse startled it (it can still be hit).
+var _shaken := 0.0
 var standing_on: Node = null
 var _attack_from := Vector3.ZERO
 var _attack_dir := Vector3.ZERO
@@ -260,6 +262,7 @@ func _physics_process(dt: float) -> void:
 		return
 	state_t += dt
 	hit_cd = maxf(0.0, hit_cd - dt)
+	_shaken = maxf(0.0, _shaken - dt)
 	_flash = maxf(0.0, _flash - dt * 3.0)
 	_gray = move_toward(_gray, _gray_target, dt * 1.6)
 	var target_windup := 1.0 if state == "windup" else 0.0
@@ -357,7 +360,7 @@ func _update_crawl(dt: float, pl: Axolotl) -> void:
 	var spd := speed
 	if state == "chase":
 		dir = to_player - up * to_player.dot(up)
-		if d < attack_reach and hit_cd <= 0.0:
+		if d < attack_reach and hit_cd <= 0.0 and _shaken <= 0.0:
 			_attack_dir = dir.normalized()
 			_set_state("windup")
 			Sfx.play("parasite_windup", global_position, -4.0)
@@ -590,13 +593,16 @@ func hit(stages: int, from_pos: Vector3, knock := 1.0) -> bool:
 ## Startled back from `from_pos` (the bloom's pulse when the axolotl re-forms there), unhurt: it
 ## scuttles a few metres off, then carries on.
 func startle(from_pos: Vector3) -> void:
-	if not state in ["graze", "chase", "windup", "recover"]:
+	if not state in ["graze", "chase", "windup", "attack", "recover"]:
 		return
 	var away := global_position - from_pos
 	away -= up * away.dot(up)
 	away = away.normalized() if away.length() > 0.01 else heading * -1.0
 	vel = away * 7.0
 	_latched = 0.0
+	# Shaken: it may come back, but holds off attacking for a while (a unit test found one
+	# returning to strike just as the re-formed axolotl's grace ran out).
+	_shaken = 3.5
 	_set_state("knocked")
 
 

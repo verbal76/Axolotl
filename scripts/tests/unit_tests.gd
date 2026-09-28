@@ -3081,9 +3081,12 @@ func _test_parasite_body_and_death() -> void:
 		for sgi in par._segs:
 			beads += 1 if sgi.mesh != null else 0
 	t.check("parasite_one_continuous_body", beads == 0 and bodies == b.parasites.size() and bodies > 0, "%d parasites, %d bodies, %d bead meshes" % [b.parasites.size(), bodies, beads])
-	var large := first_alive(0, Parasite.Kind.LARGE)
+	# (Current Hollows' far large parasite: Mossy Meadow's only large one is needed alive later by
+	# the swipe-stage test.)
+	b = g.balls[1]
+	var large := first_alive(1, Parasite.Kind.LARGE, "far")
 	p.invuln_t = 999
-	place_at(0, b.surface_point(b.up_at(large.global_position + MossBall.frame_at(b.up_at(large.global_position), 0).x * 8.0), 0.2), Vector3.FORWARD)
+	place_at(1, b.surface_point(b.up_at(large.global_position + MossBall.frame_at(b.up_at(large.global_position), 0).x * 8.0), 0.2), Vector3.FORWARD)
 	await t.seconds(0.5)
 	large.set_physics_process(true)
 	while large.is_alive():

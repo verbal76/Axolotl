@@ -341,7 +341,7 @@ func sample(t: float) -> Array:
 	return [p, fwd, u]
 
 
-## Gill's pose on the ride at t (0..1 from A): carried round the path beside the first jet, a
+## The axolotl's pose on the ride at t (0..1 from A): carried round the path beside the first jet, a
 ## little inside it, as the spiral revolves: a corkscrew. At both ends he is at the eye of the pool.
 ## Returns [position, direction of travel from A to B, up (toward the path: his belly to the jet)].
 func ride_pose(t: float) -> Array:
