@@ -62,13 +62,17 @@ func _build_light() -> void:
 	# shade what is under them.
 	sun.shadow_enabled = true
 	# A modest map for a phone (set here, not in the project settings, so an update carries it).
-	RenderingServer.directional_shadow_atlas_set_size(2048, true)
+	RenderingServer.directional_shadow_atlas_set_size(1024, true)
 	# Hard-edged sampling: soft filters dither (there is no temporal smoothing on a phone to hide
 	# it); the water's haze softens the look instead.
 	RenderingServer.directional_soft_shadow_filter_set_quality(RenderingServer.SHADOW_QUALITY_HARD)
-	sun.directional_shadow_mode = DirectionalLight3D.SHADOW_PARALLEL_2_SPLITS
-	sun.directional_shadow_max_distance = 42.0
-	sun.directional_shadow_split_1 = 0.3
+	# One shadow map over the near 30 m (QualityScaler shortens it, then turns it off, on a phone
+	# that cannot hold its frame rate).
+	sun.directional_shadow_mode = DirectionalLight3D.SHADOW_ORTHOGONAL
+	sun.directional_shadow_max_distance = 30.0
+	# Only the selected casters (MossBall.SHADOW_CASTER_LAYER): Gill, parasites, creatures,
+	# climbing leaves and stems.
+	sun.shadow_caster_mask = MossBall.SHADOW_CASTER_LAYER
 	sun.shadow_blur = 0.8
 	sun.shadow_bias = 0.1
 	sun.shadow_normal_bias = 2.0

@@ -149,6 +149,77 @@ func run(runner) -> void:
 				await t.seconds(1.2)
 				await t.shot("world_b%d_%d_%s" % [bi + 1, k, str(h["route"]).replace(" ", "_")])
 				k += 1
+	if only == "perfsplit":
+		# Where the frame time goes (Expansion 6 performance pass): two heavy views, measured with
+		# everything, then with each Expansion 6 feature switched off in turn (cumulatively).
+		var sets := []
+		for bi in [2, 3]:
+			var b := g.balls[bi]
+			var at := MossBall.dir_ll(10.0, 110.0) if bi == 2 else Vector3.ZERO
+			if bi == 3:
+				for h in (b.get_meta("builder") as LevelBuilder).bot_hints:
+					if h.has("route"):
+						sets.append([b, (h["start"] as Vector3) + b.up_at(h["start"]) * 0.2, (h["tops"][0] as Vector3) - (h["start"] as Vector3), "ball4_terraces"])
+						break
+			else:
+				sets.append([b, b.surface_point(at, 0.2), Vector3.FORWARD, "ball3_10_110"])
+		# Shadow casters by kind: triangle totals.
+		var tally := {}
+		var stack: Array = [g]
+		while not stack.is_empty():
+			var n: Node = stack.pop_back()
+			stack.append_array(n.get_children())
+			if n is GeometryInstance3D and ((n as VisualInstance3D).layers & MossBall.SHADOW_CASTER_LAYER) != 0:
+				var tris := 0
+				var mesh: Mesh = null
+				var mult := 1
+				if n is MeshInstance3D:
+					mesh = (n as MeshInstance3D).mesh
+				elif n is MultiMeshInstance3D and (n as MultiMeshInstance3D).multimesh:
+					mesh = (n as MultiMeshInstance3D).multimesh.mesh
+					mult = (n as MultiMeshInstance3D).multimesh.instance_count
+				if mesh:
+					for si in mesh.get_surface_count():
+						var arr := mesh.surface_get_arrays(si)
+						var idx = arr[Mesh.ARRAY_INDEX]
+						tris += (idx.size() if idx != null else (arr[Mesh.ARRAY_VERTEX] as PackedVector3Array).size()) / 3
+				var key := n.get_parent().get_class() + "/" + str(n.get_parent().get_script().get_global_name() if n.get_parent().get_script() else "") + " " + str(n.get_parent().get_meta("grounded", ""))
+				var cur: Array = tally.get(key, [0, 0])
+				tally[key] = [cur[0] + tris * mult, cur[1] + 1]
+		for k in tally:
+			t.log_line("CASTERS %s: %d triangles in %d meshes" % [k, tally[k][0], tally[k][1]])
+		var steps := ["all", "mask_none", "no_shadows", "no_vortices", "no_sprouts", "no_corals", "no_shafts", "no_parasites"]
+		for step in steps:
+			match step:
+				"mask_none":
+					g.aquarium.sun.shadow_caster_mask = 0
+				"no_shadows":
+					g.aquarium.sun.shadow_enabled = false
+				"no_vortices":
+					for v in g.vortices:
+						v.visible = false
+				"no_sprouts":
+					for b in g.balls:
+						for n in b.sprout_nodes:
+							n.visible = false
+				"no_corals":
+					for b in g.balls:
+						for n in b.coral_nodes:
+							n.visible = false
+				"no_shafts":
+					for m in g.aquarium.shaft_mats:
+						m.set_shader_parameter("strength", 0.0)
+					for n in g.aquarium.get_children():
+						if n is MeshInstance3D and (n as MeshInstance3D).material_override in g.aquarium.shaft_mats:
+							n.visible = false
+				"no_parasites":
+					for b in g.balls:
+						for par in b.parasites:
+							par.visible = false
+			for st in sets:
+				g.player.place(st[0], st[1], st[2])
+				g.cam.snap_behind()
+				await _perf_view("%s %s" % [st[3], step])
 	if only == "perf":
 		# Rendering cost at fixed views: frame time (software renderer here, so a proxy for GPU
 		# fill cost, not phone numbers), draw calls, triangles and video memory.

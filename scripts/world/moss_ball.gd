@@ -93,6 +93,9 @@ func setup(p_index: int, p_radius: float, p_palette: Dictionary) -> void:
 	moss_material = make_moss_material()
 	mi.material_override = moss_material
 	mi.name = "MossSurface"
+	# (It receives shadows but casts none: a sphere shading itself adds little, and redrawing each
+	# ball's surface into the shadow map was most of Expansion 6's frame-time cost.)
+	mi.cast_shadow = GeometryInstance3D.SHADOW_CASTING_SETTING_OFF
 	add_child(mi)
 	_surface = mi
 	_veg_parent = Node3D.new()
@@ -352,9 +355,26 @@ func health_at(dir: Vector3) -> float:
 	return h
 
 
+## Visual layer of the few things that cast the ceiling light's shadow (Aquarium.sun casts only
+## from it, Expansion 6 "selective shadows"): the axolotl, parasites, creatures, climbing leaves
+## and stems. Terrain, formations and vegetation only receive shadows: drawing them into the
+## shadow map was most of the frame time the lighting added.
+const SHADOW_CASTER_LAYER := 1 << 10
+
+
+## Puts every visible mesh under `n` that may cast a shadow on the caster layer.
+static func mark_caster(n: Node) -> void:
+	if n is GeometryInstance3D and (n as GeometryInstance3D).cast_shadow != GeometryInstance3D.SHADOW_CASTING_SETTING_OFF:
+		(n as VisualInstance3D).layers |= SHADOW_CASTER_LAYER
+	for c in n.get_children():
+		mark_caster(c)
+
+
 ## Plants that sprout only as the ball heals (Levels._sprouts): not drawn at all until it is a
 ## quarter restored (on neglected moss they would be zero-size and still cost their triangles).
 var sprout_nodes: Array = []
+## The reef corals (Levels._accent_flora), for diagnostics.
+var coral_nodes: Array = []
 var _sprouts_shown := true
 
 

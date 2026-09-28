@@ -210,6 +210,7 @@ func _physics_process(dt: float) -> void:
 		_placed = true
 		for c in all_critters():
 			c.late_place()
+			MossBall.mark_caster(c)
 	var g := Game.inst
 	if g == null or g.player == null or g.player.ball == null or g.state != "play":
 		return

@@ -229,6 +229,8 @@ func _ready() -> void:
 		for c in sgi.get_children():
 			if c is GeometryInstance3D:
 				c.visibility_range_end = 40.0
+	# (Only the body casts: its eyes, mandibles and legs are too small to show in a shadow.)
+	MossBall.mark_caster(_body)
 
 
 ## Colour state on the body and its appendages: grey front (0..1, head to rear), hit flash, and

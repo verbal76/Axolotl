@@ -69,6 +69,19 @@ static func build_ball(i: int, game: Node) -> MossBall:
 	_accent_flora(lb, i)
 	_sprouts(lb, i)
 	b.finalize_terrain()
+	# Selective shadows: the climbing leaves and the stems cast; formations and ground do not.
+	# The detailed climbing leaves cast through a flat stand-in (a few triangles per leaf).
+	var shadow_mat := StandardMaterial3D.new()
+	shadow_mat.cull_mode = BaseMaterial3D.CULL_DISABLED
+	for n in lb.root.get_children():
+		if n is Platforms.FlexLeaf or n is Platforms.SwayLeaf:
+			MossBall.mark_caster(n)
+		elif n is Platforms.Crumble or str(n.get_meta("grounded", "")) == "stem":
+			MossBall.mark_caster(n)
+			if n.has_meta("leaves"):
+				_leaf_shadow(n, shadow_mat)
+		elif n.has_meta("leaves"):
+			_leaf_shadow(n, shadow_mat)
 	b.set_meta("builder", lb)
 	return b
 
@@ -126,6 +139,18 @@ static func _sprouts(lb: LevelBuilder, i: int) -> void:
 	b.sprout_nodes = nodes
 
 
+## A shadow-only flat stand-in for a body's detailed climbing leaves (MeshLib.leaf_shadow_proxy).
+static func _leaf_shadow(body: Node, mat: Material) -> void:
+	var mi := MeshInstance3D.new()
+	mi.mesh = MeshLib.leaf_shadow_proxy(body.get_meta("leaves"))
+	mi.material_override = mat
+	mi.top_level = true
+	mi.cast_shadow = GeometryInstance3D.SHADOW_CASTING_SETTING_SHADOWS_ONLY
+	mi.layers = MossBall.SHADOW_CASTER_LAYER
+	body.add_child(mi)
+	mi.global_transform = Transform3D.IDENTITY
+
+
 static func _accent_flora(lb: LevelBuilder, i: int) -> void:
 	var b := lb.ball
 	var keep := _veg_keep_clear(lb)
@@ -134,7 +159,7 @@ static func _accent_flora(lb: LevelBuilder, i: int) -> void:
 	for k in 2:
 		var col: Array = ACCENTS[i][k]
 		var mat := b.make_veg_material(col[0], col[1], Vegetation.family_params("short", 0.45).merged({"sway": 0.12, "wake_gain": 0.7, "cam_fade": 1.0}, true))
-		b.scatter(MeshLib.coral_mesh(5 + k * 2, 0.75 + k * 0.15, 900 + i * 10 + k), mat, per, 900 + i * 10 + k, 0.9, 1.8, ok, 70.0)
+		b.coral_nodes += b.scatter(MeshLib.coral_mesh(5 + k * 2, 0.75 + k * 0.15, 900 + i * 10 + k), mat, per, 900 + i * 10 + k, 0.9, 1.8, ok, 70.0)
 
 
 static func _materials(lb: LevelBuilder, stem_a: Color, stem_b: Color, leaf_a: Color, leaf_b: Color) -> void:

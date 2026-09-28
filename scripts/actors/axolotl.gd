@@ -95,6 +95,7 @@ func _ready() -> void:
 	add_child(cs)
 	model = AxolotlModel.new()
 	add_child(model)
+	MossBall.mark_caster.call_deferred(model)
 	blob_shadow = MeshInstance3D.new()
 	var q := QuadMesh.new()
 	q.size = Vector2(1.1, 1.1)

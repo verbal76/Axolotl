@@ -285,6 +285,31 @@ static func _broad_leaf(st: SurfaceTool, rot: Basis, rise: float, half_w: float,
 ## through the middle so there is room to land, settle, turn and aim, then a natural taper to a
 ## rounded point. t = 0 at the base, 1 at the tip; returns the half-width as a fraction of half the
 ## leaf's width. The drawn leaf and its collision both follow this.
+## A shadow-only stand-in for a set of leaves (Expansion 6 performance): each leaf's outline as a
+## flat fan of 8 triangles, in world space. `leaves` = [[transform, length, width], ...] as the
+## climbing leaves record them (meta "leaves").
+static func leaf_shadow_proxy(leaves: Array) -> ArrayMesh:
+	var st := SurfaceTool.new()
+	st.begin(Mesh.PRIMITIVE_TRIANGLES)
+	for lf in leaves:
+		var xf: Transform3D = lf[0]
+		var len: float = lf[1]
+		var w: float = lf[2]
+		var pts: Array[Vector3] = []
+		for t in [0.0, 0.25, 0.5, 0.75, 1.0]:
+			var hw := w * 0.5 * leaf_profile(t)
+			pts.append(xf * Vector3(-hw, leaf_top_y(t, 1.0, w), -t * len))
+			pts.append(xf * Vector3(hw, leaf_top_y(t, 1.0, w), -t * len))
+		for k in 4:
+			var a := pts[k * 2]
+			var b := pts[k * 2 + 1]
+			var c := pts[k * 2 + 2]
+			var d := pts[k * 2 + 3]
+			for v in [a, c, b, b, c, d]:
+				st.add_vertex(v)
+	return st.commit()
+
+
 static func leaf_profile(t: float) -> float:
 	var tc := clampf(t, 0.0, 1.0)
 	var neck := 0.22 + 0.78 * smoothstep(0.0, 0.2, tc)

@@ -4064,6 +4064,15 @@ func _test_upgrades() -> void:
 
 
 func _test_ui() -> void:
+	# Expansion 6 performance: a phone that cannot hold its frame rate loses the ceiling light's
+	# shadows first; the best level keeps them, casting only from the selected casters.
+	var lvl: int = g.quality.level
+	g.quality.force_level(0)
+	var on0: bool = g.aquarium.sun.shadow_enabled and g.aquarium.sun.shadow_caster_mask == MossBall.SHADOW_CASTER_LAYER
+	g.quality.force_level(1)
+	var off1: bool = not g.aquarium.sun.shadow_enabled
+	g.quality.force_level(lvl)
+	t.check("shadows_first_to_scale_down", on0 and off1, "level 0 shadows %s, level 1 shadows off %s" % [on0, off1])
 	g.pause_menu.open()
 	await t.frames(2)
 	t.check("pause_menu_pauses", g.get_tree().paused and g.pause_menu.visible, "")
