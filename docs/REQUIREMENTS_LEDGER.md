@@ -251,7 +251,7 @@ consolidate everything into ONE Mote app and ONE current APK (retire Mote Dev; k
 
 [x] 1. Timer + completion foundation (dev-000018, verified 2026-09-28)
 [x] 2. Living terrain / texture and material upgrade (dev-000019, verified 2026-09-28)
-[ ] 3. Dense reactive vegetation / cornfield movement
+[x] 3. Dense reactive vegetation / cornfield movement (dev-000020, verified 2026-09-28)
 [ ] 4. Additional moss balls + expanded terrain set
 [ ] 5. Additional enemies + ecosystem expansion
 [ ] 6. Full expansion integration + progression/balance/100%/speedrun reconciliation
@@ -310,6 +310,7 @@ Design and measurements: `docs/VEGETATION.md`.
 | E3-06 | Readability: paths, caves, blooms, holes, platforms, hazards kept clear; open ground stays | I+V | keep-clear rule; patches, not carpets | `veg_keeps_clear_of_landmarks` |
 | E3-07 | No gameplay effect: no collision, no barriers, gameplay RNG untouched, save unaffected | I+V | cosmetic only | `veg_has_no_collision`, `veg_does_not_slow_or_block`, `veg_leaves_gameplay_rng_alone`; relaunch tests; playthroughs |
 | E3-08 | Mobile performance measured with movers | I+V | instancing, bounds early-out, reduced segments and visibility ranges | `docs/VEGETATION.md` Performance |
+| E3-09 | Ships by OTA, no APK | I+V | game layer only; runtime r5 | dev-000020 (OTA publish #20, source `2206aea`, PCK `c0c6a736…26374b`, 8,832,576 bytes, baked, save schema 1): signature (pinned key), hash, size and inspector verified from public URLs; a b22 client downloads and stages it; `_test_vegetation` passes run from the pack; Build & Verify #28 green with no APK build |
 
 ## Precedence notes
 
