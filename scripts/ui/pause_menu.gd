@@ -1,7 +1,7 @@
 class_name PauseMenu
 extends CanvasLayer
 ## Small pause/settings menu: Resume, this run (time, completion, finish, best), Show run timer,
-## Reduced HUD, Gill's colours (GillPage), audio levels, haptics, controller/touch status, New Run, Return to Title.
+## Reduced HUD, the colours page (GillPage), audio levels, haptics, controller/touch status, New Run, Return to Title.
 
 var _root: Control
 var _panel: PanelContainer
@@ -66,7 +66,7 @@ func _ready() -> void:
 	_haptics.text = "Haptics"
 	_haptics.toggled.connect(_on_haptics)
 	v.add_child(_haptics)
-	var colours := UiStyle.button("Gill's colours", _open_gill)
+	var colours := UiStyle.button("%s's colours" % GameVersion.CHARACTER_NAME, _open_gill)
 	colours.name = "GillColours"
 	v.add_child(colours)
 	_music = _slider(v, "Music")
@@ -91,7 +91,7 @@ func _ready() -> void:
 	_startup.autowrap_mode = TextServer.AUTOWRAP_WORD_SMART
 	v.add_child(_startup)
 	_session_rows = [restart, title, _run_time, _run_detail]
-	# Gill's colours: a page of its own in place of the menu.
+	# His colours: a page of its own in place of the menu.
 	gill_page = GillPage.new()
 	gill_page.visible = false
 	center.add_child(gill_page)

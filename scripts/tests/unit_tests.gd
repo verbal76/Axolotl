@@ -3651,7 +3651,7 @@ func _hold_threats(b: MossBall) -> Callable:
 		g.ecosystem.set_physics_process(true)
 
 
-## Gill's idles: now and then, standing still, one of four little animations; cosmetic only.
+## Idles: now and then, standing still, one of four little animations; cosmetic only.
 func _test_gill_idles() -> void:
 	var b := g.balls[0]
 	var release := _hold_threats(b)
@@ -3803,7 +3803,7 @@ func _test_gill_idles() -> void:
 	release.call()
 
 
-## Gill's colours (owner request): morph swatches and fine-tuning in the pause menu, applied live to
+## His colours (owner request): morph swatches and fine-tuning in the pause menu, applied live to
 ## him and the preview, saved per device in settings (the save schema is unchanged); and the
 ## stretch idle's little yawn.
 func _test_gill_colours() -> void:
@@ -3846,7 +3846,7 @@ func _test_gill_colours() -> void:
 	Settings._load()
 	var reloaded := Settings.gill_morph == "golden" and absf(Settings.gill_body_hue - 0.25) < 0.001 and absf(Settings.gill_dots_bright - 0.6) < 0.001
 	t.check("gill_colour_picker_live_and_saved", page_open and live and hue_moved and dots_darker and saved and reloaded,
-			"page %s; live on Gill and preview %s; hue moved %s, freckles darker %s; saved in settings (schema 1) %s; read back %s"
+			"page %s; live on him and in the preview %s; hue moved %s, freckles darker %s; saved in settings (schema 1) %s; read back %s"
 			% [page_open, live, hue_moved, dots_darker, saved, reloaded])
 	# Reset and Done; the preview stops drawing once the page is closed.
 	(page.find_child("Reset", true, false) as Button).pressed.emit()
@@ -3877,7 +3877,7 @@ func _test_gill_colours() -> void:
 	release.call()
 
 
-## Gill's patterns (owner request): built-in patterns tile seamlessly, replace his freckles, show as
+## His patterns (owner request): built-in patterns tile seamlessly, replace his freckles, show as
 ## markings or in full colour at a chosen size; a picture from the phone becomes his pattern; the
 ## page opens straight from the title screen. All in settings, save schema unchanged.
 func _test_gill_patterns() -> void:
@@ -3946,7 +3946,7 @@ func _test_gill_patterns() -> void:
 	cf.load(Settings.SETTINGS_PATH)
 	var reload_ok := Settings.gill_pattern == GillLook.UPLOAD and int(cf.get_value("meta", "save_schema", -1)) == 1
 	t.check("gill_picture_upload_becomes_pattern", up_ok and bad_ok and reload_ok,
-			"uploaded, %dx%d, on Gill %s; a bad file refused politely %s; kept for next launch (schema 1) %s" % [stored.get_width() if stored else 0, stored.get_height() if stored else 0, up_ok, bad_ok, reload_ok])
+			"uploaded, %dx%d, on him %s; a bad file refused politely %s; kept for next launch (schema 1) %s" % [stored.get_width() if stored else 0, stored.get_height() if stored else 0, up_ok, bad_ok, reload_ok])
 	# Freckles again, and back to the menu.
 	(page.find_child("Pattern_none", true, false) as Button).pressed.emit()
 	page._full_colour.button_pressed = false

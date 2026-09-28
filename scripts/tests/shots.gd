@@ -944,7 +944,7 @@ func _gill_shots(g: Game, prefix: String) -> void:
 	_open(g)
 
 
-## Gill's idles and tail whip (dev-000024 physical playtest polish), frame by frame. Slowed down
+## His idles and tail whip (dev-000024 physical playtest polish), frame by frame. Slowed down
 ## (Engine.time_scale) so the software renderer catches each moment at its time.
 func _gill_anim(g: Game) -> void:
 	var p := g.player
@@ -1012,7 +1012,7 @@ func _gill_anim(g: Game) -> void:
 	_open(g)
 
 
-## Gill's colours page (owner request): each morph on the page, then two of them in the world.
+## The colours page (owner request): each morph on the page, then two of them in the world.
 func _colour_shots(g: Game) -> void:
 	var b0 := g.balls[0]
 	_look(g, 0, b0.surface_point(MossBall.dir_ll(12, 30), 0.1), Vector3.FORWARD)

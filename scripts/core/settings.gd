@@ -17,13 +17,13 @@ var haptics := true
 var music_volume := 0.8
 var sfx_volume := 0.9
 var input_mode: int = InputMode.TOUCH
-## Gill's colours (GillLook): a morph plus fine-tuning of the body and the freckles.
+## The character's colours (GillLook): a morph plus fine-tuning of the body and the freckles.
 var gill_morph := "pink"
 var gill_body_hue := 0.0
 var gill_body_bright := 1.0
 var gill_dots_hue := 0.0
 var gill_dots_bright := 1.0
-## Gill's pattern (GillLook.PATTERNS or "upload"), shown as markings (0) or in full colour (1),
+## His pattern (GillLook.PATTERNS or "upload"), shown as markings (0) or in full colour (1),
 ## repeated this many times round his body.
 var gill_pattern := "none"
 var gill_pattern_mode := 0
@@ -170,7 +170,7 @@ func _load() -> void:
 	gill_pattern_alpha = bool(cf.get_value("gill", "pattern_alpha", gill_pattern_alpha))
 
 
-## Sets Gill's colours, saves them and tells every model.
+## Sets his colours, saves them and tells every model.
 func set_gill_look(morph_id: String, body_hue: float, body_bright: float, dots_hue: float, dots_bright: float) -> void:
 	gill_morph = morph_id
 	gill_body_hue = body_hue
@@ -181,7 +181,7 @@ func set_gill_look(morph_id: String, body_hue: float, body_bright: float, dots_h
 	gill_look_changed.emit()
 
 
-## Sets Gill's pattern (GillLook), saves it and tells every model.
+## Sets his pattern (GillLook), saves it and tells every model.
 func set_gill_pattern(id: String, mode: int, size: int) -> void:
 	gill_pattern = id
 	gill_pattern_mode = mode

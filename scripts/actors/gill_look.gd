@@ -1,11 +1,11 @@
 class_name GillLook
 extends RefCounted
-## Gill's colours (owner request after the dev-000024 playtest): a real axolotl morph as a base,
+## The character's colours (owner request after the dev-000024 playtest): a real axolotl morph as a base,
 ## fine-tuned by a hue shift and brightness for his body and for his freckles. Chosen in the pause
 ## menu (scripts/ui/gill_page.gd), kept per device in user://settings.cfg (Settings), and applied
 ## to every AxolotlModel. Cosmetic only; the gill fronds keep their health colours.
 
-## Each morph: body tones (base, back, belly), freckles, cheeks. "pink" is Gill's original look
+## Each morph: body tones (base, back, belly), freckles, cheeks. "pink" is his original look
 ## (the skin shader's own defaults), so an untouched setting changes nothing.
 const MORPHS := [
 	{"id": "pink", "name": "Pink", "base": Color(0.98, 0.58, 0.66), "back": Color(0.9, 0.48, 0.57), "belly": Color(1.0, 0.8, 0.77),

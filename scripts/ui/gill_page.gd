@@ -1,6 +1,6 @@
 class_name GillPage
 extends PanelContainer
-## "Gill's colours" (owner request after the dev-000024 playtest), opened from the pause menu:
+## The colours page (owner request after the dev-000024 playtest), opened from the pause menu:
 ## real axolotl morphs as swatches, fine-tuning sliders for his body and his freckles, and a live
 ## close-up of him that recolours as you tap. Saved per device (Settings, GillLook).
 
@@ -32,7 +32,7 @@ func _ready() -> void:
 	v.size_flags_horizontal = Control.SIZE_EXPAND_FILL
 	scroll.add_child(v)
 	var title := Label.new()
-	title.text = "Gill's colours"
+	title.text = "%s's colours" % GameVersion.CHARACTER_NAME
 	title.add_theme_font_size_override("font_size", 30)
 	v.add_child(title)
 	v.add_child(_preview())
@@ -214,7 +214,7 @@ func _upload() -> void:
 	_pattern_note.text = ""
 	var filters := PackedStringArray(["*.png, *.jpg, *.jpeg, *.webp ; Pictures"])
 	if DisplayServer.has_feature(DisplayServer.FEATURE_NATIVE_DIALOG_FILE):
-		DisplayServer.file_dialog_show("Pick a picture for Gill", "", "", false, DisplayServer.FILE_DIALOG_MODE_OPEN_FILE, filters, _on_native_picked)
+		DisplayServer.file_dialog_show("Pick a picture for %s" % GameVersion.CHARACTER_NAME, "", "", false, DisplayServer.FILE_DIALOG_MODE_OPEN_FILE, filters, _on_native_picked)
 		return
 	if _file_dialog == null:
 		_file_dialog = FileDialog.new()
@@ -238,7 +238,7 @@ func import_picture(path: String) -> void:
 	if err != "":
 		_pattern_note.text = err
 		return
-	_pattern_note.text = "Your picture is on Gill."
+	_pattern_note.text = "Your picture is on %s." % GameVersion.CHARACTER_NAME
 	Settings.set_gill_pattern(GillLook.UPLOAD, Settings.gill_pattern_mode, Settings.gill_pattern_size)
 	refresh()
 
