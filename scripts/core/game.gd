@@ -135,8 +135,13 @@ func _build_world() -> void:
 	env.fog_mode = Environment.FOG_MODE_EXPONENTIAL
 	env.fog_sky_affect = 1.0
 	env.ambient_light_source = Environment.AMBIENT_SOURCE_COLOR
-	env.tonemap_mode = Environment.TONE_MAPPER_FILMIC
-	env.tonemap_exposure = 1.05
+	# AgX (Expansion 6): bright greens and the pink axolotl roll off softly instead of going neon;
+	# a light grade keeps the tank natural rather than primary-coloured.
+	env.tonemap_mode = Environment.TONE_MAPPER_AGX
+	env.tonemap_exposure = 1.12
+	env.adjustment_enabled = true
+	env.adjustment_saturation = 0.9
+	env.adjustment_contrast = 1.06
 	env.glow_enabled = true
 	env.glow_intensity = 0.55
 	env.glow_bloom = 0.05

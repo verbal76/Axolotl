@@ -13,6 +13,7 @@ render_mode cull_back, diffuse_lambert, specular_disabled;
 //   variation, the moss/stone boundary and strata, detail, and moss tufts.
 
 #include "res://shaders/health_field.gdshaderinc"
+#include "res://shaders/aquarium_light.gdshaderinc"
 
 uniform sampler2D noise_tex : filter_linear_mipmap, repeat_enable;
 uniform vec3 healthy_a : source_color = vec3(0.12, 0.36, 0.1);
@@ -129,7 +130,8 @@ void fragment() {
 	float lip = cover * (1.0 - cover) * 4.0;
 	vec3 alb = mix(stone, moss, cover) * (1.0 - lip * 0.18);
 	alb *= mix(0.94, 1.05, macro.r);
-	ALBEDO = alb * (1.0 - in_cave * 0.62);
+	alb *= 1.0 - in_cave * 0.62;
+	ALBEDO = alb;
 	ROUGHNESS = 1.0;
 	float fres = pow(1.0 - clamp(dot(NORMAL, VIEW), 0.0, 1.0), 2.2);
 	vec3 em = healthy_b * fres * sheen * h * 0.5 * cover;
@@ -139,5 +141,6 @@ void fragment() {
 		glow += motes[i].w / (1.0 + dot(d, d) * 0.9);
 	}
 	em += glow * mote_color * (alb * 1.6 + 0.12);
+	em += aquarium_light(noise_tex, alb, v_wpos, wn, in_cave, TIME);
 	EMISSION = em;
 }

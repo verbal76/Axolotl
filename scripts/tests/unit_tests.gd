@@ -14,7 +14,7 @@ func run(runner) -> void:
 	p.use_bot_input = true
 	await t.seconds(0.5)
 	var only: String = Settings.test_args.get("only", "")
-	for name_ in ["_test_startup", "_test_ota_and_version", "_test_mesh_winding", "_test_terrain", "_test_terrain_grounded", "_test_no_floating_platforms", "_test_parasite_locomotion", "_test_placements", "_test_tutorial_route", "_test_sphere_walk", "_test_jump_and_burst", "_test_coyote_and_buffer", "_test_swipe_direction_and_stages", "_test_hard_landing", "_test_food", "_test_food_reach", "_test_darter_and_burrower", "_test_food_repopulates", "_test_motes", "_test_checkpoint_and_regen", "_test_crumble", "_test_restoration_continuity", "_test_vortex", "_test_current", "_test_canopy", "_test_canopy_plain_jumps", "_test_climbs_physical", "_test_jungle_ladders_physical", "_test_leaf_geometry", "_test_leaf_footing", "_test_caves", "_test_mounds", "_test_vegetation", "_test_vortex_mouths_clear", "_test_route_audit", "_test_new_areas", "_test_ecosystem", "_test_music", "_test_run_clock", "_test_completion_catalog", "_test_run_save_file", "_test_run_timer_live", "_test_run_continue", "_phase_continue_write", "_phase_continue_read", "_test_upgrades", "_test_ui", "_test_all_clear"]:
+	for name_ in ["_test_startup", "_test_ota_and_version", "_test_mesh_winding", "_test_terrain", "_test_terrain_grounded", "_test_no_floating_platforms", "_test_parasite_locomotion", "_test_parasite_body_and_death", "_test_gill_look", "_test_placements", "_test_tutorial_route", "_test_sphere_walk", "_test_jump_and_burst", "_test_coyote_and_buffer", "_test_swipe_direction_and_stages", "_test_hard_landing", "_test_food", "_test_food_reach", "_test_darter_and_burrower", "_test_food_repopulates", "_test_motes", "_test_checkpoint_and_regen", "_test_crumble", "_test_restoration_continuity", "_test_vortex", "_test_current", "_test_canopy", "_test_canopy_plain_jumps", "_test_climbs_physical", "_test_jungle_ladders_physical", "_test_leaf_geometry", "_test_leaf_footing", "_test_caves", "_test_mounds", "_test_vegetation", "_test_vortex_mouths_clear", "_test_route_audit", "_test_new_areas", "_test_ecosystem", "_test_music", "_test_run_clock", "_test_completion_catalog", "_test_run_save_file", "_test_run_timer_live", "_test_run_continue", "_phase_continue_write", "_phase_continue_read", "_test_upgrades", "_test_ui", "_test_all_clear"]:
 		# "_phase_*" tests are halves of a relaunch test: they run only when asked for by name
 		# (in a child process started by _test_run_continue).
 		if name_.begins_with("_phase") and only != name_:
@@ -2947,6 +2947,103 @@ func _test_jungle_ladders_physical() -> void:
 	t.check("jungle_ladders_climbed_with_plain_jumps", n == 70 and bad.is_empty(), "%d stems, %d leaves; short: %s" % [n, leaves, str(bad)])
 
 
+## Expansion 6: Gill reads as a soft, freckled axolotl, not shiny pink plastic, and none of it
+## changed how he collides: one body sphere (the head guard separate), no collision on the gills,
+## fins or decoration.
+func _test_gill_look() -> void:
+	var skin := 0
+	var glossy: Array[String] = []
+	for mi in p.model.find_children("*", "MeshInstance3D", true, false):
+		var m: Material = (mi as MeshInstance3D).material_override
+		if m == null and (mi as MeshInstance3D).mesh != null and (mi as MeshInstance3D).mesh.get_surface_count() > 0:
+			m = (mi as MeshInstance3D).get_surface_override_material(0)
+		if m is ShaderMaterial and (m as ShaderMaterial).shader == AxolotlModel.SKIN_SHADER:
+			skin += 1
+		elif m is StandardMaterial3D and (m as StandardMaterial3D).roughness < 0.45 and mi.get_parent() not in [p.model.eye_l, p.model.eye_r]:
+			glossy.append(str(mi.name))
+	t.check("gill_soft_skin_not_plastic", skin >= 8 and glossy.is_empty(), "%d skin parts; glossy non-eye parts: %s" % [skin, str(glossy)])
+	var shapes := p.find_children("*", "CollisionShape3D", true, false)
+	var in_model := p.model.find_children("*", "CollisionObject3D", true, false)
+	t.check("gill_collision_unchanged", shapes.size() == 1 and (shapes[0] as CollisionShape3D).shape is SphereShape3D
+			and is_equal_approx(((shapes[0] as CollisionShape3D).shape as SphereShape3D).radius, Axolotl.BODY_RADIUS) and in_model.is_empty(),
+			"%d collision shapes on the axolotl, %d collision objects in the model" % [shapes.size(), in_model.size()])
+
+
+## Expansion 6: a parasite is one continuous body (no bead chain), and a defeated one does not
+## float off as a rigid stick: a quick twitch or two that dies away, then a limp curve drifting
+## off, its residual ripple fading.
+func _test_parasite_body_and_death() -> void:
+	var b := g.balls[0]
+	var beads := 0
+	var bodies := 0
+	for par in b.parasites:
+		bodies += 1 if par._body != null and par._body.mesh != null else 0
+		for sgi in par._segs:
+			beads += 1 if sgi.mesh != null else 0
+	t.check("parasite_one_continuous_body", beads == 0 and bodies == b.parasites.size() and bodies > 0, "%d parasites, %d bodies, %d bead meshes" % [b.parasites.size(), bodies, beads])
+	var large := first_alive(0, Parasite.Kind.LARGE)
+	p.invuln_t = 999
+	place_at(0, b.surface_point(b.up_at(large.global_position + MossBall.frame_at(b.up_at(large.global_position), 0).x * 8.0), 0.2), Vector3.FORWARD)
+	await t.seconds(0.5)
+	large.set_physics_process(true)
+	while large.is_alive():
+		large.hit_cd = 0.0
+		large.hit(3, large.global_position + Vector3(0.5, 0, 0), 1.0)
+		await t.frames(1)
+	# The twitch: sideways offset of the tail from the body's resting line, early and late in dying.
+	var tw_early := 0.0
+	var tw_late := 0.0
+	var prev := _seg_positions(large)
+	var move_early := 0.0
+	for i in 30:
+		await t.frames(1)
+		var now := _seg_positions(large)
+		var m := 0.0
+		for k in now.size():
+			m = maxf(m, now[k].distance_to(prev[k]))
+		if large.state == "dying":
+			if large.state_t < 0.2:
+				tw_early = maxf(tw_early, m)
+			elif large.state_t > 0.4:
+				tw_late = maxf(tw_late, m)
+		prev = now
+	t.check("struck_parasite_twitches_then_stills", tw_early > 0.01 and tw_late < tw_early * 0.4, "per-frame twitch %.3f m at first, %.3f m after 0.4 s" % [tw_early, tw_late])
+	while large.state != "drifting":
+		await t.frames(1)
+	# Limp: the body is curved, not a straight line; the ripple (shape change relative to the body)
+	# fades over the first seconds.
+	# (The bend angles between neighbouring segments: independent of the body's slow tumble.)
+	var bends := func(a: Array[Vector3]) -> Array:
+		var out := []
+		for k in range(1, a.size() - 1):
+			out.append((a[k] - a[k - 1]).angle_to(a[k + 1] - a[k]))
+		return out
+	var shape_change := func(a: Array[Vector3], c: Array[Vector3]) -> float:
+		var ba: Array = bends.call(a)
+		var bc: Array = bends.call(c)
+		var d := 0.0
+		for k in ba.size():
+			d = maxf(d, absf(float(ba[k]) - float(bc[k])))
+		return d
+	await t.seconds(0.5)
+	var s0 := _seg_positions(large)
+	await t.frames(3)
+	var early_ripple: float = shape_change.call(s0, _seg_positions(large))
+	await t.seconds(2.5)
+	var s1 := _seg_positions(large)
+	await t.frames(3)
+	var late_ripple: float = shape_change.call(s1, _seg_positions(large))
+	var pts := _seg_positions(large)
+	var line := (pts[pts.size() - 1] - pts[0])
+	var sag := 0.0
+	for q in pts:
+		var r: Vector3 = q - pts[0]
+		sag = maxf(sag, (r - line.normalized() * r.dot(line.normalized())).length())
+	t.check("defeated_parasite_drifts_limp", sag > large.spacing * 0.5 and late_ripple < early_ripple * 0.5,
+			"curve %.2f m off straight (spacing %.2f); ripple %.3f rad early, %.3f rad later" % [sag, large.spacing, early_ripple, late_ripple])
+	p.invuln_t = 0.0
+
+
 ## Every climb leaf in the game (owner phone report, Expansion 6): [ball, body, xform, length, width].
 func _all_climb_leaves() -> Array:
 	var out := []
@@ -3391,4 +3488,5 @@ func _test_all_clear() -> void:
 	t.check("finish_saved", on_disk["run"]["clock"]["state"] == "finished" and absf(float(on_disk["run"]["clock"]["finish_s"]) - fin) < 1e-6,
 			"on disk: state %s, finish %s; in play: finish %s; last save %s, read only %s, path %s" % [on_disk["run"]["clock"]["state"],
 			str(on_disk["run"]["clock"]["finish_s"]), str(fin), g.run_save.last_save_result, g.run_save.read_only, g.run_save.path])
-	t.check("aquarium_fully_clean", is_equal_approx(g.aquarium.clean, 1.0) and g.env.fog_density < 0.003, "fog %.4f" % g.env.fog_density)
+	# (Expansion 6: clear water keeps a little haze, 0.0055, so the far glass and room recede.)
+	t.check("aquarium_fully_clean", is_equal_approx(g.aquarium.clean, 1.0) and g.env.fog_density < 0.006, "fog %.4f" % g.env.fog_density)

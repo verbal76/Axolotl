@@ -30,6 +30,13 @@ var _snail_t := 0.0
 var _legs_t := -1.0
 var _hand_t := -1.0
 var _room_light: OmniLight3D
+## Daylight from the bedroom window, through the side glass: only reaches in once the glass is clean.
+var window_light: DirectionalLight3D
+## The aquarium light shared by every moss ball's materials (shaders/aquarium_light.gdshaderinc):
+## clarity (0 murky .. 1 clear) and the direction toward the ceiling light. Materials made later
+## pick these up when their ball registers them.
+static var light_params := {"clarity": 0.0, "lamp_dir": Vector3(0.29, 0.95, -0.1)}
+var _pushed_clarity := -1.0
 
 
 func build(p_env: Environment) -> void:
@@ -50,9 +57,31 @@ func _build_light() -> void:
 	sun.rotation = Vector3(deg_to_rad(-72), deg_to_rad(20), 0)
 	sun.light_color = Color(0.95, 1.0, 0.92)
 	sun.light_energy = 0.9
-	sun.shadow_enabled = false
+	# Selective shadows (Expansion 6): terrain, stems, leaves, the axolotl and creatures cast them
+	# (grass, particles and effects do not), near the camera only, so big leaves and overhangs
+	# shade what is under them.
+	sun.shadow_enabled = true
+	# A modest map for a phone (set here, not in the project settings, so an update carries it).
+	RenderingServer.directional_shadow_atlas_set_size(2048, true)
+	# The cheapest soft filter: no noisy sampling (there is no temporal smoothing on a phone).
+	RenderingServer.directional_soft_shadow_filter_set_quality(RenderingServer.SHADOW_QUALITY_SOFT_VERY_LOW)
+	sun.directional_shadow_mode = DirectionalLight3D.SHADOW_PARALLEL_2_SPLITS
+	sun.directional_shadow_max_distance = 42.0
+	sun.directional_shadow_split_1 = 0.3
+	sun.shadow_blur = 0.8
+	sun.shadow_bias = 0.06
+	sun.shadow_normal_bias = 1.2
 	sun.light_cull_mask = 0xFFFFF & ~(1 << (ROOM_LAYER - 1))
 	add_child(sun)
+	light_params["lamp_dir"] = Basis.from_euler(sun.rotation).z.normalized()
+	window_light = DirectionalLight3D.new()
+	# From the window side of the room (+x), a little from above.
+	window_light.rotation = Vector3(deg_to_rad(-16), deg_to_rad(72), 0)
+	window_light.light_color = Color(0.72, 0.84, 1.0)
+	window_light.light_energy = 0.0
+	window_light.shadow_enabled = false
+	window_light.light_cull_mask = sun.light_cull_mask
+	add_child(window_light)
 	_room_light = OmniLight3D.new()
 	_room_light.position = Vector3(0, 1250, 1500)
 	_room_light.omni_range = 6000
@@ -198,24 +227,38 @@ func _build_surface() -> void:
 	mi.position = Vector3((TANK_MIN.x + TANK_MAX.x) * 0.5, TANK_MAX.y, (TANK_MIN.z + TANK_MAX.z) * 0.5)
 	mi.cast_shadow = GeometryInstance3D.SHADOW_CASTING_SETTING_OFF
 	add_child(mi)
-	# Soft filtered light shafts.
+	# Light shafts from the ceiling light through the surface (Expansion 6): all along the light's
+	# direction, a pair passing beside each moss ball (where the axolotl is) and a few in open water.
 	var rng := RandomNumberGenerator.new()
 	rng.seed = 21
-	for i in 7:
+	var lamp: Vector3 = light_params["lamp_dir"]
+	var through := []
+	for c in Levels.CENTERS:
+		for k in 2:
+			var side := lamp.cross(Vector3(rng.randf_range(-1, 1), 0, rng.randf_range(-1, 1)).normalized()).normalized()
+			through.append((c as Vector3) + side * rng.randf_range(22.0, 44.0))
+	for k in 5:
+		through.append(Vector3(rng.randf_range(-190, 190), 0, rng.randf_range(-160, 110)))
+	for p in through:
 		var s := MeshInstance3D.new()
 		var cm := CylinderMesh.new()
-		cm.top_radius = rng.randf_range(6, 12)
-		cm.bottom_radius = rng.randf_range(20, 34)
-		cm.height = 230
+		cm.top_radius = rng.randf_range(4, 8)
+		cm.bottom_radius = rng.randf_range(12, 22)
+		cm.height = 300
 		cm.cap_top = false
 		cm.cap_bottom = false
 		cm.radial_segments = 12
 		s.mesh = cm
 		var m := ShaderMaterial.new()
 		m.shader = preload("res://shaders/light_shaft.gdshader")
+		m.set_shader_parameter("noise_tex", NOISE)
 		s.material_override = m
-		s.position = Vector3(rng.randf_range(-190, 190), TANK_MAX.y - 115, rng.randf_range(-160, 110))
-		s.rotation = Vector3(deg_to_rad(rng.randf_range(-12, 12)), 0, deg_to_rad(rng.randf_range(-12, 12)))
+		# Its axis along the light, crossing the surface above `p`.
+		var y_axis := lamp.normalized()
+		var x_axis := y_axis.cross(Vector3.FORWARD).normalized()
+		var z_axis := x_axis.cross(y_axis).normalized()
+		var top: Vector3 = (p as Vector3) + y_axis * (TANK_MAX.y - (p as Vector3).y) / y_axis.y
+		s.transform = Transform3D(Basis(x_axis, y_axis, z_axis), top - y_axis * 150.0)
 		s.cast_shadow = GeometryInstance3D.SHADOW_CASTING_SETTING_OFF
 		add_child(s)
 		shaft_mats.append(m)
@@ -515,13 +558,25 @@ func play_hand() -> void:
 func apply(g: float) -> void:
 	clean = g
 	var e := ease(g, 0.8)
-	env.fog_density = lerpf(0.017, 0.0026, e)
+	# Even clear water keeps some haze, so the far glass and the room recede (Expansion 6).
+	env.fog_density = lerpf(0.017, 0.0055, e)
 	env.fog_light_color = Color(0.2, 0.26, 0.17).lerp(Color(0.24, 0.45, 0.52), e)
 	env.background_color = env.fog_light_color
 	env.ambient_light_color = Color(0.45, 0.5, 0.38).lerp(Color(0.5, 0.7, 0.75), e)
 	env.ambient_light_energy = lerpf(0.55, 0.8, e)
 	sun.light_energy = lerpf(0.75, 1.2, e)
 	sun.light_color = Color(0.85, 0.92, 0.75).lerp(Color(0.97, 1.0, 0.97), e)
+	# Clear water and glass: light carries further in, shadows read more crisply, and the window's
+	# daylight comes through the side glass.
+	sun.shadow_opacity = lerpf(0.4, 0.78, e)
+	window_light.light_energy = lerpf(0.0, 0.5, e * e)
+	light_params["clarity"] = e
+	if absf(e - _pushed_clarity) > 0.004 or (e >= 1.0 and _pushed_clarity < 1.0):
+		_pushed_clarity = e
+		var gm := Game.inst
+		if gm != null:
+			for b in gm.balls:
+				b.set_field_param("clarity", e)
 	gravel_mat.set_shader_parameter("clean", e)
 	pebble_mat.set_shader_parameter("clean", e)
 	for m in glass_mats:
@@ -530,7 +585,7 @@ func apply(g: float) -> void:
 		m.set_shader_parameter("water_color", env.fog_light_color)
 	surface_mat.set_shader_parameter("clean", e)
 	for m in shaft_mats:
-		m.set_shader_parameter("strength", lerpf(0.02, 0.1, e))
+		m.set_shader_parameter("strength", lerpf(0.018, 0.13, e))
 	plant_mat.set_shader_parameter("health", clampf(0.25 + g * 0.9, 0.0, 1.0))
 	for o in ooze:
 		var s := 1.0 - smoothstep(o[1], o[1] + 0.07, g)

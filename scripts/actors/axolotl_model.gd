@@ -13,6 +13,7 @@ const BODY_COLOR := Color(1.0, 0.64, 0.72)         # soft pink (head reads light
 const TOP_TINT := Color(0.97, 0.86, 0.9)           # multiplied in along the back
 const FIN_COLOR := Color(1.0, 0.7, 0.78)
 const FRECKLE_COLOR := Color(0.9, 0.42, 0.52)
+const SKIN_SHADER := preload("res://shaders/axolotl_skin.gdshader")
 const GILL_CORE := Color(0.98, 0.55, 0.55)
 const GILL_EDGE := Color(1.0, 0.3, 0.52)
 const GILL_FRINGE := Color(0.95, 0.1, 0.42)
@@ -93,12 +94,15 @@ func _m(c: Color, rough := 0.5, rim := 0.35) -> StandardMaterial3D:
 	return m
 
 
-## Axolotl skin: a faint pink self-glow (like light through translucent skin) so the colour
-## survives the murky green water.
-func _skin(m: StandardMaterial3D) -> StandardMaterial3D:
-	m.emission_enabled = true
-	m.emission = m.albedo_color
-	m.emission_energy_multiplier = 0.16
+## Axolotl skin (Expansion 6, shaders/axolotl_skin.gdshader): soft moist skin with a warmer back,
+## a pale belly, a faint mottle and freckles, and a gentle self-glow so the colour survives the
+## murky green water. `mode`: 0 the body, 1 a rigid part (head, limbs), 2 the fin membrane.
+func _skin_mat(mode: int, freckles := 1.0, spot_scale := 1.0) -> ShaderMaterial:
+	var m := ShaderMaterial.new()
+	m.shader = SKIN_SHADER
+	m.set_shader_parameter("mode", mode)
+	m.set_shader_parameter("freckles", freckles)
+	m.set_shader_parameter("spot_scale", spot_scale)
 	return m
 
 
@@ -123,12 +127,9 @@ func _ball(r: float, seg := 16) -> SphereMesh:
 
 
 func _build() -> void:
-	var body_mat := _skin(_m(BODY_COLOR, 0.34, 0.3))
-	body_mat.vertex_color_use_as_albedo = true
-	var head_mat := _skin(_m(BODY_COLOR, 0.32, 0.3))
-	var fin_mat := _skin(_m(FIN_COLOR, 0.4, 0.5))
-	fin_mat.cull_mode = BaseMaterial3D.CULL_DISABLED
-	fin_mat.vertex_color_use_as_albedo = true
+	var body_mat := _skin_mat(0)
+	var head_mat := _skin_mat(1, 1.0, 1.2)
+	var fin_mat := _skin_mat(2, 0.0)
 
 	rig = Node3D.new()
 	add_child(rig)
@@ -315,7 +316,7 @@ static func _normals(v: PackedVector3Array, idx: PackedInt32Array) -> PackedVect
 	return n
 
 
-func _build_head(head_mat: StandardMaterial3D) -> void:
+func _build_head(head_mat: ShaderMaterial) -> void:
 	var att := BoneAttachment3D.new()
 	att.bone_name = "s0"
 	skeleton.add_child(att)
@@ -324,18 +325,7 @@ func _build_head(head_mat: StandardMaterial3D) -> void:
 	att.add_child(head)
 	# Big, wide, rounded head.
 	_mesh(_ball(0.2, 32), head_mat, head, Vector3(0, 0, -0.1), Vector3(1.36, 0.96, 1.12))
-	# Freckles over the crown.
-	var fparts := []
-	var rng := RandomNumberGenerator.new()
-	rng.seed = 7
-	for i in 14:
-		var ax := rng.randf_range(-0.55, 0.55)
-		var az := rng.randf_range(-0.2, 0.75)
-		var d := Vector3(sin(ax) * 1.36, cos(ax) * cos(az) * 0.96, -sin(az) * 1.12).normalized()
-		var p := Vector3(d.x * 0.2 * 1.36, d.y * 0.2 * 0.96, d.z * 0.2 * 1.12) * 0.995 + Vector3(0, 0, -0.1)
-		var r := rng.randf_range(0.008, 0.014)
-		fparts.append([MeshLib.sphere(r, 6, 3), Transform3D(Basis().scaled(Vector3(1, 0.35, 1)), p)])
-	_mesh(MeshLib.merge(fparts), _m(FRECKLE_COLOR, 0.5, 0.0), head)
+	# (Freckles over the crown are part of the skin now: axolotl_skin.gdshader.)
 	# Soft cheeks.
 	var blush := _m(Color(1.0, 0.64, 0.68), 0.6, 0.0)
 	_mesh(_ball(0.05), blush, head, Vector3(0.19, -0.06, -0.21), Vector3(1.0, 0.55, 0.6))
@@ -370,7 +360,7 @@ func _build_head(head_mat: StandardMaterial3D) -> void:
 	head.add_child(mouth)
 	_mouth_dark = _mesh(_ball(0.1, 20), _m(Color(0.42, 0.1, 0.16), 0.7, 0.0), mouth, Vector3.ZERO, Vector3(1.25, 0.4, 0.5))
 	_tongue = _mesh(_ball(0.06, 16), _m(Color(1.0, 0.5, 0.56), 0.5, 0.0), mouth, Vector3(0, -0.018, -0.008), Vector3(1.3, 0.35, 0.65))
-	_mesh(_ball(0.1, 20), head_mat, mouth, Vector3(0, 0.03, 0.004), Vector3(1.32, 0.34, 0.54))
+	_mesh(_ball(0.1, 20), _skin_mat(1, 0.0), mouth, Vector3(0, 0.03, 0.004), Vector3(1.32, 0.34, 0.54))
 	# Six feathery external gills, three per side off the back of the head.
 	for i in GILL_SLOTS.size():
 		var side: float = GILL_SLOTS[i][0]
@@ -395,10 +385,19 @@ static func _gill_base(side: float, k: int) -> Vector3:
 
 
 ## A tapered stalk with a leaf-shaped blade and fine filaments fringing both edges, in the
-## local XY plane pointing up +Y (the node rotation aims it).
+## local XY plane pointing up +Y (the node rotation aims it). A second, slightly narrower blade
+## crosses the first round the stalk (Expansion 6), so the gill stays feathery seen edge on (from
+## the side it was a bare stick).
 static func _gill_mesh(length: float, width: float) -> ArrayMesh:
 	var st := SurfaceTool.new()
 	st.begin(Mesh.PRIMITIVE_TRIANGLES)
+	for blade in [[Basis(), 1.0], [Basis(Vector3.UP, deg_to_rad(68.0)), 0.78]]:
+		_gill_blade(st, blade[0], length, width * float(blade[1]))
+	return st.commit()
+
+
+static func _gill_blade(st: SurfaceTool, rot: Basis, length: float, width: float) -> void:
+	var nrm := rot * Vector3(0, 0, -1)
 	var n := 12
 	var pts: Array = []
 	for i in n + 1:
@@ -416,8 +415,8 @@ static func _gill_mesh(length: float, width: float) -> ArrayMesh:
 			for idx in [0, 1, 2, 0, 2, 3]:
 				st.set_color(c[idx])
 				st.set_uv(u[idx])
-				st.set_normal(Vector3(0, 0, -1))
-				st.add_vertex(q[idx])
+				st.set_normal(nrm)
+				st.add_vertex(rot * (q[idx] as Vector3))
 	# Filaments: fine strands angled toward the tip, dense along both edges.
 	var strands := 26
 	for i in strands:
@@ -436,13 +435,12 @@ static func _gill_mesh(length: float, width: float) -> ArrayMesh:
 			for idx in [0, 1, 2, 0, 2, 3]:
 				st.set_color(c[idx])
 				st.set_uv(u[idx])
-				st.set_normal(Vector3(0, 0, -1))
-				st.add_vertex(q[idx])
-	return st.commit()
+				st.set_normal(nrm)
+				st.add_vertex(rot * (q[idx] as Vector3))
 
 
-func _build_legs(body_mat: StandardMaterial3D) -> void:
-	var skin := _skin(_m(BODY_COLOR, 0.36, 0.3))
+func _build_legs(_body_mat: ShaderMaterial) -> void:
+	var skin := _skin_mat(1, 0.5, 2.5)
 	for i in 4:
 		var front := i < 2
 		var side := -1.0 if i % 2 == 0 else 1.0

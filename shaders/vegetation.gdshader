@@ -10,6 +10,9 @@ render_mode cull_disabled, world_vertex_coords, diffuse_lambert, specular_disabl
 // away from it and along its motion. Per plant, from its base (one value for the whole plant).
 
 #include "res://shaders/health_field.gdshaderinc"
+#include "res://shaders/aquarium_light.gdshaderinc"
+
+uniform sampler2D noise_tex : filter_linear_mipmap, repeat_enable;
 
 uniform vec3 healthy_a : source_color = vec3(0.1, 0.35, 0.1);
 uniform vec3 healthy_b : source_color = vec3(0.45, 0.75, 0.25);
@@ -68,6 +71,7 @@ vec3 wake_bend(vec3 base, vec3 up, float plant_h) {
 varying float v_health;
 varying float v_t;
 varying vec3 v_wpos;
+varying vec3 v_up;
 
 void vertex() {
 	vec3 base = MODEL_MATRIX[3].xyz;
@@ -101,6 +105,7 @@ void vertex() {
 	v_health = hlt;
 	v_t = t;
 	v_wpos = VERTEX;
+	v_up = up;
 }
 
 void fragment() {
@@ -113,8 +118,9 @@ void fragment() {
 	vec3 healthy = mix(healthy_a, healthy_b, v_t);
 	vec3 dead = mix(dead_a, dead_b, v_t);
 	vec3 alb = mix(dead, healthy, h) * mix(0.55, 1.0, v_t) * COLOR.rgb;
+	float in_cave = cave_factor(v_wpos);
+	alb *= 1.0 - in_cave * 0.62;
 	ALBEDO = alb;
-	ALBEDO *= 1.0 - cave_factor(v_wpos) * 0.62;
 	ROUGHNESS = 0.9;
 	BACKLIGHT = alb * 0.4 * h;
 	vec3 glow = vec3(0.0);
@@ -123,4 +129,6 @@ void fragment() {
 		glow += motes[i].w / (1.0 + dot(dd, dd) * 0.9);
 	}
 	EMISSION = glow * mote_color * (alb * 1.6 + 0.1);
+	// Blades stand up from the moss: lit as the ground they grow from, brighter toward the tips.
+	EMISSION += aquarium_light(noise_tex, alb, v_wpos, v_up, in_cave, TIME) * mix(0.5, 1.1, v_t);
 }

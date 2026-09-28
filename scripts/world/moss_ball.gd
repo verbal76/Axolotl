@@ -104,6 +104,11 @@ func setup(p_index: int, p_radius: float, p_palette: Dictionary) -> void:
 
 func register_material(m: ShaderMaterial) -> ShaderMaterial:
 	field_materials.append(m)
+	# The aquarium light's caustics sample this (vegetation has no other texture).
+	if m.get_shader_parameter("noise_tex") == null:
+		m.set_shader_parameter("noise_tex", NOISE)
+	for k in Aquarium.light_params:
+		m.set_shader_parameter(k, Aquarium.light_params[k])
 	m.set_shader_parameter("ball_center", global_position if is_inside_tree() else position)
 	if not caves.is_empty():
 		var arr := caves.duplicate()

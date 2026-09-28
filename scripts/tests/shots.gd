@@ -244,6 +244,42 @@ func run(runner) -> void:
 			await t.shot("terrain_%s" % v[4])
 	if only == "review":
 		await _review(g)
+	if only == "lightdbg":
+		for b in g.balls:
+			b.add_heal(Vector3.UP, 340.0, 0.0)
+		g.g_disp = 1.0
+		g.aquarium.apply(1.0)
+		var b2 := g.balls[2]
+		_look(g, 2, b2.surface_point(MossBall.dir_ll(10, 110), 0.2), Vector3.FORWARD, 0.9)
+		await t.seconds(1.5)
+		t.log_line("sun shadow %s opacity %.2f energy %.2f window %.2f; lamp %s" % [g.aquarium.sun.shadow_enabled, g.aquarium.sun.shadow_opacity, g.aquarium.sun.light_energy, g.aquarium.window_light.light_energy, str(Aquarium.light_params)])
+		await t.shot("light_top")
+		g.cam.pitch = 0.3
+		await t.seconds(0.5)
+		await t.shot("light_side")
+		# Grading variants on the same view (lighting experiments; not a regression view).
+		var e: Environment = g.env
+		var variants := [["agx", Environment.TONE_MAPPER_AGX, 1.0, 1.0, 1.0, 0.0026],
+				["agx_graded", Environment.TONE_MAPPER_AGX, 1.1, 0.85, 1.08, 0.006],
+				["filmic_graded", Environment.TONE_MAPPER_FILMIC, 1.0, 0.82, 1.1, 0.006]]
+		for v in variants:
+			e.tonemap_mode = v[1]
+			e.tonemap_exposure = v[2]
+			e.adjustment_enabled = true
+			e.adjustment_saturation = v[3]
+			e.adjustment_contrast = v[4]
+			e.fog_density = v[5]
+			await t.seconds(0.3)
+			await t.shot("light_side_%s" % v[0])
+	if only == "parasite":
+		await _parasite_shots(g)
+	if only == "gill":
+		await _gill_shots(g, "gill")
+		for b in g.balls:
+			b.add_heal(Vector3.UP, 340.0, 0.0)
+		g.g_disp = 1.0
+		g.aquarium.apply(1.0)
+		await _gill_shots(g, "gill_restored")
 	if only == "leafclose":
 		await _leaf_close(g, g.balls[2], "leaf_close")
 		for b in g.balls:
@@ -310,11 +346,11 @@ func _moments(g: Game) -> void:
 	large.set_physics_process(false)
 	large._gray_target = 1.0 / 3.0
 	large._gray = 1.0 / 3.0
-	large._mat.set_shader_parameter("gray_front", large._gray)
+	large.set_look(large._gray, 0.0, 0.0)
 	await t.seconds(0.6)
 	await t.shot("12_parasite_one_third_grey")
 	large._gray = 2.0 / 3.0
-	large._mat.set_shader_parameter("gray_front", large._gray)
+	large.set_look(large._gray, 0.0, 0.0)
 	await t.seconds(0.3)
 	await t.shot("13_parasite_two_thirds_grey")
 	large.set_physics_process(true)
@@ -471,24 +507,7 @@ func _review(g: Game) -> void:
 			_look(g, 2, door + inward * 1.5 + b2.up_at(door) * 0.3, inward, 0.35)
 			await t.seconds(1.5)
 			await t.shot("r_cave_inside")
-	# Gill close up: three-quarter front, and side on.
-	var gp := b0.surface_point(MossBall.dir_ll(12, 30), 0.1)
-	_look(g, 0, gp, Vector3.FORWARD)
-	await t.seconds(1.5)
-	var gu := p.up
-	var gf := p.facing
-	var gr := gf.cross(gu).normalized()
-	var head := p.global_position + gu * 0.35 + gf * 0.35
-	_close(g, head + gf * 1.5 + gr * 0.9 + gu * 0.5, head, gu)
-	await t.seconds(0.5)
-	await t.shot("r_gill_front")
-	_close(g, p.global_position + gu * 0.4 + gr * 2.0 + gf * 0.2, p.global_position + gu * 0.3, gu)
-	await t.seconds(0.4)
-	await t.shot("r_gill_side")
-	_close(g, p.global_position + gu * 2.2 - gf * 1.0, p.global_position + gu * 0.2 + gf * 0.2, gu)
-	await t.seconds(0.4)
-	await t.shot("r_gill_top")
-	_open(g)
+	await _gill_shots(g, "r_gill")
 	# Parasites: a large one crawling, close; then struck and drifting away limp.
 	var large: Parasite = null
 	for par in b0.parasites:
@@ -562,6 +581,63 @@ func _review(g: Game) -> void:
 		await t.seconds(1.5)
 		await t.shot("r_ball3_stems_%s" % stage[0])
 		await _leaf_close(g, b2, "r_leaf_close_%s" % stage[0])
+
+
+## Parasites of each size close up, crawling; then a large one struck and drifting away.
+func _parasite_shots(g: Game) -> void:
+	var b0 := g.balls[0]
+	g.player.invuln_t = 9999
+	for kind in [Parasite.Kind.SMALL, Parasite.Kind.MEDIUM, Parasite.Kind.LARGE]:
+		var par: Parasite = null
+		for x in b0.parasites:
+			if x.kind == kind and x.is_alive():
+				par = x
+				break
+		if par == null:
+			continue
+		var up := b0.up_at(par.global_position)
+		var side := MossBall.frame_at(up, 0).x
+		_look(g, 0, b0.surface_point(b0.up_at(par.global_position + side * 7.0), 0.2), -side)
+		await t.seconds(1.2)
+		var lp := par.global_position
+		var d := 1.4 + par.seg_radius * 6.0
+		_close(g, lp + up * d * 0.6 + side * d, lp + up * 0.1, up)
+		await t.seconds(0.7)
+		await t.shot("par_%d" % kind)
+		_open(g)
+		if kind == Parasite.Kind.LARGE:
+			while par.is_alive():
+				par.hit_cd = 0.0
+				par.hit(3, par.global_position - side, 1.0)
+				await t.frames(1)
+			for k in [[0.15, "par_struck_0_15s"], [0.6, "par_dying_0_75s"], [0.9, "par_drift_1_65s"], [1.2, "par_drift_2_85s"]]:
+				await t.seconds(k[0])
+				_close(g, lp + up * (2.0 + k[0] * 2.0) + side * (3.5 + k[0] * 2.0), par.global_position, up)
+				await t.shot(k[1])
+			_open(g)
+
+
+## Gill close up: three-quarter front, side on and from above.
+func _gill_shots(g: Game, prefix: String) -> void:
+	var p := g.player
+	var b0 := g.balls[0]
+	var gp := b0.surface_point(MossBall.dir_ll(12, 30), 0.1)
+	_look(g, 0, gp, Vector3.FORWARD)
+	await t.seconds(1.5)
+	var gu := p.up
+	var gf := p.facing
+	var gr := gf.cross(gu).normalized()
+	var head := p.global_position + gu * 0.35 + gf * 0.35
+	_close(g, head + gf * 1.5 + gr * 0.9 + gu * 0.5, head, gu)
+	await t.seconds(0.5)
+	await t.shot(prefix + "_front")
+	_close(g, p.global_position + gu * 0.4 + gr * 2.0 + gf * 0.2, p.global_position + gu * 0.3, gu)
+	await t.seconds(0.4)
+	await t.shot(prefix + "_side")
+	_close(g, p.global_position + gu * 2.2 - gf * 1.0, p.global_position + gu * 0.2 + gf * 0.2, gu)
+	await t.seconds(0.4)
+	await t.shot(prefix + "_top")
+	_open(g)
 
 
 ## A jungle ladder's leaves side on from 3 m, half way up: how each leaf grows from the stem.

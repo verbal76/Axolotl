@@ -15,6 +15,12 @@ uniform vec3 film_color : source_color = vec3(0.3, 0.36, 0.26);
 uniform float water_density = 0.017;
 uniform vec3 water_color : source_color = vec3(0.2, 0.26, 0.17);
 
+varying vec3 v_wpos;
+
+void vertex() {
+	v_wpos = (MODEL_MATRIX * vec4(VERTEX, 1.0)).xyz;
+}
+
 void fragment() {
 	vec2 uv = UV * scale;
 	float m = texture(algae_tex, uv).r;
@@ -28,7 +34,11 @@ void fragment() {
 	float ga = clamp(max(film, algae * 0.92), 0.0, 1.0);
 	float T = exp(-water_density * length(VERTEX));
 	float A = 1.0 - T * (1.0 - ga);
-	vec3 C = (water_color * (1.0 - T) + T * ga * col) / max(A, 0.001);
+	// The water column is not one flat colour (Expansion 6): brighter and greener toward the
+	// surface, where the ceiling light comes in, deeper and bluer toward the gravel.
+	float hy = clamp((v_wpos.y + 110.0) / 260.0, 0.0, 1.0);
+	vec3 wc = mix(water_color * vec3(0.6, 0.72, 0.9), water_color * vec3(1.22, 1.2, 1.08), smoothstep(0.0, 1.0, hy));
+	vec3 C = (wc * (1.0 - T) + T * ga * col) / max(A, 0.001);
 	ALBEDO = vec3(0.0);
 	EMISSION = C;
 	ROUGHNESS = 1.0;

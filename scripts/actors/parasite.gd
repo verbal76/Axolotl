@@ -5,6 +5,10 @@ extends Node3D
 ## through colour: damage drains stolen vitality from the head toward the rear.
 
 const SHADER := preload("res://shaders/parasite.gdshader")
+const BODY_SHADER := preload("res://shaders/parasite_body.gdshader")
+const MAX_SEGS := 12
+## The shared body tube (rings x sides), laid along the segments by BODY_SHADER.
+static var _tube: ArrayMesh
 const NOISE := preload("res://assets/textures/noise_rgb.png")
 
 enum Kind { SMALL = 1, MEDIUM = 2, LARGE = 3 }
@@ -46,8 +50,12 @@ var _flash := 0.0
 var _windup_v := 0.0
 var _trail: Array[Vector3] = []
 var _trail_up: Array[Vector3] = []
+## Segment anchors (not drawn: the body is one continuous tube, `_body`); the head's carries the
+## eyes and mandibles, the others the legs.
 var _segs: Array[MeshInstance3D] = []
 var _mat: ShaderMaterial
+var _body: MeshInstance3D
+var _body_mat: ShaderMaterial
 var _spin := Vector3.ZERO
 var _drift_t := 0.0
 var _ground_offset := 0.1
@@ -89,26 +97,29 @@ func _ready() -> void:
 			[Color(0.7, 0.15, 0.95), Color(0.2, 0.9, 0.8), Color(1.0, 0.9, 0.2)],
 			[Color(1.0, 0.35, 0.1), Color(0.95, 0.1, 0.45), Color(0.3, 0.9, 1.0)]]
 	var p: Array = palettes[kind - 1]
-	_mat.set_shader_parameter("color_a", p[0])
-	_mat.set_shader_parameter("color_b", p[1])
-	_mat.set_shader_parameter("spot", p[2])
+	_body_mat = ShaderMaterial.new()
+	_body_mat.shader = BODY_SHADER
+	_body_mat.set_shader_parameter("noise_tex", NOISE)
+	for m in [_mat, _body_mat]:
+		m.set_shader_parameter("color_a", p[0])
+		m.set_shader_parameter("color_b", p[1])
+		m.set_shader_parameter("spot", p[2])
+	_body_mat.set_shader_parameter("npts", seg_count)
 	for i in seg_count:
 		var mi := MeshInstance3D.new()
-		var s := SphereMesh.new()
-		var t := float(i) / maxf(1.0, seg_count - 1)
-		var r := seg_radius * (1.0 - 0.45 * pow(t, 1.5)) * (1.1 if i == 0 else 1.0)
-		s.radius = r
-		s.height = r * 1.7
-		s.radial_segments = 12
-		s.rings = 6
-		mi.mesh = s
-		mi.material_override = _mat
 		mi.set_instance_shader_parameter("seg_t", (float(i) + 0.5) / seg_count)
 		mi.top_level = true
 		mi.scale = Vector3(1.0, 1.0, 1.35)
-		mi.visibility_range_end = 80.0
 		add_child(mi)
 		_segs.append(mi)
+	_body = MeshInstance3D.new()
+	_body.mesh = _body_tube()
+	_body.material_override = _body_mat
+	_body.top_level = true
+	var ext := spacing * seg_count + seg_radius * 4.0 + 1.0
+	_body.custom_aabb = AABB(Vector3(-ext, -ext, -ext), Vector3(ext, ext, ext) * 2.0)
+	_body.visibility_range_end = 80.0
+	add_child(_body)
 	# Head details: beady eyes and mandibles.
 	var eye_mat := StandardMaterial3D.new()
 	eye_mat.albedo_color = Color(0.05, 0.05, 0.05)
@@ -160,6 +171,49 @@ func _ready() -> void:
 				c.visibility_range_end = 40.0
 
 
+## Colour state on the body and its appendages: grey front (0..1, head to rear), hit flash, and
+## the wind-up glow.
+func set_look(gray: float, flash_v: float, windup_v: float) -> void:
+	for m in [_mat, _body_mat]:
+		m.set_shader_parameter("gray_front", gray)
+		m.set_shader_parameter("flash", flash_v)
+		m.set_shader_parameter("windup", windup_v)
+
+
+## The shared body tube: rings along UV.y (head 0 .. tail 1, plus the rounded caps the shader
+## adds beyond both ends), sides round UV.x. Positions are placed entirely by the shader.
+static func _body_tube() -> ArrayMesh:
+	if _tube != null:
+		return _tube
+	var rings := 34
+	var sides := 10
+	var verts := PackedVector3Array()
+	var uvs := PackedVector2Array()
+	var nrm := PackedVector3Array()
+	for j in rings:
+		for k in sides + 1:
+			verts.append(Vector3(0, 0, float(j) * 0.01))
+			uvs.append(Vector2(float(k) / sides, float(j) / (rings - 1)))
+			nrm.append(Vector3.UP)
+	var idx := PackedInt32Array()
+	for j in rings - 1:
+		for k in sides:
+			var a := j * (sides + 1) + k
+			var b := a + 1
+			var c := a + sides + 1
+			var d := c + 1
+			idx.append_array([a, c, b, b, c, d])
+	var arr := []
+	arr.resize(Mesh.ARRAY_MAX)
+	arr[Mesh.ARRAY_VERTEX] = verts
+	arr[Mesh.ARRAY_NORMAL] = nrm
+	arr[Mesh.ARRAY_TEX_UV] = uvs
+	arr[Mesh.ARRAY_INDEX] = idx
+	_tube = ArrayMesh.new()
+	_tube.add_surface_from_arrays(Mesh.PRIMITIVE_TRIANGLES, arr)
+	return _tube
+
+
 func is_alive() -> bool:
 	return hp > 0
 
@@ -208,11 +262,9 @@ func _physics_process(dt: float) -> void:
 	hit_cd = maxf(0.0, hit_cd - dt)
 	_flash = maxf(0.0, _flash - dt * 3.0)
 	_gray = move_toward(_gray, _gray_target, dt * 1.6)
-	_mat.set_shader_parameter("gray_front", _gray)
-	_mat.set_shader_parameter("flash", _flash)
 	var target_windup := 1.0 if state == "windup" else 0.0
 	_windup_v = move_toward(_windup_v, target_windup, dt * 4.0)
-	_mat.set_shader_parameter("windup", _windup_v * (0.6 + 0.4 * sin(state_t * 30.0)))
+	set_look(_gray, _flash, _windup_v * (0.6 + 0.4 * sin(state_t * 30.0)))
 
 	match state:
 		"graze", "chase":
@@ -281,6 +333,8 @@ func _init_on_ground() -> void:
 		_trail_up.push_back(up)
 	state = "graze"
 	_graze_target = global_position
+	# Laid out where it is at once (a parasite on another ball sleeps until the axolotl arrives).
+	_update_segments(0.0)
 
 
 func _set_state(s: String) -> void:
@@ -405,13 +459,23 @@ func _update_segments(dt: float) -> void:
 		var dist := spacing * i
 		base.append(_sample_trail(dist))
 		ups.append(_trail_up[mini(_trail_up.size() - 1, int(dist / (spacing * 0.35)))])
+	var limp: Array[Vector3] = []
+	if state == "drifting":
+		limp = _limp_chain()
 	for i in seg_count:
 		var p: Vector3 = base[i]
 		var u: Vector3 = ups[i]
 		if state == "drifting":
-			p = global_transform * Vector3(0, 0, spacing * i)
+			p = limp[i]
 			u = global_basis.y
 		else:
+			# Struck (Expansion 6): one or two quick residual twitches that die away at once.
+			if state == "dying":
+				var tw := exp(-state_t * 7.0) * seg_radius * 1.1
+				var ax: Vector3 = heading if i == 0 else (base[i - 1] - base[i])
+				ax -= u * ax.dot(u)
+				if ax.length() > 0.0001:
+					p += ax.normalized().cross(u) * tw * sin(state_t * 34.0 - float(i) * 1.2) * lerpf(0.4, 1.0, float(i) / maxf(1.0, seg_count - 1))
 			if i == 0:
 				p += u * rear_lift * seg_radius * 1.6
 			elif i == 1:
@@ -426,7 +490,7 @@ func _update_segments(dt: float) -> void:
 		var s := _segs[i]
 		var ahead := head if i == 0 else _segs[i - 1].global_position
 		var fwd := (ahead - p) if i > 0 else heading
-		if state == "drifting":
+		if state == "drifting" and i == 0:
 			fwd = -global_basis.z
 		fwd = fwd - u * fwd.dot(u)
 		if fwd.length() < 0.001:
@@ -434,12 +498,51 @@ func _update_segments(dt: float) -> void:
 		var right := fwd.normalized().cross(u).normalized()
 		var sc := s.scale
 		s.global_transform = Transform3D(Basis(right, u, -fwd.normalized()).orthonormalized().scaled(sc), p)
+	_push_body()
 	if state == "windup" or (state == "attack" and kind == Kind.LARGE):
 		var open := 0.9 if state == "windup" else 0.3
 		for c in _segs[0].get_children():
 			if c.name.begins_with("Mandible"):
 				var side := signf(c.position.x)
 				c.rotation.z = side * -(0.4 + open)
+
+
+## The body tube follows the segment anchors: their positions (with the body's taper as radius)
+## and ups, sent to the body shader.
+func _push_body() -> void:
+	var pts := PackedVector4Array()
+	var ups := PackedVector4Array()
+	pts.resize(MAX_SEGS)
+	ups.resize(MAX_SEGS)
+	for i in seg_count:
+		var t := float(i) / maxf(1.0, seg_count - 1)
+		var r := seg_radius * (1.0 - 0.5 * pow(t, 1.4)) * (1.08 if i == 0 else 1.0)
+		var sp := _segs[i].global_position
+		pts[i] = Vector4(sp.x, sp.y, sp.z, r)
+		var su := _segs[i].global_basis.y.normalized()
+		ups[i] = Vector4(su.x, su.y, su.z, 0.0)
+	_body.global_position = _segs[0].global_position
+	_body_mat.set_shader_parameter("pts", pts)
+	_body_mat.set_shader_parameter("ups", ups)
+
+
+## Defeated and adrift (Expansion 6): not a rigid stick. The body hangs in a gentle limp curve that
+## sags as it relaxes, with a weak ripple running to the tail (the tail lagging behind) that dies
+## away over the first seconds.
+func _limp_chain() -> Array[Vector3]:
+	var out: Array[Vector3] = []
+	var p := global_position
+	var dir := global_basis.z.normalized()
+	var ax := global_basis.y.normalized()
+	var ax2 := global_basis.x.normalized()
+	var relax := exp(-_drift_t * 1.4)
+	for i in seg_count:
+		out.append(p)
+		var tt := float(i) / maxf(1.0, seg_count - 1)
+		var bend := 0.16 * (1.0 - relax * 0.6) + sin(_drift_t * 6.5 - float(i) * 1.1) * 0.42 * relax * (0.3 + tt)
+		dir = dir.rotated(ax, bend).rotated(ax2, 0.07 * (1.0 - relax * 0.5)).normalized()
+		p += dir * spacing
+	return out
 
 
 func _sample_trail(dist: float) -> Vector3:
@@ -526,7 +629,7 @@ func _detach() -> void:
 	var u := up
 	global_transform = Transform3D(Basis(heading.cross(u).normalized(), u, -heading), global_position)
 	vel = u * 2.6 + Game.inst.tank_flow() * 0.6 + ball.current_at(global_position)
-	_spin = Vector3(randf_range(-1, 1), randf_range(-1, 1), randf_range(-1, 1)) * 0.8
+	_spin = Vector3(randf_range(-1, 1), randf_range(-1, 1), randf_range(-1, 1)) * 0.35
 
 
 func _update_drift(dt: float) -> void:
