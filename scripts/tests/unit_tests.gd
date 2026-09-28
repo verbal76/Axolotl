@@ -14,7 +14,7 @@ func run(runner) -> void:
 	p.use_bot_input = true
 	await t.seconds(0.5)
 	var only: String = Settings.test_args.get("only", "")
-	for name_ in ["_test_startup", "_test_ota_and_version", "_test_mesh_winding", "_test_terrain", "_test_terrain_grounded", "_test_no_floating_platforms", "_test_parasite_locomotion", "_test_placements", "_test_tutorial_route", "_test_sphere_walk", "_test_jump_and_burst", "_test_coyote_and_buffer", "_test_swipe_direction_and_stages", "_test_hard_landing", "_test_food", "_test_food_reach", "_test_darter_and_burrower", "_test_food_repopulates", "_test_motes", "_test_checkpoint_and_regen", "_test_crumble", "_test_restoration_continuity", "_test_vortex", "_test_current", "_test_canopy", "_test_upgrades", "_test_ui", "_test_all_clear"]:
+	for name_ in ["_test_startup", "_test_ota_and_version", "_test_mesh_winding", "_test_terrain", "_test_terrain_grounded", "_test_no_floating_platforms", "_test_parasite_locomotion", "_test_placements", "_test_tutorial_route", "_test_sphere_walk", "_test_jump_and_burst", "_test_coyote_and_buffer", "_test_swipe_direction_and_stages", "_test_hard_landing", "_test_food", "_test_food_reach", "_test_darter_and_burrower", "_test_food_repopulates", "_test_motes", "_test_checkpoint_and_regen", "_test_crumble", "_test_restoration_continuity", "_test_vortex", "_test_current", "_test_canopy", "_test_canopy_plain_jumps", "_test_upgrades", "_test_ui", "_test_all_clear"]:
 		if only == "" or name_.contains(only):
 			await call(name_)
 
@@ -1332,7 +1332,12 @@ func _test_canopy() -> void:
 	var c3: Transform3D = hint["c3"]
 	p.health = 3
 	kinds.clear()
-	var above := Levels.leaf_mid(f1.global_transform, 2.4, 0.0).origin + b.up_at(f1.global_position) * 8.5
+	# Dropped over F1's outer half, out beyond the spiral leaves' reach (the column above it is
+	# open water: checked, so this really lands on the flexible leaf).
+	var on_leaf := Levels.leaf_mid(f1.global_transform, 1.2, 0.0).origin
+	var above := on_leaf + b.up_at(f1.global_position) * 8.5
+	var blocker := g.get_world_3d().direct_space_state.intersect_ray(PhysicsRayQueryParameters3D.create(above, on_leaf + b.up_at(f1.global_position) * 0.4, 1 | 2))
+	t.check("flex_leaf_drop_column_open", blocker.is_empty(), "")
 	place_at(2, above, -c3.basis.z)
 	var rebound_v := 0.0
 	var landed_leaf := false
@@ -1346,6 +1351,67 @@ func _test_canopy() -> void:
 	t.check("flex_leaf_cushions_fall", landed_leaf and p.health == 3 and not ("extreme" in kinds.slice(0, 1)), str(kinds))
 	t.check("flex_leaf_modest_rebound", rebound_v > 3.0 and rebound_v < 12.5, "rebound %.1f" % rebound_v)
 	p.invuln_t = 0.0
+
+
+## Owner playtest: a child could not start the Moss Ball #3 canopy climb. The spiral must be
+## climbable with plain jumps (no water burst): from the ground onto the first leaf, then leaf to
+## leaf; and no leaf may have a platform hanging low over it.
+func _test_canopy_plain_jumps() -> void:
+	var b := g.balls[2]
+	var lb: LevelBuilder = b.get_meta("builder")
+	var h: Dictionary = {}
+	for x in lb.bot_hints:
+		if x.has("canopy"):
+			h = x
+	var spiral: Array = h["spiral"]
+	var space := g.get_world_3d().direct_space_state
+	var prev := 0.0
+	var worst_step := 0.0
+	var low_head := INF
+	for xf in spiral:
+		var top := b.altitude(Levels.leaf_mid(xf, 1.5, 0.0).origin)
+		worst_step = maxf(worst_step, top - prev)
+		prev = top
+		for along in [0.4, 1.0, 1.6, 2.2, 2.8]:
+			for side in [-0.6, 0.0, 0.6]:
+				var m := Levels.leaf_mid(xf, along, side)
+				var up := b.up_at(m.origin)
+				var hit := space.intersect_ray(PhysicsRayQueryParameters3D.create(m.origin + up * 0.2, m.origin + up * 3.0, 1 | 2))
+				if not hit.is_empty() and xf != spiral[spiral.size() - 1]:
+					low_head = minf(low_head, (hit.position - m.origin).dot(up))
+	t.check("canopy_steps_within_a_plain_jump", worst_step <= 1.1 and b.altitude(Levels.leaf_mid(spiral[0], 1.5, 0.0).origin) <= 1.0, "first leaf %.2f m, largest step %.2f m (jump apex 1.85 m)" % [b.altitude(Levels.leaf_mid(spiral[0], 1.5, 0.0).origin), worst_step])
+	t.check("canopy_spiral_headroom", low_head >= 1.5, "lowest headroom above a spiral leaf %.2f m" % low_head)
+	# Physically: from the ground beside the first leaf, plain jumps only, all the way up.
+	p.invuln_t = 999
+	var ground := b.surface_point(b.up_at(Levels.leaf_mid(spiral[0], 4.4, 0.0).origin), 0.1)
+	place_at(2, ground, (Levels.leaf_mid(spiral[0], 1.5, 0.0).origin - ground).normalized())
+	await wait_grounded()
+	var reached := 0
+	for k in spiral.size():
+		var target := Levels.leaf_mid(spiral[k], 1.6, 0.0).origin
+		for i in 10:
+			stick_toward(target - p.global_position)
+			await t.frames(1)
+		await press("jump")
+		for i in 90:
+			var off := target - p.global_position
+			off -= p.up * off.dot(p.up)
+			if off.length() > 0.3:
+				stick_toward(off)
+			else:
+				p.bot_input = Vector2.ZERO
+			await t.frames(1)
+			if p.grounded and i > 12:
+				break
+		p.bot_input = Vector2.ZERO
+		await wait_grounded()
+		var on := absf(b.altitude(p.global_position) - b.altitude(target)) < 0.35 and p.global_position.distance_to(target) < 1.8
+		if not on:
+			t.log_line("plain-jump climb stopped at leaf %d: at h %.2f, leaf top h %.2f" % [k, b.altitude(p.global_position), b.altitude(target)])
+			break
+		reached += 1
+	p.invuln_t = 0.0
+	t.check("canopy_climb_with_plain_jumps", reached == spiral.size(), "reached leaf %d of %d with plain jumps" % [reached, spiral.size()])
 
 
 func _test_upgrades() -> void:

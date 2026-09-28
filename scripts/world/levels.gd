@@ -291,6 +291,17 @@ class Site:
 		return p(tx * k + dx * off, y, tz * k + dz * off, yaw_out(dx, dz))
 
 
+## Moss Ball #3's spiral canopy climb around the giant stem. Every step is a plain jump with room
+## to spare (jump apex 1.85 m; the water burst is extra help, not a requirement), and the first
+## leaf is low enough to get onto from the ground. Owner playtest: the old 1.5 m start and 1.6 m
+## steps needed a precise jump + burst every time, and a child could not start the climb.
+const SPIRAL_LEAVES := 16
+const SPIRAL_START := 0.8
+const SPIRAL_RISE := 1.0
+const SPIRAL_TURN := 72.0
+const SPIRAL_PHASE := 180.0
+
+
 static func _ball3(lb: LevelBuilder) -> void:
 	var b := lb.ball
 	b.food_weights = [0.25, 0.3, 0.45]
@@ -313,9 +324,12 @@ static func _ball3(lb: LevelBuilder) -> void:
 	var C := Site.new(lb, 28, -30, 0)
 	C.stem_top(0, 0, 19.0, 1.1, 0.75)
 	var spiral := []
-	for i in 10:
-		var a := deg_to_rad(i * 60.0)
-		var h := 1.5 + i * 1.6
+	for i in SPIRAL_LEAVES:
+		# Five leaves per turn: a leaf is 5 m above the one below it, so no leaf hangs low over
+		# another (or over the lower canopy's flexible leaves); the last leaf ends at 180 degrees,
+		# where the old spiral ended, next to the canopy leaves C1 and C3.
+		var a := deg_to_rad(SPIRAL_PHASE + i * SPIRAL_TURN)
+		var h := SPIRAL_START + i * SPIRAL_RISE
 		var xf := C.p(cos(a) * 0.9, h, sin(a) * 0.9, Site.yaw_out(cos(a), sin(a)))
 		lb.leaf_xf(xf, 3.0, 1.9)
 		spiral.append(xf)
