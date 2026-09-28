@@ -32,7 +32,9 @@ void fragment() {
 	float film = clamp(mix(0.9, 0.03, clean) * (0.8 + gr * 0.4), 0.0, 1.0);
 	vec3 col = mix(film_color, mix(algae_a, algae_b, m), algae);
 	float ga = clamp(max(film, algae * 0.92), 0.0, 1.0);
-	float T = exp(-water_density * length(VERTEX));
+	// (Expansion 6: the bedroom beyond reads softly through the water, never as flat shapes
+	// competing with the tank: the water column and the glass let through under half of it.)
+	float T = exp(-water_density * length(VERTEX)) * 0.45;
 	float A = 1.0 - T * (1.0 - ga);
 	// The water column is not one flat colour (Expansion 6): brighter and greener toward the
 	// surface, where the ceiling light comes in, deeper and bluer toward the gravel.

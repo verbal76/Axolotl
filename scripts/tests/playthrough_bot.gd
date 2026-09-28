@@ -55,6 +55,25 @@ func run(runner) -> void:
 		t.check("debug_reached_ball3", p.ball == g.balls[2], "")
 		_report()
 		return
+	if Settings.test_args.get("start", "") == "eels":
+		# Debug scenario: each cave eel fought with the 100% tactic, starting at its cave's entry.
+		g.start_play(true)
+		for b in g.balls:
+			for c in b.critters:
+				if c is CaveEel:
+					# Outside, beyond the eel's cave (the 100% phase arrives from elsewhere).
+					var ch: Dictionary = {}
+					for h in (b.get_meta("builder") as LevelBuilder).bot_hints:
+						if h.has("cave") and (ch.is_empty() or (h["centre"] as Vector3).distance_to((c as CaveEel).mouth) < (ch["centre"] as Vector3).distance_to((c as CaveEel).mouth)):
+							ch = h
+					var out: Vector3 = ch["entry"] + ((ch["entry"] as Vector3) - (ch["door"] as Vector3)).normalized() * 9.0
+					p.place(b, b.surface_point(b.up_at(out), 0.3), Vector3.FORWARD)
+					g.audio.set_ball(b.index, false)
+					await wait(1.0)
+					await _fight_eel(c as CaveEel)
+					t.check("debug_eel_%s" % (c as CaveEel).threat_id, (c as CaveEel).defeated, "")
+		_report()
+		return
 	g.all_clear.connect(func(): _all_clear_at = sim_time; mark("ALL CLEAR shown"))
 	# Start from the title screen like a player would.
 	g._enter_title()
@@ -247,17 +266,34 @@ func _see(c: Critter) -> void:
 ## its head is within a swipe (the swipe turns to it), so swipe then; repeat until it is beaten.
 func _fight_eel(e: CaveEel) -> void:
 	var b: MossBall = e.ball
+	# Its grotto (the cave hint whose centre is nearest the crevice): go in by the door, never
+	# over the roof above it.
+	var cave_h: Dictionary = {}
+	var cd := INF
+	for h in (b.get_meta("builder") as LevelBuilder).bot_hints:
+		if h.has("cave") and (h["centre"] as Vector3).distance_to(e.mouth) < cd:
+			cd = (h["centre"] as Vector3).distance_to(e.mouth)
+			cave_h = h
 	for round_ in 12:
 		if e.defeated:
 			return
 		var front := b.surface_point(b.up_at(e.mouth + e.normal * (CaveEel.STRIKE_REACH + 0.45)), 0.1)
+		if not cave_h.is_empty() and (_cave_of(p.global_position) != cave_h or height_of(p.global_position) > 1.2):
+			await goto(cave_h["entry"], 0.8, 60.0)
+			await goto(cave_h["door"], 0.8, 15.0)
 		await goto(front, 0.4, 25.0, null, false)
 		set_stick(Vector2.ZERO)
+		var seen := ""
+		var most := 0.0
 		for i in 60 * 6:
 			await tick()
+			most = maxf(most, e.ext)
+			if not seen.contains(e.state):
+				seen += e.state + " "
 			if e.hittable() and e.ext > e.reach * 0.8:
 				await press("swipe")
 				break
+		t.log_line("eel %s round %d: at %.2f m from the mouth (front %.2f), states %s, out %.2f of %.2f, hp %d" % [e.threat_id, round_, p.global_position.distance_to(e.mouth), p.global_position.distance_to(front), seen, most, e.reach, e.hp])
 		await wait(1.0)
 
 
@@ -303,6 +339,21 @@ var _perf_phys := 0.0
 var _last_us := 0
 var _perf_max := 0.0
 var _hb := 0.0
+var _last_hp := 99
+
+
+func _nearest_threat() -> String:
+	var best := "none"
+	var bd := 4.0
+	for par in p.ball.parasites:
+		if par.is_alive() and par.global_position.distance_to(p.global_position) < bd:
+			bd = par.global_position.distance_to(p.global_position)
+			best = "parasite %s %.1f m" % [par.zone_id, bd]
+	for c in p.ball.critters:
+		if c.species in ["eel", "crab", "puffer"] and not c.defeated and c.global_position.distance_to(p.global_position) < bd:
+			bd = c.global_position.distance_to(p.global_position)
+			best = "%s %.1f m" % [c.species, bd]
+	return best
 
 
 func tick() -> void:
@@ -316,6 +367,9 @@ func tick() -> void:
 		_perf_proc += ms
 		_perf_max = maxf(_perf_max, ms)
 	_last_us = now
+	if p.health < _last_hp:
+		t.log_line("hurt at %.1fs: hp %d (%s; nearest threat %s)" % [sim_time, p.health, activity, _nearest_threat()])
+	_last_hp = p.health
 	if _hb >= float(Settings.test_args.get("hb", "20")):
 		_hb = 0.0
 		t.log_line("heartbeat %.0fs ball %d h %.1f act '%s' R %.2f %.2f %.2f hp %d cine '%s' state %s %s" % [sim_time, p.ball.index + 1,
@@ -880,6 +934,8 @@ func capture_mote(m: Mote) -> bool:
 		return true
 	await goto(func(): return m.global_position, 2.0, 40.0)
 	var ok := await lunge_at(func(): return m.global_position, 25.0)
+	if not ok:
+		t.log_line("mote %s missed: %.1f m away, %.1f m above him, h_hint %.1f" % [m.zone_id, m.global_position.distance_to(p.global_position), height_of(m.global_position) - height_of(p.global_position), m.h_hint])
 	if ok:
 		await wait(1.0)
 	return not m.is_available()

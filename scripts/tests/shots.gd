@@ -271,6 +271,26 @@ func run(runner) -> void:
 			e.fog_density = v[5]
 			await t.seconds(0.3)
 			await t.shot("light_side_%s" % v[0])
+	if only == "worldr":
+		# The terrain vocabulary (ridges, terraces, arch, bridge, shelves), healed, from further back.
+		for b in g.balls:
+			b.add_heal(Vector3.UP, 340.0, 0.0)
+		g.g_disp = 1.0
+		g.aquarium.apply(1.0)
+		for bi in range(3, g.balls.size()):
+			var b := g.balls[bi]
+			var k := 0
+			for h in (b.get_meta("builder") as LevelBuilder).bot_hints:
+				if not h.has("route") or h.get("audit", false):
+					continue
+				var st: Vector3 = h["start"]
+				var tops: Array = h["tops"]
+				var mid: Vector3 = tops[tops.size() / 2]
+				var back := st - (mid - st).normalized() * 7.0
+				_look(g, bi, b.surface_point(b.up_at(back), 0.2), mid - back, 0.35)
+				await t.seconds(1.0)
+				await t.shot("wr_b%d_%d_%s" % [bi + 1, k, str(h["route"]).replace(" ", "_")])
+				k += 1
 	if only == "feedback":
 		await _feedback(g, "")
 		for b in g.balls:
