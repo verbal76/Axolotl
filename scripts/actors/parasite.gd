@@ -52,6 +52,11 @@ var _spin := Vector3.ZERO
 var _drift_t := 0.0
 var _ground_offset := 0.1
 var _pushed := Vector3.ZERO
+## Body wave (see _update_segments): phase advances with distance travelled, so the motion is the
+## same at any frame rate; amplitude follows how fast the head is really moving.
+var _wave_phase := 0.0
+var _wave_amp := 0.0
+var _last_head := Vector3.ZERO
 
 
 func setup(p_ball: MossBall, p_kind: int, p_zone: String, dir: Vector3, home_deg := 9.0, h := 0.0) -> void:
@@ -374,11 +379,27 @@ func _update_segments(dt: float) -> void:
 	var rear_lift := 0.0
 	if state == "windup":
 		rear_lift = minf(1.0, state_t / windup_time)
-	var wiggle := sin(_clock * 8.0) * 0.04
+	# Travelling body wave. The head lays down the path (the trail); every segment sits on that
+	# path at its own distance behind the head, so turns bend the body progressively. On top of
+	# that, a sideways wave whose phase advances with the distance the head has travelled: crests
+	# start near the head and roll back towards the tail as the creature moves, like a crawling
+	# centipede or a swimming worm. Standing still, a slow restrained ripple remains.
+	var moved := 0.0 if _last_head == Vector3.ZERO else minf(head.distance_to(_last_head), speed * 3.0 * dt + 0.05)
+	_last_head = head
+	var body_len := spacing * maxf(2.0, seg_count - 1)
+	var wavelength := body_len * 1.3
+	_wave_phase = fmod(_wave_phase + moved / wavelength * TAU + dt * 1.1, TAU * 64.0)
+	var pace := clampf(moved / maxf(dt * speed, 0.0001), 0.0, 1.2) if dt > 0.0 else 0.0
+	_wave_amp = lerpf(_wave_amp, seg_radius * (0.1 + 0.34 * pace), 1.0 - exp(-dt * 6.0))
+	var base: Array[Vector3] = []
+	var ups: Array[Vector3] = []
 	for i in seg_count:
 		var dist := spacing * i
-		var p := _sample_trail(dist)
-		var u: Vector3 = _trail_up[mini(_trail_up.size() - 1, int(dist / (spacing * 0.35)))]
+		base.append(_sample_trail(dist))
+		ups.append(_trail_up[mini(_trail_up.size() - 1, int(dist / (spacing * 0.35)))])
+	for i in seg_count:
+		var p: Vector3 = base[i]
+		var u: Vector3 = ups[i]
 		if state == "drifting":
 			p = global_transform * Vector3(0, 0, spacing * i)
 			u = global_basis.y
@@ -387,7 +408,13 @@ func _update_segments(dt: float) -> void:
 				p += u * rear_lift * seg_radius * 1.6
 			elif i == 1:
 				p += u * rear_lift * seg_radius * 0.8
-			p += heading.cross(u) * wiggle * (i % 2 * 2 - 1) * 0.5
+			# Sideways, across the path at this segment (not across the head's heading).
+			var along: Vector3 = heading if i == 0 else (base[i - 1] - base[i])
+			along -= u * along.dot(u)
+			if along.length() > 0.0001:
+				var t_body := float(i) / maxf(1.0, seg_count - 1)
+				var env := lerpf(0.3, 1.0, t_body) * (1.0 - rear_lift)
+				p += along.normalized().cross(u) * _wave_amp * env * sin(_wave_phase - TAU * spacing * i / wavelength)
 		var s := _segs[i]
 		var ahead := head if i == 0 else _segs[i - 1].global_position
 		var fwd := (ahead - p) if i > 0 else heading

@@ -13,6 +13,9 @@ class Crumble extends StaticBody3D:
 	var _mesh: MeshInstance3D
 	var _shape: CollisionShape3D
 	var _home: Transform3D
+	var _stalk: Node3D
+	var _stalk_shape: CollisionShape3D
+	var _stalk_radius := 0.0
 
 	func build(p_ball: MossBall, xf: Transform3D, size: Vector3, p_zone: String) -> void:
 		ball = p_ball
@@ -34,6 +37,50 @@ class Crumble extends StaticBody3D:
 		_mesh.scale = Vector3(1.0, 1.0, size.z / size.x)
 		_mesh.material_override = ball.moss_material
 		add_child(_mesh)
+		_build_stalk(xf, size)
+
+	## A raised brittle cap stands on a brittle moss stalk rooted in the real ground below (hills
+	## included): the formation reaches the ground, collides like it looks, and the whole of it
+	## crumbles and regrows together. Without the stalk an elevated cap hung in open water, read
+	## as the top of a formation whose lower part was missing, and Gill could walk underneath.
+	func _build_stalk(xf: Transform3D, size: Vector3) -> void:
+		var up := ball.up_at(xf.origin)
+		var ground := ball.surface_point(up)
+		var height := (xf.origin - up * size.y * 0.5 - ground).dot(up)
+		if height < 0.3:
+			return
+		var sink := 0.4
+		var r_top := size.x * 0.26
+		_stalk_radius = size.x * 0.44
+		var base_y := -size.y * 0.5 - height - sink
+		_stalk_shape = CollisionShape3D.new()
+		var cyl := CylinderShape3D.new()
+		cyl.radius = (r_top + _stalk_radius) * 0.5
+		cyl.height = height + sink
+		_stalk_shape.shape = cyl
+		_stalk_shape.position = Vector3(0, base_y + (height + sink) * 0.5, 0)
+		add_child(_stalk_shape)
+		# Grows from its root (scale.y) when the formation regrows.
+		_stalk = Node3D.new()
+		_stalk.name = "Stalk"
+		_stalk.set_meta("grounded", "brittle-moss stalk")
+		_stalk.position = Vector3(0, base_y, 0)
+		add_child(_stalk)
+		var mi := MeshInstance3D.new()
+		mi.mesh = MeshLib.stem_mesh(_stalk_radius, r_top, height + sink + size.y * 0.25, 12)
+		mi.material_override = ball.moss_material
+		_stalk.add_child(mi)
+
+	## Regrowing waits until Gill is clear of the cap and of the stalk's footprint.
+	func _clear_of_player() -> bool:
+		var pl := Game.inst.player
+		var off := pl.global_position - _home.origin
+		if off.length() <= 1.4:
+			return false
+		if _stalk == null:
+			return true
+		var up := ball.up_at(_home.origin)
+		return (off - up * off.dot(up)).length() > _stalk_radius + 0.6
 
 	func stepped() -> void:
 		if restored or _state != "solid":
@@ -59,21 +106,26 @@ class Crumble extends StaticBody3D:
 					_t = 0.0
 					_shape.disabled = true
 					_mesh.visible = false
+					if _stalk != null:
+						_stalk_shape.disabled = true
+						_stalk.visible = false
 					global_position = _home.origin
 					var up := ball.up_at(global_position)
 					for i in 10:
 						WaterFX.inst._spawn_puff(global_position + Vector3(randf() - 0.5, randf() - 0.5, randf() - 0.5) * 0.8,
 								-up * randf_range(1.0, 3.0), 1.2, randf_range(0.06, 0.12), Color(0.5, 0.48, 0.42, 0.9), 0.8)
 			"gone":
-				if _t > 3.5 or restored:
-					var pl := Game.inst.player
-					if pl.global_position.distance_to(global_position) > 1.4:
-						_state = "regrow"
-						_t = 0.0
+				if (_t > 3.5 or restored) and _clear_of_player():
+					_state = "regrow"
+					_t = 0.0
 			"regrow":
 				_shape.disabled = false
 				_mesh.visible = true
 				_mesh.scale.y = minf(1.0, _t / 0.6)
+				if _stalk != null:
+					_stalk_shape.disabled = false
+					_stalk.visible = true
+					_stalk.scale.y = minf(1.0, _t / 0.6)
 				if _t > 0.6:
 					_state = "solid"
 

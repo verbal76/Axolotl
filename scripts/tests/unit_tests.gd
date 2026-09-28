@@ -14,7 +14,7 @@ func run(runner) -> void:
 	p.use_bot_input = true
 	await t.seconds(0.5)
 	var only: String = Settings.test_args.get("only", "")
-	for name_ in ["_test_startup", "_test_ota_and_version", "_test_mesh_winding", "_test_terrain", "_test_placements", "_test_tutorial_route", "_test_sphere_walk", "_test_jump_and_burst", "_test_coyote_and_buffer", "_test_swipe_direction_and_stages", "_test_hard_landing", "_test_food", "_test_food_reach", "_test_darter_and_burrower", "_test_food_repopulates", "_test_motes", "_test_checkpoint_and_regen", "_test_crumble", "_test_restoration_continuity", "_test_vortex", "_test_current", "_test_canopy", "_test_upgrades", "_test_ui", "_test_all_clear"]:
+	for name_ in ["_test_startup", "_test_ota_and_version", "_test_mesh_winding", "_test_terrain", "_test_terrain_grounded", "_test_no_floating_platforms", "_test_parasite_locomotion", "_test_placements", "_test_tutorial_route", "_test_sphere_walk", "_test_jump_and_burst", "_test_coyote_and_buffer", "_test_swipe_direction_and_stages", "_test_hard_landing", "_test_food", "_test_food_reach", "_test_darter_and_burrower", "_test_food_repopulates", "_test_motes", "_test_checkpoint_and_regen", "_test_crumble", "_test_restoration_continuity", "_test_vortex", "_test_current", "_test_canopy", "_test_upgrades", "_test_ui", "_test_all_clear"]:
 		if only == "" or name_.contains(only):
 			await call(name_)
 
@@ -146,6 +146,332 @@ func _test_mesh_winding() -> void:
 
 
 ## Rolling hills: smooth, walkable, and the collision matches what is drawn.
+## Every structure that rises from a moss ball (moss cushions, cave domes, stems) must meet the
+## ground all the way round its base: no floating caps with a gap Gill can walk into. Measures
+## each structure's lowest vertex ring in world space against the real terrain (hills included).
+## No collision body hangs over open water unless it floats by design (leaves on stems): the
+## phone playtest found the brittle-moss bridge caps floating like broken formation tops.
+func _test_no_floating_platforms() -> void:
+	var all := _unsupported_bodies(true)
+	var bad := _unsupported_bodies(false)
+	for f in bad:
+		t.log_line(f)
+	var brittle_supported := true
+	for b in g.balls:
+		for c in b.crumbles:
+			var up := b.up_at(c.global_position)
+			var q := PhysicsRayQueryParameters3D.create(c.global_position - up * 0.45, c.global_position - up * 6.0, 1 | 2)
+			q.hit_from_inside = true
+			var hit := g.get_world_3d().direct_space_state.intersect_ray(q)
+			brittle_supported = brittle_supported and not hit.is_empty() and hit.collider == c and c._stalk != null
+	t.check("terrain_no_unsupported_platforms", bad.is_empty() and all.size() > 50, "%d elevated bodies over water, all by design (leaves on stems); %d unsupported" % [all.size(), bad.size()])
+	t.check("brittle_moss_caps_on_grounded_stalks", brittle_supported and g.balls[0].crumbles.size() >= 2, "")
+
+
+## Every static collision body on the balls whose lowest point hangs more than 0.3 m above the
+## ground with nothing directly beneath it, unless it is tagged as floating by design.
+func _unsupported_bodies(include_by_design := true) -> Array[String]:
+	var out: Array[String] = []
+	var space := g.get_world_3d().direct_space_state
+	for b in g.balls:
+		var stack: Array = [b]
+		while not stack.is_empty():
+			var node: Node = stack.pop_back()
+			stack.append_array(node.get_children())
+			if not node is StaticBody3D or node == b.static_body:
+				continue
+			var body := node as StaticBody3D
+			# The underside: every vertex within 5 cm of the lowest one; probe below its centre.
+			var pts: Array[Vector3] = []
+			var alts: Array[float] = []
+			var lo := INF
+			for mi in body.get_children():
+				if mi is MeshInstance3D and (mi as MeshInstance3D).mesh != null:
+					for v in (mi as MeshInstance3D).mesh.surface_get_arrays(0)[Mesh.ARRAY_VERTEX]:
+						var w: Vector3 = (mi as MeshInstance3D).global_transform * v
+						pts.append(w)
+						alts.append(b.altitude(w))
+						lo = minf(lo, alts[-1])
+			if lo == INF or lo <= 0.3:
+				continue
+			var lowest := Vector3.ZERO
+			var n_low := 0
+			for i in pts.size():
+				if alts[i] <= lo + 0.05:
+					lowest += pts[i]
+					n_low += 1
+			lowest /= n_low
+			var up := b.up_at(lowest)
+			var q := PhysicsRayQueryParameters3D.create(lowest - up * 0.02, lowest - up * (lo + 0.5), 1 | 2)
+			q.hit_from_inside = true
+			var hit := space.intersect_ray(q)
+			var gap: float = lo if hit.is_empty() else (lowest - (hit.position as Vector3)).dot(up)
+			if gap <= 0.15:
+				continue
+			var by_design: String = body.get_meta("floats_by_design", "")
+			if by_design != "" and not include_by_design:
+				continue
+			var at := Levels._latlon((body.global_position - b.global_position).normalized())
+			out.append("ball %d %s %s at lat %.0f lon %.0f: underside %.2f m above ground, %.2f m of open water beneath%s" % [b.index + 1, body.get_class(), body.get_script().get_global_name() if body.get_script() else "", at.x, at.y, lo, gap, (" (by design: %s)" % by_design) if by_design != "" else ""])
+	return out
+
+
+# --- Parasite body motion -------------------------------------------------------------------
+
+## The centipede-like parasites must move like articulated creatures, not rigid sticks: the head
+## lays the path, a wave travels from head to tail, turns bend the body, segments keep their
+## spacing, and the motion is frame-rate independent and deterministic. Uses sleeping parasites
+## on Moss Ball #3 (Gill is elsewhere) and drives their heads along scripted paths.
+func _test_parasite_locomotion() -> void:
+	var b := g.balls[2]
+	var large: Parasite = null
+	var medium: Parasite = null
+	for par in b.parasites:
+		if par.kind == Parasite.Kind.LARGE and large == null and par.state == "graze":
+			large = par
+		elif par.kind == Parasite.Kind.MEDIUM and medium == null and par.state == "graze":
+			medium = par
+	if large == null or medium == null:
+		t.check("parasite_locomotion_subjects", false, "no sleeping large+medium parasite on ball 3")
+		return
+	var snaps := [_par_snapshot(large), _par_snapshot(medium)]
+	large.set_physics_process(false)
+	medium.set_physics_process(false)
+	var dt := 1.0 / 60.0
+	var n: int = large.seg_count
+	var r: float = large.seg_radius
+	# Warm up so the trail covers the whole body, then record 4 s of straight travel.
+	_drive([large, medium], large.speed * 0.8, 0.0, 90, dt)
+	var rec := _drive([large, medium], large.speed * 0.8, 0.0, 240, dt)
+	var lat: Array = rec[0]   # per segment: lateral offset series for the large parasite
+	var peak := 0.0
+	var jitter := 0.0
+	for i in n:
+		for f in range(1, lat[i].size()):
+			peak = maxf(peak, absf(lat[i][f]))
+			jitter = maxf(jitter, absf(lat[i][f] - lat[i][f - 1]))
+	var mixed := 0
+	for f in lat[0].size():
+		var pos := 0
+		var neg := 0
+		for i in range(1, n):
+			if lat[i][f] > 0.01 * r:
+				pos += 1
+			elif lat[i][f] < -0.01 * r:
+				neg += 1
+		if pos > 0 and neg > 0:
+			mixed += 1
+	var lag := _best_lag(lat[2], lat[n - 1], 90)
+	t.check("parasite_straight_travel_has_body_wave", peak > 0.18 * r and peak < 0.5 * r, "peak sideways %.3f m (segment radius %.2f)" % [peak, r])
+	t.check("parasite_body_not_rigid", mixed > lat[0].size() * 0.6, "body curved (both sides of the path) in %d of %d frames" % [mixed, lat[0].size()])
+	t.check("parasite_wave_travels_head_to_tail", lag > 2, "segment %d follows segment 3 by %d frames" % [n, lag])
+	t.check("parasite_motion_smooth_no_twitch", jitter < 0.06 * r, "largest frame-to-frame sideways step %.4f m" % jitter)
+	t.check("parasite_segments_keep_spacing", _spacing_ok(rec[1], large.spacing), "")
+	t.check("parasite_multiple_creatures_animate", _spacing_ok(rec[2], medium.spacing) and _max_abs(rec[3]) > 0.1 * medium.seg_radius, "medium peak %.3f" % _max_abs(rec[3]))
+	# Gradual and sharp turns bend the body (head direction vs tail direction).
+	_drive([large], large.speed * 0.8, 70.0, 80, dt)
+	var bend_gentle := _body_bend(large)
+	_drive([large], large.speed * 0.8, 0.0, 120, dt)
+	var sharp := _drive([large], large.speed * 0.8, 260.0, 30, dt)
+	var bend_sharp := _body_bend(large)
+	t.check("parasite_turns_curve_the_body", bend_gentle > 20.0 and bend_sharp > bend_gentle and _spacing_ok(sharp[1], large.spacing), "gentle turn %.0f deg, sharp turn %.0f deg" % [bend_gentle, bend_sharp])
+	# Stopping calms the wave to a restrained idle ripple; starting again brings it back.
+	_drive([large], 0.0, 0.0, 120, dt)
+	var idle := _drive([large], 0.0, 0.0, 120, dt)
+	var idle_peak := _max_abs(idle[0])
+	_drive([large], large.speed * 0.8, 0.0, 120, dt)
+	var again := _drive([large], large.speed * 0.8, 0.0, 60, dt)
+	t.check("parasite_idle_restrained_then_resumes", idle_peak > 0.0 and idle_peak < 0.5 * peak and _max_abs(again[0]) > 0.7 * peak, "idle %.3f m, moving %.3f m" % [idle_peak, _max_abs(again[0])])
+	# Frame-rate independence and determinism, from the same starting state.
+	var start := _par_snapshot(large)
+	_drive([large], large.speed * 0.8, 30.0, 60, 1.0 / 60.0)
+	var at60 := _seg_positions(large)
+	_par_restore(large, start)
+	_drive([large], large.speed * 0.8, 30.0, 30, 1.0 / 30.0)
+	var at30 := _seg_positions(large)
+	_par_restore(large, start)
+	_drive([large], large.speed * 0.8, 30.0, 60, 1.0 / 60.0)
+	var again60 := _seg_positions(large)
+	var d30 := 0.0
+	var drep := 0.0
+	for i in n:
+		d30 = maxf(d30, at60[i].distance_to(at30[i]))
+		drep = maxf(drep, at60[i].distance_to(again60[i]))
+	t.check("parasite_motion_frame_rate_independent", d30 < 0.3 * r, "30 vs 60 fps: segments differ by at most %.3f m" % d30)
+	t.check("parasite_motion_deterministic", drep < 0.00001, "")
+	# Cost per creature per frame (desktop; the phone is slower but the work is tiny).
+	var t0 := Time.get_ticks_usec()
+	for k in 200:
+		large._update_segments(dt)
+	var us := (Time.get_ticks_usec() - t0) / 200.0
+	t.check("parasite_motion_cheap", us < 400.0, "%.0f us per large parasite per frame" % us)
+	_par_restore(large, snaps[0])
+	_par_restore(medium, snaps[1])
+	large.set_physics_process(true)
+	medium.set_physics_process(true)
+
+
+## Moves each head along the ball (speed m/s, turning deg/s) and updates the bodies; returns
+## [large lateral series per segment, large spacing samples, medium spacing, medium laterals].
+func _drive(pars: Array, v: float, turn: float, frames: int, dt: float) -> Array:
+	var lat := []
+	var spacing := []
+	var spacing_m := []
+	var lat_m := []
+	for par in pars:
+		(par as Parasite).state = "graze"
+	for i in (pars[0] as Parasite).seg_count:
+		lat.append([])
+	if pars.size() > 1:
+		for i in (pars[1] as Parasite).seg_count:
+			lat_m.append([])
+	for f in frames:
+		for k in pars.size():
+			var par: Parasite = pars[k]
+			var b := par.ball
+			par.heading = par.heading.rotated(par.up, deg_to_rad(turn) * dt)
+			var dir := (par.global_position + par.heading * v * dt - b.global_position).normalized()
+			par.global_position = b.surface_point(dir, par._ground_offset)
+			par.up = b.up_at(par.global_position)
+			par.heading = (par.heading - par.up * par.heading.dot(par.up)).normalized()
+			par._update_segments(dt)
+			var pos := _seg_positions(par)
+			var wave := _wave_offsets(par, pos)
+			var gaps := []
+			for i in pos.size():
+				if i > 0:
+					gaps.append(pos[i].distance_to(pos[i - 1]))
+			if k == 0:
+				spacing.append(gaps)
+				for i in pos.size():
+					lat[i].append(wave[i])
+			else:
+				spacing_m.append(gaps)
+				for i in pos.size():
+					lat_m[i].append(wave[i])
+	return [lat, spacing, spacing_m, lat_m]
+
+
+## Each segment's sideways offset from its own point on the head's trail (the body wave alone,
+## whatever the shape of the path).
+func _wave_offsets(par: Parasite, pos: Array[Vector3]) -> Array[float]:
+	var out: Array[float] = []
+	for i in pos.size():
+		var base := par._sample_trail(par.spacing * i)
+		var along := par.heading if i == 0 else par._sample_trail(par.spacing * (i - 1)) - base
+		along -= par.up * along.dot(par.up)
+		out.append((pos[i] - base).dot(along.normalized().cross(par.up).normalized()) if along.length() > 0.0001 else 0.0)
+	return out
+
+
+func _seg_positions(par: Parasite) -> Array[Vector3]:
+	var out: Array[Vector3] = []
+	for s in par._segs:
+		out.append(s.global_position)
+	return out
+
+
+func _spacing_ok(samples: Array, spacing: float) -> bool:
+	for gaps in samples:
+		for gp in gaps:
+			if gp < spacing * 0.7 or gp > spacing * 1.35:
+				return false
+	return true
+
+
+func _max_abs(series: Array) -> float:
+	var m := 0.0
+	for s in series:
+		for x in s:
+			m = maxf(m, absf(x))
+	return m
+
+
+## Frame lag (0..max_lag) at which `b` best matches `a` shifted later in time.
+func _best_lag(a: Array, b: Array, max_lag: int) -> int:
+	var best := 0
+	var best_v := -INF
+	for lag in max_lag:
+		var acc := 0.0
+		for f in range(a.size() - lag):
+			acc += a[f] * b[f + lag]
+		if acc > best_v:
+			best_v = acc
+			best = lag
+	return best
+
+
+## Angle between where the head points and where the tail end points (degrees).
+func _body_bend(par: Parasite) -> float:
+	var pos := _seg_positions(par)
+	var tail: Vector3 = pos[pos.size() - 2] - pos[pos.size() - 1]
+	return rad_to_deg(par.heading.angle_to(tail - par.up * tail.dot(par.up)))
+
+
+func _par_snapshot(par: Parasite) -> Dictionary:
+	return {"pos": par.global_position, "heading": par.heading, "up": par.up, "trail": par._trail.duplicate(),
+			"trail_up": par._trail_up.duplicate(), "state": par.state, "clock": par._clock, "phase": par._wave_phase,
+			"amp": par._wave_amp, "last": par._last_head}
+
+
+func _par_restore(par: Parasite, s: Dictionary) -> void:
+	par.global_position = s["pos"]
+	par.heading = s["heading"]
+	par.up = s["up"]
+	par._trail = s["trail"].duplicate()
+	par._trail_up = s["trail_up"].duplicate()
+	par.state = s["state"]
+	par._clock = s["clock"]
+	par._wave_phase = s["phase"]
+	par._wave_amp = s["amp"]
+	par._last_head = s["last"]
+	par._update_segments(0.0)
+
+
+func _test_terrain_grounded() -> void:
+	var worst := {}
+	var floating: Array[String] = []
+	var n := 0
+	for b in g.balls:
+		var lb: LevelBuilder = b.get_meta("builder")
+		for node in _grounded_nodes(lb.root):
+			n += 1
+			var kind: String = node.get_meta("grounded")
+			var gap := _base_gap(b, node)
+			worst[kind] = maxf(worst.get(kind, -INF), gap)
+			if gap > 0.05:
+				var at := Levels._latlon((node.global_position - b.global_position).normalized())
+				floating.append("ball %d %s at lat %.0f lon %.0f: base up to %.2f m above ground" % [b.index + 1, kind, at.x, at.y, gap])
+	for f in floating:
+		t.log_line(f)
+	t.check("terrain_structures_meet_the_ground", n > 50 and floating.is_empty(), "%d structures; worst base gap by kind %s; %d floating" % [n, str(worst), floating.size()])
+
+
+func _grounded_nodes(root: Node) -> Array:
+	var out := []
+	for c in root.get_children():
+		if c.has_meta("grounded"):
+			out.append(c)
+		out.append_array(_grounded_nodes(c))
+	return out
+
+
+## Largest height of the structure's base ring (its lowest vertices) above the ground below it.
+func _base_gap(b: MossBall, node: Node3D) -> float:
+	var gap := -INF
+	for mi in node.get_children():
+		if not mi is MeshInstance3D or (mi as MeshInstance3D).mesh == null:
+			continue
+		var verts: PackedVector3Array = (mi as MeshInstance3D).mesh.surface_get_arrays(0)[Mesh.ARRAY_VERTEX]
+		var lo := INF
+		for v in verts:
+			lo = minf(lo, v.y)
+		for v in verts:
+			if v.y <= lo + 0.02:
+				gap = maxf(gap, b.altitude((mi as MeshInstance3D).global_transform * v))
+	return gap
+
+
 func _test_terrain() -> void:
 	var b := g.balls[0]
 	t.check("terrain_has_hills", b.hills.size() >= 5, "%d hills" % b.hills.size())
@@ -793,8 +1119,15 @@ func _test_crumble() -> void:
 			fell = true
 			break
 	t.check("brittle_moss_crumbles", fell, c._state)
+	# The whole raised formation (cap and stalk) is gone: Gill drops to the ground below it and
+	# nothing regrows into Gill while Gill stays at the foot of it.
 	await t.seconds(5.0)
-	t.check("brittle_moss_regrows", c._state == "solid", c._state)
+	var stalk_gone: bool = c._stalk == null or (not c._stalk.visible and c._stalk_shape.disabled)
+	t.check("brittle_moss_whole_formation_crumbles", stalk_gone and b.altitude(p.global_position) < 0.6, "player %.2f m above ground" % b.altitude(p.global_position))
+	t.check("brittle_moss_waits_for_gill_to_move", c._state == "gone", c._state)
+	place_at(0, b.surface_point(b.up_at(c.global_position).rotated(Vector3.UP, 0.25), 0.1), MossBall.frame_at(up, 0).z)
+	await t.seconds(1.5)
+	t.check("brittle_moss_regrows", c._state == "solid" and (c._stalk == null or (c._stalk.visible and not c._stalk_shape.disabled)), c._state)
 	p.invuln_t = 0.0
 
 

@@ -59,6 +59,7 @@ func cushion(lat: float, lon: float, radius: float, height: float, xf_override: 
 	mi.material_override = ball.moss_material
 	body.add_child(mi)
 	body.set_meta("top", height)
+	body.set_meta("grounded", "cushion")
 	return body
 
 
@@ -79,6 +80,7 @@ func stem_xf(xf: Transform3D, height: float, r0: float, r1: float, collide := tr
 		node = Node3D.new()
 	root.add_child(node)
 	node.global_transform = xf.translated_local(Vector3(0, -0.5, 0))
+	node.set_meta("grounded", "stem")
 	var mi := MeshInstance3D.new()
 	mi.mesh = MeshLib.stem_mesh(r0, r1, height + 0.5, 9, bend)
 	mi.material_override = stem_mat
@@ -108,6 +110,7 @@ func leaf_xf(xf: Transform3D, length: float, width: float, collide := true) -> N
 		node = Node3D.new()
 	root.add_child(node)
 	node.global_transform = xf
+	node.set_meta("floats_by_design", "leaf platform attached to a stem")
 	var mi := MeshInstance3D.new()
 	mi.mesh = MeshLib.platform_leaf_mesh(length, width)
 	mi.material_override = leaf_mat
@@ -120,6 +123,7 @@ func flex_xf(xf: Transform3D, length: float, width: float, bouncy: bool) -> Plat
 	var f := Platforms.FlexLeaf.new()
 	root.add_child(f)
 	f.build(ball, xf, length, width, leaf_mat, bouncy)
+	f.set_meta("floats_by_design", "flexible leaf attached to a stem")
 	ball.flex_leaves.append(f)
 	return f
 
@@ -128,6 +132,7 @@ func sway_xf(xf: Transform3D, stem_len: float, leaf_len: float, leaf_w: float, a
 	var s := Platforms.SwayLeaf.new()
 	root.add_child(s)
 	s.build(ball, xf, stem_len, leaf_len, leaf_w, amp, freq, phase, stem_mat, leaf_mat)
+	s.set_meta("floats_by_design", "current-swayed leaf on its own stem")
 	return s
 
 
@@ -237,12 +242,14 @@ func strands(xf: Transform3D, width: float, depth: float, height: float, count: 
 ## Inside: a short optional climb to one permanent health upgrade.
 func cave(lat: float, lon: float, heading: float, radius := 8.0) -> void:
 	var xf := at(lat, lon, heading, 0, 0, 0)
-	var res := MeshLib.dome_shell(radius, 0.9, 0.9, 2.6, 1.8)
+	# Rim skirt deep enough for the ball's curvature under the dome, plus a margin for slopes.
+	var res := MeshLib.dome_shell(radius, 0.9, 0.9, 2.6, 1.8, 1.2 + radius * radius / (2.0 * ball.radius) + 0.4)
 	var body := StaticBody3D.new()
 	body.collision_layer = 1
 	root.add_child(body)
 	# Mesh door faces +Z; site forward is -Z, so turn the dome to face its heading.
 	body.global_transform = Transform3D(xf.basis * Basis(Vector3.UP, PI), xf.origin)
+	body.set_meta("grounded", "cave dome")
 	var cs := CollisionShape3D.new()
 	var shape := ConcavePolygonShape3D.new()
 	shape.set_faces(res[1])

@@ -180,13 +180,14 @@ static func stem_mesh(r0: float, r1: float, height: float, radial := 10, bend :=
 
 ## Hollow dome shell with an entrance gap: the interior moss caves. Returns [mesh, faces].
 ## The dome sits on y=0 (the moss surface), opening toward +Z.
-static func dome_shell(radius: float, thickness: float, height_scale: float, door_w: float, door_h: float) -> Array:
+## `sink` is how far the rim skirt reaches below the site's ground point: it must cover the moss
+## ball curving away under a flat dome (radius^2 / 2R) plus any slope, or the rim floats.
+static func dome_shell(radius: float, thickness: float, height_scale: float, door_w: float, door_h: float, sink := 1.2) -> Array:
 	var st := SurfaceTool.new()
 	st.begin(Mesh.PRIMITIVE_TRIANGLES)
 	var faces := PackedVector3Array()
 	var rings := 14
 	var radial := 36
-	var sink := 1.2
 	for layer in [0, 1]:
 		var r := radius if layer == 0 else radius - thickness
 		for j in range(rings):
