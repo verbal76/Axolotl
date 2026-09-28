@@ -480,12 +480,51 @@ def creatures():
     write_wav("sfx_discover", reverb(s, 0.4))
 
 
+def parasites():
+    # Expansion 6: the parasites' combat voices (docs/ECOSYSTEM.md, parasites). Own generator, so
+    # every sound above stays the same.
+    r = np.random.default_rng(6006)
+    n = lambda d: int(d * SR)
+    # Alert: a quick rising chitter when one spots him (it tells the others).
+    s = np.zeros(n(0.35))
+    for k in range(5):
+        tt = t_axis(0.04)
+        c = np.sin(2 * np.pi * (1800 + k * 260) * tt) * expdecay(len(tt), 0.012)
+        place(s, k * 0.045, c, 0.8 - k * 0.08, wrap=False)
+    s += bandpass_fast(r.standard_normal(n(0.35)), 2500, 6000) * expdecay(n(0.35), 0.08) * 0.25
+    write_wav("sfx_parasite_alert", s)
+    # Large parasite's charge wind-up: a low grinding swell (1.1 s), then the charge's heavy rush.
+    tt = t_axis(1.1)
+    grind = bandpass_fast(r.standard_normal(len(tt)), 90, 420) * (0.6 + 0.4 * np.sin(2 * np.pi * 17 * tt))
+    s = (grind + np.sin(2 * np.pi * np.cumsum(55 + 40 * tt) / SR) * 0.6) * np.clip(tt / 1.0, 0, 1) ** 1.3
+    write_wav("sfx_parasite_charge_windup", reverb(s, 0.25))
+    s = sweep_noise(0.6, 180, 700) * env_adsr(n(0.6), 0.02, 0.2, 0.7, 0.3) + lowpass_fast(r.standard_normal(n(0.6)), 160) * expdecay(n(0.6), 0.15)
+    write_wav("sfx_parasite_charge", s)
+    # Spitter: a swelling gurgle (the wind-up), the spit, and the glob's splat.
+    s = bubbles(0.85, 16, 250, 900) + np.sin(2 * np.pi * np.cumsum(140 + 220 * t_axis(0.85)) / SR) * env_adsr(n(0.85), 0.3, 0.2, 0.7, 0.1) * 0.35
+    write_wav("sfx_parasite_spit_windup", reverb(s, 0.3))
+    tt = t_axis(0.22)
+    s = np.sin(2 * np.pi * (420 - 900 * tt) * tt) * expdecay(len(tt), 0.05) + bandpass_fast(r.standard_normal(len(tt)), 600, 2400) * expdecay(len(tt), 0.03) * 0.6
+    write_wav("sfx_parasite_spit", s)
+    s = bubbles(0.4, 8, 400, 1400) + lowpass_fast(r.standard_normal(n(0.4)), 900) * expdecay(n(0.4), 0.05) * 0.8
+    write_wav("sfx_parasite_splat", s)
+    # Hurt and fleeing: a high skittering squeal.
+    s = np.zeros(n(0.5))
+    for k in range(8):
+        c = bandpass_fast(r.standard_normal(n(0.03)), 2500, 6500) * expdecay(n(0.03), 0.006)
+        place(s, k * 0.05 + r.uniform(0, 0.015), c, r.uniform(0.4, 0.8), wrap=False)
+    tt = t_axis(0.3)
+    place(s, 0.0, np.sin(2 * np.pi * np.cumsum(2200 - 900 * tt) / SR) * expdecay(len(tt), 0.1) * 0.4, 1.0, wrap=False)
+    write_wav("sfx_parasite_flee", s)
+
+
 def main():
     os.makedirs(OUT, exist_ok=True)
     sfx()
     ambience()
     outside()
     creatures()
+    parasites()
     print("audio written to", os.path.abspath(OUT))
 
 

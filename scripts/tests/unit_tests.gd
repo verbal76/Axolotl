@@ -14,7 +14,7 @@ func run(runner) -> void:
 	p.use_bot_input = true
 	await t.seconds(0.5)
 	var only: String = Settings.test_args.get("only", "")
-	for name_ in ["_test_startup", "_test_ota_and_version", "_test_mesh_winding", "_test_terrain", "_test_terrain_grounded", "_test_no_floating_platforms", "_test_parasite_locomotion", "_test_parasite_body_and_death", "_test_gill_look", "_test_placements", "_test_tutorial_route", "_test_sphere_walk", "_test_jump_and_burst", "_test_coyote_and_buffer", "_test_swipe_direction_and_stages", "_test_hard_landing", "_test_food", "_test_food_reach", "_test_darter_and_burrower", "_test_food_repopulates", "_test_motes", "_test_checkpoint_and_regen", "_test_crumble", "_test_restoration_continuity", "_test_vortex", "_test_current", "_test_canopy", "_test_canopy_plain_jumps", "_test_climbs_physical", "_test_jungle_ladders_physical", "_test_leaf_geometry", "_test_leaf_footing", "_test_caves", "_test_mounds", "_test_vegetation", "_test_vortex_mouths_clear", "_test_route_audit", "_test_new_areas", "_test_ecosystem", "_test_music", "_test_run_clock", "_test_completion_catalog", "_test_run_save_file", "_test_run_timer_live", "_test_run_continue", "_test_timer_integrity", "_test_resume_points_safe", "_phase_continue_write", "_phase_continue_read", "_test_upgrades", "_test_ui", "_test_all_clear"]:
+	for name_ in ["_test_startup", "_test_ota_and_version", "_test_mesh_winding", "_test_terrain", "_test_terrain_grounded", "_test_no_floating_platforms", "_test_parasite_locomotion", "_test_parasite_body_and_death", "_test_parasite_combat", "_test_gill_look", "_test_placements", "_test_tutorial_route", "_test_sphere_walk", "_test_jump_and_burst", "_test_coyote_and_buffer", "_test_swipe_direction_and_stages", "_test_hard_landing", "_test_food", "_test_food_reach", "_test_darter_and_burrower", "_test_food_repopulates", "_test_motes", "_test_checkpoint_and_regen", "_test_crumble", "_test_restoration_continuity", "_test_vortex", "_test_current", "_test_canopy", "_test_canopy_plain_jumps", "_test_climbs_physical", "_test_jungle_ladders_physical", "_test_leaf_geometry", "_test_leaf_footing", "_test_caves", "_test_mounds", "_test_vegetation", "_test_vortex_mouths_clear", "_test_route_audit", "_test_new_areas", "_test_ecosystem", "_test_music", "_test_run_clock", "_test_completion_catalog", "_test_run_save_file", "_test_run_timer_live", "_test_run_continue", "_test_timer_integrity", "_test_resume_points_safe", "_phase_continue_write", "_phase_continue_read", "_test_upgrades", "_test_ui", "_test_all_clear"]:
 		# "_phase_*" tests are halves of a relaunch test: they run only when asked for by name
 		# (in a child process started by _test_run_continue).
 		if name_.begins_with("_phase") and only != name_:
@@ -3045,6 +3045,494 @@ func _test_resume_points_safe() -> void:
 	for x in bad:
 		t.log_line(x)
 	t.check("resume_points_safe", bad.is_empty() and n >= 20, "%d blooms; %s" % [n, str(bad.slice(0, 4))])
+
+
+## Expansion 6 addendum (parasite combat, docs/ECOSYSTEM.md "Parasites"): each size fights its own
+## way, hurt ones may flee inside their territory and recover a little, neighbours are alerted
+## locally and spread round him, a spitter lobs slow globs, and all of it stays fair: telegraphed,
+## never through rock, within an attack budget, deterministic. Played out on the open ground of one
+## of the new balls with the parasites involved moved there; everything is restored afterwards.
+func _test_parasite_combat() -> void:
+	# The first of the new balls with two small, a medium and a large parasite, and a cave.
+	var b := g.balls[3]
+	for bi in range(3, g.balls.size()):
+		var kinds := {}
+		for par in g.balls[bi].parasites:
+			kinds[par.kind] = int(kinds.get(par.kind, 0)) + 1
+		if int(kinds.get(Parasite.Kind.SMALL, 0)) >= 2 and kinds.has(Parasite.Kind.MEDIUM) and kinds.has(Parasite.Kind.LARGE) and not g.balls[bi].upgrades.is_empty():
+			b = g.balls[bi]
+			break
+	var lb: LevelBuilder = b.get_meta("builder")
+	g.ecosystem.set_physics_process(false)
+	var saved := {}
+	for par in b.parasites:
+		saved[par] = [_par_snapshot(par), par.hp, par.home_dir, par.home_radius, par._brave, par.variant, par._gray_target, par.attack_reach, par.windup_time]
+		par.set_physics_process(false)
+	# Open ground: beside the vortex arrival (kept clear of platforms by design).
+	var centre := b.arrival_dir.rotated(MossBall.frame_at(b.arrival_dir, 0).x, deg_to_rad(9.0)).normalized()
+	var fr := MossBall.frame_at(centre, 0.0)
+	var at := func(east: float, north: float) -> Vector3:
+		return b.surface_point((b.surface_point(centre) + fr.x * east - fr.z * north - b.global_position).normalized())
+	var put := func(par: Parasite, pos: Vector3, home_deg := 14.0) -> void:
+		var d := b.up_at(pos)
+		par.home_dir = d
+		par.home_radius = deg_to_rad(home_deg)
+		par.global_position = b.surface_point(d, par._ground_offset)
+		par.up = d
+		par._trail.clear()
+		par._trail_up.clear()
+		for i in 12:
+			par._trail.push_back(par.global_position)
+			par._trail_up.push_back(d)
+		par._set_state("graze")
+		par._graze_target = par.global_position
+		par._graze_t = 5.0
+		par._alerted_t = 0.0
+		par._wary_t = 0.0
+		par._shaken = 0.0
+		par.hit_cd = 0.0
+		par._want_retreat = false
+		par._regen_ok = false
+		par._circled = false
+		par._flank = 0.0
+		par._los_check = 0.0
+		par._update_segments(0.0)
+		par.set_physics_process(true)
+	var park := func() -> void:
+		for par in b.parasites:
+			par.set_physics_process(false)
+			if par.is_alive():
+				par._set_state("graze")
+		for gl in ParasiteGlob.live.duplicate():
+			gl.queue_free()
+		ParasiteGlob.live.clear()
+	var pick := func(kind: int) -> Parasite:
+		for par in b.parasites:
+			if par.is_alive() and par.kind == kind:
+				return par
+		return null
+	var smalls: Array = []
+	for par in b.parasites:
+		if par.is_alive() and par.kind == Parasite.Kind.SMALL:
+			smalls.append(par)
+	var med: Parasite = pick.call(Parasite.Kind.MEDIUM)
+	var large: Parasite = pick.call(Parasite.Kind.LARGE)
+	if smalls.size() < 2 or med == null or large == null:
+		t.check("parasite_combat_subjects", false, "%d small, medium %s, large %s on ball %d" % [smalls.size(), str(med), str(large), b.index + 1])
+		return
+	var small: Parasite = smalls[0]
+	var hero := func(pos: Vector3, face: Vector3) -> void:
+		place_at(b.index, b.surface_point(b.up_at(pos), 0.1), face)
+		g.audio.set_ball(b.index, false)
+		p.restore_full()
+	await controls_ready()
+
+	# --- Small: rushes in with darting bursts and commits quickly; latches on a hit. ---
+	hero.call(at.call(0.0, 0.0), fr.z * -1.0)
+	p.invuln_t = 999
+	put.call(small, at.call(0.0, 5.5))
+	var speeds: Array[float] = []
+	var last := small.global_position
+	var tw := -1.0
+	for i in 150:
+		await t.frames(1)
+		speeds.append(small.global_position.distance_to(last) * 60.0)
+		last = small.global_position
+		if small.state == "windup" and tw < 0.0:
+			tw = i / 60.0
+			break
+	var fast := 0.0
+	var slow := INF
+	for v in speeds.slice(5):
+		fast = maxf(fast, v)
+		slow = minf(slow, v)
+	t.check("small_parasite_darts_in", fast > small.speed * 1.4 and slow < small.speed * 0.6 and tw > 0.0 and tw < 2.5,
+			"burst %.1f m/s, pause %.1f m/s, committed after %.2f s" % [fast, slow, tw])
+	p.invuln_t = 0.0
+	var latched := false
+	for i in 90:
+		await t.frames(1)
+		latched = latched or small._latched > 0.0
+	t.check("small_parasite_latches_on_a_hit", latched and small.windup_time <= 0.5, "windup %.2f s" % small.windup_time)
+	park.call()
+
+	# --- Medium: circles for a better angle before it commits. ---
+	hero.call(at.call(0.0, 0.0), fr.z * -1.0)
+	p.invuln_t = 999
+	put.call(med, at.call(0.0, 5.0))
+	var circled := false
+	var bearing0 := INF
+	var swept := 0.0
+	var committed := false
+	for i in 60 * 6:
+		await t.frames(1)
+		var off: Vector3 = med.global_position - p.global_position
+		off -= p.up * off.dot(p.up)
+		var bearing := atan2(off.dot(fr.x), off.dot(-fr.z))
+		if med._mode == "circle":
+			circled = true
+			if bearing0 == INF:
+				bearing0 = bearing
+			swept = maxf(swept, absf(wrapf(bearing - bearing0, -PI, PI)))
+		if med.state == "windup":
+			committed = true
+			break
+	t.check("medium_parasite_circles_then_commits", circled and swept > deg_to_rad(30.0) and committed,
+			"circled %s, swept %.0f deg round him, then committed %s" % [circled, rad_to_deg(swept), committed])
+	park.call()
+
+	# --- Large: a coiled wind-up, then a heavy committed charge with a long recovery; a sidestep
+	# during the wind-up avoids it, standing still does not. ---
+	for dodge in [false, true]:
+		hero.call(at.call(0.0, 0.0), fr.z * -1.0)
+		p.invuln_t = 0.0
+		var hp0 := p.health
+		put.call(large, at.call(0.0, 4.5))
+		var wstart := -1.0
+		var coil := 1.0
+		var run_from := Vector3.ZERO
+		var ran := 0.0
+		var rec_t := 0.0
+		var el := 0.0
+		while el < 8.0:
+			await t.frames(1)
+			el += 1.0 / 60.0
+			if large.state == "windup":
+				if wstart < 0.0:
+					wstart = el
+					if dodge:
+						# Seen it coil: step well aside.
+						hero.call(p.global_position + fr.x * 2.8, fr.z * -1.0)
+				coil = minf(coil, large._stretch_v)
+			elif large.state == "attack":
+				if run_from == Vector3.ZERO:
+					run_from = large.global_position
+				ran = maxf(ran, large.global_position.distance_to(run_from))
+			elif large.state == "recover" and run_from != Vector3.ZERO:
+				rec_t += 1.0 / 60.0
+			elif run_from != Vector3.ZERO:
+				break
+		var hurt := p.health < hp0
+		if not dodge:
+			t.check("large_parasite_heavy_charge", large.windup_time >= 1.0 and coil < 0.85 and ran > 2.5 and rec_t > 1.2 and hurt,
+					"wind-up %.1f s (coiled to %.2f), charged %.1f m, recovered %.1f s, hurt %s" % [large.windup_time, coil, ran, rec_t, hurt])
+		else:
+			t.check("large_charge_dodged_by_sidestep", wstart >= 0.0 and not hurt, "")
+		park.call()
+
+	# --- Retreat: a timid medium, hurt to half, breaks off; never leaves its territory; left
+	# alone it recovers one stage, once. A brave one stands its ground. ---
+	hero.call(at.call(0.0, 0.0), fr.z * -1.0)
+	p.invuln_t = 999
+	med._brave = false
+	put.call(med, at.call(0.0, 2.0), 9.0)
+	med.hit(1, p.global_position)
+	var fled := false
+	var worst_out := 0.0
+	var far_from_him := 0.0
+	for i in 60 * 5:
+		await t.frames(1)
+		fled = fled or med.state == "retreat"
+		if med.state == "retreat":
+			worst_out = maxf(worst_out, med._angle_from_home(med.global_position) / med.home_radius)
+		far_from_him = maxf(far_from_him, med.global_position.distance_to(p.global_position))
+	t.check("hurt_parasite_retreats", fled and med.hp == 1 and far_from_him > 4.0, "fled %s, got %.1f m away" % [fled, far_from_him])
+	t.check("retreat_stays_in_territory", worst_out < 1.08, "furthest %.2f of its home radius" % worst_out)
+	# He walks off: it recovers one stage after a while, and only one.
+	hero.call(at.call(0.0, -14.0), fr.z)
+	await t.seconds(11.5)
+	var healed := med.hp
+	await t.seconds(12.0)
+	t.check("escaped_parasite_recovers_once", healed == 2 and med.hp == 2, "hp %d after 11.5 s, %d after 23.5 s (max %d)" % [healed, med.hp, med.max_hp])
+	# Back to him: the next blow again drives it off; killing it goes to the twitch and limp drift.
+	hero.call(at.call(0.0, 0.0), fr.z * -1.0)
+	put.call(med, at.call(0.0, 1.6), 9.0)
+	med.hp = 1
+	med._want_retreat = true
+	med._set_state("retreat")
+	await t.frames(20)
+	med.hit(1, p.global_position)
+	var died := med.state == "dying"
+	var drifted := false
+	for i in 90:
+		await t.frames(1)
+		drifted = drifted or med.state == "drifting"
+	t.check("fleeing_parasite_dies_limp", died and drifted, "dying %s, then drifting %s" % [died, drifted])
+	var brave := smalls[1] as Parasite
+	t.check("small_parasites_never_flee", brave._brave, "")
+	park.call()
+
+	# --- Pack alert: one that sees him alerts grazing neighbours within ALERT_R (not beyond), and
+	# they spread round him instead of queueing. ---
+	hero.call(at.call(0.0, 0.0), fr.z * -1.0)
+	p.invuln_t = 999
+	var a: Parasite = smalls[0]
+	var near_q: Parasite = smalls[1]
+	var far_q: Parasite = large
+	put.call(a, at.call(0.0, 5.0))
+	put.call(near_q, at.call(-4.0, 9.5), 30.0)
+	put.call(far_q, at.call(9.0, 13.0), 30.0)
+	a.set_physics_process(false)
+	near_q.set_physics_process(false)
+	far_q.set_physics_process(false)
+	var dn: float = near_q.global_position.distance_to(a.global_position)
+	var df: float = far_q.global_position.distance_to(a.global_position)
+	a.set_physics_process(true)
+	near_q.set_physics_process(true)
+	far_q.set_physics_process(true)
+	await t.frames(3)
+	t.check("pack_alert_reaches_neighbours", a.state == "chase" and near_q._alerted_t > 0.0 and near_q.state == "chase", "neighbour %.1f m away: %s" % [dn, near_q.state])
+	t.check("pack_alert_is_local", far_q._alerted_t == 0.0 and df > Parasite.ALERT_R, "one %.1f m away: %s" % [df, far_q.state])
+	park.call()
+	# A group engaging: spread round him, never more than MAX_COMMITTED committed at once, attack
+	# starts spaced out.
+	hero.call(at.call(0.0, 0.0), fr.z * -1.0)
+	p.invuln_t = 999
+	var group: Array = [smalls[0], smalls[1], med]
+	if smalls.size() > 2:
+		group.append(smalls[2])
+	for k in group.size():
+		var ang := TAU * k / group.size() * 0.35
+		put.call(group[k], p.global_position + (-fr.z).rotated(p.up, ang) * 4.5)
+	var most := 0
+	var starts: Array[int] = []
+	var prev_w := {}
+	var min_gap := INF
+	var samples := 0
+	var crowd := 0
+	var spread := 0.0
+	for i in 60 * 6:
+		await t.frames(1)
+		var n := 0
+		for q in group:
+			if q.state in ["windup", "attack"]:
+				n += 1
+			if q.state == "windup" and not prev_w.get(q, false):
+				starts.append(i)
+			prev_w[q] = q.state == "windup"
+		most = maxi(most, n)
+		if i >= 60 and i % 10 == 0:
+			# Those closing in, holding at reach or winding up (a lunging one is briefly on top of him).
+			var closing: Array = group.filter(func(q): return q.state in ["chase", "windup"])
+			var crowded := false
+			for x in closing.size():
+				for y in range(x + 1, closing.size()):
+					var gd: float = (closing[x] as Parasite).global_position.distance_to((closing[y] as Parasite).global_position)
+					min_gap = minf(min_gap, gd)
+					crowded = crowded or gd < 0.6
+			samples += 1
+			crowd += 1 if crowded else 0
+			var bearings: Array[float] = []
+			for q in group:
+				var off: Vector3 = (q as Parasite).global_position - p.global_position
+				bearings.append(atan2(off.dot(fr.x), off.dot(-fr.z)))
+			bearings.sort()
+			# How much of the circle round him they cover: all of it but the widest empty gap.
+			var widest := TAU - (bearings[bearings.size() - 1] - bearings[0])
+			for k in range(1, bearings.size()):
+				widest = maxf(widest, bearings[k] - bearings[k - 1])
+			spread = maxf(spread, TAU - widest)
+	starts.sort()
+	var tight := 999
+	for k in range(1, starts.size()):
+		tight = mini(tight, starts[k] - starts[k - 1])
+	# (Darting ones may cross close for a moment; they must not bunch up.)
+	t.check("group_spreads_round_him", samples > 20 and crowd <= samples / 10 and spread > deg_to_rad(50.0),
+			"a pair within 0.6 m in %d of %d samples (closest %.2f m), spread %.0f deg round him" % [crowd, samples, min_gap, rad_to_deg(spread)])
+	t.check("group_attack_budget", most <= Parasite.MAX_COMMITTED and starts.size() >= 2 and tight >= Parasite.COMMIT_GAP_FRAMES,
+			"at most %d committed at once, %d attacks, closest starts %d frames apart" % [most, starts.size(), tight])
+	park.call()
+
+	# --- Spitter: keeps its distance, telegraphs, spits a slow glob; a sidestep dodges it; a swipe
+	# bats it back; rock stops it; it never notices him through rock. ---
+	var sp := med
+	sp.make_spitter()
+	sp.hp = sp.max_hp
+	for dodge in [false, true]:
+		hero.call(at.call(0.0, 0.0), fr.z * -1.0)
+		g.cam.snap_behind()
+		p.invuln_t = 0.0
+		var hp0 := p.health
+		put.call(sp, at.call(0.0, 6.0))
+		var w0 := -1.0
+		var launched := -1.0
+		var el := 0.0
+		var closest := INF
+		var gl: ParasiteGlob = null
+		while el < 7.0:
+			await t.frames(1)
+			el += 1.0 / 60.0
+			closest = minf(closest, sp.global_position.distance_to(p.global_position))
+			if sp.state == "windup" and w0 < 0.0:
+				w0 = el
+			if sp._glob != null and launched < 0.0:
+				launched = el
+				gl = sp._glob
+				if dodge:
+					hero.call(p.global_position + fr.x * 1.6, fr.z * -1.0)
+			if launched > 0.0 and (gl == null or not is_instance_valid(gl) or gl._done):
+				break
+		var flight := el - launched
+		if not dodge:
+			t.check("spitter_telegraphs_and_spits", w0 >= 0.0 and launched - w0 >= 0.8 and closest > 2.4 and p.health < hp0,
+					"wind-up %.2f s, kept %.1f m off, glob in flight %.2f s, hurt %s" % [launched - w0, closest, flight, p.health < hp0])
+			t.check("glob_dodge_window", (launched - w0) + flight >= 1.4 and ParasiteGlob.SPEED <= 5.5, "%.2f s from the first sign to impact" % [(launched - w0) + flight])
+		else:
+			t.check("glob_dodged_by_sidestep", launched > 0.0 and p.health == hp0, "")
+		park.call()
+	# Batted back: a swipe as it arrives sends it back into the spitter.
+	hero.call(at.call(0.0, 0.0), fr.z * -1.0)
+	p.invuln_t = 999
+	put.call(sp, at.call(0.0, 6.0))
+	sp.set_physics_process(false)
+	sp.hp = sp.max_hp
+	var gl2 := ParasiteGlob.new()
+	gl2.launch(sp, b, sp.global_position + sp.up * 0.4 + (p.global_position - sp.global_position).normalized() * 0.4, p.body_center())
+	for i in 120:
+		await t.frames(1)
+		if gl2 == null or not is_instance_valid(gl2) or gl2._done:
+			break
+		if gl2.global_position.distance_to(p.body_center()) < 1.2 and not gl2.reflected:
+			await press("swipe")
+	for i in 120:
+		await t.frames(1)
+	t.check("glob_batted_back_hurts_spitter", sp.hp < sp.max_hp, "spitter hp %d of %d" % [sp.hp, sp.max_hp])
+	# Rock stops a glob: fired straight down at the moss, it splats there and never passes through.
+	var gl3 := ParasiteGlob.new()
+	var gp: Vector3 = at.call(3.0, 3.0) + b.up_at(at.call(3.0, 3.0)) * 1.5
+	gl3.launch(sp, b, gp, gp - b.up_at(gp) * 5.0)
+	var lowest := INF
+	for i in 60:
+		await t.frames(1)
+		if not is_instance_valid(gl3) or gl3._done:
+			break
+		lowest = minf(lowest, b.altitude(gl3.global_position))
+	t.check("glob_stops_on_terrain", not is_instance_valid(gl3) or gl3._done, "lowest %.2f m above the ground" % lowest)
+	# Never through rock: the cave nearest this ground, him deep inside it, a parasite (and the
+	# spitter) outside behind its wall, within noticing range.
+	var cave_h: Dictionary = {}
+	for h in lb.bot_hints:
+		if h.has("cave"):
+			cave_h = h
+	var blind := true
+	if not cave_h.is_empty():
+		var cen: Vector3 = cave_h["centre"]
+		var back := (cen - (cave_h["door"] as Vector3)).normalized()
+		var r: float = cave_h["radius"]
+		hero.call(cen + back * (r - 2.2) + b.up_at(cen) * 0.3, back * -1.0)
+		p.invuln_t = 999
+		for q in [smalls[0], sp]:
+			put.call(q, cen + back * (r + 1.8), 30.0)
+		for i in 60 * 3:
+			await t.frames(1)
+			for q in [smalls[0], sp]:
+				if (q as Parasite).state != "graze" or (q as Parasite)._glob != null:
+					blind = false
+		t.check("parasites_never_notice_through_rock", blind, "%.1f m apart through the wall" % smalls[0].global_position.distance_to(p.global_position))
+	park.call()
+
+	# Never from off-screen: behind the camera it holds its fire.
+	hero.call(at.call(0.0, 0.0), fr.z * -1.0)
+	g.cam.snap_behind()
+	p.invuln_t = 999
+	put.call(sp, at.call(0.0, 7.5 * -1.0))
+	await t.frames(2)
+	var off_screen := not sp._on_screen()
+	var spat := false
+	for i in 60 * 4:
+		await t.frames(1)
+		spat = spat or sp._glob != null or sp.state == "windup"
+		if sp._on_screen():
+			off_screen = false
+	t.check("spitter_never_fires_from_off_screen", off_screen and not spat, "")
+	park.call()
+	# Blooms are not camped: one grazing right beside a bloom moves off it and stays off.
+	if not b.blooms.is_empty():
+		var bl: Bloom = b.blooms[0]
+		hero.call(at.call(0.0, 0.0), fr.z * -1.0)
+		var q0: Parasite = smalls[1]
+		put.call(q0, bl.respawn_point() + MossBall.frame_at(b.up_at(bl.respawn_point()), 0).x * 0.4, 12.0)
+		q0.home_dir = b.up_at(bl.respawn_point())
+		var near_t := 0.0
+		for i in 60 * 8:
+			await t.frames(1)
+			if i > 120 and q0.global_position.distance_to(bl.respawn_point()) < 1.5:
+				near_t += 1.0 / 60.0
+		t.check("parasites_do_not_camp_blooms", near_t < 0.5, "%.1f s within 1.5 m of the bloom after the first 2 s" % near_t)
+		park.call()
+	# Cost: the combat reasoning of an engaged parasite (sight, budget, spacing) per frame.
+	hero.call(at.call(0.0, 0.0), fr.z * -1.0)
+	for k in 3:
+		put.call(group[k], p.global_position + (-fr.z).rotated(p.up, 0.8 * k) * 4.0)
+		(group[k] as Parasite).set_physics_process(false)
+		(group[k] as Parasite)._set_state("chase")
+	var t0 := Time.get_ticks_usec()
+	for k in 200:
+		for q in group.slice(0, 3):
+			(q as Parasite)._physics_process(1.0 / 60.0)
+	var us := float(Time.get_ticks_usec() - t0) / 600.0
+	t.check("parasite_combat_cheap", us < 400.0, "%.0f us per engaged parasite per frame (desktop)" % us)
+	park.call()
+
+	# --- Determinism: the same parasite set up twice decides the same way, and setting one up
+	# never draws from the gameplay random sequence. ---
+	seed(4242)
+	var r1 := randf()
+	seed(4242)
+	var twin := Parasite.new()
+	twin.setup(b, Parasite.Kind.MEDIUM, "far", med.spawn_dir, 10.0)
+	var r2 := randf()
+	var twin2 := Parasite.new()
+	twin2.setup(b, Parasite.Kind.MEDIUM, "far", med.spawn_dir, 10.0)
+	var same := twin._brave == twin2._brave and twin._circle_dir == twin2._circle_dir and twin._rng.randf() == twin2._rng.randf()
+	t.check("parasite_decisions_deterministic", same and r1 == r2, "")
+	twin.free()
+	twin2.free()
+
+	# --- Vegetation: a charging parasite pushes the plants harder than a grazing one. ---
+	hero.call(at.call(0.0, 0.0), fr.z * -1.0)
+	p.invuln_t = 999
+	put.call(large, at.call(0.0, 4.5))
+	var graze_w := 0.0
+	var charge_w := 0.0
+	for i in 60 * 5:
+		await t.frames(1)
+		if i < 30:
+			continue
+		for k in g.wake.count:
+			var pa: Vector4 = g.wake.points_a[k]
+			if Vector3(pa.x, pa.y, pa.z).distance_to(large.global_position) < 0.05:
+				var w: float = g.wake.points_b[k].w
+				if large.state == "attack":
+					charge_w = maxf(charge_w, w)
+				elif large.state == "graze" or large.state == "chase":
+					graze_w = maxf(graze_w, w)
+		if large.state == "recover":
+			break
+	t.check("charge_stirs_the_plants", charge_w > graze_w and charge_w > 0.7, "wake strength charging %.2f, crawling %.2f" % [charge_w, graze_w])
+	park.call()
+
+	# Put everything back as it was.
+	for par in saved:
+		var sv: Array = saved[par]
+		_par_restore(par, sv[0])
+		par.hp = sv[1]
+		par.home_dir = sv[2]
+		par.home_radius = sv[3]
+		par._brave = sv[4]
+		par.variant = sv[5]
+		par._gray_target = sv[6]
+		par.attack_reach = sv[7]
+		par.windup_time = sv[8]
+		par._alerted_t = 0.0
+		par._want_retreat = false
+		par._regen_ok = false
+		par.set_physics_process(true)
+	for gl in ParasiteGlob.live.duplicate():
+		gl.queue_free()
+	ParasiteGlob.live.clear()
+	g.ecosystem.set_physics_process(true)
+	p.invuln_t = 0.0
 
 
 ## Expansion 6: Gill reads as a soft, freckled axolotl, not shiny pink plastic, and none of it

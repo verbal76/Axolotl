@@ -646,6 +646,11 @@ func player_swipe(p: Axolotl) -> void:
 			continue
 		if par.hit(1, p.global_position):
 			connected = true
+	# A spitter's glob in reach is batted back (Expansion 6).
+	for gl in ParasiteGlob.live.duplicate():
+		if gl.ball == p.ball and not gl.reflected and gl.global_position.distance_to(p.body_center()) < SWIPE_REACH + 0.35:
+			gl.deflect(p)
+			connected = true
 	if connected:
 		Settings.haptic("tap")
 		Sfx.play("swipe_hit", p.global_position)

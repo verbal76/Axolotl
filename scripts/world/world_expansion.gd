@@ -116,7 +116,7 @@ static func terrace_steps(lb: LevelBuilder) -> void:
 	var cv: Vector2 = R.call(-8, 172)
 	lb.cave(cv.x, cv.y, 0.0, 7.2, "pearl")
 	p = R.call(24, 150)
-	lb.parasite(Parasite.Kind.MEDIUM, "far", p.x, p.y, 10.0)
+	lb.parasite(Parasite.Kind.MEDIUM, "far", p.x, p.y, 10.0).make_spitter()
 	p = R.call(20, -150)
 	lb.mote("far", p.x, p.y)
 	p = R.call(30, 140)
@@ -209,7 +209,7 @@ static func reed_canyon(lb: LevelBuilder) -> void:
 	p = R.call(20, -140)
 	lb.mote("far", p.x, p.y)
 	p = R.call(-4, -120)
-	lb.parasite(Parasite.Kind.MEDIUM, "far", p.x, p.y, 10.0)
+	lb.parasite(Parasite.Kind.MEDIUM, "far", p.x, p.y, 10.0).make_spitter()
 	p = R.call(-20, -150)
 	lb.bloom(p.x, p.y)
 

@@ -422,7 +422,7 @@ static func _ball2(lb: LevelBuilder) -> void:
 
 	# Far side.
 	lb.parasite(Parasite.Kind.LARGE, "far", -8, 158, 12.0)
-	lb.parasite(Parasite.Kind.MEDIUM, "far", 6, 176, 10.0)
+	lb.parasite(Parasite.Kind.MEDIUM, "far", 6, 176, 10.0).make_spitter()
 	lb.mote("far", -22, 148)
 	lb.mote("far", 0, -168)
 	lb.bloom(-4, 146)
@@ -627,7 +627,7 @@ static func _ball3(lb: LevelBuilder) -> void:
 
 	# --- Far jungle.
 	lb.parasite(Parasite.Kind.LARGE, "far", -10, 160, 12.0)
-	lb.parasite(Parasite.Kind.MEDIUM, "far", 10, 176, 10.0)
+	lb.parasite(Parasite.Kind.MEDIUM, "far", 10, 176, 10.0).make_spitter()
 	lb.mote("far", -25, 150)
 	lb.mote("far", 4, -170)
 	lb.bloom(-5, 148)
