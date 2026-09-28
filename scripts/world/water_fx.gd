@@ -4,6 +4,10 @@ extends Node3D
 ## moss and particulate shaders), a camera-wrapped cloud of suspended particles, pooled
 ## billboard puffs (bubbles, sparkles), and cheap drifting specks for distant dead parasites.
 
+## Cosmetic randomness (Expansion 6): its own generator, never the gameplay random sequence
+## that deterministic playthroughs and tests rely on.
+static var _fx_rng := RandomNumberGenerator.new()
+
 static var inst: WaterFX
 
 const MAX_IMPULSES := 8
@@ -149,10 +153,10 @@ func push_at(pos: Vector3) -> Vector3:
 
 
 func trail(pos: Vector3, strength: float) -> void:
-	if randf() < 0.25:
+	if _fx_rng.randf() < 0.25:
 		impulse(pos, strength, 0.3)
-	if randf() < 0.3:
-		_spawn_puff(pos + Vector3(randf() - 0.5, randf() - 0.5, randf() - 0.5) * 0.3, Vector3.ZERO, 0.8, 0.05, Color(0.85, 0.95, 1.0, 0.5), 0.9, _up_of(pos) * 0.8)
+	if _fx_rng.randf() < 0.3:
+		_spawn_puff(pos + Vector3(_fx_rng.randf() - 0.5, _fx_rng.randf() - 0.5, _fx_rng.randf() - 0.5) * 0.3, Vector3.ZERO, 0.8, 0.05, Color(0.85, 0.95, 1.0, 0.5), 0.9, _up_of(pos) * 0.8)
 
 
 func _up_of(pos: Vector3) -> Vector3:
@@ -179,8 +183,8 @@ func _spawn_puff(pos: Vector3, vel: Vector3, life: float, size: float, col: Colo
 
 func burst_fx(pos: Vector3, back_dir: Vector3, up: Vector3) -> void:
 	for i in 18:
-		var spread := Vector3(randf() - 0.5, randf() - 0.5, randf() - 0.5) * 1.4
-		_spawn_puff(pos, (back_dir + spread).normalized() * randf_range(3.0, 7.0), randf_range(0.5, 0.9), randf_range(0.04, 0.1), Color(0.85, 0.97, 1.0, 0.8), 3.5, up * 1.2)
+		var spread := Vector3(_fx_rng.randf() - 0.5, _fx_rng.randf() - 0.5, _fx_rng.randf() - 0.5) * 1.4
+		_spawn_puff(pos, (back_dir + spread).normalized() * _fx_rng.randf_range(3.0, 7.0), _fx_rng.randf_range(0.5, 0.9), _fx_rng.randf_range(0.04, 0.1), Color(0.85, 0.97, 1.0, 0.8), 3.5, up * 1.2)
 
 
 func landing_ring(pos: Vector3, up: Vector3, radius: float) -> void:
@@ -189,29 +193,29 @@ func landing_ring(pos: Vector3, up: Vector3, radius: float) -> void:
 	for i in n:
 		var a := TAU * i / n
 		var d := b.x * cos(a) + b.z * sin(a)
-		_spawn_puff(pos + up * 0.15, d * radius * 2.2, 0.55, randf_range(0.06, 0.12), Color(0.8, 0.95, 1.0, 0.7), 3.0, up * 0.6)
+		_spawn_puff(pos + up * 0.15, d * radius * 2.2, 0.55, _fx_rng.randf_range(0.06, 0.12), Color(0.8, 0.95, 1.0, 0.7), 3.0, up * 0.6)
 	for i in 8:
-		_spawn_puff(pos + up * 0.1, (up + Vector3(randf() - 0.5, randf() - 0.5, randf() - 0.5)).normalized() * 2.0, 0.7, 0.08, Color(0.55, 0.5, 0.4, 0.5), 2.0)
+		_spawn_puff(pos + up * 0.1, (up + Vector3(_fx_rng.randf() - 0.5, _fx_rng.randf() - 0.5, _fx_rng.randf() - 0.5)).normalized() * 2.0, 0.7, 0.08, Color(0.55, 0.5, 0.4, 0.5), 2.0)
 
 
 func stream(pos: Vector3, up: Vector3, strength: float) -> void:
 	for i in int(2 + strength * 3):
-		var o := Vector3(randf() - 0.5, randf() - 0.5, randf() - 0.5) * 0.6
-		_spawn_puff(pos + o, up * randf_range(6.0, 10.0) * strength, 0.35, 0.035, Color(0.9, 1.0, 1.0, 0.6), 2.0)
+		var o := Vector3(_fx_rng.randf() - 0.5, _fx_rng.randf() - 0.5, _fx_rng.randf() - 0.5) * 0.6
+		_spawn_puff(pos + o, up * _fx_rng.randf_range(6.0, 10.0) * strength, 0.35, 0.035, Color(0.9, 1.0, 1.0, 0.6), 2.0)
 
 
 func sparkle(pos: Vector3, col: Color, count := 14, speed := 1.5, size := 0.07, life := 1.0) -> void:
 	for i in count:
-		var d := Vector3(randf() - 0.5, randf() - 0.5, randf() - 0.5).normalized()
-		_spawn_puff(pos, d * speed * randf_range(0.4, 1.0), life * randf_range(0.6, 1.2), size * randf_range(0.6, 1.3), col, 1.5)
+		var d := Vector3(_fx_rng.randf() - 0.5, _fx_rng.randf() - 0.5, _fx_rng.randf() - 0.5).normalized()
+		_spawn_puff(pos, d * speed * _fx_rng.randf_range(0.4, 1.0), life * _fx_rng.randf_range(0.6, 1.2), size * _fx_rng.randf_range(0.6, 1.3), col, 1.5)
 
 
 ## Particles travelling from `from` to `to` over `time` seconds (regeneration wisps).
 func wisp(from: Vector3, to: Vector3, time: float, col: Color, count := 30) -> void:
 	for i in count:
-		var o := Vector3(randf() - 0.5, randf() - 0.5, randf() - 0.5) * 0.8
+		var o := Vector3(_fx_rng.randf() - 0.5, _fx_rng.randf() - 0.5, _fx_rng.randf() - 0.5) * 0.8
 		var v := (to - from) / time
-		_spawn_puff(from + o, v * randf_range(0.9, 1.05), time * randf_range(0.9, 1.0), randf_range(0.05, 0.11), col, 0.0)
+		_spawn_puff(from + o, v * _fx_rng.randf_range(0.9, 1.05), time * _fx_rng.randf_range(0.9, 1.0), _fx_rng.randf_range(0.05, 0.11), col, 0.0)
 
 
 func _process(dt: float) -> void:

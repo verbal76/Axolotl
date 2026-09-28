@@ -2,6 +2,10 @@ class_name Sfx
 extends Node
 ## Pooled one-shot sound effects. Streams are loaded lazily from res://assets/audio/sfx_<name>.wav.
 
+## Cosmetic randomness (Expansion 6): its own generator, never the gameplay random sequence
+## that deterministic playthroughs and tests rely on.
+static var _fx_rng := RandomNumberGenerator.new()
+
 static var inst: Sfx
 
 var _streams := {}
@@ -50,7 +54,7 @@ static func play(sfx_name: String, pos: Variant = null, vol_db := 0.0, pitch_var
 		inst._n2 = (inst._n2 + 1) % inst._players2d.size()
 		p.stream = s
 		p.volume_db = vol_db
-		p.pitch_scale = 1.0 + randf_range(-pitch_var, pitch_var)
+		p.pitch_scale = 1.0 + _fx_rng.randf_range(-pitch_var, pitch_var)
 		p.play()
 	else:
 		var p := inst._players3d[inst._n3]
@@ -58,5 +62,5 @@ static func play(sfx_name: String, pos: Variant = null, vol_db := 0.0, pitch_var
 		p.stream = s
 		p.global_position = pos
 		p.volume_db = vol_db
-		p.pitch_scale = 1.0 + randf_range(-pitch_var, pitch_var)
+		p.pitch_scale = 1.0 + _fx_rng.randf_range(-pitch_var, pitch_var)
 		p.play()
