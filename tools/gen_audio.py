@@ -525,7 +525,42 @@ def main():
     outside()
     creatures()
     parasites()
+    gill()
     print("audio written to", os.path.abspath(OUT))
+
+
+def gill():
+    # After dev-000024 (owner): a tiny, cute yawn for Gill's stretch idle. Own generator, so every
+    # sound above stays the same. A small voice (high pitch) opening "a" then closing to "o",
+    # rising then sighing down, breathy, a soft "mm" as the mouth shuts and a squeak at the end.
+    r = np.random.default_rng(7117)
+    dur = 1.15
+    tt = t_axis(dur)
+    n = len(tt)
+    u = tt / dur
+    # Pitch: a lift into the yawn, a long sigh down, a little squeak at the close.
+    f0 = np.interp(u, [0.0, 0.12, 0.3, 0.6, 0.88, 1.0], [420, 520, 600, 470, 370, 380])
+    f0 = f0 + 520 * np.exp(-((u - 0.93) / 0.025) ** 2)
+    f0 = f0 * (1 + 0.012 * np.sin(2 * np.pi * 5.5 * tt))
+    phase = 2 * np.pi * np.cumsum(f0) / SR
+    # Vowel: "a" (formants 900/1400) closing to "o" (520/900), then to a hum.
+    k_open = np.clip((u - 0.05) / 0.25, 0, 1) * np.clip((0.85 - u) / 0.2, 0, 1)
+    F1 = 520 + 380 * k_open
+    F2 = 900 + 500 * k_open
+    voice = np.zeros(n)
+    for k in range(1, 12):
+        fk = f0 * k
+        w = np.exp(-((fk - F1) / 260) ** 2) + 0.6 * np.exp(-((fk - F2) / 330) ** 2) + 0.25 / k
+        voice += np.sin(k * phase) * w
+    amp = np.clip(u / 0.12, 0, 1) ** 1.5 * np.clip((1.0 - u) / 0.25, 0, 1)
+    breath = bandpass_fast(r.standard_normal(n), 1200, 5000) * 0.18 * k_open
+    hum = np.sin(phase * 0.5) * 0.35 * np.exp(-((u - 0.86) / 0.05) ** 2)
+    s = (voice * 0.5 + breath + hum) * amp
+    # Underwater: a touch muffled, a couple of bubbles after.
+    s = lowpass_fast(s, 3800)
+    s = np.concatenate([s, np.zeros(int(0.25 * SR))])
+    place(s, 1.02, bubbles(0.3, 3, 700, 1500), 0.35, wrap=False)
+    write_wav("sfx_gill_yawn", reverb(s, 0.18), peak=0.7)
 
 
 if __name__ == "__main__":

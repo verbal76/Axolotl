@@ -4,6 +4,7 @@ extends Node
 
 signal input_mode_changed(mode: int)
 signal settings_changed
+signal gill_look_changed
 
 enum InputMode { TOUCH, PAD }
 
@@ -16,6 +17,12 @@ var haptics := true
 var music_volume := 0.8
 var sfx_volume := 0.9
 var input_mode: int = InputMode.TOUCH
+## Gill's colours (GillLook): a morph plus fine-tuning of the body and the freckles.
+var gill_morph := "pink"
+var gill_body_hue := 0.0
+var gill_body_bright := 1.0
+var gill_dots_hue := 0.0
+var gill_dots_bright := 1.0
 
 ## Session flags (not saved to disk).
 var skip_title := false
@@ -145,6 +152,23 @@ func _load() -> void:
 	haptics = cf.get_value("hud", "haptics", haptics)
 	music_volume = cf.get_value("audio", "music", music_volume)
 	sfx_volume = cf.get_value("audio", "sfx", sfx_volume)
+	# (Added after dev-000024; absent in older files, which keep the original pink.)
+	gill_morph = str(cf.get_value("gill", "morph", gill_morph))
+	gill_body_hue = float(cf.get_value("gill", "body_hue", gill_body_hue))
+	gill_body_bright = float(cf.get_value("gill", "body_bright", gill_body_bright))
+	gill_dots_hue = float(cf.get_value("gill", "dots_hue", gill_dots_hue))
+	gill_dots_bright = float(cf.get_value("gill", "dots_bright", gill_dots_bright))
+
+
+## Sets Gill's colours, saves them and tells every model.
+func set_gill_look(morph_id: String, body_hue: float, body_bright: float, dots_hue: float, dots_bright: float) -> void:
+	gill_morph = morph_id
+	gill_body_hue = body_hue
+	gill_body_bright = body_bright
+	gill_dots_hue = dots_hue
+	gill_dots_bright = dots_bright
+	save()
+	gill_look_changed.emit()
 
 
 func save() -> void:
@@ -154,6 +178,11 @@ func save() -> void:
 	cf.set_value("hud", "haptics", haptics)
 	cf.set_value("audio", "music", music_volume)
 	cf.set_value("audio", "sfx", sfx_volume)
+	cf.set_value("gill", "morph", gill_morph)
+	cf.set_value("gill", "body_hue", gill_body_hue)
+	cf.set_value("gill", "body_bright", gill_body_bright)
+	cf.set_value("gill", "dots_hue", gill_dots_hue)
+	cf.set_value("gill", "dots_bright", gill_dots_bright)
 	for k in save_meta():
 		cf.set_value("meta", k, save_meta()[k])
 	cf.save(SETTINGS_PATH)

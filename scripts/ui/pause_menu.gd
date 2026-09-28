@@ -1,7 +1,7 @@
 class_name PauseMenu
 extends CanvasLayer
 ## Small pause/settings menu: Resume, this run (time, completion, finish, best), Show run timer,
-## Reduced HUD, audio levels, haptics, controller/touch status, New Run, Return to Title.
+## Reduced HUD, Gill's colours (GillPage), audio levels, haptics, controller/touch status, New Run, Return to Title.
 
 var _root: Control
 var _panel: PanelContainer
@@ -16,6 +16,7 @@ var _music: HSlider
 var _sfx: HSlider
 var _session_rows: Array[Control] = []
 var _from_title := false
+var gill_page: GillPage
 
 
 func _ready() -> void:
@@ -64,6 +65,9 @@ func _ready() -> void:
 	_haptics.text = "Haptics"
 	_haptics.toggled.connect(_on_haptics)
 	v.add_child(_haptics)
+	var colours := UiStyle.button("Gill's colours", _open_gill)
+	colours.name = "GillColours"
+	v.add_child(colours)
 	_music = _slider(v, "Music")
 	_music.value_changed.connect(_on_music)
 	_sfx = _slider(v, "Sound")
@@ -86,10 +90,28 @@ func _ready() -> void:
 	_startup.autowrap_mode = TextServer.AUTOWRAP_WORD_SMART
 	v.add_child(_startup)
 	_session_rows = [restart, title, _run_time, _run_detail]
+	# Gill's colours: a page of its own in place of the menu.
+	gill_page = GillPage.new()
+	gill_page.visible = false
+	center.add_child(gill_page)
+	gill_page.done.connect(_close_gill)
 	resume.name = "Resume"
 	visible = false
 	Settings.settings_changed.connect(_refresh)
 	Settings.input_mode_changed.connect(func(_m): _refresh())
+
+
+func _open_gill() -> void:
+	_panel.visible = false
+	gill_page.refresh()
+	gill_page.visible = true
+	(gill_page.find_child("Morph_" + Settings.gill_morph, true, false) as Button).grab_focus.call_deferred()
+
+
+func _close_gill() -> void:
+	gill_page.visible = false
+	_panel.visible = true
+	(_panel.find_child("GillColours", true, false) as Button).grab_focus.call_deferred()
 
 
 func _on_reduced(on: bool) -> void:
@@ -150,6 +172,8 @@ func open(from_title := false) -> void:
 
 
 func close() -> void:
+	if gill_page.visible:
+		_close_gill()
 	visible = false
 	get_tree().paused = false
 	Sfx.play("ui_tap", null, -8.0)

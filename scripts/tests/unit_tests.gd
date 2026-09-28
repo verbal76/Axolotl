@@ -14,7 +14,7 @@ func run(runner) -> void:
 	p.use_bot_input = true
 	await t.seconds(0.5)
 	var only: String = Settings.test_args.get("only", "")
-	for name_ in ["_test_startup", "_test_ota_and_version", "_test_mesh_winding", "_test_terrain", "_test_terrain_grounded", "_test_no_floating_platforms", "_test_parasite_locomotion", "_test_parasite_body_and_death", "_test_parasite_combat", "_test_gill_look", "_test_gill_idles", "_test_tail_whip", "_test_ambient_sway", "_test_placements", "_test_tutorial_route", "_test_sphere_walk", "_test_jump_and_burst", "_test_coyote_and_buffer", "_test_swipe_direction_and_stages", "_test_hard_landing", "_test_food", "_test_food_reach", "_test_darter_and_burrower", "_test_food_repopulates", "_test_motes", "_test_checkpoint_and_regen", "_test_crumble", "_test_restoration_continuity", "_test_vortex", "_test_current", "_test_canopy", "_test_canopy_plain_jumps", "_test_climbs_physical", "_test_jungle_ladders_physical", "_test_leaf_geometry", "_test_leaf_footing", "_test_caves", "_test_mounds", "_test_vegetation", "_test_vortex_mouths_clear", "_test_route_audit", "_test_new_areas", "_test_ecosystem", "_test_music", "_test_run_clock", "_test_completion_catalog", "_test_run_save_file", "_test_run_timer_live", "_test_run_continue", "_test_timer_integrity", "_test_resume_points_safe", "_phase_continue_write", "_phase_continue_read", "_test_upgrades", "_test_ui", "_test_all_clear"]:
+	for name_ in ["_test_startup", "_test_ota_and_version", "_test_mesh_winding", "_test_terrain", "_test_terrain_grounded", "_test_no_floating_platforms", "_test_parasite_locomotion", "_test_parasite_body_and_death", "_test_parasite_combat", "_test_gill_look", "_test_gill_idles", "_test_gill_colours", "_test_tail_whip", "_test_ambient_sway", "_test_placements", "_test_tutorial_route", "_test_sphere_walk", "_test_jump_and_burst", "_test_coyote_and_buffer", "_test_swipe_direction_and_stages", "_test_hard_landing", "_test_food", "_test_food_reach", "_test_darter_and_burrower", "_test_food_repopulates", "_test_motes", "_test_checkpoint_and_regen", "_test_crumble", "_test_restoration_continuity", "_test_vortex", "_test_current", "_test_canopy", "_test_canopy_plain_jumps", "_test_climbs_physical", "_test_jungle_ladders_physical", "_test_leaf_geometry", "_test_leaf_footing", "_test_caves", "_test_mounds", "_test_vegetation", "_test_vortex_mouths_clear", "_test_route_audit", "_test_new_areas", "_test_ecosystem", "_test_music", "_test_run_clock", "_test_completion_catalog", "_test_run_save_file", "_test_run_timer_live", "_test_run_continue", "_test_timer_integrity", "_test_resume_points_safe", "_phase_continue_write", "_phase_continue_read", "_test_upgrades", "_test_ui", "_test_all_clear"]:
 		# "_phase_*" tests are halves of a relaunch test: they run only when asked for by name
 		# (in a child process started by _test_run_continue).
 		if name_.begins_with("_phase") and only != name_:
@@ -3800,6 +3800,80 @@ func _test_gill_idles() -> void:
 			"%d idles in 20 min, kinds %s, %d back-to-back repeats, %d different runs of four, gaps %.1f..%.1f s" % [seq.size(), str(kinds.keys()), repeats, grams.size(), gap_lo, gap_hi])
 	t.check("idles_leave_gameplay_rng_alone", r1 == r2, "")
 	m2.queue_free()
+	release.call()
+
+
+## Gill's colours (owner request): morph swatches and fine-tuning in the pause menu, applied live to
+## him and the preview, saved per device in settings (the save schema is unchanged); and the
+## stretch idle's little yawn.
+func _test_gill_colours() -> void:
+	var m := p.model
+	var pink: Dictionary = GillLook.MORPHS[0]
+	var default_ok: bool = Settings.gill_morph == "pink" and m.look_base().is_equal_approx(pink["base"]) \
+			and pink["base"] == Color(0.98, 0.58, 0.66) and pink["freckle"] == Color(0.72, 0.34, 0.44)
+	var bases := {}
+	for mo in GillLook.MORPHS:
+		bases[str(mo["base"])] = true
+	t.check("gill_colour_default_is_original_pink", default_ok and bases.size() == GillLook.MORPHS.size(),
+			"%s, base %s; %d distinct morphs" % [Settings.gill_morph, str(m.look_base()), bases.size()])
+	# The pause menu's page: a swatch recolours him and the preview at once and is saved.
+	var pm := g.pause_menu
+	pm.open()
+	await t.frames(2)
+	pm._open_gill()
+	await t.frames(2)
+	var page := pm.gill_page
+	var page_open := page.visible and not pm._panel.visible
+	(page.find_child("Morph_golden", true, false) as Button).pressed.emit()
+	await t.frames(1)
+	var golden := GillLook.morph("golden")
+	var live := m.look_base().is_equal_approx(golden["base"]) and page.preview.look_base().is_equal_approx(golden["base"])
+	# Fine-tuning: the body's hue shifts, the freckles' shade changes.
+	page._body_hue.value = 0.25
+	page._dots_bright.value = 0.6
+	await t.frames(1)
+	var tuned := m.look_base()
+	var hue_moved := absf(angle_difference(tuned.h * TAU, (golden["base"] as Color).h * TAU)) > 1.2
+	var fr: Color = m._skin_mats[0].get_shader_parameter("freckle_color")
+	var dots_darker := fr.v < (golden["freckle"] as Color).v * 0.7
+	var cf := ConfigFile.new()
+	cf.load(Settings.SETTINGS_PATH)
+	var saved := str(cf.get_value("gill", "morph", "")) == "golden" and absf(float(cf.get_value("gill", "body_hue", 0.0)) - 0.25) < 0.001 \
+			and int(cf.get_value("meta", "save_schema", -1)) == SaveSchema.SAVE_SCHEMA and SaveSchema.SAVE_SCHEMA == 1
+	# Read back as on the next launch.
+	Settings.gill_morph = "pink"
+	Settings.gill_body_hue = 0.0
+	Settings._load()
+	var reloaded := Settings.gill_morph == "golden" and absf(Settings.gill_body_hue - 0.25) < 0.001 and absf(Settings.gill_dots_bright - 0.6) < 0.001
+	t.check("gill_colour_picker_live_and_saved", page_open and live and hue_moved and dots_darker and saved and reloaded,
+			"page %s; live on Gill and preview %s; hue moved %s, freckles darker %s; saved in settings (schema 1) %s; read back %s"
+			% [page_open, live, hue_moved, dots_darker, saved, reloaded])
+	# Reset and Done; the preview stops drawing once the page is closed.
+	(page.find_child("Reset", true, false) as Button).pressed.emit()
+	var reset_ok := is_zero_approx(Settings.gill_body_hue) and is_equal_approx(Settings.gill_dots_bright, 1.0) and Settings.gill_morph == "golden"
+	(page.find_child("Morph_pink", true, false) as Button).pressed.emit()
+	(page.find_child("Done", true, false) as Button).pressed.emit()
+	await t.frames(1)
+	var closed := not page.visible and pm._panel.visible and page._vp.render_target_update_mode == SubViewport.UPDATE_DISABLED
+	pm.close()
+	await t.frames(1)
+	t.check("gill_colour_reset_and_back", reset_ok and closed and m.look_base().is_equal_approx(pink["base"]) and not g.get_tree().paused,
+			"reset %s, closed %s, pink again %s" % [reset_ok, closed, m.look_base().is_equal_approx(pink["base"])])
+	# The stretch's yawn: once per stretch, a real sound.
+	var b := g.balls[0]
+	var release := _hold_threats(b)
+	var open_ := MossBall.dir_ll(-10, -40)
+	place_at(0, b.surface_point(open_, 0.2), -MossBall.frame_at(open_, 0.0).x)
+	p.invuln_t = 0.0
+	await t.seconds(1.2)
+	var y0 := m.yawns
+	m.start_idle(AxolotlModel.Idle.STRETCH)
+	await t.seconds(AxolotlModel.IDLE_LEN[AxolotlModel.Idle.STRETCH] + 0.2)
+	var y1 := m.yawns
+	m.start_idle(AxolotlModel.Idle.TILT)
+	await t.seconds(AxolotlModel.IDLE_LEN[AxolotlModel.Idle.TILT] + 0.2)
+	t.check("stretch_yawns_once", y1 - y0 == 1 and m.yawns == y1 and Sfx.inst.stream("gill_yawn") != null,
+			"%d yawn(s) in a stretch, %d in a head tilt; sound loaded %s" % [y1 - y0, m.yawns - y1, Sfx.inst.stream("gill_yawn") != null])
 	release.call()
 
 

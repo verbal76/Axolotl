@@ -396,6 +396,8 @@ func run(runner) -> void:
 		g.g_disp = 1.0
 		g.aquarium.apply(1.0)
 		await _gill_shots(g, "gill_restored")
+	if only == "colours":
+		await _colour_shots(g)
 	if only == "sway":
 		await _sway_shots(g)
 	if only == "gillanim":
@@ -959,8 +961,8 @@ func _gill_anim(g: Game) -> void:
 	var gr := gf.cross(gu).normalized()
 	var c := p.global_position + gu * 0.3
 	Engine.time_scale = 0.2
-	var names := ["lookaround", "scoot", "tilt", "stretch"]
-	var times := [[0.0, 0.6, 1.1, 1.7, 2.1, 2.9, 3.4, 4.1, 4.6], [0.0, 0.8, 1.2, 2.1, 2.6, 3.3, 3.8], [0.0, 0.8, 1.37, 1.95, 2.8], [0.0, 0.7, 1.0, 1.8, 2.3, 2.5, 3.4]]
+	var names := ["lookaround", "scoot", "tilt", "stretch", "lookup"]
+	var times := [[0.0, 0.6, 1.1, 1.7, 2.1, 2.9, 3.4, 4.1, 4.6], [0.0, 0.8, 1.2, 2.1, 2.6, 3.3, 3.8], [0.0, 0.8, 1.37, 1.95, 2.8], [0.0, 0.7, 1.0, 1.8, 2.3, 2.5, 3.4], [0.0, 0.8, 1.6, 2.4, 3.3]]
 	var kinds: Array = Settings.test_args.get("kinds", "0,1,2,3").split(",", false)
 	for ks in kinds:
 		var k := int(ks)
@@ -1007,6 +1009,38 @@ func _gill_anim(g: Game) -> void:
 			t.log_line("whip %s at %.3f s: tail tip %.0f deg" % [view, m._whip_s, rad_to_deg(m.whip_tip_az)])
 			i += 1
 	Engine.time_scale = 1.0
+	_open(g)
+
+
+## Gill's colours page (owner request): each morph on the page, then two of them in the world.
+func _colour_shots(g: Game) -> void:
+	var b0 := g.balls[0]
+	_look(g, 0, b0.surface_point(MossBall.dir_ll(12, 30), 0.1), Vector3.FORWARD)
+	await t.seconds(1.5)
+	g.pause_menu.open()
+	await t.seconds(0.3)
+	await t.shot("colours_menu")
+	g.pause_menu._open_gill()
+	for mo in GillLook.MORPHS:
+		(g.pause_menu.gill_page.find_child("Morph_" + mo["id"], true, false) as Button).pressed.emit()
+		await t.seconds(0.4)
+		await t.shot("colours_page_%s" % mo["id"])
+	g.pause_menu.gill_page._body_hue.value = 0.3
+	g.pause_menu.gill_page._dots_bright.value = 0.5
+	await t.seconds(0.4)
+	await t.shot("colours_page_tuned")
+	g.pause_menu.close()
+	var p := g.player
+	for id in ["golden", "wild", "melanoid"]:
+		Settings.set_gill_look(id, 0.0, 1.0, 0.0, 1.0)
+		var gu := p.up
+		var gf := p.facing
+		var gr := gf.cross(gu).normalized()
+		var head := p.global_position + gu * 0.35 + gf * 0.35
+		_close(g, head + gf * 1.5 + gr * 0.9 + gu * 0.5, head, gu)
+		await t.seconds(0.5)
+		await t.shot("colours_world_%s" % id)
+	Settings.set_gill_look("pink", 0.0, 1.0, 0.0, 1.0)
 	_open(g)
 
 

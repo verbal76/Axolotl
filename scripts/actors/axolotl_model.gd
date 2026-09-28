@@ -91,10 +91,12 @@ var _whip_side := 1.0
 var _prev_swipe_t := -1.0
 var whip_tip_az := 0.0            # the tail tip's direction round his body (0 = straight behind)
 
-# Idles (physical playtest of dev-000024): standing still, now and then he does one of a few
-# little things. Purely the model: the gameplay body, its collision and the camera never move.
-enum Idle { NONE = -1, LOOKAROUND, SCOOT, TILT, STRETCH }
-const IDLE_LEN := [4.6, 3.8, 2.8, 3.4]
+# Idles (physical playtest of dev-000024): standing still, now and then he does one of five
+# little things (the owner added the look-up). Purely the model: the gameplay body, its collision and the camera never move.
+enum Idle { NONE = -1, LOOKAROUND, SCOOT, TILT, STRETCH, LOOKUP }
+const IDLE_LEN := [4.6, 3.8, 2.8, 3.4, 3.4]
+## When the stretch's yawn sounds (seconds into it).
+const YAWN_AT := 0.38
 const IDLE_FIRST := Vector2(4.0, 8.0)     # first idle after he stops
 const IDLE_GAP := Vector2(7.0, 16.0)      # between idles while he stays still
 var idle_ok := false                      # set by the controller: nothing else going on
@@ -106,6 +108,9 @@ var _idle_wait := -1.0
 var _still_s := 0.0
 var _idle_last: int = Idle.NONE
 var _idle_stride := 0.0
+var yawns := 0                   # yawn sounds played (tests)
+var _skin_mats: Array[ShaderMaterial] = []
+var _cheek_mat: StandardMaterial3D
 var _leg_idle: Array = []
 var _leg_idle_w := 0.0
 var _leg_swing := 1.0
@@ -114,6 +119,13 @@ var _leg_swing := 1.0
 func _ready() -> void:
 	_fx.seed = 0x6711
 	_build()
+	# His colours as chosen in the pause menu (GillLook), kept up to date while it is open.
+	apply_look(GillLook.current())
+	Settings.gill_look_changed.connect(_on_look_changed)
+
+
+func _on_look_changed() -> void:
+	apply_look(GillLook.current())
 
 
 # --- construction -------------------------------------------------------------------------
@@ -138,7 +150,24 @@ func _skin_mat(mode: int, freckles := 1.0, spot_scale := 1.0) -> ShaderMaterial:
 	m.set_shader_parameter("mode", mode)
 	m.set_shader_parameter("freckles", freckles)
 	m.set_shader_parameter("spot_scale", spot_scale)
+	_skin_mats.append(m)
 	return m
+
+
+## Recolours his skin, freckles and cheeks (GillLook.tones); the gill fronds keep their colours.
+func apply_look(t: Dictionary) -> void:
+	for m in _skin_mats:
+		m.set_shader_parameter("base_color", t["base"])
+		m.set_shader_parameter("back_tint", t["back"])
+		m.set_shader_parameter("belly_tint", t["belly"])
+		m.set_shader_parameter("freckle_color", t["freckle"])
+	if _cheek_mat:
+		_cheek_mat.albedo_color = t["cheek"]
+
+
+## The skin colours in use (tests).
+func look_base() -> Color:
+	return _skin_mats[0].get_shader_parameter("base_color") if not _skin_mats.is_empty() else Color.BLACK
 
 
 func _mesh(mesh: Mesh, mat: Material, parent: Node3D, pos := Vector3.ZERO, scl := Vector3.ONE, rot := Vector3.ZERO) -> MeshInstance3D:
@@ -364,6 +393,7 @@ func _build_head(head_mat: ShaderMaterial) -> void:
 	# (Freckles over the crown are part of the skin now: axolotl_skin.gdshader.)
 	# Soft cheeks.
 	var blush := _m(Color(1.0, 0.64, 0.68), 0.6, 0.0)
+	_cheek_mat = blush
 	_mesh(_ball(0.05), blush, head, Vector3(0.19, -0.06, -0.21), Vector3(1.0, 0.55, 0.6))
 	_mesh(_ball(0.05), blush, head, Vector3(-0.19, -0.06, -0.21), Vector3(1.0, 0.55, 0.6))
 	# Nostrils.
@@ -576,7 +606,12 @@ func _update_idle(dt: float) -> void:
 		_idle_stride = 0.0
 		return
 	if idle_kind != Idle.NONE:
+		var before := idle_s
 		idle_s += dt
+		if idle_kind == Idle.STRETCH and before < YAWN_AT and idle_s >= YAWN_AT:
+			# A tiny, squeaky yawn.
+			yawns += 1
+			Sfx.play("gill_yawn", global_position if is_inside_tree() else null, -6.0, 0.06)
 		if idle_s >= IDLE_LEN[idle_kind]:
 			idle_kind = Idle.NONE
 			_still_s = 0.0
@@ -694,6 +729,16 @@ static func _idle_pose_at(kind: int, s: float, side: float) -> Dictionary:
 			p["gflap"] = sh
 			for i in range(3, BONE_Z.size()):
 				spine[i] = Vector2(0.0, sin(s * 30.0 - i * 0.7) * 0.13 * sh)
+		Idle.LOOKUP:
+			# Watches something drift past overhead: chin up, eyes following it across.
+			var up := _env(s, 0.2, 0.7, 2.7, 3.2)
+			var follow := lerpf(-0.6, 0.7, smoothstep(0.6, 2.6, s)) * side
+			p["head"] = Vector3(0.55 * up, follow * up, -follow * 0.2 * up)
+			p["rot"] = Vector3(0.12 * up, follow * 0.15 * up, 0.0)
+			p["pivot"] = Vector3(0, 0.03, BONE_Z[REAR_BONE])
+			p["eye"] = 1.0 + 0.2 * up
+			p["gflare"] = 0.45 * up
+			p["mouth"] = 0.45 * up
 	return p
 
 
