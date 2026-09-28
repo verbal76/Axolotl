@@ -48,6 +48,56 @@ after a while; ambient life is never saved.
 - No threat can reach a bloom's respawn point or a vortex arrival point.
 - The stalker pounces along a line locked when its telegraph starts, so a sidestep avoids it.
 
+## Parasites (Expansion 6 addendum: combat)
+
+The parasites are the main recurring enemy. Before this pass, all three sizes shared one
+routine: notice, chase, wind up, lunge. Each size now fights its own way (`scripts/actors/parasite.gd`).
+
+| | How it fights | Telegraph (posture, sound, timing) | Afterwards |
+|---|---|---|---|
+| **Small** | Rushes in with darting bursts and a zig-zag, and commits quickly. Its bite latches on for a moment | rears up, the wind-up chirr, 0.45 s | a short recovery; never flees |
+| **Medium** | Closes to a wary distance, then circles him for a better angle (his side or back) before committing | rears up, the wind-up chirr, 0.6 s | recovers, then may circle again |
+| **Large** | A heavy committed charge along the line it locked: 4.4 m in 0.6 s, stopped by rock or a drop | coils (the body shortens), rears high, scrapes the moss, a low grinding swell, 1.1 s | spent: head low, a 1.5 s recovery (the time to hit it) |
+| **Spitter** (four mediums, in the far zones of balls 2–5) | Keeps 3–7 m off, backing away and sidling. It spits a slow glowing glob (5 m/s, no homing), and bites if cornered | faces him, rears and swells, a bubbling gurgle, 0.85 s | 2.6 s before it spits again |
+
+- **Retreat and recovery.** A timid medium or large (about two in three) hurt to half its
+  vitality breaks off after the blow's knockback. It flees faster than it crawls, never beyond its
+  own territory (it runs along the edge instead), for up to 4 s or until clear, and stays wary a
+  little while (it notices him later). Left alone for 10 s, it regains one stage, once. So you
+  can chase it down, or let it go and face it at 1 stage again.
+- **Pack alert.** A parasite that sees him alerts grazing neighbours within 8 m whose territory he
+  is in (the alert chitter). Only a parasite that saw him itself raises the alarm, so it never
+  chains across the ball. Joiners come in from their own side (40–70° round him), and engaged
+  parasites shuffle apart instead of stacking.
+- **Fair by construction.** At most two attacks are committed at once on a ball (a glob in flight
+  counts as one), and attack starts are at least 0.4 s apart. The others hold just out of reach.
+  After any hit the axolotl's invulnerability still prevents chained damage. Every attack has a
+  telegraph of 0.45 s or more.
+- **Sight.** A parasite notices him only in line of sight over the terrain (two rays, low and high).
+  It never notices him through rock, and gives up when he has been out of sight for 1.5 s
+  (2.5 s when alerted). Spitters never fire from off-screen. Globs splat on rock, moss and
+  plants.
+- **Respawn and blooms.** The bloom's pulse startles parasites off a re-forming axolotl, and they
+  hold off attacking for 3.5 s. Grazing and fleeing parasites keep 2.2 m off blooms.
+- **Glob deflection.** A tail swipe that meets a glob bats it back at the spitter (1.5× speed),
+  where it hurts the spitter.
+- **Body.** The continuous body sells each move. It coils during a wind-up and stretches in a lunge
+  or charge, the charge's momentum runs down the body, it perks up at the alarm, it runs long and
+  low in flight, and its head drops when spent. Death still goes to the twitch and limp drift.
+- **Determinism and cost.** Every choice (brave or timid, circling side, circle length, flank)
+  comes from the parasite's own generator, seeded from where it lives. Only parasites on his ball
+  run. Sight is checked 5 times a second and only when he is within 12 m. Measured cost is about
+  40 µs per engaged parasite per frame (desktop).
+- **Completion unchanged.** Spitters are existing parasites with their ids. Retreat, recovery,
+  alerts and deflections earn nothing and are never required.
+
+Tests: `_test_parasite_combat` (25 checks). Each size's behaviour; the dodges (a sidestep from the
+charge and from a glob); the retreat threshold, boundary and recovery; the alert reaching near
+neighbours and not far ones; a group spreading round him within the attack budget; the spitter's
+telegraph, dodge window, deflection, terrain stop and never firing off-screen; never noticing
+through rock; blooms not camped; determinism; the charge stirring the plants; a fleeing
+parasite's death; cost.
+
 ## Look (Expansion 6)
 
 The owner reviewed each creature against reference photos. Each was remodelled so it reads as the
