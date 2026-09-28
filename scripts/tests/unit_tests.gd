@@ -3106,7 +3106,9 @@ func _test_all_clear() -> void:
 	t.check("finish_time_frozen_after_more_play", g.clock.finish_s == fin and g.clock.shown_s() == fin and g.clock.play_s > fin + 20.0
 			and g.hud.finish_label.text.begins_with("Finished in " + RunClock.format(fin)), "%s, play %.1f s" % [g.hud.finish_label.text, g.clock.play_s])
 	var on_disk: Dictionary = JSON.parse_string(FileAccess.get_file_as_string(g.run_save.path))
-	t.check("finish_saved", on_disk["run"]["clock"]["state"] == "finished" and float(on_disk["run"]["clock"]["finish_s"]) == fin,
+	# (Through JSON the time can come back a last binary digit different: agree to a microsecond;
+	# the timer shows centiseconds.)
+	t.check("finish_saved", on_disk["run"]["clock"]["state"] == "finished" and absf(float(on_disk["run"]["clock"]["finish_s"]) - fin) < 1e-6,
 			"on disk: state %s, finish %s; in play: finish %s; last save %s, read only %s, path %s" % [on_disk["run"]["clock"]["state"],
 			str(on_disk["run"]["clock"]["finish_s"]), str(fin), g.run_save.last_save_result, g.run_save.read_only, g.run_save.path])
 	t.check("aquarium_fully_clean", is_equal_approx(g.aquarium.clean, 1.0) and g.env.fog_density < 0.003, "fog %.4f" % g.env.fog_density)
