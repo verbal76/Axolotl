@@ -6,8 +6,10 @@ class_name Levels
 ## reached by its own vortex from a ball already in the world (docs/WORLD.md): 4 Terrace Steps (off
 ## ball 1), 5 Reed Canyon (off 2), 6 Canopy Spire (off 3), 7 Hollow Grotto (off 4).
 
-const CENTERS := [Vector3(0, 0, 0), Vector3(130, 15, -35), Vector3(-50, 20, -120),
-		Vector3(-10, 25, 110), Vector3(150, -20, 60), Vector3(-160, 30, -60), Vector3(-130, 0, 70)]
+## (World expansion: the Expansion 4 arrangement spread 1.4x, so the balls can each double in
+## radius as they are rebuilt and still keep 35 m or more of water between any two.)
+const CENTERS := [Vector3(0, 0, 0), Vector3(182, 21, -49), Vector3(-70, 28, -168),
+		Vector3(-14, 35, 154), Vector3(210, -28, 84), Vector3(-224, 42, -84), Vector3(-182, 0, 98)]
 const RADII := [24.0, 28.0, 30.0, 18.0, 26.0, 16.0, 22.0]
 const NAMES := ["Mossy Meadow", "Current Hollows", "Giant Stems", "Terrace Steps", "Reed Canyon", "Canopy Spire", "Hollow Grotto"]
 ## Vortex links [from, to]: the original chain first, then the branches. A link opens when its

@@ -3,8 +3,9 @@ extends Node3D
 ## The household aquarium and the kid's bedroom around it. Everything here responds
 ## continuously to total restoration (0..1): water clarity, gravel, ooze, algae, light.
 
-const TANK_MIN := Vector3(-232, -110, -202)
-const TANK_MAX := Vector3(232, 150, 152)
+## (World expansion: grown to hold the spread-out, doubled moss balls with about 30 m to the glass.)
+const TANK_MIN := Vector3(-290, -110, -260)
+const TANK_MAX := Vector3(290, 150, 220)
 const FLOOR_Y := -825.0
 const ROOM_LAYER := 2
 
@@ -462,10 +463,14 @@ func _build_room() -> void:
 	_box(Vector3(1100, 7, 700), Vector3(-100, FLOOR_Y + 4, 1700), _room_mat(Color(0.95, 0.8, 0.35)), room)
 	# Tank stand / dresser with drawers.
 	var wood := _room_mat(Color(0.8, 0.62, 0.42))
-	_box(Vector3(620, 690, 420), Vector3(0, FLOOR_Y + 345, -25), wood, room)
+	# (Sized to the tank: a little wider and deeper than the glass.)
+	var dw := TANK_MAX.x - TANK_MIN.x + 40.0
+	var dd := TANK_MAX.z - TANK_MIN.z + 40.0
+	var dz := (TANK_MIN.z + TANK_MAX.z) * 0.5
+	_box(Vector3(dw, 690, dd), Vector3(0, FLOOR_Y + 345, dz), wood, room)
 	for i in 3:
-		_box(Vector3(560, 190, 10), Vector3(0, FLOOR_Y + 120 + i * 215, 190), _room_mat(Color(0.86, 0.7, 0.5)), room)
-		_box(Vector3(80, 18, 20), Vector3(0, FLOOR_Y + 120 + i * 215, 200), _room_mat(Color(0.3, 0.3, 0.32), 0.3), room)
+		_box(Vector3(dw - 60.0, 190, 10), Vector3(0, FLOOR_Y + 120 + i * 215, dz + dd * 0.5 + 5.0), _room_mat(Color(0.86, 0.7, 0.5)), room)
+		_box(Vector3(80, 18, 20), Vector3(0, FLOOR_Y + 120 + i * 215, dz + dd * 0.5 + 15.0), _room_mat(Color(0.3, 0.3, 0.32), 0.3), room)
 	# Bed.
 	_box(Vector3(1000, 300, 1900), Vector3(950, FLOOR_Y + 150, 2100), _room_mat(Color(0.6, 0.45, 0.32)), room)
 	_box(Vector3(1020, 140, 1500), Vector3(950, FLOOR_Y + 360, 2300), _room_mat(Color(0.4, 0.75, 0.55)), room)
