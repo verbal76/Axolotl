@@ -4,6 +4,7 @@ render_mode cull_disabled, diffuse_lambert, specular_disabled;
 // Large individual plants (stems, platform leaves, cave shells, roots). Colour follows the
 // moss-ball health field sampled per vertex.
 
+#include "res://shaders/variegation.gdshaderinc"
 #include "res://shaders/health_field.gdshaderinc"
 #include "res://shaders/aquarium_light.gdshaderinc"
 
@@ -13,6 +14,11 @@ uniform vec3 healthy_b : source_color = vec3(0.4, 0.72, 0.25);
 uniform vec3 dead_a : source_color = vec3(0.3, 0.29, 0.26);
 uniform vec3 dead_b : source_color = vec3(0.5, 0.48, 0.43);
 uniform float vein = 0.0;
+// Variegation (shaders/variegation.gdshaderinc): 0 = plain green.
+uniform float variegate = 0.0;
+uniform float vari_style = 0.0;
+uniform vec3 vari_edge : source_color = vec3(0.95, 0.45, 0.62);
+uniform vec3 vari_stripe : source_color = vec3(0.95, 0.93, 0.8);
 uniform float health_bias = 0.0;
 uniform float dark = 0.0;
 uniform vec4 motes[6];
@@ -50,7 +56,11 @@ void fragment() {
 	}
 	float n = texture(noise_tex, UV * vec2(2.0, 6.0)).r;
 	float h = smoothstep(0.1, 0.9, clamp(v_health + (n - 0.5) * 0.4 * (1.0 - abs(v_health * 2.0 - 1.0)), 0.0, 1.0));
-	vec3 alb = mix(mix(dead_a, dead_b, n), mix(healthy_a, healthy_b, UV.y * 0.6 + n * 0.4), h);
+	vec3 green = mix(healthy_a, healthy_b, UV.y * 0.6 + n * 0.4);
+	if (variegate > 0.0) {
+		green = mix(green, variegate_leaf(green, abs(UV.x - 0.5) * 2.0, UV.y, fract(v_wpos.x * 0.37 + v_wpos.z * 0.21), vari_style, vari_edge, vari_stripe), variegate);
+	}
+	vec3 alb = mix(mix(dead_a, dead_b, n), green, h);
 	float v = vein * (1.0 - smoothstep(0.0, 0.04, abs(UV.x - 0.5))) ;
 	float side_veins = vein * 0.5 * (1.0 - smoothstep(0.0, 0.1, abs(fract((UV.y + abs(UV.x - 0.5) * 0.8) * 7.0) - 0.5)));
 	alb *= 1.0 + (v + side_veins) * 0.25;

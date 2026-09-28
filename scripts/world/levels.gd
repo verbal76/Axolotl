@@ -105,28 +105,31 @@ static func _sprouts(lb: LevelBuilder, i: int) -> void:
 	var crown := func(d: Vector3) -> bool: return not keep.call(d) and (d.y > 0.25 or pick.call(d) < 0.35 * (d.y + 1.0))
 	var stems := b.make_veg_material(Color(0.22, 0.46, 0.12), SPROUT_TIPS[i],
 			Vegetation.family_params("medium", 1.0).merged({"sway": 0.2, "wake_gain": 0.8, "cam_fade": 1.4, "sprout": 1.0}, true))
-	b.scatter(MeshLib.stem_plant_mesh(7, 1.2, 700 + i), stems, int(110 * area), 700 + i, 0.8, 1.6, crown, 70.0)
-	var ferns := b.make_veg_material(Color(0.12, 0.42, 0.1), Color(0.55, 0.85, 0.25),
+	var nodes: Array = []
+	nodes += b.scatter(MeshLib.stem_plant_mesh(5, 1.2, 700 + i, 7), stems, int(90 * area), 700 + i, 0.8, 1.6, crown, 45.0)
+	var ferns := b.make_veg_material(Color(0.12, 0.42, 0.1), Color(0.55, 0.85, 0.25), {"variegate": 1.0, "vari_style": float(i % 2),
+			"vari_edge": Color(0.95, 0.46, 0.62), "vari_stripe": Color(0.96, 0.94, 0.82)}.merged(
 			Vegetation.family_params("short", 0.6).merged({"sway": 0.18, "wake_gain": 0.7, "cam_fade": 1.2, "sprout": 1.0}, true))
-	b.scatter(MeshLib.broadleaf_mesh(6, 1.0, 720 + i), ferns, int(70 * area), 720 + i, 0.8, 1.5, crown, 70.0)
+	nodes += b.scatter(MeshLib.broadleaf_mesh(5, 1.0, 720 + i), ferns, int(45 * area), 720 + i, 0.8, 1.5, crown, 45.0)
 	# The crown itself: tall stem plants and big fern clumps over the top of the ball, large enough
 	# to shape its outline from across the tank (he walks through them like tall reeds).
 	var top := func(d: Vector3) -> bool: return not keep.call(d) and d.y > 0.5 and pick.call(d * 1.7) < smoothstep(0.5, 0.9, d.y)
 	var tall := b.make_veg_material(Color(0.2, 0.44, 0.1), SPROUT_TIPS[i],
 			Vegetation.family_params("tall", 4.0).merged({"sway": 0.16, "sway_speed": 0.9, "wake_gain": 0.9, "cam_fade": 2.4, "sprout": 1.0}, true))
-	b.scatter(MeshLib.stem_plant_mesh(11, 1.2, 760 + i), tall, int(60 * area), 760 + i, 3.0, 5.5, top, 140.0)
-	b.scatter(MeshLib.broadleaf_mesh(7, 1.0, 780 + i), ferns, int(22 * area), 780 + i, 2.0, 3.0, top, 140.0)
+	nodes += b.scatter(MeshLib.stem_plant_mesh(8, 1.2, 760 + i, 8), tall, int(55 * area), 760 + i, 3.0, 5.5, top, 120.0)
+	nodes += b.scatter(MeshLib.broadleaf_mesh(6, 1.0, 780 + i), ferns, int(18 * area), 780 + i, 2.0, 3.0, top, 120.0)
 	var roots := b.make_veg_material(Color(0.22, 0.3, 0.12), Color(0.5, 0.45, 0.3),
 			Vegetation.family_params("tall", 2.0).merged({"sway": 0.3, "sway_speed": 0.8, "wake_gain": 0.9, "cam_fade": 2.0, "sprout": 1.0}, true))
 	var under := func(d: Vector3) -> bool: return not keep.call(d) and d.y < -0.65
-	b.scatter(MeshLib.root_strands_mesh(6, 2.2, 740 + i), roots, int(60 * area), 740 + i, 1.8, 3.0, under, 140.0)
+	nodes += b.scatter(MeshLib.root_strands_mesh(5, 2.2, 740 + i), roots, int(45 * area), 740 + i, 1.8, 3.0, under, 110.0)
+	b.sprout_nodes = nodes
 
 
 static func _accent_flora(lb: LevelBuilder, i: int) -> void:
 	var b := lb.ball
 	var keep := _veg_keep_clear(lb)
 	var ok := func(d: Vector3) -> bool: return not keep.call(d)
-	var per := int(120.0 * pow(float(RADII[i]) / 24.0, 2.0))
+	var per := int(95.0 * pow(float(RADII[i]) / 24.0, 2.0))
 	for k in 2:
 		var col: Array = ACCENTS[i][k]
 		var mat := b.make_veg_material(col[0], col[1], Vegetation.family_params("short", 0.45).merged({"sway": 0.12, "wake_gain": 0.7, "cam_fade": 1.0}, true))
@@ -136,7 +139,7 @@ static func _accent_flora(lb: LevelBuilder, i: int) -> void:
 static func _materials(lb: LevelBuilder, stem_a: Color, stem_b: Color, leaf_a: Color, leaf_b: Color) -> void:
 	var b := lb.ball
 	lb.stem_mat = b.make_plant_material(stem_a, stem_b)
-	lb.leaf_mat = b.make_plant_material(leaf_a, leaf_b, {"vein": 1.0})
+	lb.leaf_mat = b.make_plant_material(leaf_a, leaf_b, {"vein": 1.0, "variegate": 0.45, "vari_style": 1.0, "vari_stripe": Color(0.9, 0.95, 0.78)})
 	lb.shell_mat = b.make_moss_material({"fuzz": 0.0})
 	lb.strand_mat = b.make_veg_material(b.palette["moss_healthy_a"], b.palette["moss_healthy_b"], {"sway": 0.08, "impulse_gain": 2.2, "cam_fade": 1.2,
 			"wake_gain": 1.0, "plant_height": 2.4})
@@ -336,7 +339,9 @@ static func _ball1(lb: LevelBuilder) -> void:
 	# Vegetation: soft velvety marimo moss, short plants and broad leaves.
 	var veg := b.make_veg_material(Color(0.12, 0.4, 0.1), Color(0.5, 0.8, 0.28), Vegetation.family_params("short", 0.34))
 	b.scatter(MeshLib.tuft_mesh(5, 0.07, 0.34, 0.12, 1, 3, 0.3), veg, 5200, 11, 0.8, 1.35)
-	var leaves := b.make_veg_material(Color(0.1, 0.36, 0.1), Color(0.35, 0.7, 0.22), Vegetation.family_params("short", 0.5).merged({"sway": 0.22, "wake_gain": 0.6}, true))
+	var leaves := b.make_veg_material(Color(0.1, 0.36, 0.1), Color(0.35, 0.7, 0.22), Vegetation.family_params("short", 0.5).merged({"sway": 0.22, "wake_gain": 0.6,
+			# (Owner reference: variegated like an earth star, pink margins and cream stripes.)
+			"variegate": 1.0, "vari_style": 0.0, "vari_edge": Color(0.95, 0.46, 0.62), "vari_stripe": Color(0.96, 0.93, 0.8)}, true))
 	b.scatter(MeshLib.broadleaf_mesh(4, 0.7, 2), leaves, 380, 12, 0.7, 1.25)
 	var stalks := b.make_veg_material(Color(0.1, 0.36, 0.1), Color(0.35, 0.7, 0.22), Vegetation.family_params("medium", 1.7).merged({"sway": 0.14}, true))
 	b.scatter(MeshLib.tuft_mesh(3, 0.1, 1.7, 0.1, 3, 5, 0.25), stalks, 160, 13, 0.8, 1.3)
@@ -443,7 +448,10 @@ static func _ball2(lb: LevelBuilder) -> void:
 	b.scatter(MeshLib.tuft_mesh(4, 0.1, 3.0, 0.15, 4, 6, 0.2), grass, 2100, 21, 0.7, 1.4, ok_tall)
 	var short := b.make_veg_material(Color(0.06, 0.32, 0.16), Color(0.3, 0.66, 0.34), Vegetation.family_params("short", 0.4).merged({"sway": 0.2}, true))
 	b.scatter(MeshLib.tuft_mesh(5, 0.07, 0.4, 0.12, 5, 3, 0.3), short, 3200, 22, 0.8, 1.3)
-	b.scatter(MeshLib.broadleaf_mesh(4, 0.9, 7), short, 260, 23, 1.0, 1.6, ok)
+	# (Owner reference: "fire and ice" hosta leaves, a white centre with green margins.)
+	var ice := b.make_veg_material(Color(0.06, 0.32, 0.16), Color(0.3, 0.66, 0.34), Vegetation.family_params("short", 0.4).merged({"sway": 0.2,
+			"variegate": 1.0, "vari_style": 1.0, "vari_stripe": Color(0.94, 0.96, 0.9)}, true))
+	b.scatter(MeshLib.broadleaf_mesh(4, 0.9, 7), ice, 260, 23, 1.0, 1.6, ok)
 	var rng := RandomNumberGenerator.new()
 	rng.seed = 24
 	for k in 34:
@@ -677,7 +685,8 @@ static func _ball3(lb: LevelBuilder) -> void:
 	var ok_tall := func(dd: Vector3) -> bool: return ok.call(dd) and stands.call(dd)
 	var tall := b.make_veg_material(Color(0.06, 0.3, 0.06), Color(0.4, 0.7, 0.16), Vegetation.family_params("tall", 4.2).merged({"cam_fade": 2.4}, true))
 	b.scatter(MeshLib.tuft_mesh(3, 0.18, 4.2, 0.2, 5, 6, 0.25), tall, 1300, 31, 0.8, 1.4, ok_tall)
-	var fern := b.make_veg_material(Color(0.05, 0.28, 0.06), Color(0.3, 0.62, 0.14), Vegetation.family_params("medium", 1.2).merged({"sway": 0.16, "cam_fade": 1.6, "wake_gain": 0.8}, true))
+	var fern := b.make_veg_material(Color(0.05, 0.28, 0.06), Color(0.3, 0.62, 0.14), Vegetation.family_params("medium", 1.2).merged({"sway": 0.16, "cam_fade": 1.6, "wake_gain": 0.8,
+			"variegate": 0.8, "vari_style": 0.0, "vari_edge": Color(0.8, 0.22, 0.3), "vari_stripe": Color(0.85, 0.92, 0.62)}, true))
 	b.scatter(MeshLib.broadleaf_mesh(7, 1.4, 6), fern, 520, 32, 1.0, 1.8, ok)
 	var short := b.make_veg_material(Color(0.05, 0.26, 0.05), Color(0.3, 0.6, 0.14), Vegetation.family_params("short", 0.4))
 	b.scatter(MeshLib.tuft_mesh(5, 0.07, 0.4, 0.12, 8, 3, 0.3), short, 3200, 34, 0.8, 1.3)

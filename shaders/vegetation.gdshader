@@ -9,6 +9,7 @@ render_mode cull_disabled, world_vertex_coords, diffuse_lambert, specular_disabl
 // axolotl's head, body, tail and trail, and nearby parasites): plants near a wake point bend
 // away from it and along its motion. Per plant, from its base (one value for the whole plant).
 
+#include "res://shaders/variegation.gdshaderinc"
 #include "res://shaders/health_field.gdshaderinc"
 #include "res://shaders/aquarium_light.gdshaderinc"
 
@@ -35,6 +36,11 @@ uniform float plant_height = 0.5;
 // 1 for plants that sprout only as the moss heals (Expansion 6: stem plants, ferns and trailing
 // roots of the "sprouted moss ball"): absent on neglected moss, growing in as it recovers.
 uniform float sprout = 0.0;
+// Variegation (shaders/variegation.gdshaderinc): 0 = plain.
+uniform float variegate = 0.0;
+uniform float vari_style = 0.0;
+uniform vec3 vari_edge : source_color = vec3(0.95, 0.45, 0.62);
+uniform vec3 vari_stripe : source_color = vec3(0.95, 0.93, 0.8);
 uniform vec4 motes[6];
 uniform int mote_count = 0;
 uniform vec3 mote_color : source_color = vec3(0.55, 1.0, 0.75);
@@ -75,6 +81,7 @@ varying float v_health;
 varying float v_t;
 varying vec3 v_wpos;
 varying vec3 v_up;
+varying float v_ph;
 
 void vertex() {
 	vec3 base = MODEL_MATRIX[3].xyz;
@@ -109,6 +116,7 @@ void vertex() {
 	v_t = t;
 	v_wpos = VERTEX;
 	v_up = up;
+	v_ph = hsh;
 }
 
 // An even 4x4 ordered dither (Expansion 6: random per-pixel dither read as noise on a phone).
@@ -128,6 +136,9 @@ void fragment() {
 	}
 	float h = smoothstep(0.1, 0.9, v_health);
 	vec3 healthy = mix(healthy_a, healthy_b, v_t);
+	if (variegate > 0.0) {
+		healthy = mix(healthy, variegate_leaf(healthy, abs(UV.x - 0.5) * 2.0, v_t, v_ph, vari_style, vari_edge, vari_stripe), variegate);
+	}
 	vec3 dead = mix(dead_a, dead_b, v_t);
 	vec3 alb = mix(dead, healthy, h) * mix(0.55, 1.0, v_t) * COLOR.rgb;
 	float in_cave = cave_factor(v_wpos);

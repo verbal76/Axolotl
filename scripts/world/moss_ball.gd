@@ -352,7 +352,27 @@ func health_at(dir: Vector3) -> float:
 	return h
 
 
+## Plants that sprout only as the ball heals (Levels._sprouts): not drawn at all until it is a
+## quarter restored (on neglected moss they would be zero-size and still cost their triangles).
+var sprout_nodes: Array = []
+var _sprouts_shown := true
+
+
+func _update_sprouts() -> void:
+	var want := restoration >= 0.25
+	if not want:
+		for h in heals:
+			if h.w > 90.0:
+				want = true
+				break
+	if want != _sprouts_shown:
+		_sprouts_shown = want
+		for n in sprout_nodes:
+			(n as Node3D).visible = want
+
+
 func _process(delta: float) -> void:
+	_update_sprouts()
 	var growing := false
 	for i in heals.size():
 		var s := heals[i]

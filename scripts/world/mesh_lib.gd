@@ -109,7 +109,7 @@ static func broadleaf_mesh(leaves: int, size: float, seed_v: int) -> ArrayMesh:
 ## stems crowning the healed moss). `stems` thin upright stems of up to `height`, leaning a little
 ## outward, each with pairs of narrow leaves turning a quarter turn up the stem, longer below and
 ## shorter toward the tip. UV.y runs base to tip (the material's colour runs green to red by it).
-static func stem_plant_mesh(stems: int, height: float, seed_v: int) -> ArrayMesh:
+static func stem_plant_mesh(stems: int, height: float, seed_v: int, pairs := 10) -> ArrayMesh:
 	var rng := RandomNumberGenerator.new()
 	rng.seed = seed_v
 	var st := SurfaceTool.new()
@@ -126,7 +126,7 @@ static func stem_plant_mesh(stems: int, height: float, seed_v: int) -> ArrayMesh
 		var at := func(t: float) -> Vector3: return root + dirv * len * t + bow * len * t * t
 		# The stem: a thin three-sided tube.
 		var r0 := height * 0.012
-		var rings := 5
+		var rings := 3
 		var start := base
 		var x := dirv.cross(Vector3.RIGHT if absf(dirv.x) < 0.9 else Vector3.FORWARD).normalized()
 		var y := dirv.cross(x).normalized()
@@ -146,7 +146,6 @@ static func stem_plant_mesh(stems: int, height: float, seed_v: int) -> ArrayMesh
 				for q in [i0, i1, i0 + 3, i1, i1 + 3, i0 + 3]:
 					st.add_index(q)
 		# Leaf pairs: narrow lance-shaped leaves, arching out and a little down.
-		var pairs := 10
 		for j in pairs:
 			var t := 0.12 + 0.86 * float(j) / (pairs - 1)
 			var c: Vector3 = at.call(t)
@@ -215,7 +214,7 @@ static func coral_mesh(tubes: int, height: float, seed_v: int) -> ArrayMesh:
 	var st := SurfaceTool.new()
 	st.begin(Mesh.PRIMITIVE_TRIANGLES)
 	var base := 0
-	var sides := 7
+	var sides := 6
 	for i in tubes:
 		var a := TAU * i / tubes + rng.randf() * 0.6
 		var lean := rng.randf_range(0.1, 0.45)
@@ -226,7 +225,7 @@ static func coral_mesh(tubes: int, height: float, seed_v: int) -> ArrayMesh:
 		var tint := Color.WHITE.darkened(rng.randf() * 0.18)
 		var start := base
 		# Rings: the tube, then a flared lip and a rounded rim turning back in.
-		var profile := [[0.0, 1.0], [0.3, 0.8], [0.65, 0.72], [0.88, 0.85], [0.96, 1.35], [1.0, 1.2], [0.98, 0.7]]
+		var profile := [[0.0, 1.0], [0.55, 0.74], [0.9, 0.88], [0.97, 1.35], [0.99, 0.75]]
 		var x := dirv.cross(Vector3.UP if absf(dirv.y) < 0.95 else Vector3.RIGHT).normalized()
 		var y := dirv.cross(x).normalized()
 		for pr in profile:
