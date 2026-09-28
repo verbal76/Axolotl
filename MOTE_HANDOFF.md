@@ -19,7 +19,7 @@ kept below as history.
 | **Release commit** (APK + OTA source) | `104605727ab2bc48f6b0b6e2d56a0fd44127c5be` (`1046057`) |
 | **The one Android app** | **Mote**, `com.verbal76.axolotl`. The separate Mote Dev app is **retired** (owner, 2026-09-27). |
 | **Current APK** | **`mote-v0.1.0-b22.apk`** (artifact `mote-android-v0.1.0-b22`), Android build 22, bundled baseline `1046057` |
-| **Current OTA / channel pointer** | **`dev-000014`**, built from `1046057` (the APK's own game: a b22 install reports "Up to date") |
+| **Current OTA / channel pointer** | **`dev-000015`**, built from `637014d` (bridge + parasite fixes; the first OTA newer than b22's bundled game). dev-000014 = b22's own game |
 | Runtime | `android-godot-4.7.2-r5` |
 | Game version / save schema | `0.1.0` / `1` |
 | Requirement authority | `docs/REQUIREMENTS_LEDGER.md` (sections G, F, O, V, N, C, A, R, **S**) |
@@ -345,6 +345,14 @@ is expected; tap **Install anyway**.
 
 ## 11. Current OTA
 
+**Latest: `dev-000015`** (OTA publish #15, run 36361312212): source `637014dcd639bbd071d0b9be16efc2654eb794e2`,
+runtime r5, PCK `4fc048be6af27eb9934f07dee57141a54a8c46bdebcdfc01e6b5dea13bc5bdfe` (4,859,880 bytes, shaders
+baked). Game-layer fixes from the phone playtest (ledger P): brittle-moss bridge caps grounded on stalks,
+cave-dome skirt, articulated parasite locomotion. Verified from the public URLs; a b22 client downloads it.
+No APK was built (Build & Verify #23 skipped the Android job: native layer unchanged).
+
+The table below describes dev-000014, the OTA of b22's own game.
+
 | | |
 |---|---|
 | OTA id / channel | **`dev-000014`** / `dev` |
@@ -393,6 +401,9 @@ containing `[skip ci]` skips both.
   CI exports on software Vulkan (lavapipe) under xvfb and fails if the log shows no baking.
 - **`1046057`, the release APK verifies itself.** CI unzips the APK's assets and runs them
   (`--print-identity`), so the bundled baseline is proven from the artifact, not from the source tree.
+- **`637014d`, APK only on native change.** Build & Verify's Android job runs only when the pushed
+  commits touch `project.godot`, `export_presets.cfg`, `scripts/boot/` or `ota/runtime_lock.json`
+  (or on a manual run). Game-layer changes ship by OTA without a new APK.
 - **`31ae69d`, real branch SHA.** `pull_request` runs check out GitHub's synthetic merge commit. The
   workflow now checks out and records `SOURCE_SHA` = the PR head commit, and asserts it before export.
 
@@ -455,9 +466,11 @@ These are implemented but lack automated evidence. They are **not** unimplemente
    - Save Schema 1.
 4. Play a little (food/lunge, swipe, gills), then close and reopen: progress/settings kept.
 5. **Airplane mode OFF**, restart: Status **Up to date**, Latest on channel **dev-000014**, Runtime compatibility "latest OTA compatible", Last check "up to date (latest dev-000014 is the game bundled in this app, 104605727ab2)". Nothing is downloaded.
-6. **OTA download/activate/rollback on the phone** needs an OTA newer than b22's own game. The next push without `[skip ci]` provides one; then: it downloads by itself ("ready: restart to run it"), restart → Active dev-0000NN, **Roll back** → restart → bundled baseline, **Boot bundled baseline** / **Re-enable OTA** behave as labelled, saves kept throughout.
+6. **OTA download/activate/rollback on the phone:** dev-000015 is newer than b22's own game. Online, restart: it downloads by itself ("ready: restart to run it"), restart → Active dev-0000NN, **Roll back** → restart → bundled baseline, **Boot bundled baseline** / **Re-enable OTA** behave as labelled, saves kept throughout.
 
-Record results in the ledger (O-19, A-05, R-01, R-14, R-19, S-03, S-06, S-14, F-07, F-09) only with the owner's evidence.
+7. **After dev-000015 is active:** Moss Ball 1, east tower (the view of the playtest screenshot): the two brittle bridge caps stand on moss stalks down to the ground; Gill cannot walk under them; stepping on a cap makes the whole cap-and-stalk crumble, Gill drops to the ground, and it regrows once Gill moves away. Same on Moss Ball 2's south tower. Watch several parasites crawl, turn and stop: a wave should roll from head to tail, turns should curve the body, no stiff-stick sliding or twitching.
+
+Record results in the ledger (O-19, A-05, R-01, R-14, R-19, S-03, S-06, S-14, F-07, F-09, P-01, P-03) only with the owner's evidence.
 
 ## 17. Repository isolation
 
@@ -468,7 +481,8 @@ repository. Do not name, open or use any other game repository in Mote developme
 
 - **Released:** one Mote APK (b22, r5) with everything approved bundled, OTA on `dev`, channel pointer
   reconciled to dev-000014 (the APK's own game). CI green on `1046057`.
-- **Next task:** the owner's fresh install and phone checks (§16), including the startup numbers.
+- **Delivered after b22:** dev-000015 (phone-playtest fixes, ledger P), by OTA only.
+- **Next task:** the owner's phone checks (§16), including the startup numbers and the dev-000015 fixes.
 - **After that:** continue from the owner's feedback. Game-layer changes reach b22 by OTA on push
   (that push is also the first OTA a b22 phone downloads). Native changes need `--bump` and a new APK.
 

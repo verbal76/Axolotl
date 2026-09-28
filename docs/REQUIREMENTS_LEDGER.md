@@ -228,6 +228,16 @@ consolidate everything into ONE Mote app and ONE current APK (retire Mote Dev; k
 | S-14 | Real OTA download → activate → rollback on the phone with the current APK | needs phone | | needs b22 installed and the next OTA (any later push without `[skip ci]`) |
 | S-15 | iOS team ID for device builds | OPEN (owner input) | `export_presets.cfg` `AXOLOTL000` | iOS is built only as an unsigned simulator build; needs the owner's Apple team ID if iOS devices are wanted |
 
+## P — Phone playtest fixes (owner, 2026-09-27; delivered by OTA dev-000015)
+
+| ID | Requirement | Status | Implementation | Evidence |
+|---|---|---|---|---|
+| P-01 | No floating terrain caps: raised formations connect to the ground; collision matches; Gill cannot pass underneath | I+V / needs phone | `Platforms.Crumble._build_stalk`: each raised brittle-moss cap stands on a brittle stalk rooted in the real ground; the whole formation crumbles/regrows; it regrows only once Gill is clear | Root cause: `_tower()`'s brittle-moss bridge caps (cushion-cap profile, 2.5–3.0 m up, nothing beneath). 4 found (ball 1 east, ball 2 south), 4 fixed. `terrain_no_unsupported_platforms`, `brittle_moss_caps_on_grounded_stalks` (both fail without the stalk), `brittle_moss_whole_formation_crumbles`, `brittle_moss_waits_for_gill_to_move`, `brittle_moss_regrows` |
+| P-02 | Same defect class, whole world audited | I+V | `MeshLib.dome_shell(sink)`, `LevelBuilder.cave` | 132 grounded structures measured (`terrain_structures_meet_the_ground`); one more found and fixed: ball 1's cave-dome rim 0.16 m above the downhill ground (fixed skirt vs curvature). 79 elevated bodies over water remain, all leaves on stems (tagged `floats_by_design`) |
+| P-03 | Centipede-like parasites move as articulated creatures (head leads, wave travels head→tail, turns curve the body, restrained idle, no twitch, no separation, frame-rate independent, deterministic) | I+V / needs phone | `Parasite._update_segments`: distance-driven travelling wave on the existing trail-following segments | 11 `parasite_*` checks (wave 0.089 m peak on a large parasite, tail lags by 64 frames, 30 vs 60 fps within 6 mm, 12–21 µs per creature); playthrough 12/12 on seeds 4242 and 7 |
+| P-04 | Deliver as the first real OTA past b22's bundled game; no new APK | I+V | OTA publish #15 (run 36361312212); Build & Verify #23 skipped the APK job (native layer unchanged) | dev-000015, source `637014d`, r5, PCK `4fc048be…c5bdfe` (4,859,880 bytes), baked; signature, pin, hash, inspector verified from public URLs; a b22 client downloads and stages it |
+| P-05 | CI builds a new APK only when the native layer changes | I+V | `build.yml` `native` job gates `android` | Build & Verify #23: "Android APK" skipped; tests green |
+
 ## Precedence notes
 
 - The reconciliation prompt's floor list repeats two items that the owner changed earlier today: "diegetic
