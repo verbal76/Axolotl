@@ -1,13 +1,16 @@
 class_name PauseMenu
 extends CanvasLayer
-## Small pause/settings menu: Resume, Reduced HUD, audio levels, haptics, controller/touch
-## status, Restart Experience, Return to Title.
+## Small pause/settings menu: Resume, this run (time, completion, finish, best), Show run timer,
+## Reduced HUD, audio levels, haptics, controller/touch status, New Run, Return to Title.
 
 var _root: Control
 var _panel: PanelContainer
 var _status: Label
 var _startup: Label
 var _reduced: CheckButton
+var _timer_toggle: CheckButton
+var _run_time: Label
+var _run_detail: Label
 var _haptics: CheckButton
 var _music: HSlider
 var _sfx: HSlider
@@ -41,6 +44,18 @@ func _ready() -> void:
 	scroll.add_child(v)
 	var resume := UiStyle.button("Resume", close)
 	v.add_child(resume)
+	# This run: time, completion, finished or not, best finish.
+	_run_time = Label.new()
+	_run_time.name = "RunTime"
+	_run_time.add_theme_font_size_override("font_size", 30)
+	v.add_child(_run_time)
+	_run_detail = UiStyle.note()
+	_run_detail.name = "RunDetail"
+	v.add_child(_run_detail)
+	_timer_toggle = CheckButton.new()
+	_timer_toggle.text = "Show run timer"
+	_timer_toggle.toggled.connect(_on_timer_toggle)
+	v.add_child(_timer_toggle)
 	_reduced = CheckButton.new()
 	_reduced.text = "Reduced HUD"
 	_reduced.toggled.connect(_on_reduced)
@@ -57,7 +72,8 @@ func _ready() -> void:
 	_status.add_theme_font_size_override("font_size", 22)
 	_status.autowrap_mode = TextServer.AUTOWRAP_WORD_SMART
 	v.add_child(_status)
-	var restart := UiStyle.button("Restart Experience", func(): Game.inst.restart_experience())
+	var restart := UiStyle.confirm_button("New Run", "Start a new run? This run's progress and time are replaced (your best finish is kept).",
+			"Start over", func(): Game.inst.restart_experience())
 	v.add_child(restart)
 	var title := UiStyle.button("Return to Title", func(): Game.inst.return_to_title())
 	v.add_child(title)
@@ -69,7 +85,7 @@ func _ready() -> void:
 	_startup.add_theme_color_override("font_color", Color(0.85, 0.95, 0.92, 0.6))
 	_startup.autowrap_mode = TextServer.AUTOWRAP_WORD_SMART
 	v.add_child(_startup)
-	_session_rows = [restart, title]
+	_session_rows = [restart, title, _run_time, _run_detail]
 	resume.name = "Resume"
 	visible = false
 	Settings.settings_changed.connect(_refresh)
@@ -78,6 +94,11 @@ func _ready() -> void:
 
 func _on_reduced(on: bool) -> void:
 	Settings.reduced_hud = on
+	Settings.save()
+
+
+func _on_timer_toggle(on: bool) -> void:
+	Settings.show_run_timer = on
 	Settings.save()
 
 
@@ -117,6 +138,8 @@ func _slider(parent: Control, text: String) -> HSlider:
 
 func open(from_title := false) -> void:
 	_from_title = from_title
+	if not from_title and Game.inst != null:
+		Game.inst.save_run()
 	for r in _session_rows:
 		r.visible = not from_title
 	_refresh()
@@ -134,6 +157,16 @@ func close() -> void:
 
 func _refresh() -> void:
 	_reduced.set_pressed_no_signal(Settings.reduced_hud)
+	_timer_toggle.set_pressed_no_signal(Settings.show_run_timer)
+	var g := Game.inst
+	if g != null and g.run_save != null:
+		_run_time.text = g.run_line()
+		var lines: Array[String] = []
+		lines.append("Game finished: " + ("yes" if g.clock.is_finished() else "not yet"))
+		lines.append_array(g.completion.summary_lines(g.run_save.earned()))
+		if g.best_line() != "":
+			lines.append(g.best_line())
+		_run_detail.text = "\n".join(lines)
 	_haptics.set_pressed_no_signal(Settings.haptics)
 	_music.set_value_no_signal(Settings.music_volume)
 	_sfx.set_value_no_signal(Settings.sfx_volume)

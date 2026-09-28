@@ -244,7 +244,40 @@ consolidate everything into ONE Mote app and ONE current APK (retire Mote Dev; k
 | ID | Requirement | Status | Implementation | Evidence |
 |---|---|---|---|---|
 | M-01 | The owner's two songs, *Aquarium Whimsy* (106.7 s) and *Bubbly Underworld* (98.8 s), are the background music: they alternate on the title and every moss ball, replacing the generated layers | I+V / needs phone | `AudioDirector`: one `Music`-bus player, `SONGS`, `next_song` on `finished`; travelling keeps the current song; the lowpass still opens as the current ball heals. Files: `assets/audio/music_aquarium_whimsy.ogg`, `music_bubbly_underworld.ogg` (Ogg Vorbis, 48 kHz stereo, full length, no loop). The 15 generated `music_b*_l*.wav` layers and their generator are removed | `music_owner_songs_load`, `music_generated_layers_removed`, `music_travel_keeps_song`, `music_songs_alternate`, `music_on_the_music_bus`, `music_next_song_starts_when_one_ends` (a real song end hands over to the other) |
+| M-03 | Music not hidden by the muffling (owner: "finish the music") | I+V / needs phone | `AudioDirector`: clear on the title; lowpass 2.2 kHz on a murky ball (was 750 Hz, and 900 Hz on the title) up to 18 kHz healed; log-scale glide instead of snapping | `music_murky_still_recognisable` |
 | M-02 | Keep the OTA small (owner chose Ogg Vorbis over WAV) | I+V | Encoded from the owner's WAVs (39 MB) at Vorbis ~q7: 2.71 MB + 2.55 MB, same sample count as the originals | dev-000017 (OTA publish #17, source `618dcf3`, PCK `3ffcb6b1…a9fcc8`, 8,736,680 bytes, baked): signature, hash, inspector verified from public URLs; no `music_b*` layers in the pack; the `music_*` tests pass run from the pack; a b22 client downloads it; Build & Verify #25 skipped the APK |
+
+## MOTE OPEN ITEMS EXPANSION LIST
+
+[ ] 1. Timer + completion foundation
+[ ] 2. Living terrain / texture and material upgrade
+[ ] 3. Dense reactive vegetation / cornfield movement
+[ ] 4. Additional moss balls + expanded terrain set
+[ ] 5. Additional enemies + ecosystem expansion
+[ ] 6. Full expansion integration + progression/balance/100%/speedrun reconciliation
+
+Each item ships as its own dev OTA once its automated validation passes, and is ticked only after
+that OTA is published and independently verified. Each item is authorised separately.
+
+## E1 — Expansion 1: timer + completion foundation (owner, 2026-09-28)
+
+Design and rules: `docs/COMPLETION.md`. Owner decisions (2026-09-28): add a real run save
+(Continue); title Continue + New Run with confirmation; run timer hidden in play by default, with
+a pause-menu toggle; completion weighted by category.
+
+| ID | Requirement | Status | Implementation | Evidence |
+|---|---|---|---|---|
+| E1-01 | Per-run timer owned by the save (survives quit, relaunch and OTA restart; no background, pause or title time; wall-clock and time-zone independent; frame-rate deterministic) | I+V / needs phone | `RunClock` (frame deltas in float64 s, 0.25 s frame cap, discard the frame after a resume), `Game._process` ticks only in play; `_notification` suspends and saves | `timer_*` (11), `timer_started_at_play`, `timer_advances_in_play`, `timer_paused_by_pause_menu`, `timer_paused_in_background`, `run_saved_when_backgrounded`, `relaunch/read_timer_continues` |
+| E1-02 | Exact start, finish and freeze rules | I+V | Start: first play frame of a new run. Finish: the frame the last moss ball is fully restored. Frozen `finish_s`; later play only adds to `play_s` | `timer_finish_freezes`, `timer_after_finish_frozen`, `run_finished_when_all_balls_restored`, `finish_time_frozen_after_more_play`, `finish_saved` |
+| E1-03 | Best valid finish time kept across runs | I+V | `RunSave.record_finish`, `records.best_finish_s`; New Run keeps records | `run_save_best_time`, `run_save_new_run_keeps_records` |
+| E1-04 | Central deterministic completion catalog with stable ids; one percentage source | I+V | `Completion` (4 categories with fixed shares 50/20/15/15; 87 entries; ids stamped on world nodes); gameplay only calls `Game._earn(id)` | `completion_ids_unique_and_pinned` (count 87 + SHA-256), `completion_shares_sum_to_100`, `completion_ids_on_world` |
+| E1-05 | 0%, partial, finished below 100%, exactly 100%, never above 100%, duplicates once | I+V | `Completion.percent` (100 only when nothing remains; displayed rounded down) | `completion_zero`, `completion_partial`, `completion_finished_below_100` (65%), `completion_exactly_100`, `completion_never_above_100`, `completion_duplicate_counts_once` |
+| E1-06 | Expansion-safe: the catalog grows without losing earned progress; documented percentage model | I+V | Growth adds entries and bumps `CATALOG_VERSION`; earned ids are kept, the % can go down; unknown ids are kept but not counted | `completion_growth_changes_denominator`; `docs/COMPLETION.md` "Extending the catalog" |
+| E1-07 | Run save: Continue restores the world; New Run; autosave; atomic with backup; newer formats untouched | I+V / needs phone | `RunSave` (`user://run.json`, format 1), `Game._apply_run` (silent restore), `_resume_position` (last bloom once it has settled) | `run_save_*` (9), `relaunch/*` (a real two-process relaunch: same run, ids, timer, restoration, cleared things, cave and health, resume at the last bloom) |
+| E1-08 | Existing saves migrated conservatively; nothing invented | I+V | Mote saved no progress before this OTA; `settings.cfg` (schema 1) is unchanged; the new run save records "no earlier progress existed" | `run_save_migration_from_no_progress`, `run_save_migrates_partial_data`, `run_save_outside_ota_storage` |
+| E1-09 | Player UI: run time, %, finished, finish time, per-category progress, best; unobtrusive optional HUD timer | I+V / needs phone | Title (Continue / New Run + run line), pause (run panel, Show run timer, New Run with confirmation), HUD timer (top left, faint, off by default), ALL CLEAR shows "Finished in …" | `pause_menu_shows_run`, `title_continue_and_new_run`, `hud_run_timer_toggle`, `finish_time_frozen_after_more_play` |
+| E1-10 | Diagnostics: timer state, run time, finished, frozen time, completion, run save format and origin, catalog version | I+V | `Game.run_diagnostics_text` through `StartupTrace.timeline_text` (the r5 bootstrap's game-layer hook; no native change) | `diagnostics_show_run_timer` |
+| E1-11 | Ships by OTA, no APK | pending publish | Game layer only (no `scripts/boot/`, `project.godot`, `export_presets.cfg` or runtime lock changes) | runtime r5 unchanged |
 
 ## Precedence notes
 

@@ -174,6 +174,13 @@ deals two stages. Dangerous falls are telegraphed only by body language and wate
 death he dissolves into glowing particles that travel back to the bloom and reform with full health.
 Restoration and kills persist.
 
+**Runs, timer and completion** — the run autosaves; the title offers Continue (resume at the last
+bloom) and New Run. A run timer counts only play (not the title, the pause menu or the app in the
+background) and freezes when the last moss ball is restored ("Finished in …" under ALL CLEAR). The
+pause menu shows run time, completion % by category, finished or not, and the best finish; Pause →
+Show run timer adds a small timer in play. Finishing is not 100%: the hidden caves and blooms count
+too. Rules and catalog: `docs/COMPLETION.md`.
+
 **Restoration** — each moss ball tracks 0–100% internally (never shown). Every Mote and parasite
 restores a local patch, and finishing a patch blooms it fully. Brittle moss crumbles underfoot and
 becomes solid once its patch is restored.

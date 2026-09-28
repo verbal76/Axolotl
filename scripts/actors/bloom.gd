@@ -76,6 +76,12 @@ func _ready() -> void:
 	add_child(core)
 
 
+## True once the bloom has settled onto the ground (its first frame): before that its position
+## is not meaningful.
+func is_placed() -> bool:
+	return _ready_pos
+
+
 func respawn_point() -> Vector3:
 	var up := ball.up_at(global_position)
 	return global_position + up * 0.35 + global_basis.z * 0.9

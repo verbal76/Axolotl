@@ -10,6 +10,8 @@ enum InputMode { TOUCH, PAD }
 const SETTINGS_PATH := "user://settings.cfg"
 
 var reduced_hud := false
+## Shows the small run timer during play (the pause menu always shows it).
+var show_run_timer := false
 var haptics := true
 var music_volume := 0.8
 var sfx_volume := 0.9
@@ -139,6 +141,7 @@ func _load() -> void:
 	if cf.load(SETTINGS_PATH) != OK:
 		return
 	reduced_hud = cf.get_value("hud", "reduced", reduced_hud)
+	show_run_timer = cf.get_value("hud", "run_timer", show_run_timer)
 	haptics = cf.get_value("hud", "haptics", haptics)
 	music_volume = cf.get_value("audio", "music", music_volume)
 	sfx_volume = cf.get_value("audio", "sfx", sfx_volume)
@@ -147,6 +150,7 @@ func _load() -> void:
 func save() -> void:
 	var cf := ConfigFile.new()
 	cf.set_value("hud", "reduced", reduced_hud)
+	cf.set_value("hud", "run_timer", show_run_timer)
 	cf.set_value("hud", "haptics", haptics)
 	cf.set_value("audio", "music", music_volume)
 	cf.set_value("audio", "sfx", sfx_volume)

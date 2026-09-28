@@ -10,6 +10,10 @@ const BTN_LUNGE := "lunge"
 var root: Control
 var canvas: HudCanvas
 var all_clear_label: Label
+## The optional run timer (Pause → Show run timer): small and faint, top left, play only.
+var timer_label: Label
+## Under ALL CLEAR: the run's frozen finish time.
+var finish_label: Label
 
 var _stick_touch := -1
 var _stick_origin := Vector2.ZERO
@@ -52,6 +56,26 @@ func _ready() -> void:
 	all_clear_label.grow_horizontal = Control.GROW_DIRECTION_BOTH
 	all_clear_label.grow_vertical = Control.GROW_DIRECTION_BOTH
 	root.add_child(all_clear_label)
+	finish_label = Label.new()
+	finish_label.name = "FinishTime"
+	finish_label.set_anchors_preset(Control.PRESET_CENTER)
+	finish_label.horizontal_alignment = HORIZONTAL_ALIGNMENT_CENTER
+	finish_label.add_theme_font_size_override("font_size", 30)
+	finish_label.add_theme_color_override("font_color", Color(0.9, 1.0, 0.95))
+	finish_label.add_theme_color_override("font_outline_color", Color(0.05, 0.2, 0.18, 0.6))
+	finish_label.add_theme_constant_override("outline_size", 4)
+	finish_label.grow_horizontal = Control.GROW_DIRECTION_BOTH
+	finish_label.offset_top = 56
+	finish_label.modulate.a = 0.0
+	root.add_child(finish_label)
+	timer_label = Label.new()
+	timer_label.name = "RunTimer"
+	timer_label.add_theme_font_size_override("font_size", 22)
+	timer_label.add_theme_color_override("font_color", Color(0.9, 1.0, 0.96, 0.55))
+	timer_label.add_theme_color_override("font_outline_color", Color(0.02, 0.1, 0.09, 0.5))
+	timer_label.add_theme_constant_override("outline_size", 3)
+	timer_label.visible = false
+	root.add_child(timer_label)
 	get_viewport().size_changed.connect(_layout)
 	Settings.input_mode_changed.connect(func(_m): _update_alpha())
 	Settings.settings_changed.connect(_update_alpha)
@@ -92,6 +116,8 @@ func _layout() -> void:
 	if _stick_touch < 0:
 		_stick_origin = _stick_rest
 	_pause_rect = Rect2(Vector2(_safe.end.x - 64 * s, _safe.position.y + 6), Vector2(56, 56) * s)
+	if timer_label:
+		timer_label.position = _safe.position + Vector2(6, 4)
 	canvas.scale_k = s
 	canvas.queue_redraw()
 
@@ -133,6 +159,7 @@ func prompts_shown() -> bool:
 
 
 func _process(dt: float) -> void:
+	_update_timer()
 	_alpha = move_toward(_alpha, _target_alpha, dt * 3.0)
 	for k in _pressed.keys():
 		_pressed[k] = maxf(0.0, _pressed[k] - dt)
@@ -247,11 +274,21 @@ func hide_prompt(name_: String) -> void:
 	prompts.erase(name_)
 
 
-func show_all_clear() -> void:
-	var tw := create_tween()
-	tw.tween_property(all_clear_label, "modulate:a", 1.0, 2.5)
-	tw.tween_interval(3.5)
-	tw.tween_property(all_clear_label, "modulate:a", 0.0, 3.0)
+func show_all_clear(finish_text := "") -> void:
+	finish_label.text = finish_text
+	for l in [all_clear_label, finish_label]:
+		var tw := create_tween()
+		tw.tween_property(l, "modulate:a", 1.0, 2.5)
+		tw.tween_interval(3.5 if l == all_clear_label else 5.5)
+		tw.tween_property(l, "modulate:a", 0.0, 3.0)
+
+
+func _update_timer() -> void:
+	var g := Game.inst
+	var on := Settings.show_run_timer and g != null and g.clock != null and g.state == "play" and _controls_visible
+	timer_label.visible = on
+	if on:
+		timer_label.text = RunClock.format(g.clock.shown_s()) + ("  finished" if g.clock.is_finished() else "")
 
 
 func button_info() -> Dictionary:

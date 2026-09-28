@@ -1,11 +1,13 @@
 class_name TitleScreen
 extends CanvasLayer
 ## Minimal live-environment title: the murky starting aquarium with Gill at home.
-## MOTE, the game version, Play, Settings. Nothing else.
-## Title, Play, Settings. No lore, no exposition.
+## MOTE, the game version, Play (or Continue / New Run when a run is saved), Settings, and one
+## line about the saved run. No lore, no exposition.
 
 var _root: Control
 var _play: Button
+var _new_run: VBoxContainer
+var _run_info: Label
 var version_label: Label
 var title_label: Label
 
@@ -38,7 +40,13 @@ func _ready() -> void:
 	box.add_child(spacer)
 	_play = UiStyle.button("Play", _on_play)
 	box.add_child(_play)
+	_new_run = UiStyle.confirm_button("New Run", "Start a new run? This run's progress and time are replaced (your best finish is kept).",
+			"Start over", _on_new_run)
+	box.add_child(_new_run)
 	box.add_child(UiStyle.button("Settings", _on_settings))
+	_run_info = UiStyle.note()
+	_run_info.name = "RunInfo"
+	box.add_child(_run_info)
 	# Product version only; build/OTA/SHA identities live in Diagnostics.
 	var ver := Label.new()
 	ver.name = "VersionLabel"
@@ -56,6 +64,17 @@ func _ready() -> void:
 
 
 func show_title() -> void:
+	var g := Game.inst
+	var saved := g.has_run_in_progress()
+	_play.text = "Continue" if saved else "Play"
+	_new_run.visible = saved
+	var lines: Array[String] = []
+	if saved:
+		lines.append(g.run_line())
+	if g.best_line() != "":
+		lines.append(g.best_line())
+	_run_info.text = "\n".join(lines)
+	_run_info.visible = not lines.is_empty()
 	visible = true
 	_play.grab_focus.call_deferred()
 
@@ -67,6 +86,11 @@ func hide_title() -> void:
 func _on_play() -> void:
 	Sfx.play("ui_tap", null, -6.0)
 	Game.inst.start_play()
+
+
+func _on_new_run() -> void:
+	Sfx.play("ui_tap", null, -6.0)
+	Game.inst.restart_experience()
 
 
 func _on_settings() -> void:

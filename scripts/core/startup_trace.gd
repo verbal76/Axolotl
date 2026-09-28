@@ -56,12 +56,21 @@ static func summary() -> String:
 			(base + usable) / 1000.0, "from app start" if process_offset_ms >= 0.0 else "from engine start"]
 
 
+## Called by the bootstrap's Diagnostics for the "Startup" section. It is the one game-layer text
+## hook runtime r5's Diagnostics has, so it also carries the game's own diagnostic sections
+## (run timer & completion) after the timeline.
 static func timeline_text(native: Array = []) -> String:
 	var L: Array[String] = []
 	if process_offset_ms >= 0.0:
 		L.append("  %9.0f ms  process started (Android/native startup before the engine clock)" % -process_offset_ms)
 	for m in timeline(native):
 		L.append("  %9.1f ms  %s" % [m[1] / 1000.0, m[0]])
+	# Found by group, not by class, so this file never depends on the game scripts compiling.
+	var tree := Engine.get_main_loop() as SceneTree
+	var g: Node = tree.get_first_node_in_group("mote_game") if tree != null else null
+	if g != null and g.has_method("run_diagnostics_text") and g.get("run_save") != null:
+		L.append("")
+		L.append(g.run_diagnostics_text())
 	return "\n".join(L)
 
 

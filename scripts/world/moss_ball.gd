@@ -392,6 +392,26 @@ func complete_event(zone_id: String, pos: Vector3, splat_deg := 11.0) -> void:
 	restoration_changed.emit(self)
 
 
+## Continuing a saved run: an event that was already restored. Same bookkeeping and healed moss
+## as complete_event, but instant and silent (no signals, sounds or growth animation).
+func restore_event(zone_id: String, pos: Vector3, splat_deg := 11.0) -> void:
+	var z: Dictionary = zones[zone_id]
+	z["done"] += 1
+	events_done += 1
+	add_heal(up_at(pos), splat_deg, 0.0)
+	restoration = float(events_done) / maxf(1.0, float(events_total))
+	if z["done"] >= z["total"] and not z["completed"]:
+		z["completed"] = true
+		add_heal(z["dir"], z["radius"] * 1.12, 0.0)
+		for c in crumbles:
+			if c.zone_id == zone_id:
+				c.restored = true
+				c.remove_meta("unsafe")
+	if events_done >= events_total and not completed:
+		completed = true
+		add_heal(Vector3.UP, 340.0, 0.0)
+
+
 func zone_health(zone_id: String) -> float:
 	var z: Dictionary = zones[zone_id]
 	return float(z["done"]) / maxf(1.0, float(z["total"]))

@@ -52,12 +52,22 @@ var loading: LoadingScreen
 var ready_done := false
 ## The stages the loading screen showed this launch.
 var loading_stages: Array[String] = []
+## The completion catalog (every completion-bearing thing, with stable ids) and this run's save
+## and clock. Only _earn() reports completion; only Completion computes percentages.
+var completion: Completion
+var run_save: RunSave
+var clock: RunClock
+var _autosave_t := 0.0
+## Continuing a run: the ball to resume on, until its bloom has settled (see _resume_position).
+var _resume_ball := -1
+var _save_dirty := false
 var stats := {"kills": 0, "motes": 0, "eaten": [0, 0, 0], "upgrades": 0, "deaths": 0, "extreme_landings": 0, "hard_landings": 0,
 		"travels": [], "connects": []}
 
 
 func _init() -> void:
 	inst = self
+	add_to_group("mote_game")
 
 
 ## Startup is staged so the first frame is Mote's loading screen, not a dark splash: the world
@@ -73,6 +83,7 @@ func _ready() -> void:
 	await _drawn()
 	StartupTrace.mark("first frame drawn: Mote loading screen visible")
 	await _build_world()
+	_open_run()
 	process_mode = Node.PROCESS_MODE_INHERIT
 	if Settings.skip_title or Settings.test_mode != "":
 		start_play(true)
@@ -147,6 +158,7 @@ func _build_world() -> void:
 		var b := Levels.build_ball(i, self)
 		b.event_restored.connect(_on_event_restored)
 		b.zone_completed.connect(_on_zone_completed)
+		b.restoration_changed.connect(_on_restoration_changed)
 		balls.append(b)
 		StartupTrace.mark("moss ball %d built" % (i + 1))
 	await _stage("Placing the axolotl and the vortices")
@@ -235,6 +247,9 @@ func _enter_title() -> void:
 
 func start_play(immediate := false) -> void:
 	state = "play"
+	run_save.note_identity(Boot.identity())
+	if clock.start():
+		save_run()
 	title.hide_title()
 	hud.visible_controls(true)
 	player.controls_enabled = true
@@ -246,16 +261,217 @@ func start_play(immediate := false) -> void:
 	Boot.report_ready()
 
 
+## New Run: a fresh run (world, completion, clock) straight into play. Records such as the best
+## finish time are kept.
 func restart_experience() -> void:
+	run_save.start_new_run()
+	run_save.save()
 	get_tree().paused = false
 	Settings.skip_title = true
 	get_tree().reload_current_scene()
 
 
 func return_to_title() -> void:
+	save_run()
 	get_tree().paused = false
 	Settings.skip_title = false
 	get_tree().reload_current_scene()
+
+
+# --- Run save, clock and completion --------------------------------------------------------
+
+static func run_save_path() -> String:
+	if Settings.test_args.has("run-save"):
+		return Settings.test_args["run-save"]
+	# Automated runs never touch the player's run save.
+	return "user://test_run.json" if Settings.test_mode != "" else RunSave.PATH
+
+
+## After the world is built: the catalog stamps ids on the world, the run save is opened (tests
+## start from a fresh one unless given their own file) and a run in progress is restored.
+func _open_run() -> void:
+	completion = Completion.build_from_world(balls, vortices)
+	var path := run_save_path()
+	if Settings.test_mode != "" and not Settings.test_args.has("run-save"):
+		RunSave.erase(path)
+	run_save = RunSave.open(path)
+	clock = RunClock.from_dict(run_save.run()["clock"])
+	_apply_run()
+	StartupTrace.mark("run save opened (%s)" % run_save.origin.get_slice(" (", 0))
+
+
+## True when there is a run to continue (the title then offers Continue and New Run).
+func has_run_in_progress() -> bool:
+	return clock.state != "not_started" or not run_save.earned().is_empty()
+
+
+## Restores a saved run's world: everything earned is put back silently (no effects, no signals),
+## then Gill is placed at the last bloom on the ball the run was on.
+func _apply_run() -> void:
+	var e := run_save.earned()
+	var world: Dictionary = run_save.run().get("world", {})
+	for b in balls:
+		for par in b.parasites:
+			if e.has(par.get_meta("completion_id", "")):
+				par.restore_cleared()
+				b.restore_event(par.zone_id, b.surface_point(par.spawn_dir))
+		for m in b.motes:
+			if e.has(m.get_meta("completion_id", "")):
+				m.restore_done()
+				b.restore_event(m.zone_id, b.surface_point(m.home_dir()))
+		for u in b.upgrades:
+			if e.has(u.get_meta("completion_id", "")):
+				u.taken = true
+				u.visible = false
+				player.max_health = mini(6, player.max_health + 1)
+		for bl in b.blooms:
+			if e.has(bl.get_meta("completion_id", "")):
+				bl.active = true
+				if bl.get_meta("completion_id") == world.get("checkpoint", ""):
+					checkpoint = bl
+		ball_disp[b.index] = b.restoration
+	for v in vortices:
+		if e.has(v.get_meta("completion_id", "")):
+			v.connected = true
+	player.restore_full()
+	if world.is_empty():
+		return
+	for k in world.get("prompts_done", []):
+		prompts_done[k] = true
+	_tut_framed = bool(world.get("tut_framed", false))
+	all_clear_done = bool(world.get("all_clear_shown", false))
+	var st: Dictionary = world.get("stats", {})
+	for k in st:
+		if stats.has(k):
+			stats[k] = st[k]
+	var total := 0.0
+	for b in balls:
+		total += b.restoration
+	g_target = total / balls.size()
+	g_disp = g_target
+	_resume_ball = clampi(int(world.get("ball", 0)), 0, balls.size() - 1)
+	var b := balls[_resume_ball]
+	player.place(b, b.surface_point(b.start_dir, 0.1))
+	audio.set_ball(_resume_ball, false)
+	aquarium.apply(g_disp)
+	_resume_position()
+
+
+## Places Gill where a continued run resumes: the last bloom on the ball the run was on (else
+## that ball's arrival point). Blooms settle onto the ground on their first frame, so until the
+## checkpoint bloom has, this waits (and no bloom is checked meanwhile).
+func _resume_position() -> void:
+	if _resume_ball < 0 or (checkpoint != null and not checkpoint.is_placed()):
+		return
+	var b := balls[_resume_ball]
+	player.place(b, b.surface_point(b.start_dir, 0.1))
+	var target := respawn_target()
+	player.place(target[0], target[1])
+	player.velocity = Vector3.ZERO
+	cam.snap_behind()
+	_last_pos = player.global_position
+	_resume_ball = -1
+
+
+func _capture_world() -> Dictionary:
+	return {"ball": player.ball.index, "checkpoint": checkpoint.get_meta("completion_id", "") if checkpoint else "",
+			"prompts_done": prompts_done.keys(), "tut_framed": _tut_framed, "all_clear_shown": all_clear_done,
+			"stats": stats.duplicate(true)}
+
+
+## Writes the run (clock, world, earned) now.
+func save_run() -> bool:
+	if run_save == null:
+		return false
+	run_save.run()["clock"] = clock.to_dict()
+	run_save.run()["world"] = _capture_world()
+	_save_dirty = false
+	_autosave_t = 0.0
+	return run_save.save()
+
+
+## Reports a completion id. Each id counts once; returns true the first time.
+func _earn(id: String) -> bool:
+	if id == "" or run_save.earned().has(id):
+		return false
+	run_save.earned()[id] = snappedf(clock.play_s, 0.001)
+	_save_dirty = true
+	return true
+
+
+func _on_restoration_changed(ball: MossBall) -> void:
+	if not ball.completed:
+		return
+	_earn(Completion.ball_restored_id(ball.index))
+	for b in balls:
+		if not b.completed:
+			return
+	_finish_run()
+
+
+## The game is finished: every moss ball fully restored. Freezes the run's finish time (once).
+func _finish_run() -> void:
+	if not clock.finish():
+		return
+	_earn(Completion.ENDING_ID)
+	run_save.record_finish(clock.finish_s, completion.percent(run_save.earned()), Completion.CATALOG_VERSION, Boot.identity())
+	save_run()
+
+
+func completion_percent() -> float:
+	return completion.percent(run_save.earned())
+
+
+## One line for the title and pause menu: "Run 12:34.56 · 43% complete" (or the finish time).
+func run_line() -> String:
+	var pct := completion.percent_display(run_save.earned())
+	if clock.is_finished():
+		return "Finished in %s  ·  %d%% complete" % [RunClock.format(clock.finish_s), pct]
+	return "Run time %s  ·  %d%% complete" % [RunClock.format(clock.run_s), pct]
+
+
+func best_line() -> String:
+	var best: float = run_save.records()["best_finish_s"]
+	return "Best finish %s" % RunClock.format(best) if best >= 0.0 else ""
+
+
+func _autosave(dt: float) -> void:
+	_autosave_t += dt
+	if (_save_dirty and _autosave_t > 1.0) or _autosave_t > 15.0:
+		save_run()
+
+
+func _notification(what: int) -> void:
+	if clock == null:
+		return
+	match what:
+		NOTIFICATION_APPLICATION_PAUSED, NOTIFICATION_APPLICATION_FOCUS_OUT:
+			clock.suspend()
+			save_run()
+		NOTIFICATION_APPLICATION_RESUMED, NOTIFICATION_APPLICATION_FOCUS_IN:
+			clock.resume()
+		NOTIFICATION_WM_CLOSE_REQUEST:
+			save_run()
+
+
+## Diagnostics section (shown through StartupTrace.timeline_text, the r5 bootstrap's hook).
+func run_diagnostics_text() -> String:
+	var L: Array[String] = []
+	var e := run_save.earned()
+	var rec := run_save.records()
+	L.append("Run timer & completion")
+	L.append("  Timer state: %s%s" % [clock.state, " (suspended)" if clock.suspended else ""])
+	L.append("  Run time: %s  (%.3f s)" % [RunClock.format(clock.run_s), clock.run_s])
+	L.append("  Play time incl. after finish: %s" % RunClock.format(clock.play_s))
+	L.append("  Finished: %s" % ("yes, frozen at %s (%.3f s)" % [RunClock.format(clock.finish_s), clock.finish_s] if clock.is_finished() else "no"))
+	L.append("  Best finish: %s" % (RunClock.format(rec["best_finish_s"]) if rec["best_finish_s"] >= 0.0 else "none yet"))
+	L.append("  Completion: %.2f%%  (%d of %d catalog entries; %d earned ids stored)" % [completion.percent(e),
+			completion.earned_known(e).size(), completion.size(), e.size()])
+	L.append("  Run id: %s   started with catalog v%d; catalog now v%d" % [run_save.run()["id"],
+			int(run_save.run()["catalog_version_at_start"]), Completion.CATALOG_VERSION])
+	L.append("  Run save: %s, format %d, timer model %d; %s" % [run_save.path, RunSave.FORMAT, RunClock.TIMER_MODEL, run_save.origin])
+	L.append("  Last save: %s" % run_save.last_save_result)
+	return "\n".join(L)
 
 
 func _unhandled_input(event: InputEvent) -> void:
@@ -270,6 +486,10 @@ func tank_flow() -> Vector3:
 # --- Main loop ---------------------------------------------------------------------------
 
 func _process(dt: float) -> void:
+	_resume_position()
+	clock.tick(dt, state == "play")
+	if state == "play":
+		_autosave(dt)
 	if state == "title":
 		_title_t += dt
 		var up := player.up
@@ -322,7 +542,9 @@ func _update_all_clear(dt: float) -> void:
 		# A quiet period to notice the restored aquarium before the message.
 		if _all_clear_wait > 12.0:
 			all_clear_done = true
-			hud.show_all_clear()
+			hud.show_all_clear("Finished in %s  ·  %d%% complete" % [RunClock.format(clock.finish_s), completion.percent_display(run_save.earned())]
+					if clock.is_finished() else "")
+			save_run()
 			Sfx.play("all_clear", null, -6.0)
 			all_clear.emit()
 
@@ -495,6 +717,7 @@ func _eat(p: Axolotl, f: Food) -> void:
 
 func parasite_killed(par: Parasite) -> void:
 	stats["kills"] += 1
+	_earn(par.get_meta("completion_id", ""))
 	var ball := par.ball
 	# Stolen vitality returns to the moss.
 	WaterFX.inst.sparkle(par.global_position, Color(0.45, 1.0, 0.45, 0.9), 22, 2.2, 0.08, 1.2)
@@ -505,6 +728,7 @@ func parasite_killed(par: Parasite) -> void:
 
 func mote_restored(m: Mote) -> void:
 	stats["motes"] += 1
+	_earn(m.get_meta("completion_id", ""))
 	WaterFX.inst.sparkle(m.global_position, Color(0.5, 1.0, 0.7, 0.9), 18, 1.6, 0.07, 1.2)
 	Sfx.play("restore", m.global_position)
 	m.ball.complete_event(m.zone_id, m.global_position, 11.0)
@@ -512,6 +736,7 @@ func mote_restored(m: Mote) -> void:
 
 func upgrade_collected(u: Node) -> void:
 	stats["upgrades"] += 1
+	_earn(u.get_meta("completion_id", ""))
 	player.add_max_health()
 	player.model.happy_t = 0.0
 	WaterFX.inst.sparkle(player.body_center(), Color(0.4, 1.0, 0.9, 1.0), 30, 2.0, 0.08, 1.4)
@@ -548,13 +773,17 @@ func _on_zone_completed(ball: MossBall, zone_id: String) -> void:
 # --- Checkpoints / regeneration ----------------------------------------------------------
 
 func _check_blooms() -> void:
-	if player.state != "normal":
+	if player.state != "normal" or _resume_ball >= 0:
 		return
 	for bl in player.ball.blooms:
+		if not bl.is_placed():
+			continue
 		if bl.global_position.distance_to(player.body_center()) < 1.35:
 			if checkpoint != bl:
 				bl.activate()
 				checkpoint = bl
+				_earn(bl.get_meta("completion_id", ""))
+				save_run()
 				Settings.haptic("tap")
 
 
@@ -583,6 +812,7 @@ func _check_vortex_connections() -> void:
 		if not v.connected and v.ball_a.restoration >= Vortex.CONNECT_AT - 0.0001:
 			v.connected = true
 			stats["connects"].append(v.ball_a.index)
+			_earn(v.get_meta("completion_id", ""))
 			_pending_connect.append(v)
 	# The connection shot waits for any running cinematic (e.g. regeneration) to finish.
 	if not _pending_connect.is_empty() and cinematic == "" and player.state == "normal":

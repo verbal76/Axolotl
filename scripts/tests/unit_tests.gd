@@ -14,7 +14,11 @@ func run(runner) -> void:
 	p.use_bot_input = true
 	await t.seconds(0.5)
 	var only: String = Settings.test_args.get("only", "")
-	for name_ in ["_test_startup", "_test_ota_and_version", "_test_mesh_winding", "_test_terrain", "_test_terrain_grounded", "_test_no_floating_platforms", "_test_parasite_locomotion", "_test_placements", "_test_tutorial_route", "_test_sphere_walk", "_test_jump_and_burst", "_test_coyote_and_buffer", "_test_swipe_direction_and_stages", "_test_hard_landing", "_test_food", "_test_food_reach", "_test_darter_and_burrower", "_test_food_repopulates", "_test_motes", "_test_checkpoint_and_regen", "_test_crumble", "_test_restoration_continuity", "_test_vortex", "_test_current", "_test_canopy", "_test_canopy_plain_jumps", "_test_music", "_test_upgrades", "_test_ui", "_test_all_clear"]:
+	for name_ in ["_test_startup", "_test_ota_and_version", "_test_mesh_winding", "_test_terrain", "_test_terrain_grounded", "_test_no_floating_platforms", "_test_parasite_locomotion", "_test_placements", "_test_tutorial_route", "_test_sphere_walk", "_test_jump_and_burst", "_test_coyote_and_buffer", "_test_swipe_direction_and_stages", "_test_hard_landing", "_test_food", "_test_food_reach", "_test_darter_and_burrower", "_test_food_repopulates", "_test_motes", "_test_checkpoint_and_regen", "_test_crumble", "_test_restoration_continuity", "_test_vortex", "_test_current", "_test_canopy", "_test_canopy_plain_jumps", "_test_music", "_test_run_clock", "_test_completion_catalog", "_test_run_save_file", "_test_run_timer_live", "_test_run_continue", "_phase_continue_write", "_phase_continue_read", "_test_upgrades", "_test_ui", "_test_all_clear"]:
+		# "_phase_*" tests are halves of a relaunch test: they run only when asked for by name
+		# (in a child process started by _test_run_continue).
+		if name_.begins_with("_phase") and only != name_:
+			continue
 		if only == "" or name_.contains(only):
 			await call(name_)
 
@@ -51,6 +55,314 @@ func _test_startup() -> void:
 			net_before = true
 	t.check("startup_no_ota_check_before_usable", usable >= 0.0 and not net_before and not Boot.auto_check("start"), "")
 	t.check("startup_summary_for_pause_menu", StartupTrace.summary().begins_with("Last launch: Mote on screen after"), StartupTrace.summary())
+
+
+# --- run timer, completion, run save ----------------------------------------------------
+
+## Pinned: the current game's completion ids (sha256 of the ids in catalog order). A change means
+## completion content changed: bump Completion.CATALOG_VERSION, update docs/COMPLETION.md, re-pin.
+const CATALOG_IDS_SHA := "a5661d7c57318685ea46a8af0f85f991d064b7db751ce071eb95d5d1fc0ce430"
+const CATALOG_SIZE := 87
+
+
+## The timer's rules on a bare clock: start, what counts, background, finish, frame rates.
+func _test_run_clock() -> void:
+	var c := RunClock.new()
+	c.tick(1.0, true)
+	t.check("timer_new_run_starts_at_zero_not_started", c.state == "not_started" and c.run_s == 0.0, "")
+	t.check("timer_starts_once", c.start() and not c.start() and c.state == "running", "")
+	for i in 60:
+		c.tick(1.0 / 60.0, true)
+	var one := c.run_s
+	for i in 60:
+		c.tick(1.0 / 60.0, false)
+	t.check("timer_counts_active_play_only", is_equal_approx(one, 1.0) and is_equal_approx(c.run_s, 1.0), "%.4f then %.4f" % [one, c.run_s])
+	c.suspend()
+	c.tick(0.2, true)
+	c.resume()
+	c.tick(30.0, true)
+	c.tick(0.1, true)
+	t.check("timer_background_not_counted", is_equal_approx(c.run_s, 1.1), "%.4f (backgrounded 0.2 s, 30 s resume frame discarded)" % c.run_s)
+	c.tick(5.0, true)
+	t.check("timer_frame_cap", is_equal_approx(c.run_s, 1.1 + RunClock.MAX_FRAME_S), "%.4f" % c.run_s)
+	var before := c.run_s
+	t.check("timer_finish_freezes", c.finish() and c.finish_s == before and not c.finish(), "%.3f" % c.finish_s)
+	for i in 120:
+		c.tick(1.0 / 60.0, true)
+	t.check("timer_after_finish_frozen", c.finish_s == before and c.run_s == before and c.shown_s() == before and c.play_s > before + 1.9,
+			"finish %.3f, play %.3f" % [c.finish_s, c.play_s])
+	var c2 := RunClock.from_dict(JSON.parse_string(JSON.stringify(c.to_dict(), "", true, true)))
+	t.check("timer_survives_serialisation", c2.state == "finished" and c2.finish_s == c.finish_s and c2.play_s == c.play_s, "")
+	# Same simulated play at different frame rates: same time (to within one frame).
+	var times: Array[float] = []
+	for fps in [30, 60, 144]:
+		var k := RunClock.new()
+		k.start()
+		for i in 600 * fps / 60:
+			k.tick(1.0 / fps, true)
+		times.append(k.run_s)
+	t.check("timer_same_across_frame_rates", absf(times[0] - 10.0) < 1e-6 and absf(times[1] - 10.0) < 1e-6 and absf(times[2] - 10.0) < 1e-6, str(times))
+	# Never the wall clock: the timer code reads no clock at all, and the game feeds it frame deltas.
+	var src := FileAccess.get_file_as_string("res://scripts/core/run_clock.gd")
+	var clean := not src.contains("Time.") and not src.contains("OS.get_") and not src.contains("unix")
+	var gsrc := FileAccess.get_file_as_string("res://scripts/core/game.gd")
+	t.check("timer_wall_clock_independent", clean and gsrc.contains("clock.tick(dt, state == \"play\")"), "")
+	t.check("timer_format_long_runs", RunClock.format(0.0) == "0.00" and RunClock.format(65.432) == "1:05.43" and RunClock.format(3723.456) == "1:02:03.45"
+			and RunClock.format(360000.0) == "100:00:00.00", "%s %s %s" % [RunClock.format(65.432), RunClock.format(3723.456), RunClock.format(360000.0)])
+
+
+## The catalog: ids, percentages, finishing vs 100%, duplicates, growth.
+func _test_completion_catalog() -> void:
+	var cat: Completion = g.completion
+	var ids := "\n".join(cat.order)
+	var sha := ids.sha256_text()
+	t.check("completion_ids_unique_and_pinned", cat.size() == CATALOG_SIZE and cat.entries.size() == cat.order.size() and sha == CATALOG_IDS_SHA,
+			"%d ids, sha %s" % [cat.size(), sha])
+	var share := 0.0
+	for c in Completion.CATEGORIES:
+		share += Completion.CATEGORIES[c][1]
+	t.check("completion_shares_sum_to_100", is_equal_approx(share, 100.0), "%.1f" % share)
+	t.check("completion_zero", cat.percent({}) == 0.0 and cat.remaining({}).size() == cat.size(), "")
+	var half := {}
+	for id in cat.order.slice(0, 20):
+		half[id] = 1
+	var pc := cat.percent(half)
+	t.check("completion_partial", pc > 0.0 and pc < 100.0 and cat.remaining(half).size() == cat.size() - 20, "%.2f%%" % pc)
+	# Finishing (every ball restored) without the caves and blooms: below 100%.
+	var fin := {}
+	for id in cat.order:
+		if cat.entries[id]["category"] in ["restoration", "milestones"]:
+			fin[id] = 1
+	t.check("completion_finished_below_100", is_equal_approx(cat.percent(fin), 65.0) and cat.percent_display(fin) == 65, "%.2f%%" % cat.percent(fin))
+	var all := {}
+	for id in cat.order:
+		all[id] = 1
+	var all_but := all.duplicate()
+	all_but.erase(cat.order[cat.order.size() - 1])
+	t.check("completion_exactly_100", cat.percent(all) == 100.0 and cat.remaining(all).is_empty() and cat.percent(all_but) < 100.0
+			and cat.percent_display(all_but) <= 99, "all %.2f, all but one %.2f" % [cat.percent(all), cat.percent(all_but)])
+	var extra := all.duplicate()
+	extra["b9.future.thing"] = 1
+	t.check("completion_never_above_100", cat.percent(extra) == 100.0 and cat.earned_known(extra).size() == cat.size(), "")
+	# Duplicates: earning an id twice counts once (on a copy of this run's earned ids).
+	var saved := g.run_save.earned().duplicate()
+	var id0: String = cat.order[0]
+	g.run_save.earned().erase(id0)
+	var n := g.run_save.earned().size()
+	var first := g._earn(id0)
+	var second := g._earn(id0)
+	t.check("completion_duplicate_counts_once", first and not second and g.run_save.earned().size() == n + 1, "")
+	g.run_save.run()["earned"] = saved
+	# Growth: a later OTA adds content. The denominator grows, the percentage may drop, nothing earned is lost.
+	var grown := Completion.build_from_world(g.balls, g.vortices)
+	grown.add("b4.meadow.mote.0", "restoration", "Mote returned")
+	grown.add("b4.cave.0", "caves", "Hidden cave")
+	var was := cat.percent(all)
+	var now := grown.percent(all)
+	t.check("completion_growth_changes_denominator", grown.size() == cat.size() + 2 and now < was and now > 90.0
+			and grown.earned_known(all).size() == cat.size() and grown.remaining(all) == ["b4.meadow.mote.0", "b4.cave.0"], "%.2f%% -> %.2f%%" % [was, now])
+	# Every completion-bearing node carries its id.
+	var stamped := true
+	for b in g.balls:
+		for n2 in b.parasites + b.motes + b.upgrades + b.blooms:
+			stamped = stamped and cat.has(n2.get_meta("completion_id", ""))
+	t.check("completion_ids_on_world", stamped, "")
+
+
+## The run save file: new, reload, migration, damage, newer formats, best time, new run.
+func _test_run_save_file() -> void:
+	var dir := "user://run_save_test"
+	DirAccess.make_dir_recursive_absolute(dir)
+	var path := dir.path_join("run.json")
+	RunSave.erase(path)
+	# Existing players: settings.cfg only, no run file. Nothing is invented.
+	var rs := RunSave.open(path)
+	t.check("run_save_migration_from_no_progress", rs.origin.begins_with("new") and rs.earned().is_empty() and rs.run()["clock"]["state"] == "not_started"
+			and rs.records()["best_finish_s"] < 0.0 and (rs.records()["finishes"] as Array).is_empty()
+			and str(rs.data["history"].get("migration", "")).begins_with("none"), rs.origin)
+	rs.earned()["b1.tut.parasite.0"] = 1.5
+	var ck := RunClock.new()
+	ck.start()
+	ck.tick(0.2, true)
+	rs.run()["clock"] = ck.to_dict()
+	t.check("run_save_writes", rs.save() and FileAccess.file_exists(path), rs.last_save_result)
+	var rs2 := RunSave.open(path)
+	t.check("run_save_reloads", rs2.origin == "loaded" and rs2.earned().has("b1.tut.parasite.0") and is_equal_approx(float(rs2.run()["clock"]["run_s"]), 0.2)
+			and rs2.run()["id"] == rs.run()["id"], rs2.origin)
+	# Best time: kept across runs, only improved by a faster finish.
+	rs2.record_finish(100.0, 70.0, 1, {})
+	rs2.start_new_run()
+	rs2.record_finish(90.0, 80.0, 1, {})
+	rs2.start_new_run()
+	rs2.record_finish(120.0, 100.0, 1, {})
+	t.check("run_save_best_time", rs2.records()["best_finish_s"] == 90.0 and (rs2.records()["finishes"] as Array).size() == 3, str(rs2.records()["best_finish_s"]))
+	rs2.start_new_run()
+	t.check("run_save_new_run_keeps_records", rs2.earned().is_empty() and rs2.records()["best_finish_s"] == 90.0, "")
+	rs2.save()
+	# A damaged file falls back to the backup; the damaged file is never deleted silently.
+	var f := FileAccess.open(path, FileAccess.WRITE)
+	f.store_string("{ not json")
+	f.close()
+	var rs3 := RunSave.open(path)
+	t.check("run_save_damaged_uses_backup", rs3.origin.begins_with("recovered from backup") and rs3.earned().has("b1.tut.parasite.0"), rs3.origin)
+	# A file from a newer format is never overwritten.
+	var newer := {"format": RunSave.FORMAT + 1, "run": {"earned": {"x": 1}}, "records": {}}
+	f = FileAccess.open(path, FileAccess.WRITE)
+	f.store_string(JSON.stringify(newer))
+	f.close()
+	var rs4 := RunSave.open(path)
+	var wrote := rs4.save()
+	var still: Dictionary = JSON.parse_string(FileAccess.get_file_as_string(path))
+	t.check("run_save_newer_format_untouched", rs4.read_only and not wrote and int(still["format"]) == RunSave.FORMAT + 1, rs4.origin)
+	# Older/partial data is completed conservatively: nothing earned is dropped.
+	var old := RunSave.migrate({"format": 0, "run": {"earned": {"b1.bloom.0": 3.0}}})
+	t.check("run_save_migrates_partial_data", old["format"] == RunSave.FORMAT and (old["run"]["earned"] as Dictionary).has("b1.bloom.0")
+			and old["run"].has("clock") and old["records"]["best_finish_s"] < 0.0, "")
+	# OTAs never touch the run save: the OTA client only uses user://ota.
+	var boot_src := FileAccess.get_file_as_string("res://scripts/boot/ota_core.gd") + FileAccess.get_file_as_string("res://scripts/boot/boot.gd")
+	t.check("run_save_outside_ota_storage", not boot_src.contains("run.json") and RunSave.PATH == "user://run.json", "")
+	RunSave.erase(path)
+	for x in DirAccess.get_files_at(dir):
+		DirAccess.remove_absolute(dir.path_join(x))
+
+
+## The live game: the run started at play; play counts; the pause menu and background do not;
+## saving writes the clock; Diagnostics and the UI show it.
+func _test_run_timer_live() -> void:
+	t.check("timer_started_at_play", g.clock.state in ["running", "finished"] and g.state == "play", g.clock.state)
+	var a := g.clock.run_s
+	await t.seconds(1.0)
+	var b := g.clock.run_s
+	t.check("timer_advances_in_play", absf(b - a - 1.0) < 0.05, "%.3f s for 1 s of play" % (b - a))
+	g.pause_menu.open()
+	await t.seconds(1.0)
+	var c := g.clock.run_s
+	g.pause_menu.close()
+	t.check("timer_paused_by_pause_menu", c == b, "%.3f -> %.3f" % [b, c])
+	await t.frames(2)
+	g._notification(Node.NOTIFICATION_APPLICATION_PAUSED)
+	var d := g.clock.run_s
+	await t.seconds(1.0)
+	var e := g.clock.run_s
+	g._notification(Node.NOTIFICATION_APPLICATION_RESUMED)
+	await t.seconds(0.5)
+	t.check("timer_paused_in_background", e == d and g.clock.run_s > e, "%.3f -> %.3f while backgrounded" % [d, e])
+	var on_disk: Dictionary = JSON.parse_string(FileAccess.get_file_as_string(g.run_save.path))
+	t.check("run_saved_when_backgrounded", is_equal_approx(float(on_disk["run"]["clock"]["run_s"]), d), "%.3f on disk" % float(on_disk["run"]["clock"]["run_s"]))
+	var diag := StartupTrace.timeline_text()
+	t.check("diagnostics_show_run_timer", diag.contains("Run timer & completion") and diag.contains("Timer state: running") and diag.contains("Completion:")
+			and diag.contains("format %d" % RunSave.FORMAT), "")
+	Settings.show_run_timer = true
+	await t.frames(2)
+	var shown := g.hud.timer_label.visible and g.hud.timer_label.text.contains(".")
+	Settings.show_run_timer = false
+	await t.frames(2)
+	t.check("hud_run_timer_toggle", shown and not g.hud.timer_label.visible, "")
+	g.pause_menu.open()
+	await t.frames(2)
+	var pm := g.pause_menu
+	var ok: bool = pm._run_time.text.begins_with("Run time") and pm._run_time.text.contains("% complete") and pm._run_detail.text.contains("Game finished: not yet")
+	g.pause_menu.close()
+	t.check("pause_menu_shows_run", ok, pm._run_time.text)
+	# The title offers Continue and New Run for a saved run, and New Run asks first.
+	g.title.show_title()
+	var ask: Button = g.title._new_run.find_child("Ask", true, false)
+	var titled: bool = g.title._play.text == "Continue" and g.title._new_run.visible and g.title._run_info.text.begins_with("Run time")
+	ask.pressed.emit()
+	var asks: bool = not ask.visible and (g.title._new_run.find_child("Yes", true, false) as Button).is_visible_in_tree()
+	g.title.hide_title()
+	t.check("title_continue_and_new_run", titled and asks and g.state == "play", g.title._run_info.text)
+
+
+## Relaunch: a child process plays and saves, a second child continues the same run.
+func _test_run_continue() -> void:
+	var path := "user://continue_test.json"
+	RunSave.erase(path)
+	# Same engine, same game (a project folder or an exported pack), headless, fixed 60 fps.
+	var base: Array = ["--headless", "--fixed-fps", "60", "--max-fps", "0"]
+	var args := OS.get_cmdline_args()
+	var pack := args.find("--main-pack")
+	if pack >= 0 and pack + 1 < args.size():
+		base += ["--main-pack", args[pack + 1]]
+	else:
+		base += ["--path", ProjectSettings.globalize_path("res://")]
+	var outs := []
+	for phase in ["_phase_continue_write", "_phase_continue_read"]:
+		var out := []
+		var cmd: Array = base + ["--", "--test=unit", "--only=" + phase, "--run-save=" + path, "--out=" + ProjectSettings.globalize_path("user://continue_out")]
+		var code := OS.execute(OS.get_executable_path(), cmd, out, true)
+		outs.append(code)
+		if code != 0:
+			t.log_line("%s exited %d; output:\n%s" % [phase, code, str(out[0]).right(3000)])
+		for line in str(out[0]).split("\n"):
+			if line.begins_with("[TEST] PASS") or line.begins_with("[TEST] FAIL"):
+				var parts := line.substr(7).split(" ", false, 2)
+				t.check("relaunch/" + parts[1], parts[0] == "PASS", parts[2] if parts.size() > 2 else "")
+	t.check("relaunch_children_ran", outs == [0, 0], str(outs))
+	RunSave.erase(path)
+
+
+## First launch: play a little, clear things, find a bloom and a cave, then save (as quitting does).
+func _phase_continue_write() -> void:
+	var b := g.balls[0]
+	var par: Parasite = b.parasites[0]
+	par.hit_cd = 0.0
+	par.hit(par.hp, par.global_position)
+	var m: Mote = b.motes[0]
+	place(0, 0, 0)
+	p.global_position = m.global_position
+	m.capture()
+	await t.seconds(1.5)
+	# Clearing the tutorial patch plays its framing shot; blooms are found in normal play.
+	var waited := 0
+	while (g.cinematic != "" or waited < 90) and waited < 900:
+		await t.frames(1)
+		waited += 1
+	var bl: Bloom = b.blooms[1]
+	place_at(0, bl.global_position + b.up_at(bl.global_position) * 0.3, p.facing)
+	await t.seconds(0.3)
+	var u = g.balls[1].upgrades[0]
+	u.taken = true
+	g.upgrade_collected(u)
+	await t.seconds(1.0)
+	g.save_run()
+	var st := {"earned": g.run_save.earned().keys(), "run_s": g.clock.run_s, "r0": b.restoration, "checkpoint": bl.get_meta("completion_id"),
+			"max_hp": p.max_health, "par": par.get_meta("completion_id"), "mote": m.get_meta("completion_id"), "run_id": g.run_save.run()["id"]}
+	var f := FileAccess.open(g.run_save.path + ".expect", FileAccess.WRITE)
+	f.store_string(JSON.stringify(st))
+	f.close()
+	t.check("write_earned_progress", st["earned"].size() >= 4 and b.restoration > 0.0 and g.checkpoint == bl, str(st["earned"]))
+
+
+## Second launch (as after quitting, or after an OTA restart): the same run continues.
+func _phase_continue_read() -> void:
+	var st: Dictionary = JSON.parse_string(FileAccess.get_file_as_string(g.run_save.path + ".expect"))
+	var b := g.balls[0]
+	var earned: Array = g.run_save.earned().keys()
+	var same := earned.size() == (st["earned"] as Array).size()
+	for id in st["earned"]:
+		same = same and earned.has(id)
+	t.check("read_same_run_and_earned", g.run_save.run()["id"] == st["run_id"] and same and g.has_run_in_progress(), "%s; saved %s; now %s" % [g.run_save.origin, st["earned"], earned])
+	t.check("read_timer_continues", g.clock.run_s >= float(st["run_s"]) and g.clock.run_s < float(st["run_s"]) + 1.0,
+			"saved %.3f, now %.3f" % [float(st["run_s"]), g.clock.run_s])
+	t.check("read_restoration_restored", is_equal_approx(b.restoration, float(st["r0"])) and is_equal_approx(g.ball_disp[0], b.restoration), "%.3f" % b.restoration)
+	var par: Parasite
+	var mote: Mote
+	for x in b.parasites:
+		if x.get_meta("completion_id") == st["par"]:
+			par = x
+	for x in b.motes:
+		if x.get_meta("completion_id") == st["mote"]:
+			mote = x
+	t.check("read_cleared_things_stay_cleared", par != null and not par.is_alive() and not par.visible and mote != null and mote.state == "done" and not mote.visible, "")
+	t.check("read_cave_and_health", g.balls[1].upgrades[0].taken and p.max_health == int(st["max_hp"]), "max hp %d" % p.max_health)
+	t.check("read_resumes_at_last_bloom", g.checkpoint != null and g.checkpoint.get_meta("completion_id") == st["checkpoint"]
+			and p.ball == b and p.global_position.distance_to(g.checkpoint.respawn_point()) < 1.0,
+			"checkpoint %s (saved %s), ball %d, %.2f m from its respawn point" % [g.checkpoint.get_meta("completion_id") if g.checkpoint else "none", st["checkpoint"],
+			p.ball.index, p.global_position.distance_to(g.checkpoint.respawn_point()) if g.checkpoint else -1.0])
+	var before := g.clock.run_s
+	await t.seconds(1.0)
+	t.check("read_timer_runs_on", g.clock.run_s > before + 0.9, "")
 
 
 # --- music -------------------------------------------------------------------------------
@@ -1530,6 +1842,11 @@ func _test_all_clear() -> void:
 	for b in g.balls:
 		done = done and b.completed and is_equal_approx(b.restoration, 1.0)
 	t.check("all_three_balls_reach_100", done, "%.2f %.2f %.2f" % [g.balls[0].restoration, g.balls[1].restoration, g.balls[2].restoration])
+	# Finishing: the run's time froze on the frame the last ball was restored.
+	var fin: float = g.clock.finish_s
+	var rec: Dictionary = g.run_save.run()["finish"]
+	t.check("run_finished_when_all_balls_restored", g.clock.is_finished() and fin > 0.0 and g.run_save.earned().has(Completion.ENDING_ID)
+			and float(rec.get("finish_s", -1.0)) == fin and g.run_save.records()["best_finish_s"] == fin, "finish %s, %.2f%%" % [RunClock.format(fin), g.completion_percent()])
 	var reached := -1.0
 	var shown := -1.0
 	var el := 0.0
@@ -1544,4 +1861,8 @@ func _test_all_clear() -> void:
 	t.check("all_clear_after_quiet_period", reached >= 0.0 and shown - reached >= 11.0, "g reached 1 at %.1fs, ALL CLEAR at %.1fs" % [reached, shown])
 	await t.seconds(10.0)
 	t.check("free_roam_after_all_clear", p.controls_enabled and g.state == "play" and g.hud.all_clear_label.modulate.a < 0.05, "")
+	t.check("finish_time_frozen_after_more_play", g.clock.finish_s == fin and g.clock.shown_s() == fin and g.clock.play_s > fin + 20.0
+			and g.hud.finish_label.text.begins_with("Finished in " + RunClock.format(fin)), "%s, play %.1f s" % [g.hud.finish_label.text, g.clock.play_s])
+	var on_disk: Dictionary = JSON.parse_string(FileAccess.get_file_as_string(g.run_save.path))
+	t.check("finish_saved", on_disk["run"]["clock"]["state"] == "finished" and float(on_disk["run"]["clock"]["finish_s"]) == fin, "")
 	t.check("aquarium_fully_clean", is_equal_approx(g.aquarium.clean, 1.0) and g.env.fog_density < 0.003, "fog %.4f" % g.env.fog_density)

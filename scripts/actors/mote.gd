@@ -84,6 +84,18 @@ func is_available() -> bool:
 	return state == "wander"
 
 
+## The ground direction this mote belongs to (its restoration spot).
+func home_dir() -> Vector3:
+	return _dir
+
+
+## Continuing a saved run: this mote was already returned to the moss. Gone at once, no effects.
+func restore_done() -> void:
+	state = "done"
+	intensity = 0.0
+	visible = false
+
+
 func light_intensity() -> float:
 	return intensity
 

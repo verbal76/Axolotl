@@ -164,6 +164,14 @@ func is_alive() -> bool:
 	return hp > 0
 
 
+## Continuing a saved run: this parasite was already cleared. Gone at once, no effects.
+func restore_cleared() -> void:
+	hp = 0
+	state = "gone"
+	visible = false
+	set_physics_process(false)
+
+
 func head_pos() -> Vector3:
 	return global_position
 
