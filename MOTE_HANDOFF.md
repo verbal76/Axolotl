@@ -527,7 +527,14 @@ These are implemented but lack automated evidence. They are **not** unimplemente
     - Ball 1: walk through the short grass (a small stir); the medium meadow north-east of the start (it parts round him and closes behind); the tall reed bed in the southern hills (he mostly disappears; follow the moving reeds). Whip the tail in the reeds (a wide sideways sweep); stop (the reeds settle); move again (the disturbance resumes). Watch the large parasite move through the reeds.
     - Grass sways gently on its own, not in unison. Balls 2 and 3's long grass is in stands with clearings.
 
-Record results in the ledger (O-19, A-05, R-01, R-14, R-19, S-03, S-06, S-14, F-07, F-09, P-01, P-03, P-06, M-01, M-03, E1-01, E1-07, E1-09, E2-01, E2-02, E2-04, E2-05, E3-01, E3-02, E3-04) only with the owner's evidence.
+13. **After dev-000021 is active (Expansion 4):**
+    - Four new moss balls: from Mossy Meadow a new vortex leads to Terrace Steps (and from there to Hollow Grotto); from Current Hollows to Reed Canyon; from Giant Stems to Canopy Spire. Each opens when the ball it leaves is 70% restored, like the originals.
+    - Giant Stems (your screenshot): every jungle stem now has a small leaf about knee height to start and leaves spiralling up, each one plain jump, all the way to its big leaves. Try two or three stems to the top.
+    - Terrace Steps: climb the three terraces to the crown; walk up the arch; walk the ridge. Reed Canyon: tall reeds on the canyon floor; climb the north crest and cross the natural bridge. Canopy Spire: the spiral to the crown, and the stacked shelves. Hollow Grotto: along the low ridge to the high shelf; two grottoes.
+    - The new caves hold pearls (they refill health). Ball 2's thin kelp stalks now have drooping leaves (decoration).
+    - Finishing now needs all seven balls; the pause menu's completion shows the larger catalog (a finished run's time is kept).
+
+Record results in the ledger (O-19, A-05, R-01, R-14, R-19, S-03, S-06, S-14, F-07, F-09, P-01, P-03, P-06, M-01, M-03, E1-01, E1-07, E1-09, E2-01, E2-02, E2-04, E2-05, E3-01, E3-02, E3-04, E4-01..E4-05) only with the owner's evidence.
 
 ## 17. Repository isolation
 

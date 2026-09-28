@@ -26,7 +26,7 @@ fully restored** (owner decision).
 
 - Topology is `Levels.LINKS` (`[a, b]` pairs, one vortex each). `Levels.CENTERS`, `RADII`, `NAMES` and
   `PALETTES` hold one entry per ball.
-- A vortex opens when the ball it leaves is fully restored. The original two vortices are unchanged,
+- A vortex opens when the ball it leaves is 70% restored (`Vortex.CONNECT_AT`). The original two vortices are unchanged,
   so the original route plays exactly as before.
 - A ball can now have several outgoing vortices (`MossBall.vortices`); `vortex_out` stays the
   original chain's for anything that used it.
@@ -177,3 +177,27 @@ In `scripts/tests/unit_tests.gd`:
 - The relaunch test (`_test_run_continue`) saves on Hollow Grotto and continues there.
 - The playthrough bot follows the original route, then travels to balls 4, 7, 5 and 6 in turn and
   restores each fully, climbing every route and entering every cave.
+
+## Performance
+
+Measured with `--test=shots --only=perf` under a software Vulkan renderer: the same views before
+(dev-000020's source, `7c3f082`) and after, two runs each, averaged, the axolotl walking during every
+measurement. The frame times are a relative proxy, not phone numbers.
+
+| View | Before | After | Notes |
+|---|---|---|---|
+| Ball 1 tutorial | 136 ms, 235 draw calls, 333k tris | 147 ms, 303 draw calls, 455k tris | the new balls are visible across the tank |
+| Ball 1 meadow | 89 ms | 97 ms | |
+| Ball 1 reed bed | 79 ms | 94 ms | |
+| Ball 2 east | 75 ms | 84 ms | |
+| Ball 2 mesa side | 66 ms | 70 ms | |
+| Ball 3 jungle | 83 ms, 335 draw calls | 87 ms, 240 draw calls | ladder leaves are one MultiMesh per stem |
+| Ball 1 cave | 87 ms | 86 ms | |
+| Ball 4 terraces / 5 bridge / 6 spire / 7 high shelf / 7 grotto | — | 50 / 77 / 40 / 60 / 70 ms | all within the range of the original views |
+
+- Video memory: 55.4 → 68.6 MB (+13 MB, the four balls' meshes and collision).
+- World build (headless): about 1.1 s → 1.8 s. Rendered startup to the first world frame is
+  unchanged within noise (5.6–6.2 s before, 6.0–6.2 s after, software renderer).
+- Only the current ball runs its creatures, food and vegetation wake; the new balls add no per-frame
+  work while the axolotl is elsewhere.
+

@@ -312,6 +312,26 @@ Design and measurements: `docs/VEGETATION.md`.
 | E3-08 | Mobile performance measured with movers | I+V | instancing, bounds early-out, reduced segments and visibility ranges | `docs/VEGETATION.md` Performance |
 | E3-09 | Ships by OTA, no APK | I+V | game layer only; runtime r5 | dev-000020 (OTA publish #20, source `2206aea`, PCK `c0c6a736…26374b`, 8,832,576 bytes, baked, save schema 1): signature (pinned key), hash, size and inspector verified from public URLs; a b22 client downloads and stages it; `_test_vegetation` passes run from the pack; Build & Verify #28 green with no APK build |
 
+## E4 — Expansion 4: world expansion, more moss balls + expanded terrain set (owner, 2026-09-28)
+
+Design, audit and measurements: `docs/WORLD.md`; catalog: `docs/COMPLETION.md` (version 2).
+Owner decisions: new areas branch off the chain; finishing needs every ball restored; round moss balls
+plus big formations; four new areas.
+
+| ID | Requirement | Status | Implementation | Evidence |
+|---|---|---|---|---|
+| E4-01 | Four new moss balls, each distinct (size, palette, silhouette, vegetation, landmark), branching off the original chain | I+V / needs phone | `Levels` CENTERS/RADII/NAMES/PALETTES/LINKS; `WorldExpansion` (Terrace Steps, Reed Canyon, Canopy Spire, Hollow Grotto); vortices 1→4, 2→5, 3→6, 4→7 | `world_has_seven_balls`, `new_balls_distinct`; rendered shots |
+| E4-02 | Expanded terrain vocabulary: ridges, terraces, arch, natural bridge, shelves, canopy spiral, stem ladders | I+V / needs phone | `LevelBuilder` ridge/terrace/arch/bridge/shelf/canopy_spiral/ladder_stem; `MeshLib.sweep`/`shelf` | `terrain_grounded`, `no_floating_platforms`, `mesh_winding` |
+| E4-03 | Vertical and canopy routes, every elevated destination reachable, readable from the ground | I+V / needs phone | `route` hints (95 climbs incl. audit-only legacy climbs) | `routes_reachable_by_design`, `climbs_start_with_a_plain_step_from_the_ground`, `elevated_platforms_all_on_climbs`, `decor_leaves_do_not_look_like_platforms`, `elevated_motes_have_routes`, `climbs_with_plain_jumps`, `jungle_ladders_climbed_with_plain_jumps` |
+| E4-04 | Phone report (Giant Stems): leaf platforms with no visible way up | I+V / needs phone | all 70 jungle stems are ladders from 0.9 m (949 leaves), outline collision, spaced 9 m, bases kept clear; bent stems collide along the bend; ball 2 kelp-top leaves droop | the tests in E4-03; shots `climb_*`, `b3look_*` |
+| E4-05 | Cave expansion | I+V / needs phone | four new caves (balls 4, 5, 7 ×2) with pearls; up to four caves darken a ball | `caves` (7 caves), `new_caves_hold_pearls` |
+| E4-06 | Completion: new content in the catalog, finishing needs all seven balls | I+V | catalog v2: 157 ids (was 87), no id changed | `completion_ids_unique_and_pinned`, `new_areas_in_completion`, playthroughs restore all seven balls |
+| E4-07 | Old progress and the original route survive | I+V | ids unchanged; original vortices and layout unchanged (mesa unchanged) | relaunch test; playthroughs 20/20 on seeds 4242 and 7 |
+| E4-08 | Save/reload in the new areas | I+V | run save unchanged in format | relaunch test saves on Hollow Grotto and continues there; `new_blooms_resume_standing` |
+| E4-09 | Determinism | I+V | all placement seeded; nothing uses the gameplay random generator | playthroughs; `veg_leaves_gameplay_rng_alone` |
+| E4-10 | Performance measured | I+V | MultiMesh ladders; per-ball simulation only | `docs/WORLD.md` Performance |
+| E4-11 | Ships by OTA, no APK | pending | game layer only; runtime r5 | dev-000021 (to be verified) |
+
 ## Precedence notes
 
 - The reconciliation prompt's floor list repeats two items that the owner changed earlier today: "diegetic
