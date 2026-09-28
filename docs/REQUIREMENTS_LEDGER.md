@@ -252,7 +252,7 @@ consolidate everything into ONE Mote app and ONE current APK (retire Mote Dev; k
 [x] 1. Timer + completion foundation (dev-000018, verified 2026-09-28)
 [x] 2. Living terrain / texture and material upgrade (dev-000019, verified 2026-09-28)
 [x] 3. Dense reactive vegetation / cornfield movement (dev-000020, verified 2026-09-28)
-[ ] 4. Additional moss balls + expanded terrain set
+[x] 4. Additional moss balls + expanded terrain set (dev-000021, verified 2026-09-28; dev-000022 adds only test fixes)
 [ ] 5. Additional enemies + ecosystem expansion
 [ ] 6. Full expansion integration + progression/balance/100%/speedrun reconciliation
 
@@ -330,7 +330,7 @@ plus big formations; four new areas.
 | E4-08 | Save/reload in the new areas | I+V | run save unchanged in format | relaunch test saves on Hollow Grotto and continues there; `new_blooms_resume_standing` |
 | E4-09 | Determinism | I+V | all placement seeded; nothing uses the gameplay random generator | playthroughs; `veg_leaves_gameplay_rng_alone` |
 | E4-10 | Performance measured | I+V | MultiMesh ladders; per-ball simulation only | `docs/WORLD.md` Performance |
-| E4-11 | Ships by OTA, no APK | pending | game layer only; runtime r5 | dev-000021 (to be verified) |
+| E4-11 | Ships by OTA, no APK | I+V | game layer only; runtime r5 | dev-000021 (OTA publish #21, run 36383509240, source `9ed29db`, PCK `7415e907…162274`, 8,882,636 bytes, baked, save schema 1): signature (pinned key), hash, size and inspector verified from public URLs; a b22 client downloads, verifies and stages it; `_test_route_audit`, `_test_new_areas`, `_test_completion_catalog`, `_test_caves`, `_test_climbs_physical` pass run from the pack. CI on that commit found `_test_upgrades` stopping silently on Canopy Spire (no cave); fixed with the runner now failing any test that reports nothing: dev-000022 (OTA publish #22, run 36385605395, source `fe3e0fd`, PCK `48597241…1e5894`, 8,883,196 bytes; same game, tests only) verified the same way; Build & Verify #30 green, Android APK job skipped |
 
 ## Precedence notes
 

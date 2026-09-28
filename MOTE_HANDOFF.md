@@ -19,7 +19,7 @@ kept below as history.
 | **Release commit** (APK + OTA source) | `104605727ab2bc48f6b0b6e2d56a0fd44127c5be` (`1046057`) |
 | **The one Android app** | **Mote**, `com.verbal76.axolotl`. The separate Mote Dev app is **retired** (owner, 2026-09-27). |
 | **Current APK** | **`mote-v0.1.0-b22.apk`** (artifact `mote-android-v0.1.0-b22`), Android build 22, bundled baseline `1046057` |
-| **Current OTA / channel pointer** | **`dev-000020`**, built from `2206aea` (Expansion 3: reactive vegetation; includes dev-000015..19). dev-000014 = b22's own game |
+| **Current OTA / channel pointer** | **`dev-000022`**, built from `fe3e0fd` (Expansion 4: seven moss balls, as dev-000021 from `9ed29db`, plus test fixes; includes dev-000015..21). dev-000014 = b22's own game |
 | Runtime | `android-godot-4.7.2-r5` |
 | Game version / save schema | `0.1.0` / `1` |
 | Requirement authority | `docs/REQUIREMENTS_LEDGER.md` (sections G, F, O, V, N, C, A, R, S, P, M, **E1** and the **MOTE OPEN ITEMS EXPANSION LIST**) |
@@ -346,7 +346,21 @@ is expected; tap **Install anyway**.
 
 ## 11. Current OTA
 
-**Latest: `dev-000020`** (OTA publish #20, run 36374340406): source `2206aea80b5da086ef44f54970e62603c4d56876`,
+**Latest: `dev-000022`** (OTA publish #22, run 36385605395): source `fe3e0fdaba68fe275f4ed7b19e63cac5a5b76362`,
+runtime r5, PCK `485972412e36b10aa8b03381affc8b74246423999db7b162fa0b882b6c1e5894` (8,883,196 bytes, baked),
+save schema 1. The same game as dev-000021 plus test fixes (`_test_upgrades` covers pearls; the unit runner
+fails a test that stops without reporting). Verified from the public URLs; a b22 client downloads and stages
+it; Build & Verify #30 green, no APK.
+
+`dev-000021` (OTA publish #21, run 36383509240): source `9ed29db8209882d09133cba4c9b2dc27fee1ba1d`, runtime r5,
+PCK `7415e9072a455aa6ae95e0790cb53d76504072c536019d079ece03bd86162274` (8,882,636 bytes, baked), save schema 1.
+**Expansion 4** (ledger E4, `docs/WORLD.md`, catalog v2 in `docs/COMPLETION.md`): four new moss balls
+(Terrace Steps, Reed Canyon, Canopy Spire, Hollow Grotto) branching off the chain; ridges, terraces, an arch,
+a natural bridge, shelves, canopy spirals; four pearl caves; 157 completion ids; finishing needs all seven
+balls. Owner phone report: every Giant Stems jungle stem is a plain-jump ladder; every climb on all seven
+balls audited and climbed in tests. Verified from the public URLs; a b22 client downloads and stages it. No APK.
+
+Before it: `dev-000020` (OTA publish #20, run 36374340406): source `2206aea80b5da086ef44f54970e62603c4d56876`,
 runtime r5, PCK `c0c6a7365c3d040339764c5d78d06db81de2a35cafb655f3e0570567d226374b` (8,832,576 bytes, baked),
 save schema 1. **Expansion 3** (ledger E3, `docs/VEGETATION.md`): reactive vegetation. The wake of the
 axolotl's body, tail and trail and of parasites bends plants, which recover behind him. Short, medium and
@@ -545,18 +559,18 @@ repository. Do not name, open or use any other game repository in Mote developme
 
 - **Released:** one Mote APK (b22, r5) with everything approved bundled, OTA on `dev`, channel pointer
   reconciled to dev-000014 (the APK's own game). CI green on `1046057`.
-- **Delivered after b22:** dev-000015 (phone-playtest fixes, ledger P) and dev-000016 (ball 3 canopy climb, P-06) and dev-000017 (owner's music, M) and dev-000018 (Expansion 1: timer + completion foundation, E1; music finish, M-03) and dev-000019 (Expansion 2: living terrain + cave repair, E2) and dev-000020 (Expansion 3: reactive vegetation, E3), by OTA only.
+- **Delivered after b22:** dev-000015 (phone-playtest fixes, ledger P) and dev-000016 (ball 3 canopy climb, P-06) and dev-000017 (owner's music, M) and dev-000018 (Expansion 1: timer + completion foundation, E1; music finish, M-03) and dev-000019 (Expansion 2: living terrain + cave repair, E2) and dev-000020 (Expansion 3: reactive vegetation, E3) and dev-000021/22 (Expansion 4: world expansion, E4), by OTA only.
 - **MOTE OPEN ITEMS EXPANSION LIST** (also in the ledger; each item is one dev OTA, authorised separately):
 
   [x] 1. Timer + completion foundation (dev-000018)
   [x] 2. Living terrain / texture and material upgrade (dev-000019)
   [x] 3. Dense reactive vegetation / cornfield movement (dev-000020)
-  [ ] 4. Additional moss balls + expanded terrain set
+  [x] 4. Additional moss balls + expanded terrain set (dev-000021; dev-000022 test fixes)
   [ ] 5. Additional enemies + ecosystem expansion
   [ ] 6. Full expansion integration + progression/balance/100%/speedrun reconciliation
 
   New completion-bearing content must extend the catalog as `docs/COMPLETION.md` describes.
-- **Expansion list:** items 1–3 of 6 are done (dev-000018, dev-000019, dev-000020). Item 4 (world expansion) is authorised and in progress; each item is authorised separately.
+- **Expansion list:** items 1–4 of 6 are done (dev-000018, dev-000019, dev-000020, dev-000021/22). Item 5 (ecosystem) is authorised with owner design decisions recorded; item 6's prompt is received and starts only after item 5 is published and verified.
 - **Next task:** the owner's phone checks (§16), including the dev-000015..18 changes.
 - **After that:** continue from the owner's feedback. Game-layer changes reach b22 by OTA on push
   (that push is also the first OTA a b22 phone downloads). Native changes need `--bump` and a new APK.
