@@ -14,7 +14,7 @@ func run(runner) -> void:
 	p.use_bot_input = true
 	await t.seconds(0.5)
 	var only: String = Settings.test_args.get("only", "")
-	for name_ in ["_test_startup", "_test_ota_and_version", "_test_mesh_winding", "_test_terrain", "_test_terrain_grounded", "_test_no_floating_platforms", "_test_parasite_locomotion", "_test_placements", "_test_tutorial_route", "_test_sphere_walk", "_test_jump_and_burst", "_test_coyote_and_buffer", "_test_swipe_direction_and_stages", "_test_hard_landing", "_test_food", "_test_food_reach", "_test_darter_and_burrower", "_test_food_repopulates", "_test_motes", "_test_checkpoint_and_regen", "_test_crumble", "_test_restoration_continuity", "_test_vortex", "_test_current", "_test_canopy", "_test_canopy_plain_jumps", "_test_caves", "_test_mounds", "_test_vegetation", "_test_vortex_mouths_clear", "_test_route_audit", "_test_new_areas", "_test_music", "_test_run_clock", "_test_completion_catalog", "_test_run_save_file", "_test_run_timer_live", "_test_run_continue", "_phase_continue_write", "_phase_continue_read", "_test_upgrades", "_test_ui", "_test_all_clear"]:
+	for name_ in ["_test_startup", "_test_ota_and_version", "_test_mesh_winding", "_test_terrain", "_test_terrain_grounded", "_test_no_floating_platforms", "_test_parasite_locomotion", "_test_placements", "_test_tutorial_route", "_test_sphere_walk", "_test_jump_and_burst", "_test_coyote_and_buffer", "_test_swipe_direction_and_stages", "_test_hard_landing", "_test_food", "_test_food_reach", "_test_darter_and_burrower", "_test_food_repopulates", "_test_motes", "_test_checkpoint_and_regen", "_test_crumble", "_test_restoration_continuity", "_test_vortex", "_test_current", "_test_canopy", "_test_canopy_plain_jumps", "_test_climbs_physical", "_test_jungle_ladders_physical", "_test_caves", "_test_mounds", "_test_vegetation", "_test_vortex_mouths_clear", "_test_route_audit", "_test_new_areas", "_test_music", "_test_run_clock", "_test_completion_catalog", "_test_run_save_file", "_test_run_timer_live", "_test_run_continue", "_phase_continue_write", "_phase_continue_read", "_test_upgrades", "_test_ui", "_test_all_clear"]:
 		# "_phase_*" tests are halves of a relaunch test: they run only when asked for by name
 		# (in a child process started by _test_run_continue).
 		if name_.begins_with("_phase") and only != name_:
@@ -534,16 +534,33 @@ func _test_route_audit() -> void:
 			for k in range(1, pts.size()):
 				var tp: Vector3 = pts[k]
 				var up := b.up_at(tp)
-				var q := PhysicsRayQueryParameters3D.create(tp + up * 0.6, tp - up * 1.0, 1 | 2)
+				var q := PhysicsRayQueryParameters3D.create(tp + up * 0.6, tp - up * 1.0, p.collision_mask)
 				var hit := space.intersect_ray(q)
 				var floor_ok := not hit.is_empty() and rad_to_deg((hit["normal"] as Vector3).angle_to(up)) < 52.0
-				var qh := PhysicsRayQueryParameters3D.create(tp + up * 0.2, tp + up * 1.4, 1 | 2)
+				var qh := PhysicsRayQueryParameters3D.create(tp + up * 0.2, tp + up * 1.4, p.collision_mask)
 				var head_ok := space.intersect_ray(qh).is_empty()
 				var rise := (tp - prev).dot(up)
 				var gap := ((tp - prev) - up * (tp - prev).dot(up)).length()
 				worst_rise = maxf(worst_rise, rise)
 				worst_gap = maxf(worst_gap, gap)
-				if not floor_ok or not head_ok or rise > 2.6 or gap > 5.0:
+				# The axolotl's measured reach (a standing plain jump: 4.0 m at 0.5 m up, 3.5 m at 1.0, 2.9 m at
+				# 1.6; with the water burst 5.9-7.0 m at 1.6 m up), plus 1 m because these points lie
+				# inside the surfaces, not on their edges. Ordinary climbs need only a standing plain
+				# jump; those that teach or need the burst (the tutorial, cave ledges) may use it.
+				var reach: float = (5.5 if rise <= 2.2 else 4.3) if h.get("burst", false) else (4.4 - 0.97 * maxf(rise, 0.0)) + 1.0
+				var plain_ok: bool = h.get("burst", false) or rise <= 1.6
+				# A step along one continuous walkable surface (up an arch, along a crest) is a walk,
+				# not a jump.
+				var walk := true
+				for f in [0.2, 0.4, 0.6, 0.8]:
+					var mp: Vector3 = prev.lerp(tp, f)
+					var mu := b.up_at(mp)
+					var mh := space.intersect_ray(PhysicsRayQueryParameters3D.create(mp + mu * 0.5, mp - mu * 0.6, p.collision_mask))
+					walk = walk and not mh.is_empty() and rad_to_deg((mh["normal"] as Vector3).angle_to(mu)) < 45.0
+				if walk:
+					plain_ok = true
+					reach = INF
+				if not floor_ok or not head_ok or rise > 2.6 or not plain_ok or gap > reach:
 					bad.append("ball %d %s step %d: floor %s headroom %s rise %.2f gap %.2f" % [b.index + 1, h["route"], k, floor_ok, head_ok, rise, gap])
 				prev = tp
 			var end: Vector3 = pts[pts.size() - 1]
@@ -553,7 +570,73 @@ func _test_route_audit() -> void:
 						bad.append("ball %d %s: mote %.1f m from the top" % [b.index + 1, h["route"], m.global_position.distance_to(end)])
 	for x in bad:
 		t.log_line(x)
-	t.check("routes_reachable_by_design", n >= 9 and bad.is_empty(), "%d climbs; biggest step up %.2f m (jump 1.85, + burst ~2.6), widest gap %.2f m" % [n, worst_rise, worst_gap])
+	t.check("routes_reachable_by_design", n >= 9 and bad.is_empty(), "%d climbs; biggest step up %.2f m (jump 1.85, + burst ~2.6), widest gap %.2f m; ordinary climbs within a standing plain jump" % [n, worst_rise, worst_gap])
+	# Readable from the ground (owner phone report, Giant Stems): every climb starts on open
+	# ground, and its first step is a plain jump up (no burst) close to where you stand, so a player
+	# underneath can see where it begins. Climbs that branch off another climb start on that one.
+	var unreadable: Array[String] = []
+	var worst_first := 0.0
+	for b in g.balls:
+		for h in (b.get_meta("builder") as LevelBuilder).bot_hints:
+			if not h.has("route") or h.get("branch", false):
+				continue
+			var st: Vector3 = h["start"]
+			var up := b.up_at(st)
+			var hit := space.intersect_ray(PhysicsRayQueryParameters3D.create(st + up * 0.5, st - up * 1.0, p.collision_mask))
+			var on_ground: bool = not hit.is_empty() and hit["collider"] is StaticBody3D and (hit["collider"] as StaticBody3D).collision_layer == 1 \
+					and rad_to_deg((hit["normal"] as Vector3).angle_to(up)) < 52.0
+			var first: Vector3 = (h["tops"] as Array)[0]
+			var rise := (first - st).dot(up)
+			var gap := ((first - st) - up * rise).length()
+			worst_first = maxf(worst_first, rise)
+			if not on_ground or rise > 1.6 or gap > 3.5:
+				unreadable.append("ball %d %s: start on ground %s, first step up %.2f m, %.2f m away" % [b.index + 1, h["route"], on_ground, rise, gap])
+	for x in unreadable:
+		t.log_line(x)
+	t.check("climbs_start_with_a_plain_step_from_the_ground", unreadable.is_empty(), "highest first step %.2f m (a plain jump reaches 1.85 m)" % worst_first)
+	# Nothing that looks like a platform is out of reach: every standable leaf, brittle cap, swaying
+	# leaf, mound or shelf more than 2.6 m above the ground under it lies on a climb; leaves that are
+	# only decoration (no collision) hang like fronds rather than lying flat like platforms.
+	var orphan_tops: Array[String] = []
+	var flat_decor: Array[String] = []
+	var checked := 0
+	for b in g.balls:
+		var lb: LevelBuilder = b.get_meta("builder")
+		var pts: Array[Vector3] = []
+		for h in lb.bot_hints:
+			if h.has("route"):
+				pts.append(h["start"])
+				for q in h["tops"]:
+					pts.append(q)
+		for node in lb.root.get_children():
+			if node.has_meta("decor_leaf"):
+				var lup := b.up_at((node as Node3D).global_position)
+				if absf((node as Node3D).global_basis.z.normalized().dot(lup)) < 0.5:
+					flat_decor.append("ball %d %s" % [b.index + 1, node.name])
+				continue
+			var tp := Vector3.INF
+			if node.has_meta("top_point"):
+				tp = node.get_meta("top_point")
+			elif node.has_meta("top") and node is Node3D:
+				tp = (node as Node3D).global_transform * Vector3(0, float(node.get_meta("top")), 0)
+			if tp == Vector3.INF:
+				continue
+			var u := b.up_at(tp)
+			var gh := space.intersect_ray(PhysicsRayQueryParameters3D.create(tp - u * 0.3, b.global_position, 1))
+			var above: float = (tp - (gh["position"] as Vector3)).dot(u) if gh else 0.0
+			if above <= 2.6:
+				continue
+			checked += 1
+			var near := INF
+			for q in pts:
+				near = minf(near, q.distance_to(tp))
+			if near > 2.5:
+				orphan_tops.append("ball %d %s %s %.1f m up at %s (nearest climb point %.1f m)" % [b.index + 1, node.get_meta("terrain_kind", node.get_meta("grounded", node.get_class())),
+						node.name, above, Levels._latlon(b.up_at(tp)).round(), near])
+	for x in orphan_tops + flat_decor:
+		t.log_line(x)
+	t.check("elevated_platforms_all_on_climbs", orphan_tops.is_empty() and checked > 20, "%d elevated platforms checked; %s" % [checked, str(orphan_tops)])
+	t.check("decor_leaves_do_not_look_like_platforms", flat_decor.is_empty(), str(flat_decor))
 	# Every elevated mote belongs to a climb that reaches it (none is decoration out of reach).
 	var orphans: Array[String] = []
 	for b in g.balls:
@@ -1170,6 +1253,17 @@ func _unsupported_bodies(include_by_design := true) -> Array[String]:
 						pts.append(w)
 						alts.append(b.altitude(w))
 						lo = minf(lo, alts[-1])
+				elif mi is MultiMeshInstance3D:
+					# Stem ladders draw their leaves as one MultiMesh.
+					var mm: MultiMesh = (mi as MultiMeshInstance3D).multimesh
+					var verts: PackedVector3Array = mm.mesh.surface_get_arrays(0)[Mesh.ARRAY_VERTEX]
+					for lxf in mi.get_meta("leaf_transforms", []):
+						var ixf: Transform3D = (mi as MultiMeshInstance3D).global_transform * (lxf as Transform3D)
+						for v in verts:
+							var w: Vector3 = ixf * v
+							pts.append(w)
+							alts.append(b.altitude(w))
+							lo = minf(lo, alts[-1])
 			if lo == INF or lo <= 0.3:
 				continue
 			var lowest := Vector3.ZERO
@@ -2406,6 +2500,110 @@ func _test_canopy_plain_jumps() -> void:
 		reached += 1
 	p.invuln_t = 0.0
 	t.check("canopy_climb_with_plain_jumps", reached == spiral.size(), "reached leaf %d of %d with plain jumps" % [reached, spiral.size()])
+
+
+## Physically, from the ground at each climb's start to its top, with plain jumps: the towers and
+## the new areas' climbs. Every jump is a normal touch jump. (The mesa's swaying platforms in the
+## current take timing and the water burst; the playthrough bot climbs them on both seeds.)
+func _test_climbs_physical() -> void:
+	var picks := []
+	for b in g.balls:
+		for h in (b.get_meta("builder") as LevelBuilder).bot_hints:
+			if h.has("route") and h["route"] in ["spire", "terraces", "shelves", "high shelf", "tower"]:
+				picks.append([b, h])
+	var results := []
+	var all_ok := true
+	p.invuln_t = 999
+	for e in picks:
+		var h: Dictionary = e[1]
+		var tops: Array = h["tops"]
+		var reached: int = await _climb(e[0], h)
+		all_ok = all_ok and reached == tops.size()
+		results.append("b%d %s %d/%d" % [e[0].index + 1, h["route"], reached, tops.size()])
+	p.invuln_t = 0.0
+	t.check("climbs_with_plain_jumps", all_ok and picks.size() >= 6, ", ".join(results))
+
+
+## Every jungle-stem ladder on Giant Stems (the owner's phone report), climbed from the ground to
+## its top leaf with plain jumps.
+func _test_jungle_ladders_physical() -> void:
+	var b := g.balls[2]
+	var n := 0
+	var bad: Array[String] = []
+	var leaves := 0
+	p.invuln_t = 999
+	for h in (b.get_meta("builder") as LevelBuilder).bot_hints:
+		if not (h.has("route") and str(h["route"]).begins_with("jungle")):
+			continue
+		n += 1
+		var tops: Array = h["tops"]
+		leaves += tops.size()
+		var reached: int = await _climb(b, h)
+		if reached < tops.size():
+			bad.append("%s %d/%d" % [h["route"], reached, tops.size()])
+	p.invuln_t = 0.0
+	t.check("jungle_ladders_climbed_with_plain_jumps", n == 70 and bad.is_empty(), "%d stems, %d leaves; short: %s" % [n, leaves, str(bad)])
+
+
+## Climbs `h` (a route hint on `b`) from its start with plain touch jumps; returns how many of its
+## steps were reached in order.
+func _climb(b: MossBall, h: Dictionary) -> int:
+	var tops: Array = h["tops"]
+	var st: Vector3 = h["start"]
+	place_at(b.index, st + b.up_at(st) * 0.2, ((tops[0] as Vector3) - st))
+	g.audio.set_ball(b.index, false)
+	await wait_grounded()
+	var reached := 0
+	var k := 0
+	while k < tops.size():
+		var target: Vector3 = tops[k]
+		var flat := target - p.global_position
+		flat -= p.up * flat.dot(p.up)
+		if (target - p.global_position).dot(p.up) < 0.3 and flat.length() < 1.2:
+			reached = k + 1
+			k += 1
+			continue
+		var upward := (target - p.global_position).dot(p.up) > 0.3
+		if upward:
+			# Take off from outside the next leaf's footprint (as a player does): step back
+			# until about 2 m out, then jump toward it.
+			for i in 40:
+				flat = target - p.global_position
+				flat -= p.up * flat.dot(p.up)
+				if flat.length() >= 1.9:
+					break
+				stick_toward(-flat)
+				await t.frames(1)
+		for i in 6:
+			stick_toward(target - p.global_position)
+			await t.frames(1)
+		if upward or flat.length() > 2.5:
+			await press("jump")
+		for i in 110:
+			var off := target - p.global_position
+			off -= p.up * off.dot(p.up)
+			if off.length() > 0.3:
+				stick_toward(off)
+			else:
+				p.bot_input = Vector2.ZERO
+			await t.frames(1)
+			if p.grounded and i > 12 and off.length() < 0.6:
+				break
+		p.bot_input = Vector2.ZERO
+		await wait_grounded()
+		# On this step, or already on a later one (a jump that carried further up the climb).
+		var on := -1
+		for j in range(k, tops.size()):
+			var tj: Vector3 = tops[j]
+			if absf(b.altitude(p.global_position) - b.altitude(tj)) <= 0.45 and p.global_position.distance_to(tj) <= 1.9:
+				on = j
+		if on < 0:
+			t.log_line("ball %d %s: stopped before step %d of %d (at h %.2f, step h %.2f, %.2f m away)" % [b.index + 1, h["route"], k + 1, tops.size(),
+					b.altitude(p.global_position), b.altitude(target), p.global_position.distance_to(target)])
+			break
+		reached = on + 1
+		k = on + 1
+	return reached
 
 
 func _test_upgrades() -> void:

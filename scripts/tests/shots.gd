@@ -73,6 +73,23 @@ func run(runner) -> void:
 			await t.seconds(2.5)
 			await t.shot("veg_%s_stopped" % v[3])
 		g.player.use_bot_input = false
+	if only == "" or only == "climbs":
+		# Every ball-3 jungle stem ladder and the mesa, from where a player stands underneath.
+		for bi in [2, 1]:
+			var b := g.balls[bi]
+			for h in (b.get_meta("builder") as LevelBuilder).bot_hints:
+				if not h.has("route") or not (str(h["route"]).begins_with("jungle") or h["route"] == "mesa"):
+					continue
+				if str(h["route"]).begins_with("jungle") and not (str(h["route"]) in ["jungle stem 3", "jungle stem 20", "jungle stem 41"]):
+					continue
+				var st: Vector3 = h["start"]
+				var first: Vector3 = (h["tops"] as Array)[0]
+				var back := st - (first - st).normalized() * 3.0
+				g.player.place(b, b.surface_point(b.up_at(back), 0.2), first - back)
+				g.cam.snap_behind()
+				g.cam.pitch = 0.05
+				await t.seconds(1.2)
+				await t.shot("climb_b%d_%s" % [bi + 1, str(h["route"]).replace(" ", "_")])
 	if only == "" or only == "world":
 		# Expansion 4's balls: each climb's start, looking at its first step.
 		for bi in range(3, g.balls.size()):

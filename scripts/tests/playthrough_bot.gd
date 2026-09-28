@@ -739,7 +739,7 @@ func _collect_tasks(b: MossBall, lb: LevelBuilder, skip_zones: Array, done: Dict
 		if h.has("canopy") and (not done.has("canopy") or done.has("retry_canopy")):
 			tasks.append({"kind": "canopy", "hint": h, "pos": func(): return (h["spiral"][0] as Transform3D).origin})
 		# Expansion 4 climbs: needed while an elevated mote in their zones is still there.
-		if h.has("route") and int(done.get("route:" + str(h["route"]), 0)) < 3 and _route_pending(b, h):
+		if h.has("route") and not h.get("audit", false) and int(done.get("route:" + str(h["route"]), 0)) < 3 and _route_pending(b, h):
 			tasks.append({"kind": "route", "hint": h, "pos": func(): return h["start"]})
 	for par in b.parasites:
 		if par.is_alive() and not par.zone_id in skip_zones and par.state != "init":

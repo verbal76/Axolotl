@@ -93,7 +93,7 @@ static func terrace_steps(lb: LevelBuilder) -> void:
 	var ll := Levels._latlon(b.up_at(mid))
 	lb.mote("arch", ll.x, ll.y + 3.0, -1.4, 1.0)   # beneath it (its search starts under the slab)
 	lb.mote_xf("arch", Transform3D(MossBall.frame_at(b.up_at(mid), 0.0), mid + b.up_at(mid) * 0.5), 0.5)
-	var a_start: Vector3 = b.surface_point(b.up_at(line[0]), 0.0) - (line[3] - line[0]).normalized() * 2.0
+	var a_start: Vector3 = b.surface_point(b.up_at(line[0]), 0.0) - (line[3] - line[0]).normalized() * 1.2
 	lb.route("arch", b.surface_point(b.up_at(a_start), 0.0), [line[4], line[9], line[line.size() / 2]], ["arch"], "arch top")
 	p = R.call(-30, -70)
 	lb.parasite(Parasite.Kind.SMALL, "arch", p.x, p.y, 8.0)
@@ -174,6 +174,11 @@ static func reed_canyon(lb: LevelBuilder) -> void:
 	var bb: Vector3 = bl[bl.size() / 2 + 3]
 	lb.bloom_xf(Transform3D(MossBall.frame_at(b.up_at(bb), 0.0), bb))
 	lb.route("bridge", nc[0], nc.slice(1, bi, 3) + [nc[bi], bl[3], bl[6], bm], ["crests"], "canyon bridge")
+	# Across the bridge onto the south crest and along it (audit only).
+	lb.bot_hints.append({"route": "south crest", "audit": true, "branch": true, "start": bm,
+			"tops": bl.slice(bl.size() / 2 + 3, bl.size() - 1, 3) + [sc[bi]] + sc.slice(bi + 3, sc.size(), 3) + [sc[sc.size() - 1]], "zones": [], "goal": "south crest"})
+	lb.bot_hints.append({"route": "south crest west", "audit": true, "branch": true, "start": sc[bi],
+			"tops": sc.slice(bi - 3, 0, -3) + [sc[0]], "zones": [], "goal": "south crest"})
 	var ncf: Vector3 = nc[nc.size() - 4]
 	lb.mote_xf("crests", Transform3D(MossBall.frame_at(b.up_at(ncf), 0.0), ncf + b.up_at(ncf) * 0.5), 0.5)
 	lb.route("north crest", nc[nc.size() - 1], [nc[nc.size() - 2], ncf], ["crests"], "north crest end")
@@ -278,6 +283,10 @@ static func canopy_spire(lb: LevelBuilder) -> void:
 	var start := b.surface_point(b.up_at(Levels.leaf_mid(s0, 3.6, 0.0).origin), 0.0)
 	lb.route("spire mid", start, tops.slice(0, 6), ["spire"], "spire, half way")
 	lb.route("spire", start, tops, ["spire"], "canopy crown")
+	# The second crown leaf, a hop across from the first (audit only: nothing to collect there).
+	var c1x: Transform3D = crown[1]
+	lb.bot_hints.append({"route": "crown", "audit": true, "branch": true, "start": tops[tops.size() - 1],
+			"tops": [Levels.leaf_mid(c1x, 1.0, 0.0).origin + c1x.basis.y * 0.1], "zones": [], "goal": "second crown leaf"})
 	p = R.call(-24, 104)
 	lb.parasite(Parasite.Kind.MEDIUM, "spire", p.x, p.y, 8.0)
 
@@ -348,7 +357,7 @@ static func hollow_grotto(lb: LevelBuilder) -> void:
 	var sh0p: Vector2 = R.call(16, 18)
 	lb.shelf(sh0p.x, sh0p.y, 1.6, 2.2, 1.1)
 	var sh1p: Vector2 = R.call(-8, 50)
-	var sh1 := lb.shelf(sh1p.x, sh1p.y, 2.9, 2.2, 1.1)
+	var sh1 := lb.shelf(sh1p.x, sh1p.y, 2.75, 2.2, 1.1)
 
 	# Two low ridges with a vegetation corridor between them (exposed rock on the crests).
 	var r0a: Vector2 = R.call(0, 30)
@@ -365,7 +374,11 @@ static func hollow_grotto(lb: LevelBuilder) -> void:
 	for i in rac.size():
 		if (rac[i] as Vector3).distance_to(sh1.global_position) < (rac[near_i] as Vector3).distance_to(sh1.global_position):
 			near_i = i
-	lb.route("high shelf", rac[0], rac.slice(1, near_i, 3) + [rac[near_i], shelf_top.call(sh1)], ["corridors"], "high shelf")
+	# (Landing on the shelf's near side, then walking to its middle.)
+	var st1: Vector3 = shelf_top.call(sh1)
+	var toward: Vector3 = (rac[near_i] as Vector3) - st1
+	toward -= b.up_at(st1) * toward.dot(b.up_at(st1))
+	lb.route("high shelf", rac[0], rac.slice(1, near_i, 3) + [rac[near_i], st1 + toward.normalized() * 1.4, st1], ["corridors"], "high shelf")
 	p = R.call(9, 46)
 	lb.mote("corridors", p.x, p.y)
 	p = R.call(8, 56)

@@ -80,7 +80,8 @@ var blob_shadow: MeshInstance3D
 
 func _ready() -> void:
 	collision_layer = 4
-	collision_mask = 1 | 2
+	# Terrain, platforms and climbing leaves (LevelBuilder.CLIMB_LAYER).
+	collision_mask = 1 | 2 | LevelBuilder.CLIMB_LAYER
 	floor_max_angle = deg_to_rad(52)
 	floor_snap_length = 0.35
 	floor_constant_speed = true
@@ -565,7 +566,7 @@ func _update_shadow() -> void:
 		return
 	var space := get_world_3d().direct_space_state
 	var from := global_position + up * 0.4
-	var q := PhysicsRayQueryParameters3D.create(from, from - up * 30.0, 1 | 2)
+	var q := PhysicsRayQueryParameters3D.create(from, from - up * 30.0, collision_mask)
 	var hit := space.intersect_ray(q)
 	if hit.is_empty() or model.dissolve > 0.5:
 		blob_shadow.visible = false

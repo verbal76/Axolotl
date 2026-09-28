@@ -47,6 +47,7 @@ route audit and the test bot read.
 | Bridge | `bridge(p0, p1, bow, width, thick)` | a slab spanning two formations (marked "floats by design": it rests on them) |
 | Shelf | `shelf(lat, lon, height, r_top, r_stem)` | a wide flat top on a narrow stem: shelter beneath, a platform on top |
 | Canopy spiral | `canopy_spiral(xf, count, start, rise, turn, stem_h, stem_r)` | leaves in a rising spiral round a stem, each one a plain jump from the last |
+| Stem ladder | `ladder_stem(stem_xf, h, r0, r1, bend, levels, heading0, turn, name)` | leaves spiralling up a stem, one plain jump each; collision follows each leaf's outline |
 | Route | `route(name, start, tops, zones, goal)` | not a shape: the designed climb over the tops above, for the audit and the bot |
 
 `MeshLib.sweep` (a profile swept along stations, triangles facing away from the inside) builds the
@@ -71,6 +72,63 @@ jump: a floor to land on, headroom above, rise ≤ 2.6 m (jump 1.85 m, burst ~2.
 | 6 | spire | the whole spiral to the canopy crown (mote and bloom about 14 m up) |
 | 6 | shelves | three stacked shelves to a mote |
 | 7 | high shelf | along the low ridge crest, then up onto the high shelf's mote |
+
+## Elevated routes: the phone report and the all-ball audit
+
+**Owner phone report (2026-09-28, Giant Stems).** Gill stood under several leaf platforms with no
+visible way up. The location was the dense jungle of ball 3.
+
+**Finding.** The jungle had 70 decorative stems with 2–4 big leaves each, 4–20 m up.
+- They were not meant to be reached, but they looked like platforms.
+- The ones below 9 m were solid.
+- Nothing reached them.
+- The real canopy climb (the spiral on the giant stem at 28, −30) was never the problem: its first
+  leaf is 0.8 m up and in plain view (shots `b3look_*`).
+
+**Repair.** Owner decision: every stem that looks climbable is climbable.
+- Each jungle stem is a ladder (`LevelBuilder.ladder_stem`, `Levels._jungle_ladder`):
+  - a small leaf 0.9 m up to start;
+  - then a leaf every ≤1.0 m, turning 108° each time, up to the stem's big leaves;
+  - the big leaves take the ladder levels nearest their original heights.
+  - 70 stems, 949 leaves. Each stem is one body and one MultiMesh.
+- The ladder leaves' collision follows the drawn leaf outline. The first build used boxes, which
+  were full width at the stem and left an invisible corner over the leaf below; Gill's head caught
+  it (found by the physical climb test).
+- Stems stand at least 9 m apart, so ladders never interleave (one stem's leaf hung over another's
+  steps).
+- Ferns and tall blades keep 3.8 m back from each ladder's base, so the first leaves can be seen from
+  the ground.
+- Ladder leaves are on their own physics layer (`LevelBuilder.CLIMB_LAYER`). The axolotl stands on
+  them; the ground rays of parasites, food and motes ignore them, so creatures walking under a
+  ladder never pop up onto it.
+- Bent stems now collide along their bend (a stack of short cylinders), not as a straight cylinder
+  that stuck out where the stem curves away.
+
+**The same audit on all seven balls.** Every destination has a registered climb (`route` hints,
+plus audit-only climbs for the existing tower, mesa, canopy, tutorial and cave interiors), checked
+as ground → first step → landings → top:
+
+| Check | Rule (from Gill's measured movement) | Result |
+|---|---|---|
+| `climbs_start_with_a_plain_step_from_the_ground` | every climb starts on open ground; first step ≤ 1.6 m up (jump apex 1.85 m), ≤ 3.5 m away | pass; highest first step 1.55 m (the ball 2 mesa's first leaf, unchanged) |
+| `routes_reachable_by_design` | every landing has floor and headroom. Ordinary steps are within a **standing plain jump**, measured at 4.0 m reach at 0.5 m up, 3.5 m at 1.0 m and 2.9 m at 1.6 m, +1 m because landing points lie inside surfaces. Burst climbs (tutorial, cave ledges, mesa) may use the burst (measured 5.9–7.0 m at 1.6 m up); limit 5.5 m. Walks up a continuous slope are walks. | 95 climbs pass |
+| `elevated_platforms_all_on_climbs` | every standable leaf, cap, swaying leaf, mound or shelf > 2.6 m above the ground lies on a climb | 61 checked, 0 orphans |
+| `decor_leaves_do_not_look_like_platforms` | leaves without collision hang like fronds, not flat | pass; ball 2's 34 kelp-top leaves now droop 55° (they looked like platforms 5–9 m up) |
+| `climbs_with_plain_jumps` (physical) | Gill climbs with real touch jumps from the ground to the top | both towers, terraces, Canopy Spire, shelves, high shelf: all steps |
+| `jungle_ladders_climbed_with_plain_jumps` (physical) | every jungle ladder, ground to top leaf | 70 stems, 949 leaves, all climbed |
+| `canopy_climb_with_plain_jumps` (physical, existing) | the Giant Stems canopy spiral | all 16 leaves |
+
+The mesa's swaying leaves ride a 3 m/s current, so that climb needs timing and the water burst. It
+is unchanged from the released game, and the playthrough bot climbs it on both seeds. Its first leaf
+(1.5 m) is the highest first step in the game: noted for Expansion 6's balance pass.
+
+Other fixes found by the audit:
+- Terrace Steps' arch climb starts 1.2 m from the arch, not 2 m.
+- Hollow Grotto's high shelf is 2.75 m, not 2.9 m, and the climb lands on its near side (the last
+  jump was beyond a standing jump).
+- Reed Canyon's bridge bloom sits on the bridge's real top.
+- A Hollow Grotto bloom was on a cave's flank, where a resumed run slid 1.4 m
+  (`new_blooms_resume_standing`).
 
 ## Caves
 
@@ -108,7 +166,11 @@ In `scripts/tests/unit_tests.gd`:
   - `new_blooms_resume_standing`
 - `_test_route_audit`:
   - `routes_reachable_by_design`
+  - `climbs_start_with_a_plain_step_from_the_ground`
+  - `elevated_platforms_all_on_climbs`
+  - `decor_leaves_do_not_look_like_platforms`
   - `elevated_motes_have_routes`
+- `_test_climbs_physical` and `_test_jungle_ladders_physical`: real touch jumps up the climbs.
 - `_test_vortex_mouths_clear`
 - `_test_caves` (seven caves)
 - `_test_terrain_grounded` and `_test_no_floating_platforms`: every new formation meets the ground.
