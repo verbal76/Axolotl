@@ -44,6 +44,8 @@ var food_weights := [0.6, 0.25, 0.15]
 var food_target := 7
 var blooms: Array = []
 var crumbles: Array = []
+## Restoration gates (RestorationGate): geography that changes when its zone heals.
+var gates: Array = []
 var flex_leaves: Array = []
 var upgrades: Array = []
 ## Expansion 5's creatures (Critter): ambient life and threats.
@@ -797,6 +799,9 @@ func complete_event(zone_id: String, pos: Vector3, splat_deg := 11.0) -> void:
 		for c in crumbles:
 			if c.zone_id == zone_id:
 				c.restore()
+		for gt in gates:
+			if gt.zone_id == zone_id:
+				gt.open(true)
 		zone_completed.emit(self, zone_id)
 	if events_done >= events_total and not completed:
 		completed = true
@@ -819,6 +824,9 @@ func restore_event(zone_id: String, pos: Vector3, splat_deg := 11.0) -> void:
 			if c.zone_id == zone_id:
 				c.restored = true
 				c.remove_meta("unsafe")
+		for gt in gates:
+			if gt.zone_id == zone_id:
+				gt.open(false)
 	if events_done >= events_total and not completed:
 		completed = true
 		add_heal(Vector3.UP, 340.0, 0.0)

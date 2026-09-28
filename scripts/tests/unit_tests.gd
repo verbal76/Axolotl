@@ -14,7 +14,7 @@ func run(runner) -> void:
 	p.use_bot_input = true
 	await t.seconds(0.5)
 	var only: String = Settings.test_args.get("only", "")
-	for name_ in ["_test_startup", "_test_ota_and_version", "_test_mesh_winding", "_test_terrain", "_test_ravines", "_test_terrain_grounded", "_test_no_floating_platforms", "_test_parasite_locomotion", "_test_parasite_body_and_death", "_test_parasite_combat", "_test_gill_look", "_test_gill_idles", "_test_gill_colours", "_test_gill_patterns", "_test_tail_whip", "_test_ambient_sway", "_test_placements", "_test_tutorial_route", "_test_sphere_walk", "_test_jump_and_burst", "_test_coyote_and_buffer", "_test_swipe_direction_and_stages", "_test_hard_landing", "_test_food", "_test_food_reach", "_test_darter_and_burrower", "_test_food_repopulates", "_test_motes", "_test_checkpoint_and_regen", "_test_crumble", "_test_restoration_continuity", "_test_health_map", "_test_vortex", "_test_current", "_test_canopy", "_test_canopy_plain_jumps", "_test_climbs_physical", "_test_jungle_ladders_physical", "_test_leaf_geometry", "_test_leaf_footing", "_test_caves", "_test_mounds", "_test_vegetation", "_test_vortex_mouths_clear", "_test_route_audit", "_test_new_areas", "_test_ecosystem", "_test_music", "_test_run_clock", "_test_completion_catalog", "_test_completion_frozen", "_test_run_save_file", "_test_run_timer_live", "_test_run_continue", "_test_timer_integrity", "_test_resume_points_safe", "_phase_continue_write", "_phase_continue_read", "_test_upgrades", "_test_ui", "_test_menu_scrollbar", "_test_all_clear"]:
+	for name_ in ["_test_startup", "_test_ota_and_version", "_test_mesh_winding", "_test_terrain", "_test_ravines", "_test_terrain_grounded", "_test_no_floating_platforms", "_test_parasite_locomotion", "_test_parasite_body_and_death", "_test_parasite_combat", "_test_gill_look", "_test_gill_idles", "_test_gill_colours", "_test_gill_patterns", "_test_tail_whip", "_test_ambient_sway", "_test_placements", "_test_tutorial_route", "_test_sphere_walk", "_test_jump_and_burst", "_test_coyote_and_buffer", "_test_swipe_direction_and_stages", "_test_hard_landing", "_test_food", "_test_food_reach", "_test_darter_and_burrower", "_test_food_repopulates", "_test_motes", "_test_checkpoint_and_regen", "_test_crumble", "_test_restoration_gates", "_test_restoration_continuity", "_test_health_map", "_test_vortex", "_test_current", "_test_canopy", "_test_canopy_plain_jumps", "_test_climbs_physical", "_test_jungle_ladders_physical", "_test_leaf_geometry", "_test_leaf_footing", "_test_caves", "_test_mounds", "_test_vegetation", "_test_vortex_mouths_clear", "_test_route_audit", "_test_new_areas", "_test_ecosystem", "_test_music", "_test_run_clock", "_test_completion_catalog", "_test_completion_frozen", "_test_run_save_file", "_test_run_timer_live", "_test_run_continue", "_test_timer_integrity", "_test_resume_points_safe", "_phase_continue_write", "_phase_continue_read", "_test_upgrades", "_test_ui", "_test_menu_scrollbar", "_test_all_clear"]:
 		# "_phase_*" tests are halves of a relaunch test: they run only when asked for by name
 		# (in a child process started by _test_run_continue).
 		if name_.begins_with("_phase") and only != name_:
@@ -1698,6 +1698,80 @@ func _test_health_map() -> void:
 	var axis := d0.cross(Vector3.UP).normalized()
 	var inside := b.health_at(d0.rotated(axis, deg_to_rad(1.2)))
 	t.check("health_map_patch_shape", inside > 0.9 and before[0] < 0.5 or inside > 0.9, "healed %.2f half way out (was %.2f)" % [inside, before[0]])
+
+
+## World expansion: restoration changes geography. A gate on a zone opens when the zone heals
+## (played out live, at once on a resumed save), is solid where it is drawn once open, and never
+## moves into him.
+func _test_restoration_gates() -> void:
+	var b := g.balls[0]
+	var at := MossBall.dir_ll(-10, -40)
+	var fr := MossBall.frame_at(at, 0.0)
+	var saved := [b.events_total, b.events_done, b.restoration, b.completed]
+	var release := _hold_threats(b)
+	var make := func(zone: String, kind: String, offset_m: float) -> RestorationGate:
+		b.add_zone(zone, at, 4.0)
+		b.register_event(zone)
+		var gt := RestorationGate.new()
+		var mi := MeshInstance3D.new()
+		var bm := BoxMesh.new()
+		bm.size = Vector3(4.0, 0.4, 1.4)
+		mi.mesh = bm
+		gt.add_child(mi)
+		var cs := CollisionShape3D.new()
+		var sh := BoxShape3D.new()
+		sh.size = bm.size
+		cs.shape = sh
+		gt.add_child(cs)
+		var base := b.xform_on_dir(at.rotated(fr.x, offset_m / b.radius), 0.0, 0.0)
+		var open_xf := base.translated_local(Vector3(0, 2.0, 0))
+		var closed_xf := base.translated_local(Vector3(0, -0.5, 0)) * Transform3D(Basis(Vector3.RIGHT, 0.4), Vector3.ZERO)
+		gt.setup(b, zone, kind, closed_xf, open_xf, 1.5)
+		b.add_child(gt)
+		return gt
+	var top_hit := func(gt: RestorationGate) -> float:
+		var top: Vector3 = gt.open_xf * Vector3(0, 0.2, 0)
+		var up := b.up_at(top)
+		var hit := g.get_world_3d().direct_space_state.intersect_ray(PhysicsRayQueryParameters3D.create(top + up * 2.0, top - up * 0.6, 1))
+		return 9.0 if hit.is_empty() else (hit.position as Vector3).distance_to(top)
+	# Rise: shut before, open and solid after its zone heals.
+	place_at(0, b.surface_point(at.rotated(fr.x, 12.0 / b.radius), 0.2), fr.z)
+	var rise: RestorationGate = make.call("probe_rise", "rise", 0.0)
+	await t.frames(2)
+	var before: float = top_hit.call(rise)
+	b.complete_event("probe_rise", rise.global_position)
+	await t.seconds(2.0)
+	var after: float = top_hit.call(rise)
+	t.check("gate_rises_when_zone_heals", before > 0.5 and rise.is_open and after < 0.05 and rise.global_transform.origin.distance_to(rise.open_xf.origin) < 0.01 and rise.has_meta("settled"),
+			"before: nothing solid at its open top (%.2f m off); after: open %s, solid there within %.3f m" % [before, rise.is_open, after])
+	# Grow: waits while he stands where it is growing, then grows once he steps off.
+	var grow: RestorationGate = make.call("probe_grow", "grow", 6.0)
+	await t.frames(2)
+	place_at(0, grow.open_xf.origin - b.up_at(grow.open_xf.origin) * 1.5, fr.z)
+	p.global_position = grow.open_xf.origin
+	p.set_physics_process(false)
+	b.complete_event("probe_grow", grow.global_position)
+	await t.seconds(2.0)
+	var waited := not grow.is_open
+	p.set_physics_process(true)
+	place_at(0, b.surface_point(at.rotated(fr.x, 12.0 / b.radius), 0.2), fr.z)
+	await t.seconds(2.0)
+	t.check("gate_never_moves_into_him", waited and grow.is_open and top_hit.call(grow) < 0.05, "waited while he stood there %s; open once he left %s" % [waited, grow.is_open])
+	# Resumed save: open at once.
+	var res: RestorationGate = make.call("probe_resume", "rise", -6.0)
+	await t.frames(1)
+	b.restore_event("probe_resume", res.global_position)
+	var at_once := res.is_open and res.global_transform.origin.distance_to(res.open_xf.origin) < 0.01
+	t.check("gate_open_on_resume", at_once, "open in the same frame %s (zone %s, gates on ball %d)" % [at_once, str(b.zones.get("probe_resume", {})), b.gates.size()])
+	for gt in [rise, grow, res]:
+		b.gates.erase(gt)
+		b.zones.erase(gt.zone_id)
+		gt.queue_free()
+	b.events_total = saved[0]
+	b.events_done = saved[1]
+	b.restoration = saved[2]
+	b.completed = saved[3]
+	release.call()
 
 
 ## World expansion: a ravine cut through a plateau. Its floor is the ball's base surface; the

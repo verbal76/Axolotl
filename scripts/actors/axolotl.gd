@@ -395,7 +395,9 @@ func _floor_is_stable() -> bool:
 	for i in get_slide_collision_count():
 		var c := get_slide_collision(i)
 		var col := c.get_collider()
-		if col and (col.has_meta("unsafe") or col is AnimatableBody3D):
+		# (A moving body is no safe footing, unless it has settled for good, like an opened
+		# restoration gate.)
+		if col and (col.has_meta("unsafe") or (col is AnimatableBody3D and not col.has_meta("settled"))):
 			return false
 	return true
 
