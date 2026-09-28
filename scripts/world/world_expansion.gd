@@ -170,8 +170,9 @@ static func reed_canyon(lb: LevelBuilder) -> void:
 	var bl: Array = bridge.get_meta("top_line")
 	var bm: Vector3 = bl[bl.size() / 2]
 	lb.mote_xf("crests", Transform3D(MossBall.frame_at(b.up_at(bm), 0.0), bm + b.up_at(bm) * 0.5), 0.5)
-	var bll := Levels._latlon(b.up_at(bm))
-	lb.bloom(bll.x, bll.y + 1.5, 3.2)
+	# The bloom a few steps further along the bridge, on its real top.
+	var bb: Vector3 = bl[bl.size() / 2 + 3]
+	lb.bloom_xf(Transform3D(MossBall.frame_at(b.up_at(bb), 0.0), bb))
 	lb.route("bridge", nc[0], nc.slice(1, bi, 3) + [nc[bi], bl[3], bl[6], bm], ["crests"], "canyon bridge")
 	var ncf: Vector3 = nc[nc.size() - 4]
 	lb.mote_xf("crests", Transform3D(MossBall.frame_at(b.up_at(ncf), 0.0), ncf + b.up_at(ncf) * 0.5), 0.5)

@@ -354,6 +354,9 @@ func _avoid_domes(dir: Vector3, tgt: Vector3) -> Vector3:
 		var door: Vector3 = h["door"]
 		var centre := door + (door - (h["entry"] as Vector3)).normalized() * 7.0
 		var away := p.global_position - centre
+		# (The tangent-plane distance alone also matches a dome on the far side of the ball.)
+		if away.length() > 14.0:
+			continue
 		away -= p.up * away.dot(p.up)
 		var dist := away.length()
 		if dist < 11.5:

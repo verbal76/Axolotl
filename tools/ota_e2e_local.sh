@@ -166,7 +166,7 @@ timeout "${PLAY_TIMEOUT:-1200}" "$W/axolotl.x86_64" --headless --fixed-fps 60 --
 	--out="$W/offline_play" --ota-root="$W/device_offline" --ota-pointer="http://127.0.0.1:$((PORT + 2))/ota-channel-dev/latest.json" \
 	> "$W/run_offline_playthrough.log" 2>&1
 grep -E "\[TEST\] SUMMARY|^\[OTA\]" "$W/run_offline_playthrough.log" | cut -c1-200
-expect "15 offline: full playthrough completes" "$W/run_offline_playthrough.log" "\[TEST\] SUMMARY 12 passed, 0 failed"
+expect "15 offline: full playthrough completes" "$W/run_offline_playthrough.log" "\[TEST\] SUMMARY 20 passed, 0 failed"
 expect "15 offline: OTA check failed quietly during play" "$W/run_offline_playthrough.log" "channel unreachable"
 
 O1=$(make_copy ota1); mark_game "$O1" 1; publish "$O1" 1

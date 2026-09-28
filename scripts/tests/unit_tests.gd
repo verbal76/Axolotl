@@ -810,10 +810,11 @@ func _test_run_timer_live() -> void:
 	var d := g.clock.run_s
 	await t.seconds(1.0)
 	var e := g.clock.run_s
+	# What going to the background wrote (read before resuming, when later autosaves may follow).
+	var on_disk: Dictionary = JSON.parse_string(FileAccess.get_file_as_string(g.run_save.path))
 	g._notification(Node.NOTIFICATION_APPLICATION_RESUMED)
 	await t.seconds(0.5)
 	t.check("timer_paused_in_background", e == d and g.clock.run_s > e, "%.3f -> %.3f while backgrounded" % [d, e])
-	var on_disk: Dictionary = JSON.parse_string(FileAccess.get_file_as_string(g.run_save.path))
 	t.check("run_saved_when_backgrounded", is_equal_approx(float(on_disk["run"]["clock"]["run_s"]), d), "%.3f on disk" % float(on_disk["run"]["clock"]["run_s"]))
 	var diag := StartupTrace.timeline_text()
 	t.check("diagnostics_show_run_timer", diag.contains("Run timer & completion") and diag.contains("Timer state: running") and diag.contains("Completion:")
