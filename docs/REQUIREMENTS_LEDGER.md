@@ -250,7 +250,7 @@ consolidate everything into ONE Mote app and ONE current APK (retire Mote Dev; k
 ## MOTE OPEN ITEMS EXPANSION LIST
 
 [x] 1. Timer + completion foundation (dev-000018, verified 2026-09-28)
-[ ] 2. Living terrain / texture and material upgrade
+[x] 2. Living terrain / texture and material upgrade (dev-000019, verified 2026-09-28)
 [ ] 3. Dense reactive vegetation / cornfield movement
 [ ] 4. Additional moss balls + expanded terrain set
 [ ] 5. Additional enemies + ecosystem expansion
@@ -294,6 +294,7 @@ too straight, it's a perfect 90 into the ground" (the platforms).
 | E2-05 | Platforms: organic mounds, no 90° walls into the ground, routes preserved | I+V / needs phone | `MeshLib.mound`: rounded rim, sides leaning out at 75°, concave sweep into the ground following the real terrain; irregular outline; top exact; collision = mesh | `mounds_tops_at_design_height`, `mounds_flare_not_a_step` (0.23 m), `mound_faces_outward`; tutorial, jump/burst, canopy and placement tests; playthroughs |
 | E2-06 | No new floating terrain or gaps; previous protections kept | I+V | | `terrain_structures_meet_the_ground` (132 structures), `terrain_no_unsupported_platforms` |
 | E2-07 | Mobile performance measured | I+V | `--test=shots --only=perf` | `docs/TERRAIN.md` Performance |
+| E2-08 | Ships by OTA, no APK | I+V | game layer only; runtime r5 unchanged | dev-000019 (OTA publish #19, source `4461b84`, PCK `e0c2b637…eef249`, 8,796,124 bytes, baked, save schema 1): signature (pinned key), hash, size and inspector verified from public URLs; a b22 client downloads and stages it; `_test_caves` and `_test_mounds` pass run from the pack; Build & Verify #27 green with no APK build |
 
 ## Precedence notes
 

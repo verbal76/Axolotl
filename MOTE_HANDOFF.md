@@ -19,7 +19,7 @@ kept below as history.
 | **Release commit** (APK + OTA source) | `104605727ab2bc48f6b0b6e2d56a0fd44127c5be` (`1046057`) |
 | **The one Android app** | **Mote**, `com.verbal76.axolotl`. The separate Mote Dev app is **retired** (owner, 2026-09-27). |
 | **Current APK** | **`mote-v0.1.0-b22.apk`** (artifact `mote-android-v0.1.0-b22`), Android build 22, bundled baseline `1046057` |
-| **Current OTA / channel pointer** | **`dev-000018`**, built from `27d6d44` (Expansion 1: run save, run timer, completion; music un-muffled; includes dev-000015..17). dev-000014 = b22's own game |
+| **Current OTA / channel pointer** | **`dev-000019`**, built from `4461b84` (Expansion 2: terrain material, natural caves and mounds, head guard; includes dev-000015..18). dev-000014 = b22's own game |
 | Runtime | `android-godot-4.7.2-r5` |
 | Game version / save schema | `0.1.0` / `1` |
 | Requirement authority | `docs/REQUIREMENTS_LEDGER.md` (sections G, F, O, V, N, C, A, R, S, P, M, **E1** and the **MOTE OPEN ITEMS EXPANSION LIST**) |
@@ -346,7 +346,14 @@ is expected; tap **Install anyway**.
 
 ## 11. Current OTA
 
-**Latest: `dev-000018`** (OTA publish #18, run 36367445453): source `27d6d44eadbaa99fd730666c37b9bc58f60c33b8`,
+**Latest: `dev-000019`** (OTA publish #19, run 36371883104): source `4461b844c8b2cd285976bdeb4954c4735f0f24b6`,
+runtime r5, PCK `e0c2b637adea45d6d9b85ad59e8a67fff2c02f3ebd56d622510ae410cceef249` (8,796,124 bytes, baked),
+save schema 1. **Expansion 2** (ledger E2, `docs/TERRAIN.md`): moss-over-stone terrain material, natural
+arched caves (phone defect: square doorway), a head guard (phone defect: head through cave walls),
+organic mounds sweeping into the ground (owner: "walls too straight"). Verified from the public URLs; a
+b22 client downloads and stages it. No APK.
+
+Before it: `dev-000018` (OTA publish #18, run 36367445453): source `27d6d44eadbaa99fd730666c37b9bc58f60c33b8`,
 runtime r5, PCK `2d980e7e68b8c503fae6554cebb3dd5940b9f6ae26591e29a5f7789e0920e66a` (8,773,516 bytes, shaders
 baked), save schema 1. **Expansion 1** (ledger E1, `docs/COMPLETION.md`): run save with Continue / New Run,
 run timer, completion catalog and %, pause-menu run panel, optional HUD timer, finish time under ALL CLEAR,
@@ -503,7 +510,13 @@ These are implemented but lack automated evidence. They are **not** unimplemente
     - Diagnostics (Pause → About / Diagnostics): the "Run timer & completion" section. On first launch of dev-000018 its run save says it is new because earlier versions saved no progress (so earlier finished games are not carried over).
     - The music on the title is clear; on a murky ball it is softer but recognisable.
 
-Record results in the ledger (O-19, A-05, R-01, R-14, R-19, S-03, S-06, S-14, F-07, F-09, P-01, P-03, P-06, M-01, M-03, E1-01, E1-07, E1-09) only with the owner's evidence.
+11. **After dev-000019 is active (Expansion 2):**
+    - Each cave's entrance is a rounded, irregular arch in a lumpy mound (no square doorway); walk in and out easily.
+    - Inside, walk nose-first into walls and jump under the roof: his head stops at the rock instead of going through.
+    - Platforms and ledges are mounds whose sides lean out and sweep into the moss (no 90-degree walls); tops and jumps as before (M1 still a jump, M2 still jump + burst).
+    - Steep faces show earth and stone under the moss; flat ground stays moss; restored moss still turns green.
+
+Record results in the ledger (O-19, A-05, R-01, R-14, R-19, S-03, S-06, S-14, F-07, F-09, P-01, P-03, P-06, M-01, M-03, E1-01, E1-07, E1-09, E2-01, E2-02, E2-04, E2-05) only with the owner's evidence.
 
 ## 17. Repository isolation
 
@@ -514,18 +527,18 @@ repository. Do not name, open or use any other game repository in Mote developme
 
 - **Released:** one Mote APK (b22, r5) with everything approved bundled, OTA on `dev`, channel pointer
   reconciled to dev-000014 (the APK's own game). CI green on `1046057`.
-- **Delivered after b22:** dev-000015 (phone-playtest fixes, ledger P) and dev-000016 (ball 3 canopy climb, P-06) and dev-000017 (owner's music, M) and dev-000018 (Expansion 1: timer + completion foundation, E1; music finish, M-03), by OTA only.
+- **Delivered after b22:** dev-000015 (phone-playtest fixes, ledger P) and dev-000016 (ball 3 canopy climb, P-06) and dev-000017 (owner's music, M) and dev-000018 (Expansion 1: timer + completion foundation, E1; music finish, M-03) and dev-000019 (Expansion 2: living terrain + cave repair, E2), by OTA only.
 - **MOTE OPEN ITEMS EXPANSION LIST** (also in the ledger; each item is one dev OTA, authorised separately):
 
   [x] 1. Timer + completion foundation (dev-000018)
-  [ ] 2. Living terrain / texture and material upgrade
+  [x] 2. Living terrain / texture and material upgrade (dev-000019)
   [ ] 3. Dense reactive vegetation / cornfield movement
   [ ] 4. Additional moss balls + expanded terrain set
   [ ] 5. Additional enemies + ecosystem expansion
   [ ] 6. Full expansion integration + progression/balance/100%/speedrun reconciliation
 
   New completion-bearing content must extend the catalog as `docs/COMPLETION.md` describes.
-- **Expansion list:** item 1 of 6 is done (dev-000018). **Do not start item 2 until the owner authorises it** (after dev-000018 is on the phones).
+- **Expansion list:** items 1 and 2 of 6 are done (dev-000018, dev-000019). Item 3 (reactive vegetation) is authorised and in progress; each item is authorised separately.
 - **Next task:** the owner's phone checks (§16), including the dev-000015..18 changes.
 - **After that:** continue from the owner's feedback. Game-layer changes reach b22 by OTA on push
   (that push is also the first OTA a b22 phone downloads). Native changes need `--bump` and a new APK.
