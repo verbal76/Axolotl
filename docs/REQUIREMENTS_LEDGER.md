@@ -381,7 +381,7 @@ stylised undersea game (the healed look), and a sprouted moss ball.
 
 ## PT — dev-000024 physical playtest polish (owner, 2026-09-28)
 
-The owner reports dev-000024 **physically active and boot-healthy** on the real b22 app. From playing it,
+The owner reports dev-000024 **physically active and boot-healthy** on the real b22 app (owner's evidence, 2026-09-28). From playing it,
 three findings, fixed in a tightly bounded pass (no gameplay rule, progression, completion id, save format,
 runtime, native code, collision, attack range, damage or timing changed; not Expansion 7).
 
@@ -393,7 +393,7 @@ runtime, native code, collision, attack range, damage or timing changed; not Exp
 | PT-04 | Owner: the look-up idle kept; a cute little yawn on the stretch | I+V / needs phone | fifth idle `Idle.LOOKUP`; `sfx_gill_yawn` (tools/gen_audio.py `gill()`), played once per stretch | `idles_varied_not_repeated` (all five), `stretch_yawns_once` |
 | PT-05 | Owner: a colour picker for Gill's body and freckles; reachable from the title screen; small uploaded or built-in patterns tiled on him | I+V / needs phone | "Gill's colours" (`GillPage`, `GillLook`) from the pause menu and the title screen: seven morph swatches, body/freckle hue and shade, patterns (five built-in or the player's picture via the phone's file picker) as markings or full colour, 1–8 repeats, live preview; per device in settings.cfg `[gill]`, schema 1 unchanged | `_test_gill_colours` (4), `_test_gill_patterns` (4); shots `colours`; the phone's file picker needs the owner's check |
 | PT-06 | Performance not undone | I+V (proxy) / needs phone | vertex-shader only; no shadows or casters changed; preview target drawn only while open | `docs/VEGETATION.md` Performance (15 views): within ±11% of dev-000024, median about 1% faster; video memory +4.5 MB; `ambient_motion_bounded_gpu_only` |
-| PT-07 | Ships by OTA, no APK | PENDING | game layer only; runtime r5 | PENDING |
+| PT-07 | Ships by OTA, no APK | I+V | game layer only; runtime r5 | dev-000025 (OTA publish #25, run 36486884032, source `8c92e5b`, PCK `333d6cd6…25dc52af`, 9,285,292 bytes, 38 baked shader caches, save schema 1): signature (pinned key), hash, size, inspector (INSPECT OK) and the new sources in the pack verified from the public URLs; a b22 client (bundled `1046057`) discovers, downloads, verifies and stages it; 50 checks pass run from the pack; unit suite 390/390 (fresh user data); playthroughs on seeds 7 and 4242: 23/23 each, 0 deaths, 100% by play; OTA end-to-end 42/42; version drift and runtime gate r5 pass; Build & Verify #33 green, Android APK job skipped |
 
 ## Precedence notes
 

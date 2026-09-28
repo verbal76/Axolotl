@@ -14,12 +14,12 @@ kept below as history.
 
 | Identity | Value |
 |---|---|
-| Repository / branch | `verbal76/Axolotl`, `claude/axolotl-aquarium-platformer-3y0qyy` (draft PR #1 into `main`) |
+| Repository / branch | `verbal76/Axolotl`. Current development branch: `claude/mote-game-continuation-bov2x9` (draft PR #2 into the E6 branch). Expansions 1–6: `claude/axolotl-aquarium-platformer-3y0qyy` (draft PR #1 into `main`) |
 | **Handoff document commit** | The commit that updates this file (`[skip ci]`, documentation only). It is newer than the release commit. |
 | **Release commit** (APK + OTA source) | `104605727ab2bc48f6b0b6e2d56a0fd44127c5be` (`1046057`) |
 | **The one Android app** | **Mote**, `com.verbal76.axolotl`. The separate Mote Dev app is **retired** (owner, 2026-09-27). |
 | **Current APK** | **`mote-v0.1.0-b22.apk`** (artifact `mote-android-v0.1.0-b22`), Android build 22, bundled baseline `1046057` |
-| **Current OTA / channel pointer** | **`dev-000024`**, built from `6e6f71e` (Expansion 6: final integration pass; includes dev-000015..23). dev-000014 = b22's own game |
+| **Current OTA / channel pointer** | **`dev-000025`**, built from `8c92e5b` (the dev-000024 playtest polish and his colours; game content validated at `969e4bb`; includes dev-000015..24). dev-000014 = b22's own game |
 | Runtime | `android-godot-4.7.2-r5` |
 | Game version / save schema | `0.1.0` / `1` |
 | Requirement authority | `docs/REQUIREMENTS_LEDGER.md` (sections G, F, O, V, N, C, A, R, S, P, M, **E1** and the **MOTE OPEN ITEMS EXPANSION LIST**) |
@@ -400,6 +400,22 @@ is expected; tap **Install anyway**.
 
 ## 11. Current OTA
 
+**Latest: `dev-000025`** (OTA publish #25, run 36486884032, 8 min 38 s): source `8c92e5b0baae9ab72058b467f4fdea5a4ca47118`,
+runtime r5, PCK `333d6cd69e2b548eff37b16caf5c004d1f29048a542342ec7fd1891325dc52af` (9,285,292 bytes, 38 baked shader caches),
+save schema 1. **Playtest polish** (ledger PT): five idles and a yawn; a tail whip that sweeps the arc, which is drawn over
+the real hit area; ambient plant and leaf sway; "Gill's colours" (morphs, fine-tuning, patterns, the player's own picture)
+from the pause menu and the title screen. `8c92e5b` differs from the validated `969e4bb` only in the publish workflow's
+trigger and a line in `docs/OTA.md`. Verified from the public URLs:
+- signature against the pinned key;
+- hash and size;
+- baked shaders and inspector;
+- the new sources in the pack;
+- a b22 client (bundled `1046057`) discovers, downloads, verifies and stages it;
+- 50 checks pass run from the pack;
+- Build & Verify #33 green, no APK.
+
+Published automatically by the push, now that the publish workflow lists the current development branch (§12).
+
 **Latest: `dev-000024`** (OTA publish #24, run 36465899336): source `6e6f71e368d92379a331c827eb772155ab470224`,
 runtime r5, PCK `6816257c11b12560e66f18e6fc4dd33925cff89734ee658aa6dee37d1ed2e7fa` (9,214,288 bytes, baked),
 save schema 1. **Expansion 6** (ledger E6): leaves grown from their stems with matching collision; Gill's soft
@@ -495,7 +511,7 @@ rejects them ("incompatible runtime"); an r3/r4 app rejects dev-000014 ("native 
 | Workflow | File | Triggers | Does |
 |---|---|---|---|
 | Build & Verify | `.github/workflows/build.yml` | `pull_request`, push to `main`, manual | Script check, unit suite, playthrough bot, version drift, runtime gate; the one Mote APK exported with shaders baked (software Vulkan under xvfb), then verified from the APK itself: package/label/versionCode, INTERNET, certificate pin, OTA-key pin, baked caches, splash, and the bundled game's own identity (`--print-identity`); unsigned iOS simulator build |
-| OTA publish (dev channel) | `.github/workflows/ota-publish.yml` | push to `claude/axolotl-aquarium-platformer-3y0qyy`, manual | Runtime gate, tests, PCK export (`Android` preset, shaders baked; fails without them), manifest, signing, inspection, immutable release, re-download and verify, pointer move, receipt artifact `ota-receipt-*` |
+| OTA publish (dev channel) | `.github/workflows/ota-publish.yml` | push to an authorized Mote development branch (`claude/mote-game-continuation-bov2x9`, `claude/axolotl-aquarium-platformer-3y0qyy`; listed explicitly, new ones added in their first release), manual | Runtime gate, tests, PCK export (`Android` preset, shaders baked; fails without them), manifest, signing, inspection, immutable release, re-download and verify, pointer move, receipt artifact `ota-receipt-*` |
 
 Every push to the branch runs both workflows (the second through the PR). A commit message
 containing `[skip ci]` skips both.
@@ -669,7 +685,7 @@ repository. Do not name, open or use any other game repository in Mote developme
 
 - **Released:** one Mote APK (b22, r5) with everything approved bundled, OTA on `dev`, channel pointer
   reconciled to dev-000014 (the APK's own game). CI green on `1046057`.
-- **Delivered after b22:** dev-000015 (phone-playtest fixes, ledger P) and dev-000016 (ball 3 canopy climb, P-06) and dev-000017 (owner's music, M) and dev-000018 (Expansion 1: timer + completion foundation, E1; music finish, M-03) and dev-000019 (Expansion 2: living terrain + cave repair, E2) and dev-000020 (Expansion 3: reactive vegetation, E3) and dev-000021/22 (Expansion 4: world expansion, E4) and dev-000023 (Expansion 5: ecosystem, E5) and dev-000024 (Expansion 6: final integration pass, E6), by OTA only.
+- **Delivered after b22:** dev-000015 (phone-playtest fixes, ledger P) and dev-000016 (ball 3 canopy climb, P-06) and dev-000017 (owner's music, M) and dev-000018 (Expansion 1: timer + completion foundation, E1; music finish, M-03) and dev-000019 (Expansion 2: living terrain + cave repair, E2) and dev-000020 (Expansion 3: reactive vegetation, E3) and dev-000021/22 (Expansion 4: world expansion, E4) and dev-000023 (Expansion 5: ecosystem, E5) and dev-000024 (Expansion 6: final integration pass, E6) and dev-000025 (playtest polish and his colours, PT), by OTA only.
 - **MOTE OPEN ITEMS EXPANSION LIST** (also in the ledger; each item is one dev OTA, authorised separately):
 
   [x] 1. Timer + completion foundation (dev-000018)
@@ -681,7 +697,8 @@ repository. Do not name, open or use any other game repository in Mote developme
 
   New completion-bearing content must extend the catalog as `docs/COMPLETION.md` describes.
 - **Expansion list:** all six items are done (dev-000018, dev-000019, dev-000020, dev-000021/22, dev-000023, dev-000024). Do not begin Expansion 7 unless the owner asks for it.
-- **Next task:** the owner's phone checks (§16), including the Expansion 6 items (15) and the frame rate.
+- **Next task:** the owner's phone checks (§16), including items 15 (Expansion 6) and 16 (dev-000025).
+- **Next development:** the major world expansion ("seven substantial worlds"), owner brief 2026-09-28. Design notes: `docs/WORLD_EXPANSION.md`. It ships as one OTA.
 - **After that:** continue from the owner's feedback. Game-layer changes reach b22 by OTA on push
   (that push is also the first OTA a b22 phone downloads). Native changes need `--bump` and a new APK.
 
@@ -698,7 +715,7 @@ You are continuing an existing game called **Mote** (protagonist **Gill**).
 
 **Before editing:**
 
-1. Verify the repository (`verbal76/Axolotl`), the remote, the branch (`claude/axolotl-aquarium-platformer-3y0qyy`) and HEAD.
+1. Verify the repository (`verbal76/Axolotl`), the remote, the development branch (currently `claude/mote-game-continuation-bov2x9`) and HEAD.
 2. Read this file (`MOTE_HANDOFF.md`) completely.
 3. Read `docs/REQUIREMENTS_LEDGER.md`.
 4. Inspect the current source.
@@ -707,7 +724,7 @@ You are continuing an existing game called **Mote** (protagonist **Gill**).
    - the handoff commit is documentation only.
 6. Report any drift.
 7. Report the current APK (Mote b22; the Mote Dev app is retired).
-8. Report the current OTA (`dev-000014`, or newer if the channel pointer has moved).
+8. Report the current OTA (the channel pointer; `dev-000025` at this handoff).
 9. Report the physical-device verification state (none unless the owner has supplied evidence).
 10. Continue from the documented stopping point (§18).
 
