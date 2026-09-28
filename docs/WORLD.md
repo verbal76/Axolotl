@@ -159,6 +159,26 @@ Tests (`_test_leaf_geometry`, and `_test_leaf_footing` with real touch input):
 | `spiral_leaves_distinct` | neighbouring leaves round every stem and spiral are ≥ 12° apart in plan view (> 900 pairs) |
 | `turning_on_a_leaf_keeps_footing`, `edge_landings_hold`, `jump_beside_the_stem_clear`, `underneath_leaves_clear`, `climb_down_never_wedges`, `ladders_climbed_twice` | physical: turning round on a leaf, landing near its edge, jumping beside the stem, walking under leaves, climbing down, and two jungle ladders climbed twice in a row (turning tried on > 140 leaves) |
 
+## Vortices (Expansion 6, owner review)
+
+The owner rejected the first vortex: a solid tube with a cone "jammed into the dirt" that looked
+like PS1 graphics. They asked for a revolving spiral of water jets that Gill circles through. The
+vortex (`scripts/world/vortex.gd`) is now:
+
+- **Jets.** Five water jets and three thinner inner spray streams wind round the path between the
+  balls as a helix (`Vortex._jet_mesh`, `shaders/vortex_jets.gdshader`). They flare out at both
+  ends into the pools. The whole spiral revolves about the path (`spin_phase`, faster as the
+  vortex strengthens), and foam streaks race along each jet. Before the vortex connects, the
+  spiral reaches only part way (`grow`), as before.
+- **Tidal pools.** Each end is a swirling pool lying on the moss (`Vortex._pool_mesh`,
+  `shaders/vortex_pool.gdshader`): spiral arms of water winding in toward a churning eye, and a lip
+  of foam. The pool grows from the eye as the vortex strengthens. Sand, bits of moss and bubbles
+  spiral up out of it into the jets (`shaders/vortex_debris.gdshader`). There is no solid geometry.
+- **The ride.** Gill is carried round the path beside a jet as the spiral turns, a corkscrew
+  (`Vortex.ride_pose`), belly toward the jet. The camera rides in the middle of the spiral. The
+  ride's start, end and length (6 s) are unchanged, and so are the mouths' clear radius and every
+  vortex test.
+
 ## Caves
 
 Seven caves in all (three before). All use the Expansion 2 generator (arched mouths, jambs,

@@ -482,10 +482,15 @@ func _superhero_landing(extreme: bool) -> void:
 
 # --- Damage / health ---------------------------------------------------------------------
 
+## Where the last hit came from (diagnostics and tests).
+var last_hit_from := Vector3.ZERO
+
+
 func take_damage(amount: int, from_pos: Vector3) -> void:
 	if state != "normal" or invuln_t > 0.0:
 		return
 	health = maxi(0, health - amount)
+	last_hit_from = from_pos
 	invuln_t = 1.3
 	hurt_lock = 0.3
 	model.hurt_t = 0.0

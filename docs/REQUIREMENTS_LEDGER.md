@@ -353,6 +353,30 @@ defeated; guardians and eels stay defeated, stalkers and puffers return, ambient
 | E5-10 | Determinism; both playthrough seeds viable | I+V | per-creature seeded generators | `eco_leaves_gameplay_rng_alone`, `eco_deterministic`; playthroughs on seeds 4242 and 7 |
 | E5-11 | Ships by OTA, no APK | I+V | game layer only; runtime r5 | dev-000023 (OTA publish #23, run 36411346325, source `9d4fd24`, PCK `c0a4037a…e6f226`, 9,026,936 bytes, baked, save schema 1): signature (pinned key), hash, size, inspector and the E5 sources in the pack verified from public URLs; a b22 client downloads, verifies and stages it; `_test_ecosystem` (30) and `_test_all_clear` (7) pass run from the pack; unit suite 315/315 (fresh user data); playthroughs 20/20 on seeds 7 and 4242, 0 deaths; Build & Verify #31 green, Android APK job skipped |
 
+## E6 — Expansion 6: final integration, visuals, balance, 100% (owner, 2026-09-28)
+
+The consolidated prompt, plus owner review during the pass. Owner rule: the game starts dirty and
+dull on purpose and brightens as it is healed. Only real defects in the murky start were changed.
+Owner references: a real crab, calm/puffed pufferfish, garden eels, moray eels, a professional
+stylised undersea game (the healed look), and a sprouted moss ball.
+
+| ID | Requirement | Status | Implementation | Evidence |
+|---|---|---|---|---|
+| E6-01 | Spiral/ladder leaves: attached, broad, staged, collision = art; every climb audited | I+V / needs phone | petiole leaves, outline collision, 90° spirals, full-height stem collision (`docs/WORLD.md` Leaf platforms) | `_test_leaf_geometry` (4), `_test_leaf_footing` (6), climbs and route audits |
+| E6-02 | Gill: an axolotl, soft freckled skin, no plastic shine; collision unchanged | I+V / needs phone | `shaders/axolotl_skin.gdshader`, crossed gill blades | `gill_soft_skin_not_plastic`, `gill_collision_unchanged` |
+| E6-03 | Parasites: one continuous body; limp death drift | I+V / needs phone | `shaders/parasite_body.gdshader`, `_limp_chain` | `_test_parasite_body_and_death` |
+| E6-04 | E5 creatures reviewed against references | I+V / needs phone | crab, pufferfish, moray eels, garden-eel burrowers, shrimp, snail, motes (`docs/ECOSYSTEM.md` Look) | shots `critterclose`, `feedback` |
+| E6-05 | Lighting: sources, shafts, caustics, shadows, caves, depth; restoration clears the tank | I+V / needs phone | `docs/LIGHTING.md` | `aquarium_fully_clean`, shots `review`, `lightdbg`, moments |
+| E6-06 | Owner: blocky rosettes, sharp base flowers | I+V / needs phone | smooth arching leaves that sway (`docs/VEGETATION.md`) | shots `feedback` |
+| E6-07 | Owner: vortex a revolving spiral of water jets over a tidal pool, Gill corkscrewing through | I+V / needs phone | `docs/WORLD.md` Vortices | `_test_vortex` (6), `vortex_mouths_clear`, shots `vortex` |
+| E6-08 | Owner: healed balls sprout like the reference moss ball | I+V / needs phone | `Levels._sprouts` (`docs/VEGETATION.md`) | shots `balls` (murky/clear) |
+| E6-09 | Completion reconciled; a legitimate automated 100% | I+V | bot `hundred()`; fixes: the Hollow Grotto cavelet's pearl on the ceiling, eels fought from inside their grottoes | playthroughs seeds 7 and 4242: 88.4% at the finish, then 100% by play, finish time kept, 23/23 each, 0 deaths; `cave_rewards_on_their_top_ledge` |
+| E6-10 | Balance review | I+V | finish floor kept at 58.5% (`docs/COMPLETION.md` Balance review) | normal finishes 88.4% on both seeds |
+| E6-11 | Timer integrity | I+V | unchanged model | `_test_timer_integrity` (3), `finish_time_kept_through_100` |
+| E6-12 | Resume points safe; save and migration | I+V | bloom pulse startles parasites on re-forming | `_test_resume_points_safe`, `_test_run_save_file`, relaunch test |
+| E6-13 | Performance | see Performance in `MOTE_HANDOFF.md` §11 | | shots `perf` before/after |
+| E6-14 | Ships by OTA, no APK | pending | game layer only; runtime r5 | (filled in on publish) |
+
 ## Precedence notes
 
 - The reconciliation prompt's floor list repeats two items that the owner changed earlier today: "diegetic

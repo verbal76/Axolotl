@@ -569,6 +569,8 @@ These are implemented but lack automated evidence. They are **not** unimplemente
     - **Parasites:** one smooth bending body, not beads. Defeated, one twitches, then drifts down limp.
     - **Creatures:** the crab has a speckled shell with a red rim, legs and claws. The pufferfish is a calm spotted fish that puffs into a spiny ball. The eels are morays in the grotto walls. The burrowers are garden eels rising from sand mounds. The motes have trailing tentacles. The rosette plants and ferns are smooth and sway.
     - **Light:** at the start the tank is murky and dull (on purpose). As balls heal, the water clears toward aqua, the ceiling light warms, light shafts and moving caustics appear, and the corals take their colour. At ALL CLEAR the tank should look bright and alive. Caves stay dark with glow-worms.
+    - **Vortex:** a spiral of water jets revolving over a swirling pool on the moss (no tube, no cone). Sand and bubbles spiral up from the pool. Ride it: Gill corkscrews round inside the spinning jets. The far end is another pool.
+    - **Healed balls:** as a ball heals, red-tipped stem plants and ferns sprout over its top like a crown, and roots trail beneath it. Neglected balls have none.
     - **Frame rate:** watch for stutter in the restored tank, especially with light shafts in view.
     - **100%:** after finishing, the pause menu's completion keeps counting. Everything (blooms, caves, crabs, eels, species) can be earned, and the finish time never changes.
 

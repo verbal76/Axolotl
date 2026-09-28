@@ -102,6 +102,16 @@ Every existing grass, leaf and strand material now uses it.
   art direction asks. They are hidden beyond 70 m.
 - **Near-camera fade** uses an ordered 4×4 (Bayer) dither in place of per-pixel random noise. The
   random pattern read as a shimmering stipple, which looked like a shadow defect.
+- **Sprouts: the healed moss ball** (owner reference photo: a sprouted moss ball). `Levels._sprouts`
+  grows `sprout` plants, which the vegetation shader keeps at zero size on neglected moss and
+  grows in with the moss's health:
+  - clusters of stem plants (`MeshLib.stem_plant_mesh`), green below and red to orange at the
+    tips like Rotala. Most are small, and a crown of tall ones (3–5.5 m) covers the top of each
+    ball, so the healed ball's outline changes across the tank. Gill walks through them like tall
+    reeds, and they bend in his wake;
+  - leafy fern clumps among them;
+  - fine roots trailing from each ball's underside (`MeshLib.root_strands_mesh`).
+  They are kept off routes, blooms and vortex mouths like the rest of the vegetation.
 - **Caustics** are added to the plant and grass shaders (`docs/LIGHTING.md`).
 
 ## Performance

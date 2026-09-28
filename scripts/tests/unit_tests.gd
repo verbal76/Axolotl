@@ -3031,6 +3031,15 @@ func _test_resume_points_safe() -> void:
 			var allow := 1.2 if b.index == 1 else 0.3
 			if p.global_position.distance_to(rp) > 5.0:
 				t.log_line("far: b%d bloom %s -> now ball %d at %s, state %s, cinematic '%s', vortex conn %s" % [b.index + 1, str(rp), p.ball.index + 1, str(p.global_position), p.state, g.cinematic, str(g.balls[b.index].vortex_out.connected if g.balls[b.index].vortex_out else "-")])
+			if p.health < hp:
+				var near := []
+				for par in b.parasites:
+					if par.global_position.distance_to(p.last_hit_from) < 3.0:
+						near.append("parasite %s %s %.1f m" % [par.zone_id, par.state, par.global_position.distance_to(p.last_hit_from)])
+				for c in b.critters:
+					if c.global_position.distance_to(p.last_hit_from) < 4.0:
+						near.append("%s %.1f m" % [c.species, c.global_position.distance_to(p.last_hit_from)])
+				t.log_line("hit at b%d bloom %s from %s (%.1f m away): %s" % [b.index + 1, str(rp.snapped(Vector3.ONE * 0.1)), str(p.last_hit_from.snapped(Vector3.ONE * 0.1)), p.last_hit_from.distance_to(rp), str(near)])
 			if not grounded or slid > allow or p.health < hp or p.global_position.distance_to(rp) > allow + 0.9:
 				bad.append("b%d bloom at %s: grounded %s, slid %.2f m, hurt %s, %.2f m from its point" % [b.index + 1, str(rp.snapped(Vector3.ONE * 0.1)), grounded, slid, p.health < hp, p.global_position.distance_to(rp)])
 	for x in bad:
