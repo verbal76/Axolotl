@@ -396,6 +396,8 @@ func run(runner) -> void:
 		g.g_disp = 1.0
 		g.aquarium.apply(1.0)
 		await _gill_shots(g, "gill_restored")
+	if only == "settingsscroll":
+		await _settings_scroll_shots(g)
 	if only == "colours":
 		await _colour_shots(g)
 	if only == "sway":
@@ -1010,6 +1012,45 @@ func _gill_anim(g: Game) -> void:
 			i += 1
 	Engine.time_scale = 1.0
 	_open(g)
+
+
+## The Settings panel's scrollbar at a phone's landscape size (dev-000025 phone test): the list at
+## its top, middle and bottom, and a finger swipe on the list itself.
+func _settings_scroll_shots(g: Game) -> void:
+	g.pause_menu.open()
+	await t.seconds(0.4)
+	var sc: ScrollContainer = g.pause_menu._panel.find_children("*", "ScrollContainer", true, false)[0]
+	var bar := sc.get_v_scroll_bar()
+	t.log_line("window %s, viewport %s, scrollbar %s" % [str(DisplayServer.window_get_size()), str(g.get_viewport().get_visible_rect().size), str(bar.get_global_rect())])
+	var max_v := int(bar.max_value - bar.page)
+	for pair in [["top", 0], ["middle", max_v / 2], ["bottom", max_v]]:
+		sc.scroll_vertical = pair[1]
+		await t.seconds(0.3)
+		await t.shot("settings_scroll_%s" % pair[0])
+	# A swipe up on the list (not the scrollbar) with touch events.
+	sc.scroll_vertical = 0
+	await t.seconds(0.2)
+	var to_win := g.get_viewport().get_screen_transform()
+	var at := sc.get_global_rect().get_center() - Vector2(80, 0)
+	var touch := InputEventScreenTouch.new()
+	touch.pressed = true
+	touch.position = to_win * at
+	g.get_viewport().push_input(touch)
+	await t.frames(1)
+	for k in 8:
+		var dr := InputEventScreenDrag.new()
+		dr.position = to_win * (at - Vector2(0, 25.0 * (k + 1)))
+		dr.relative = to_win.basis_xform(Vector2(0, -25.0))
+		dr.velocity = dr.relative * 60.0
+		g.get_viewport().push_input(dr)
+		await t.frames(1)
+	var rel := InputEventScreenTouch.new()
+	rel.pressed = false
+	rel.position = to_win * (at - Vector2(0, 200.0))
+	g.get_viewport().push_input(rel)
+	await t.seconds(0.5)
+	t.log_line("swipe on the list: scrolled to %d" % sc.scroll_vertical)
+	g.pause_menu.close()
 
 
 ## The colours page (owner request): each morph on the page, then two of them in the world.

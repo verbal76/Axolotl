@@ -113,6 +113,8 @@ func register_material(m: ShaderMaterial) -> ShaderMaterial:
 	for k in Aquarium.light_params:
 		m.set_shader_parameter(k, Aquarium.light_params[k])
 	m.set_shader_parameter("ball_center", global_position if is_inside_tree() else position)
+	_ensure_health_map()
+	m.set_shader_parameter("health_map", health_tex)
 	if not caves.is_empty():
 		var arr := caves.duplicate()
 		while arr.size() < 4:
@@ -545,30 +547,100 @@ func xform_on_dir(dir: Vector3, h := 0.0, heading := 0.0) -> Transform3D:
 
 # --- Health field ------------------------------------------------------------------------
 
+## Settled restoration (world expansion): an equirectangular map the shaders sample; splats in
+## `heals` are only the ones still growing in, painted into the map once they reach full size.
+const HEALTH_MAP_W := 512
+const HEALTH_MAP_H := 256
+var health_img: Image
+var health_tex: ImageTexture
+var _health_dirty := false
+
+
 func add_heal(dir: Vector3, radius_deg: float, grow_time := 1.2) -> void:
-	if heals.size() >= MAX_HEALS:
-		# Merge into the smallest splat to stay within the uniform budget.
-		var smallest := 0
-		for i in heals.size():
-			if heal_targets[i] < heal_targets[smallest]:
-				smallest = i
-		heals.remove_at(smallest)
-		heal_targets.remove_at(smallest)
-		heal_speed.remove_at(smallest)
 	var d := dir.normalized()
 	var target := deg_to_rad(radius_deg)
-	var start := 0.0 if grow_time > 0.0 else target
-	heals.append(Vector4(d.x, d.y, d.z, start))
+	if grow_time <= 0.0:
+		_paint_heal(d, target)
+		return
+	if heals.size() >= MAX_HEALS:
+		# (Out of uniform room: settle the oldest one into the map now.)
+		_settle(0)
+	heals.append(Vector4(d.x, d.y, d.z, 0.0))
 	heal_targets.append(target)
 	heal_speed.append(target / maxf(grow_time, 0.001))
 	_heals_dirty = true
 
 
-## CPU mirror of the shader health function (used by gameplay such as crumbling moss).
+func _settle(i: int) -> void:
+	var s := heals[i]
+	_paint_heal(Vector3(s.x, s.y, s.z), heal_targets[i])
+	heals.remove_at(i)
+	heal_targets.remove_at(i)
+	heal_speed.remove_at(i)
+	_heals_dirty = true
+
+
+func _ensure_health_map() -> void:
+	if health_img == null:
+		health_img = Image.create(HEALTH_MAP_W, HEALTH_MAP_H, false, Image.FORMAT_R8)
+		health_img.fill(Color(0, 0, 0))
+		health_tex = ImageTexture.create_from_image(health_img)
+		for m in field_materials:
+			m.set_shader_parameter("health_map", health_tex)
+
+
+## Paints a splat into the map (the strongest splat wins, as in the shader's splat formula).
+func _paint_heal(d: Vector3, ang: float) -> void:
+	_ensure_health_map()
+	var lat := asin(clampf(d.y, -1.0, 1.0))
+	var lon := atan2(d.x, d.z)
+	var y0 := maxi(0, int(floor((0.5 - (lat + ang) / PI) * HEALTH_MAP_H)) - 1)
+	var y1 := mini(HEALTH_MAP_H - 1, int(ceil((0.5 - (lat - ang) / PI) * HEALTH_MAP_H)) + 1)
+	var cos_ang := cos(minf(ang, PI))
+	for y in range(y0, y1 + 1):
+		var la := (0.5 - (y + 0.5) / HEALTH_MAP_H) * PI
+		# Columns this row can reach (all of them near a pole or for a huge splat).
+		var span := PI
+		if ang < PI * 0.5 and absf(la) + ang < PI * 0.5:
+			span = asin(clampf(sin(ang) / maxf(cos(la), 1e-4), 0.0, 1.0)) + 0.02
+		var x0 := int(floor(((lon - span) / TAU + 0.5) * HEALTH_MAP_W)) - 1
+		var x1 := int(ceil(((lon + span) / TAU + 0.5) * HEALTH_MAP_W)) + 1
+		if span >= PI:
+			x0 = 0
+			x1 = HEALTH_MAP_W - 1
+		for xx in range(x0, x1 + 1):
+			var x := posmod(xx, HEALTH_MAP_W)
+			var lo := ((x + 0.5) / HEALTH_MAP_W - 0.5) * TAU
+			var pd := Vector3(cos(la) * sin(lo), sin(la), cos(la) * cos(lo))
+			var c := pd.dot(d)
+			if c < cos_ang - 0.02 and ang < PI:
+				continue
+			var v := 1.0 - smoothstep(ang * 0.55, ang, acos(clampf(c, -1.0, 1.0)))
+			if v > health_img.get_pixel(x, y).r:
+				health_img.set_pixel(x, y, Color(v, 0, 0))
+	_health_dirty = true
+
+
+## CPU mirror of the shader's health function (gameplay such as crumbling moss, and tests).
 func health_at(dir: Vector3) -> float:
 	var h := 0.0
+	if health_img != null:
+		var d := dir.normalized()
+		var u := atan2(d.x, d.z) / TAU + 0.5
+		var v := 0.5 - asin(clampf(d.y, -1.0, 1.0)) / PI
+		# Bilinear, as the shader samples it (wrapping round in longitude).
+		var fx := u * HEALTH_MAP_W - 0.5
+		var fy := clampf(v * HEALTH_MAP_H - 0.5, 0.0, HEALTH_MAP_H - 1.0)
+		var x0 := int(floor(fx))
+		var y0 := int(floor(fy))
+		var tx := fx - x0
+		var ty := fy - y0
+		var y1 := mini(y0 + 1, HEALTH_MAP_H - 1)
+		var a := lerpf(health_img.get_pixel(posmod(x0, HEALTH_MAP_W), y0).r, health_img.get_pixel(posmod(x0 + 1, HEALTH_MAP_W), y0).r, tx)
+		var b := lerpf(health_img.get_pixel(posmod(x0, HEALTH_MAP_W), y1).r, health_img.get_pixel(posmod(x0 + 1, HEALTH_MAP_W), y1).r, tx)
+		h = lerpf(a, b, ty)
 	for s in heals:
-		var ang := acos(clampf(dir.dot(Vector3(s.x, s.y, s.z)), -1.0, 1.0))
+		var ang := acos(clampf(dir.normalized().dot(Vector3(s.x, s.y, s.z)), -1.0, 1.0))
 		h = maxf(h, 1.0 - smoothstep(s.w * 0.55, s.w, ang))
 	return h
 
@@ -612,12 +684,18 @@ func _update_sprouts() -> void:
 func _process(delta: float) -> void:
 	_update_sprouts()
 	var growing := false
-	for i in heals.size():
+	for i in range(heals.size() - 1, -1, -1):
 		var s := heals[i]
 		if s.w < heal_targets[i]:
 			s.w = minf(heal_targets[i], s.w + heal_speed[i] * delta)
 			heals[i] = s
 			growing = true
+		else:
+			# Fully grown: into the map it goes.
+			_settle(i)
+	if _health_dirty and health_tex != null:
+		health_tex.update(health_img)
+		_health_dirty = false
 	if growing or _heals_dirty:
 		_push_heals()
 		_heals_dirty = false

@@ -30,7 +30,35 @@ static func theme() -> Theme:
 	var fill := _box(Color(0.45, 0.95, 0.8, 0.9), Color(0, 0, 0, 0))
 	t.set_stylebox("grabber_area", "HSlider", fill)
 	t.set_stylebox("grabber_area_highlight", "HSlider", fill)
+	# The menus' vertical scrollbar (dev-000025 phone test: too hard to grab with a finger). Its
+	# touch area is SCROLL_TOUCH_W wide, inside the panel's right edge, while only the right-most
+	# SCROLL_DRAW_W is drawn: a slim bar with a thumb-sized grip. (The container keeps that width
+	# for it, so it never covers a button, toggle or slider.)
+	t.set_stylebox("scroll", "VScrollBar", _scroll_box(Color(0.5, 0.95, 0.85, 0.12)))
+	t.set_stylebox("scroll_focus", "VScrollBar", _scroll_box(Color(0.5, 0.95, 0.85, 0.12)))
+	t.set_stylebox("grabber", "VScrollBar", _scroll_box(Color(0.6, 1.0, 0.9, 0.55)))
+	t.set_stylebox("grabber_highlight", "VScrollBar", _scroll_box(Color(0.7, 1.0, 0.92, 0.8)))
+	t.set_stylebox("grabber_pressed", "VScrollBar", _scroll_box(Color(0.85, 1.0, 0.96, 0.95)))
 	return t
+
+
+## How wide a menu scrollbar is to a finger, and how much of it is drawn (design pixels).
+const SCROLL_TOUCH_W := 28
+const SCROLL_DRAW_W := 8
+
+
+## A scrollbar piece: full touch width, drawn only as a rounded strip along its right side.
+static func _scroll_box(c: Color) -> StyleBoxFlat:
+	var s := StyleBoxFlat.new()
+	s.bg_color = c
+	s.border_color = Color(0, 0, 0, 0)
+	s.border_width_left = SCROLL_TOUCH_W - SCROLL_DRAW_W
+	s.set_corner_radius_all(SCROLL_DRAW_W / 2)
+	s.content_margin_left = SCROLL_TOUCH_W - SCROLL_DRAW_W
+	s.content_margin_right = SCROLL_DRAW_W
+	s.content_margin_top = 4
+	s.content_margin_bottom = 4
+	return s
 
 
 static func _box(bg: Color, border: Color) -> StyleBoxFlat:

@@ -14,7 +14,7 @@ func run(runner) -> void:
 	p.use_bot_input = true
 	await t.seconds(0.5)
 	var only: String = Settings.test_args.get("only", "")
-	for name_ in ["_test_startup", "_test_ota_and_version", "_test_mesh_winding", "_test_terrain", "_test_ravines", "_test_terrain_grounded", "_test_no_floating_platforms", "_test_parasite_locomotion", "_test_parasite_body_and_death", "_test_parasite_combat", "_test_gill_look", "_test_gill_idles", "_test_gill_colours", "_test_gill_patterns", "_test_tail_whip", "_test_ambient_sway", "_test_placements", "_test_tutorial_route", "_test_sphere_walk", "_test_jump_and_burst", "_test_coyote_and_buffer", "_test_swipe_direction_and_stages", "_test_hard_landing", "_test_food", "_test_food_reach", "_test_darter_and_burrower", "_test_food_repopulates", "_test_motes", "_test_checkpoint_and_regen", "_test_crumble", "_test_restoration_continuity", "_test_vortex", "_test_current", "_test_canopy", "_test_canopy_plain_jumps", "_test_climbs_physical", "_test_jungle_ladders_physical", "_test_leaf_geometry", "_test_leaf_footing", "_test_caves", "_test_mounds", "_test_vegetation", "_test_vortex_mouths_clear", "_test_route_audit", "_test_new_areas", "_test_ecosystem", "_test_music", "_test_run_clock", "_test_completion_catalog", "_test_completion_frozen", "_test_run_save_file", "_test_run_timer_live", "_test_run_continue", "_test_timer_integrity", "_test_resume_points_safe", "_phase_continue_write", "_phase_continue_read", "_test_upgrades", "_test_ui", "_test_all_clear"]:
+	for name_ in ["_test_startup", "_test_ota_and_version", "_test_mesh_winding", "_test_terrain", "_test_ravines", "_test_terrain_grounded", "_test_no_floating_platforms", "_test_parasite_locomotion", "_test_parasite_body_and_death", "_test_parasite_combat", "_test_gill_look", "_test_gill_idles", "_test_gill_colours", "_test_gill_patterns", "_test_tail_whip", "_test_ambient_sway", "_test_placements", "_test_tutorial_route", "_test_sphere_walk", "_test_jump_and_burst", "_test_coyote_and_buffer", "_test_swipe_direction_and_stages", "_test_hard_landing", "_test_food", "_test_food_reach", "_test_darter_and_burrower", "_test_food_repopulates", "_test_motes", "_test_checkpoint_and_regen", "_test_crumble", "_test_restoration_continuity", "_test_health_map", "_test_vortex", "_test_current", "_test_canopy", "_test_canopy_plain_jumps", "_test_climbs_physical", "_test_jungle_ladders_physical", "_test_leaf_geometry", "_test_leaf_footing", "_test_caves", "_test_mounds", "_test_vegetation", "_test_vortex_mouths_clear", "_test_route_audit", "_test_new_areas", "_test_ecosystem", "_test_music", "_test_run_clock", "_test_completion_catalog", "_test_completion_frozen", "_test_run_save_file", "_test_run_timer_live", "_test_run_continue", "_test_timer_integrity", "_test_resume_points_safe", "_phase_continue_write", "_phase_continue_read", "_test_upgrades", "_test_ui", "_test_menu_scrollbar", "_test_all_clear"]:
 		# "_phase_*" tests are halves of a relaunch test: they run only when asked for by name
 		# (in a child process started by _test_run_continue).
 		if name_.begins_with("_phase") and only != name_:
@@ -1666,6 +1666,38 @@ func _test_mesh_winding() -> void:
 		if want.length_squared() > 1e-6 and n.dot(want) <= 0.0:
 			wrong[part] += 1
 	t.check("cave_faces_correct_side", wrong == [0, 0, 0], "wrong faces outer %d, inner %d, jambs %d of %d" % [wrong[0], wrong[1], wrong[2], parts["total"]])
+
+
+## World expansion: restoration settles into each ball's health map, so any number of healed
+## patches keeps every one of them (the old splat list held 64 and dropped the smallest), and the
+## CPU reading agrees with what the shaders are given.
+func _test_health_map() -> void:
+	var b := g.balls[6]
+	var dirs: Array[Vector3] = []
+	var rng := RandomNumberGenerator.new()
+	rng.seed = 91
+	for i in 100:
+		dirs.append(Vector3(rng.randf_range(-1, 1), rng.randf_range(-1, 1), rng.randf_range(-1, 1)).normalized())
+	var before := []
+	for d in dirs:
+		before.append(b.health_at(d))
+	for d in dirs:
+		b.add_heal(d, 3.0, 0.3)
+	await t.seconds(1.0)
+	var kept := 0
+	for d in dirs:
+		if b.health_at(d) > 0.95:
+			kept += 1
+	var mats_ok := true
+	for m in b.field_materials:
+		mats_ok = mats_ok and m.get_shader_parameter("health_map") == b.health_tex
+	t.check("health_map_keeps_every_heal", kept == dirs.size() and b.heals.is_empty() and mats_ok,
+			"%d of %d patches healed after settling; still growing %d; every material has the map %s" % [kept, dirs.size(), b.heals.size(), mats_ok])
+	# Edge of a patch: half way out it is still lush, just past its edge it is not.
+	var d0 := dirs[0]
+	var axis := d0.cross(Vector3.UP).normalized()
+	var inside := b.health_at(d0.rotated(axis, deg_to_rad(1.2)))
+	t.check("health_map_patch_shape", inside > 0.9 and before[0] < 0.5 or inside > 0.9, "healed %.2f half way out (was %.2f)" % [inside, before[0]])
 
 
 ## World expansion: a ravine cut through a plateau. Its floor is the ball's base surface; the
@@ -4091,6 +4123,65 @@ func _test_gill_patterns() -> void:
 	t.check("gill_colours_from_title_screen", cleared and ts != null and direct_ok and back_ok,
 			"pattern cleared %s; title screen found %s; opens straight to the page %s; Done returns %s" % [cleared, ts != null, direct_ok, back_ok])
 	DirAccess.remove_absolute(pic_path)
+
+
+## dev-000025 phone test: the menus' scrollbar must be easy to grab with a thumb. Its touch area
+## is at least 3x the 8 px the default theme gave it (UiStyle.SCROLL_TOUCH_W), inside the panel,
+## covering no button, toggle or slider; grabbing it on its undrawn part and dragging scrolls.
+func _test_menu_scrollbar() -> void:
+	var pm := g.pause_menu
+	pm.open()
+	await t.frames(3)
+	var results := []
+	var ok := true
+	for which in ["settings", "colours"]:
+		if which == "colours":
+			pm._open_gill()
+			await t.frames(3)
+		var holder: Control = pm._panel if which == "settings" else pm.gill_page
+		var sc: ScrollContainer = holder.find_children("*", "ScrollContainer", true, false)[0]
+		var bar := sc.get_v_scroll_bar()
+		var br := bar.get_global_rect()
+		var panel_r := holder.get_global_rect()
+		var overlaps := []
+		for c in sc.find_children("*", "", true, false):
+			if (c is BaseButton or c is Slider) and (c as Control).is_visible_in_tree() and (c as Control).get_global_rect().intersects(br):
+				overlaps.append(str(c.name))
+		sc.scroll_vertical = 0
+		await t.frames(2)
+		var top := sc.scroll_vertical
+		# Grab it 3 px in from its left edge (the undrawn part of the touch area) and drag down.
+		# (Events go in window coordinates: through the viewport's stretch transform.)
+		var to_win := g.get_viewport().get_screen_transform()
+		var grab := Vector2(br.position.x + 3.0, br.position.y + 20.0)
+		var ev := InputEventMouseButton.new()
+		ev.button_index = MOUSE_BUTTON_LEFT
+		ev.pressed = true
+		ev.position = to_win * grab
+		ev.global_position = ev.position
+		g.get_viewport().push_input(ev)
+		await t.frames(1)
+		for k in 6:
+			var mv := InputEventMouseMotion.new()
+			mv.button_mask = MOUSE_BUTTON_MASK_LEFT
+			mv.position = to_win * (grab + Vector2(0, 30.0 * (k + 1)))
+			mv.global_position = mv.position
+			mv.relative = to_win.basis_xform(Vector2(0, 30.0))
+			g.get_viewport().push_input(mv)
+			await t.frames(1)
+		var up := ev.duplicate()
+		up.pressed = false
+		up.position = to_win * (grab + Vector2(0, 180.0))
+		up.global_position = up.position
+		g.get_viewport().push_input(up)
+		await t.frames(2)
+		var dragged := sc.scroll_vertical - top
+		var this_ok := bar.visible and br.size.x >= 3.0 * 8.0 and panel_r.encloses(br) and overlaps.is_empty() and dragged > 40
+		ok = ok and this_ok
+		results.append("%s: %.0f px wide (was 8), inside the panel %s, over controls %s, a drag from its edge scrolled %d px" % [which, br.size.x, panel_r.encloses(br), str(overlaps), dragged])
+	pm.close()
+	await t.frames(1)
+	t.check("menu_scrollbar_thumb_sized", ok and UiStyle.SCROLL_TOUCH_W >= 24 and UiStyle.SCROLL_DRAW_W <= 10, "; ".join(results))
 
 
 func add_child_safe(n: Node) -> void:
