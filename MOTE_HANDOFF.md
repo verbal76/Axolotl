@@ -249,12 +249,13 @@ darters included.
     - cooldown 0.38 s;
     - aim assist 60°/80°.
   - Tests: `_test_tail_whip`.
-- **Idles (dev-000024 playtest polish).** Standing still, Gill now and then plays one of four
+- **Idles (dev-000024 playtest polish).** Standing still, Gill now and then plays one of five
   (`AxolotlModel.Idle`):
   - he rises onto his back legs, looks one way then the other, and drops back to all fours;
   - a little scoot to one side, one to the other, and back to the same spot;
   - a curious head tilt with a blink;
-  - a long stretch with a yawn, then a shake from gills to tail.
+  - a long stretch with a tiny yawn (`sfx_gill_yawn`), then a shake from gills to tail;
+  - a look up at something drifting past overhead (the owner asked for this one).
 
   The first comes 4–8 s after he stops, then one every 7–16 s. The choice is random, never the same
   one twice running. Any input, action or other animation ends an idle at once. The controller
@@ -263,7 +264,17 @@ darters included.
   cosmetic only:
   - they move the drawn rig, never the gameplay body, its collision or the camera;
   - choice and timing use the model's own random generator, which also runs blinks now;
-  - tests: `_test_gill_idles`.
+  - tests: `_test_gill_idles`, `stretch_yawns_once`.
+- **Colours (owner request).** The pause menu's "Gill's colours" page (`scripts/ui/gill_page.gd`,
+  `GillLook`) has:
+  - seven real axolotl morphs as swatches: Pink (the original), Golden, Wild, Melanoid, Copper,
+    Lavender, Glow;
+  - hue and shade sliders for his body and his freckles;
+  - a live preview in its own small viewport, drawn only while the page is open.
+
+  Every model recolours at once. The choice is kept per device in `user://settings.cfg` under
+  `[gill]`: additive keys, save schema 1 unchanged, and older files keep the pink. The gill fronds
+  keep their health colours. Tests: `_test_gill_colours`.
 
 ## 7. World
 
