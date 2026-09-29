@@ -105,6 +105,8 @@ static func new_run() -> Dictionary:
 		"finish": {},
 		# Tier-2 abilities found this run (Tier2.to_dict); not completion entries.
 		"tier2": {},
+		# Treasure Hunt, the postgame search (TreasureHunt.state_of); not completion entries.
+		"treasure": {},
 	}
 
 

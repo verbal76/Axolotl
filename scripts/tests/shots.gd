@@ -467,6 +467,12 @@ func run(runner) -> void:
 		g.g_disp = 1.0
 		g.aquarium.apply(1.0)
 		await _room_shots(g, "room_clean")
+	if only == "treasures":
+		for b in g.balls:
+			b.add_heal(Vector3.UP, 340.0, 0.0)
+		g.g_disp = 1.0
+		g.aquarium.apply(1.0)
+		await _treasure_shots(g)
 	if only == "bala":
 		for b in g.balls:
 			b.add_heal(Vector3.UP, 340.0, 0.0)
@@ -536,6 +542,47 @@ func _room_shots(g: Game, tag: String) -> void:
 		await t.shot("%s_%s" % [tag, v[0]])
 	g.cam.cinematic = false
 	env.fog_enabled = fog
+
+
+## The fourteen Treasure Hunt objects (docs/TREASURE_HUNT.md): each alone, close, on open ground in
+## a restored world, then the whole set in a row for scale against him.
+func _treasure_shots(g: Game) -> void:
+	g.player.invuln_t = 9999
+	var b := g.balls[0]
+	var d := MossBall.dir_ll(20.0, 60.0)
+	var at := b.surface_point(d)
+	var up := b.up_at(at)
+	var fr := MossBall.frame_at(up, 0.0)
+	g.player.place(b, b.surface_point((at + fr.z * 30.0 - b.global_position).normalized(), 0.2), fr.z)
+	g.cam.cinematic = true
+	for k in TreasureHunt.KINDS:
+		var n := TreasureModels.node(k[0], 1.0)
+		b.add_child(n)
+		var gp := b.surface_point(d)
+		n.global_transform = Transform3D(Basis(fr.x, up, fr.z).rotated(up, 0.6), gp)
+		var sz: float = TreasureModels.BASE_SIZE[k[0]]
+		g.cam.cine_pos = gp + up * sz * 0.75 - fr.z * sz * 1.7 + fr.x * sz * 0.9
+		g.cam.cine_look = gp + up * sz * 0.35
+		g.cam.cine_up = up
+		await t.seconds(1.2)
+		await t.shot("treasure_%s" % k[0])
+		n.queue_free()
+	# The set in a row, with him beside it for scale.
+	var row := []
+	for i in TreasureHunt.KINDS.size():
+		var n := TreasureModels.node(TreasureHunt.KINDS[i][0], 1.0)
+		b.add_child(n)
+		var gp := b.surface_point((at + fr.x * (i - 6.5) * 2.2 - b.global_position).normalized())
+		n.global_transform = Transform3D(Basis(fr.x, b.up_at(gp), fr.z).rotated(b.up_at(gp), PI), gp)
+		row.append(n)
+	g.player.place(b, b.surface_point((at + fr.x * -17.0 - b.global_position).normalized(), 0.2), fr.x)
+	g.cam.cine_pos = at + up * 7.0 + fr.z * 20.0 + fr.x * -4.0
+	g.cam.cine_look = at + fr.x * -4.0 + up * 0.5
+	await t.seconds(1.5)
+	await t.shot("treasure_row")
+	for n in row:
+		n.queue_free()
+	g.cam.cinematic = false
 
 
 ## The bala sharks (owner): close beside the trio in Swim Mode, from the side and behind, and the
