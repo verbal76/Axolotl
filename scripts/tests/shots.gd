@@ -417,6 +417,8 @@ func run(runner) -> void:
 		g.g_disp = 1.0
 		g.aquarium.apply(1.0)
 		await _room_shots(g, "room_clean")
+	if only == "tier2":
+		await _tier2_shots(g)
 	if only == "aquarium":
 		await _aquarium_shots(g, "aq_murky")
 		for b in g.balls:
@@ -478,6 +480,61 @@ func _room_shots(g: Game, tag: String) -> void:
 		await t.shot("%s_%s" % [tag, v[0]])
 	g.cam.cinematic = false
 	env.fog_enabled = fog
+
+
+## Tier 2 (docs/TIER2.md): each ability mid-effect at the World 3 shrine's practice targets, the
+## HUD button's glyph for each (ready and cooling down), and the pause menu's loadout.
+func _tier2_shots(g: Game) -> void:
+	g.player.invuln_t = 9999
+	var sh: Tier2Shrine = g.balls[2].shrines[0]
+	var b := sh.ball
+	for id in Tier2.ORDER:
+		g.tier2.unlock(id)
+	g.hud.reveal_special()
+	for par in b.parasites:
+		par.visible = false
+		par.set_physics_process(false)
+	for id in Tier2.ORDER:
+		# A quiet spot on World 3 with three practice targets set out ahead of him (left, centre,
+		# right), as the shrine's own are.
+		var spot := b.surface_point(MossBall.dir_ll(10, 40 + Tier2.ORDER.find(id) * 25), 0.1)
+		var up := b.up_at(spot)
+		var fr := MossBall.frame_at(up, 0.0)
+		_look(g, b.index, spot, -fr.z, 0.28)
+		await t.seconds(1.0)
+		var at: Vector3 = g.player.global_position
+		up = b.up_at(at)
+		var face: Vector3 = g.player.facing
+		var side := face.cross(up).normalized()
+		var near := 0.6 if id == Tier2.BUBBLE else 1.0
+		for k in 3:
+			var tg := PracticeTarget.new()
+			tg.place(b, at + face * [4.0, 5.5, 4.5][k] * near + side * [-2.0, 0.0, 2.0][k] * near + up * 0.6, 8800 + Tier2.ORDER.find(id) * 10 + k)
+			g.practice_targets.append(tg)
+		await t.frames(2)
+		t.log_line("tier2 setup %s: targets alive %d" % [id, g.practice_targets.size()])
+		g.tier2.equip(id)
+		g.tier2.ready_at = 0.0
+		await t.seconds(1.6)
+		await t.shot("t2_%s_ready" % id)
+		Input.action_press("special")
+		await t.frames(2)
+		Input.action_release("special")
+		await t.seconds({Tier2.CANNON: 0.2, Tier2.BUBBLE: 0.15, Tier2.RUSH: 0.3}[id])
+		await t.shot("t2_%s_action" % id)
+		await t.seconds(0.25)
+		await t.shot("t2_%s_action2" % id)
+		t.log_line("tier2 %s: last %s; targets %s; gill %s" % [id, g.t2.last, g.practice_targets.map(func(x): return x.global_position if is_instance_valid(x) else "freed"), g.player.global_position])
+		await t.seconds(1.6)
+		await t.shot("t2_%s_cooling" % id)
+		for tg in g.practice_targets.duplicate():
+			if is_instance_valid(tg):
+				tg.queue_free()
+		g.practice_targets.clear()
+	g.pause_menu.open()
+	await t.seconds(0.5)
+	await t.shot("t2_loadout")
+	g.pause_menu.close()
 
 
 ## The aquarium experiences (docs/AQUARIUM.md), through the real controller: the room, inspection

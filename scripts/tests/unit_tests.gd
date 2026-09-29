@@ -14,7 +14,7 @@ func run(runner) -> void:
 	p.use_bot_input = true
 	await t.seconds(0.5)
 	var only: String = Settings.test_args.get("only", "")
-	for name_ in ["_test_startup", "_test_ota_and_version", "_test_mesh_winding", "_test_terrain", "_test_ravines", "_test_terrain_grounded", "_test_no_floating_platforms", "_test_parasite_locomotion", "_test_parasite_body_and_death", "_test_parasite_combat", "_test_gill_look", "_test_gill_idles", "_test_gill_colours", "_test_gill_patterns", "_test_tail_whip", "_test_ambient_sway", "_test_placements", "_test_tutorial_route", "_test_sphere_walk", "_test_jump_and_burst", "_test_coyote_and_buffer", "_test_swipe_direction_and_stages", "_test_hard_landing", "_test_food", "_test_food_reach", "_test_darter_and_burrower", "_test_food_repopulates", "_test_motes", "_test_checkpoint_and_regen", "_test_crumble", "_test_restoration_gates", "_test_bubble_columns", "_test_restoration_continuity", "_test_health_map", "_test_vortex", "_test_current", "_test_canopy", "_test_canopy_plain_jumps", "_test_climbs_physical", "_test_jungle_ladders_physical", "_test_leaf_geometry", "_test_leaf_footing", "_test_caves", "_test_mounds", "_test_vegetation", "_test_vortex_mouths_clear", "_test_route_audit", "_test_new_areas", "_test_ecosystem", "_test_music", "_test_run_clock", "_test_completion_catalog", "_test_completion_frozen", "_test_run_save_file", "_test_run_timer_live", "_test_run_continue", "_test_timer_integrity", "_test_resume_points_safe", "_phase_continue_write", "_phase_continue_read", "_test_upgrades", "_test_ui", "_test_menu_scrollbar", "_test_tier2_rules", "_test_tier2_world", "_test_ambient_fish", "_test_all_clear"]:
+	for name_ in ["_test_startup", "_test_ota_and_version", "_test_mesh_winding", "_test_terrain", "_test_ravines", "_test_terrain_grounded", "_test_no_floating_platforms", "_test_parasite_locomotion", "_test_parasite_body_and_death", "_test_parasite_combat", "_test_gill_look", "_test_gill_idles", "_test_gill_colours", "_test_gill_patterns", "_test_tail_whip", "_test_ambient_sway", "_test_placements", "_test_tutorial_route", "_test_sphere_walk", "_test_jump_and_burst", "_test_coyote_and_buffer", "_test_swipe_direction_and_stages", "_test_hard_landing", "_test_food", "_test_food_reach", "_test_darter_and_burrower", "_test_food_repopulates", "_test_motes", "_test_checkpoint_and_regen", "_test_crumble", "_test_restoration_gates", "_test_bubble_columns", "_test_restoration_continuity", "_test_health_map", "_test_vortex", "_test_current", "_test_canopy", "_test_canopy_plain_jumps", "_test_climbs_physical", "_test_jungle_ladders_physical", "_test_leaf_geometry", "_test_leaf_footing", "_test_caves", "_test_mounds", "_test_vegetation", "_test_vortex_mouths_clear", "_test_route_audit", "_test_new_areas", "_test_ecosystem", "_test_music", "_test_run_clock", "_test_completion_catalog", "_test_completion_frozen", "_test_run_save_file", "_test_run_timer_live", "_test_run_continue", "_test_timer_integrity", "_test_resume_points_safe", "_phase_continue_write", "_phase_continue_read", "_test_upgrades", "_test_ui", "_test_menu_scrollbar", "_test_tier2_rules", "_test_tier2_world", "_test_ambient_fish", "_test_tier2_loadout", "_test_aquarium_experiences", "_test_all_clear"]:
 		# "_phase_*" tests are halves of a relaunch test: they run only when asked for by name
 		# (in a child process started by _test_run_continue).
 		if name_.begins_with("_phase") and only != name_:
@@ -4697,6 +4697,183 @@ func _fire_tier2(timeout := 3.0) -> float:
 	if started < 0.0:
 		return -1.0
 	return await _until(func(): return g.t2.active == "", timeout)
+
+
+## The pause menu's Tier-2 loadout: hidden until one is found; found ones equip on tap (exactly one
+## equipped, saved, cooldown untouched); ones not found are locked; hidden when opened from the title.
+func _test_tier2_loadout() -> void:
+	var saved_t2 := g.tier2
+	g.tier2 = Tier2.new()
+	var pm := g.pause_menu
+	var lo: Tier2Loadout = pm._loadout
+	pm.open()
+	await t.frames(2)
+	var hidden0 := not lo.visible
+	pm.close()
+	g.tier2.unlock(Tier2.CANNON)
+	g.tier2.unlock(Tier2.BUBBLE)
+	g.tier2.start_cooldown(Time.get_ticks_msec() / 1000.0)
+	var ready_at := g.tier2.ready_at
+	pm.open()
+	await t.frames(2)
+	var bb: Button = lo.find_child("Tier2_" + Tier2.BUBBLE, true, false)
+	var br: Button = lo.find_child("Tier2_" + Tier2.RUSH, true, false)
+	var shown := lo.visible and lo.is_visible_in_tree()
+	bb.pressed.emit()
+	br.pressed.emit()
+	await t.frames(1)
+	var ok_equip := g.tier2.equipped == Tier2.BUBBLE and br.disabled and not bb.disabled and is_equal_approx(g.tier2.ready_at, ready_at)
+	var on_disk: Dictionary = g.run_save.run().get("tier2", {})
+	pm.close()
+	pm.open(true)
+	await t.frames(2)
+	var title_hidden := not lo.visible
+	pm.close()
+	t.check("tier2_loadout_equips", hidden0 and shown and ok_equip and on_disk.get("equipped", "") == Tier2.BUBBLE and title_hidden,
+			"hidden %s shown %s equipped %s saved %s title-hidden %s" % [hidden0, shown, g.tier2.equipped, on_disk, title_hidden])
+	g.tier2 = saved_t2
+	g.get_tree().paused = false
+	await t.frames(2)
+
+
+## The aquarium experiences (docs/AQUARIUM.md): repeated entry and exit leave the run exactly as it
+## was (position, clock, completion, saves, Tier 2, health, the global generator); every mode works;
+## inspection stays outside the glass; Swim Mode stays in the water, earns nothing and Gill cannot
+## be hurt; Back steps out one level; from the title it returns to the title; nothing leaks.
+func _test_aquarium_experiences() -> void:
+	var pr: Presentation = g.presentation
+	var b0 := g.balls[0]
+	var release := _hold_threats(b0)
+	p.restore_full()
+	var spot := _quiet_spot(0)
+	var up := b0.up_at(spot)
+	place_at(0, spot + up * 0.2, -MossBall.frame_at(up, 0.0).z)
+	await t.seconds(0.6)
+	g.save_run()
+	var pos0 := p.global_position
+	var basis0 := p.global_basis
+	var run0: float = g.clock.run_s
+	var earned0 := g.run_save.earned().duplicate(true)
+	var tier0 := g.tier2.to_dict()
+	var hp0 := p.health
+	var par_pos := []
+	for par in b0.parasites:
+		par_pos.append(par.global_position)
+	await t.frames(2)
+	var nodes0 := Performance.get_monitor(Performance.OBJECT_NODE_COUNT)
+	seed(777)
+	var r0 := [randi(), randi()]
+	seed(777)
+	var modes_ok := true
+	var clock_ok := true
+	var outside_ok := true
+	for round_ in 3:
+		pr.enter("play")
+		var run_in: float = g.clock.run_s
+		modes_ok = modes_ok and g.state == "aquarium" and pr.mode == "room" and pr.ui.visible and not p.visible and g.aquarium.outside
+		await t.seconds(0.8)
+		pr.go("inspect")
+		pr.inspect_drag(Vector2(-5000, 5000))
+		await t.seconds(1.2)
+		outside_ok = outside_ok and absf(pr.inspect_yaw) <= Presentation.INSPECT_YAW + 0.001 and g.cam.global_position.z > Aquarium.TANK_MAX.z
+		pr.go("live")
+		for v in Presentation.LIVE_VIEWS.size():
+			pr.next_live_view()
+			await t.seconds(0.4)
+		modes_ok = modes_ok and pr.mode == "live"
+		pr.go("swim")
+		await t.seconds(0.5)
+		modes_ok = modes_ok and pr.swimmer != null and not g.aquarium.outside
+		pr.ui.swim_stick = Vector2(0.3, 1.0)
+		pr.ui.swim_fast = true
+		await t.seconds(1.5)
+		pr.ui.swim_stick = Vector2.ZERO
+		pr.ui.swim_fast = false
+		clock_ok = clock_ok and is_equal_approx(g.clock.run_s, run_in)
+		# Back, one level at a time (as Android back does): swim -> room -> play.
+		g._go_back()
+		modes_ok = modes_ok and pr.mode == "room" and pr.swimmer == null
+		await t.seconds(0.3)
+		g._go_back()
+		modes_ok = modes_ok and pr.mode == "" and g.state == "play" and not pr.ui.visible and p.visible and p.controls_enabled
+		await t.frames(2)
+	var r1 := [randi(), randi()]
+	t.check("aquarium_modes_and_back", modes_ok, "mode %s state %s" % [pr.mode, g.state])
+	t.check("aquarium_clock_never_counts", clock_ok, "run %.3f" % g.clock.run_s)
+	t.check("aquarium_inspection_outside_glass", outside_ok, "yaw %.2f cam z %.1f" % [pr.inspect_yaw, g.cam.global_position.z])
+	var moved := 0.0
+	for i in par_pos.size():
+		if is_instance_valid(b0.parasites[i]):
+			moved = maxf(moved, (b0.parasites[i] as Node3D).global_position.distance_to(par_pos[i]))
+	t.check("aquarium_run_untouched", p.global_position.is_equal_approx(pos0) and p.global_basis.is_equal_approx(basis0) and g.run_save.earned() == earned0
+			and g.tier2.to_dict() == tier0 and p.health == hp0 and r0 == r1,
+			"moved %.4f, earned %d->%d, rng same %s" % [p.global_position.distance_to(pos0), earned0.size(), g.run_save.earned().size(), r0 == r1])
+	t.check("aquarium_world_stands_still", moved < 0.01, "parasite moved %.3f" % moved)
+	await t.seconds(0.5)
+	var nodes1 := Performance.get_monitor(Performance.OBJECT_NODE_COUNT)
+	# (The tank's own collision is built once, on the first swim: its body and six shapes.)
+	t.check("aquarium_no_leaks", nodes1 - nodes0 <= 7, "nodes %d -> %d" % [nodes0, nodes1])
+	# Swim Mode: two minutes of hard swimming in every direction stays in the water, out of the
+	# moss balls, earns nothing, and Gill cannot be hurt even swimming through a parasite.
+	pr.enter("play")
+	run0 = g.clock.run_s
+	pr.go("swim")
+	await t.frames(3)
+	var sw := pr.swimmer
+	var worst_out := 0.0
+	var worst_in := 0.0
+	var travelled := 0.0
+	var last := sw.global_position
+	var dirs := [Vector2(0, 1), Vector2(1, 0.3), Vector2(-1, 0.5), Vector2(0.2, -1)]
+	for k in 8:
+		sw.cam_yaw = k * 0.9
+		sw.cam_pitch = [0.9, -0.9, 0.0, 0.5][k % 4]
+		pr.ui.swim_stick = dirs[k % 4]
+		pr.ui.swim_up = [1.0, -1.0, 0.0, 0.0][k % 4]
+		pr.ui.swim_fast = true
+		for f in 60 * 8:
+			await t.frames(1)
+			if f % 20 == 0:
+				var sp := sw.global_position
+				travelled += sp.distance_to(last)
+				last = sp
+				worst_out = maxf(worst_out, (sp - sp.clamp(Aquarium.TANK_MIN, Aquarium.TANK_MAX)).length())
+				for b in g.balls:
+					worst_in = maxf(worst_in, b.radius * 0.75 - sp.distance_to(b.global_position))
+	pr.ui.swim_stick = Vector2.ZERO
+	pr.ui.swim_up = 0.0
+	pr.ui.swim_fast = false
+	t.check("swim_stays_in_the_water", travelled > 200.0 and worst_out < 0.5 and worst_in <= 0.0, "swum %.0f, outside by %.2f, inside a ball by %.2f" % [travelled, worst_out, worst_in])
+	var par: Node3D = null
+	for x in b0.parasites:
+		if x.is_alive():
+			par = x
+			break
+	if par != null:
+		sw.global_position = par.global_position
+		sw.velocity = Vector3.ZERO
+	await t.seconds(1.0)
+	t.check("swim_earns_nothing_and_gill_safe", g.run_save.earned() == earned0 and p.health == hp0 and p.state == "presentation" and is_equal_approx(g.clock.run_s, run0),
+			"earned %d, hp %d, state %s" % [g.run_save.earned().size(), p.health, p.state])
+	pr.exit()
+	await t.frames(2)
+	t.check("swim_exit_restores_gill", p.global_position.is_equal_approx(pos0) and p.state == "normal" and g.state == "play", "")
+	# From the title: Back returns to the title, not to play.
+	g._enter_title()
+	pr.enter("title")
+	await t.seconds(0.4)
+	pr.back()
+	t.check("aquarium_from_title_returns_there", g.state == "title" and g.title.visible and not pr.active(), "state %s" % g.state)
+	g.start_play(true)
+	# Not from mid-cinematic: the pause menu's Aquarium is unavailable then.
+	g.cinematic = "connect"
+	g.pause_menu._refresh()
+	var dis: bool = g.pause_menu._aquarium.disabled
+	g.cinematic = ""
+	g.pause_menu._refresh()
+	t.check("aquarium_not_mid_cinematic", dis and not g.pause_menu._aquarium.disabled, "")
+	release.call()
+	await t.frames(2)
 
 
 ## Shrines, unlocks and the three abilities in the world, driven by the Tier-2 button.
