@@ -418,6 +418,7 @@ phone-verified until the owner says so (MOTE_HANDOFF §16 item 17).
 | WX-11 | Camera and touch practical | I+V (proxy) / needs phone | no camera change needed | camera-audit shots (43 views) |
 | WX-12 | Route proof and full playthroughs to a legitimate 100% (seeds 7 and 4242) | I+V | bot: ravine-aware paths, columns, hollows, gates; per-world clear scenario | see the release row |
 | WX-13 | Settings scrollbar about 3× easier to grab (owner, from dev-000025) | I+V / needs phone | `UiStyle` scrollbar: 28 px touch target, 8 px drawn | `_test_menu_scrollbar` |
+| WX-14 | Ships as ONE dev OTA, no APK | I+V (local) / publish pending | game layer only; runtime r5 unchanged (`ota_runtime.py --check`); save schema 1; catalog v4 (348) | local gates on `3526b3e`: unit suite 407/407 (fresh user data); playthroughs seed 7 and 4242: 23/23 each (deaths 1 / 2; all clear at 3,351 s / 3,832 s sim, normal finish 87.9% / 88.2%; 100% by play at 6,018 s / 5,442 s, finish time kept); version drift passes; OTA end-to-end: see the release notes in `MOTE_HANDOFF.md` §11 |
 
 ## Precedence notes
 
