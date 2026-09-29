@@ -4802,13 +4802,16 @@ func _test_aquarium_experiences() -> void:
 		par_pos.append(par.global_position)
 	await t.frames(2)
 	var nodes0 := Performance.get_monitor(Performance.OBJECT_NODE_COUNT)
-	seed(777)
-	var r0 := [randi(), randi()]
-	seed(777)
+	# (The generator is checked across the time in the aquarium only: seeded on the way in, read on
+	# the way out, before any play frame, since ordinary play draws from it.)
+	var rng_ok := true
 	var modes_ok := true
 	var clock_ok := true
 	var outside_ok := true
 	for round_ in 3:
+		seed(777 + round_)
+		var r0 := [randi(), randi()]
+		seed(777 + round_)
 		pr.enter("play")
 		var run_in: float = g.clock.run_s
 		modes_ok = modes_ok and g.state == "aquarium" and pr.mode == "room" and pr.ui.visible and not p.visible and g.aquarium.outside
@@ -4836,9 +4839,9 @@ func _test_aquarium_experiences() -> void:
 		modes_ok = modes_ok and pr.mode == "room" and pr.swimmer == null
 		await t.seconds(0.3)
 		g._go_back()
+		rng_ok = rng_ok and [randi(), randi()] == r0
 		modes_ok = modes_ok and pr.mode == "" and g.state == "play" and not pr.ui.visible and p.visible and p.controls_enabled
 		await t.frames(2)
-	var r1 := [randi(), randi()]
 	t.check("aquarium_modes_and_back", modes_ok, "mode %s state %s" % [pr.mode, g.state])
 	t.check("aquarium_clock_never_counts", clock_ok, "run %.3f" % g.clock.run_s)
 	t.check("aquarium_inspection_outside_glass", outside_ok, "yaw %.2f cam z %.1f" % [pr.inspect_yaw, g.cam.global_position.z])
@@ -4847,8 +4850,8 @@ func _test_aquarium_experiences() -> void:
 		if is_instance_valid(b0.parasites[i]):
 			moved = maxf(moved, (b0.parasites[i] as Node3D).global_position.distance_to(par_pos[i]))
 	t.check("aquarium_run_untouched", p.global_position.is_equal_approx(pos0) and p.global_basis.is_equal_approx(basis0) and g.run_save.earned() == earned0
-			and g.tier2.to_dict() == tier0 and p.health == hp0 and r0 == r1,
-			"moved %.4f, earned %d->%d, rng same %s" % [p.global_position.distance_to(pos0), earned0.size(), g.run_save.earned().size(), r0 == r1])
+			and g.tier2.to_dict() == tier0 and p.health == hp0 and rng_ok,
+			"moved %.4f, earned %d->%d, rng same %s" % [p.global_position.distance_to(pos0), earned0.size(), g.run_save.earned().size(), rng_ok])
 	t.check("aquarium_world_stands_still", moved < 0.01, "parasite moved %.3f" % moved)
 	await t.seconds(0.5)
 	var nodes1 := Performance.get_monitor(Performance.OBJECT_NODE_COUNT)
@@ -4936,9 +4939,11 @@ func _test_tier2_world() -> void:
 	var fr := MossBall.frame_at(up, 0.0)
 	place_at(0, spot + up * 0.2, -fr.z)
 	await t.seconds(0.5)
+	# (Earlier tests may have used an ability legitimately: what counts is that this press does nothing.)
+	var last0: Dictionary = g.t2.last
 	var fired0: float = await _fire_tier2(0.5)
 	await t.frames(4)
-	t.check("tier2_nothing_before_a_shrine", not g.hud.special_shown() and g.t2.last.is_empty() or g.t2.last.get("ability", "") == "", "button shown %s; last %s; game %s cine '%s' player %s controls %s ball %d paused %s" % [g.hud.special_shown(), g.t2.last, g.state, g.cinematic, p.state, p.controls_enabled, p.ball.index, g.get_tree().paused])
+	t.check("tier2_nothing_before_a_shrine", fired0 < 0.0 and g.t2.last == last0 and g.t2.active == "", "button shown %s; last %s; game %s cine '%s' player %s controls %s ball %d paused %s" % [g.hud.special_shown(), g.t2.last, g.state, g.cinematic, p.state, p.controls_enabled, p.ball.index, g.get_tree().paused])
 	# The World 3 shrine: touched in play, it gives Water Cannon, equips it, shows the button and
 	# sets out practice targets; the run save carries it.
 	var sh: Tier2Shrine = g.balls[2].shrines[0]
