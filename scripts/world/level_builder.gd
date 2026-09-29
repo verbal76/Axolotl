@@ -701,6 +701,24 @@ func bubble_column(dir: Vector3, radius: float, height: float, speed := 5.0, zon
 	root.add_child(ring)
 	ring.global_transform = Transform3D(MossBall.frame_at(up, 0.0), base)
 	bot_hints.append({"column": true, "base": base, "up": up, "radius": radius, "height": height, "gate": gate})
+	_bubble_sound(holder, base + up * minf(height * 0.5, 3.0))
+
+
+## A soft, local bubbling where water rises or rushes (quiet, heard only close by; it starts
+## with a dormant column or stream when that begins to flow, as it lives under its gate).
+func _bubble_sound(holder: Node3D, at: Vector3) -> void:
+	if not ResourceLoader.exists("res://assets/audio/amb_bubbler.wav"):
+		return
+	var snd := AudioStreamPlayer3D.new()
+	snd.bus = "Ambience"
+	snd.stream = load("res://assets/audio/amb_bubbler.wav")
+	snd.unit_size = 3.0
+	snd.max_distance = 18.0
+	snd.volume_db = -14.0
+	# (Under a gate it starts when the water starts to flow: RestorationGate plays it.)
+	snd.autoplay = not holder is RestorationGate
+	holder.add_child(snd)
+	snd.global_position = at
 
 
 ## A current stream from `from` to `to` (points on the ground; it runs a metre above the straight
@@ -744,6 +762,7 @@ func current_stream(from: Vector3, to: Vector3, radius := 1.2, speed := 7.0, zon
 	mmi.top_level = true
 	mmi.visibility_range_end = 90.0
 	holder.add_child(mmi)
+	_bubble_sound(holder, (from + to) * 0.5 + up * 1.0)
 	crossings.append({"a": from, "b": to, "gate": gate, "stream": true})
 
 

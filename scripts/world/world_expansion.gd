@@ -209,8 +209,34 @@ static func terrace_steps(lb: LevelBuilder) -> void:
 	lb.parasite(Parasite.Kind.SMALL, "far", p.x, p.y, 5.0)
 	p = R.call(-30, 170)
 	lb.mote("far", p.x, p.y)
+	# The Coral Shelves: three shelves stepping up out of a coral bed, a Mote on each.
+	var csz: Vector2 = R.call(-12, -128)
+	lb.zone("coralsh", csz.x, csz.y, 14)
+	var csp := func(x: float, z: float) -> Transform3D: return lb.at(csz.x, csz.y, 0.0, x, 0, z)
+	var cshelves := [[0.0, 0.0, 1.3, 1.9], [3.4, 1.0, 2.5, 1.8], [5.6, -1.8, 3.7, 1.8]]
+	var cstops := []
+	for cs in cshelves:
+		var cd := b.up_at((csp.call(cs[0], cs[1]) as Transform3D).origin)
+		var cll := Levels._latlon(cd)
+		lb.shelf(cll.x, cll.y, cs[2], cs[3], 0.9)
+		var ctop := b.surface_point(cd, cs[2])
+		cstops.append(ctop)
+		if cs[2] != 2.5:
+			lb.mote_xf("coralsh", Transform3D(MossBall.frame_at(b.up_at(ctop), 0.0), ctop + b.up_at(ctop) * 0.5), 0.4)
+	lb.route("coral shelves", b.surface_point(b.up_at((csp.call(-3.1, 0) as Transform3D).origin)), cstops, ["coralsh"], "the highest coral shelf")
+	lb.mote_xf("coralsh", csp.call(3, 6), 1.2)
+	lb.parasite_xf(Parasite.Kind.SMALL, "coralsh", csp.call(-5, 5), 3.0)
+	lb.parasite_xf(Parasite.Kind.MEDIUM, "coralsh", csp.call(4, 7), 3.0)
+	lb.mote_xf("coralsh", csp.call(-2, -6), 1.2)
+	lb.bloom_xf(csp.call(-6, -3))
+	var cbed := _dir(csz)
+	var in_bed := func(dd: Vector3) -> bool: return dd.angle_to(cbed) < deg_to_rad(lb.m2deg(9.0))
+	for k in 2:
+		var col: Array = Levels.ACCENTS[3][k]
+		var cmat := b.make_veg_material(col[0], col[1], Vegetation.family_params("short", 0.45).merged({"sway": 0.12, "wake_gain": 0.7, "cam_fade": 1.0}, true))
+		b.coral_nodes += b.scatter(MeshLib.coral_mesh(5 + k * 2, 0.75 + k * 0.15, 970 + k), cmat, 160, 970 + k, 1.1, 2.4, in_bed, 70.0)
 
-	for r in [[land.x, land.y, 24], [tz.x + 20, tz.y + 30, 20], [fz.x, fz.y, 24], [gz.x, gz.y, 16], [sf.x, sf.y, 14]]:
+	for r in [[land.x, land.y, 24], [tz.x + 20, tz.y + 30, 20], [fz.x, fz.y, 24], [gz.x, gz.y, 16], [sf.x, sf.y, 14], [csz.x, csz.y, 10]]:
 		lb.food_region(r[0], r[1], r[2])
 	Levels._holes(lb, 20, 301, [[_dir(tz), 18], [_dir(cv), 14], [_dir(az), 14], [_dir(gz), 16], [sf_dir, 14], [twin_dir, 8]])
 	# Open, low growth: sunny and readable; a few medium clumps.
@@ -335,7 +361,8 @@ static func reed_canyon(lb: LevelBuilder) -> void:
 	var mzxf := func(x: float, z: float) -> Transform3D: return lb.at(mz.x, mz.y, 0.0, x, 0, z)
 	lb.parasite_xf(Parasite.Kind.SMALL, "maze", mzxf.call(6, -11), 3.0)
 	lb.parasite_xf(Parasite.Kind.MEDIUM, "maze", mzxf.call(-6, 11.5), 3.0)
-	lb.parasite_xf(Parasite.Kind.SMALL, "maze", mzxf.call(0, 0.6), 1.2)
+	# (Not on the narrow strip between the cuts: a fight there is a fall waiting to happen.)
+	lb.parasite_xf(Parasite.Kind.SMALL, "maze", mzxf.call(14, -9), 2.5)
 	lb.mote_xf("maze", mzxf.call(-13, 0.5), 1.0)
 	lb.mote_xf("maze", mzxf.call(13, 1.5), 1.0)
 	lb.mote_xf("maze", mzxf.call(0, 13), 1.0)
@@ -358,8 +385,23 @@ static func reed_canyon(lb: LevelBuilder) -> void:
 	lb.mote("canyon", p.x, p.y)
 	p = R.call(-22, 130)
 	lb.mote("end", p.x, p.y)
+	# The Stalker Hollow: a reed-choked dell ringed by low mounds (sightlines only from their tops),
+	# where a reed stalker hunts; Motes on the mounds.
+	var shz: Vector2 = R.call(-40, -40)
+	lb.zone("dell", shz.x, shz.y, 12)
+	var dxf := func(x: float, z: float) -> Transform3D: return lb.at(shz.x, shz.y, 0.0, x, 0, z)
+	for k in 5:
+		var a := TAU * k / 5.0 + 0.3
+		var mxf: Transform3D = dxf.call(cos(a) * 8.5, sin(a) * 8.5)
+		lb.cushion(0, 0, 1.4, 1.3, mxf)
+		if k % 2 == 0:
+			lb.mote_xf("dell", mxf.translated_local(Vector3(0, 1.8, 0)), 0.3)
+	lb.parasite_xf(Parasite.Kind.SMALL, "dell", dxf.call(-3, 2), 2.5)
+	lb.parasite_xf(Parasite.Kind.MEDIUM, "dell", dxf.call(3, -3), 2.5)
+	lb.mote_xf("dell", dxf.call(0, 0), 1.0)
+	lb.bloom_xf(dxf.call(12, 0))
 
-	for r in [[land.x, land.y, 20], [fz.x, fz.y, 26], [ez.x + 30, ez.y, 22], [mz.x, mz.y, 14]]:
+	for r in [[land.x, land.y, 20], [fz.x, fz.y, 26], [ez.x + 30, ez.y, 22], [mz.x, mz.y, 14], [shz.x, shz.y, 10]]:
 		lb.food_region(r[0], r[1], r[2])
 	Levels._holes(lb, 22, 401, [[_dir(cz), 34], [_dir(cv), 14], [mz_dir, 16]])
 	var clear := Levels._veg_keep_clear(lb)
@@ -376,6 +418,7 @@ static func reed_canyon(lb: LevelBuilder) -> void:
 	var in_tunnel := func(dd: Vector3) -> bool: return _deg_to_arc(dd, tun_a, tun_b) < lb.m2deg(0.9) or dd.angle_to(tun_b) < deg_to_rad(lb.m2deg(4.0))
 	Vegetation.field(b, "tall", mz_dir, 26.0, 2600, 404, {"avoid": func(dd: Vector3) -> bool: return clear.call(dd) or in_tunnel.call(dd),
 			"clumps": 12, "fill": 0.7, "edge": 0.8})
+	Vegetation.field(b, "tall", _dir(shz), 9.0, 900, 405, {"avoid": clear, "clumps": 6, "fill": 0.7, "edge": 0.7})
 	_short_cover(lb, 7000, 403, clear, func(dd: Vector3) -> bool: return _deg_to_arc(dd, c0, c1) > 12.0)
 
 
@@ -519,8 +562,25 @@ static func canopy_spire(lb: LevelBuilder) -> void:
 	lb.mote("far", p.x, p.y)
 	p = R.call(30, -150)
 	lb.parasite(Parasite.Kind.SMALL, "far", p.x, p.y, 5.0)
+	# The Low Garden: a sheltered hollow of mounds and coral under the spires, and a bouncy leaf
+	# that throws him up onto the tallest mound (a leaf chain of three bounces).
+	var lgz: Vector2 = R.call(-44, -30)
+	lb.zone("garden", lgz.x, lgz.y, 14)
+	var gxf := func(x: float, z: float) -> Transform3D: return lb.at(lgz.x, lgz.y, 0.0, x, 0, z)
+	lb.cushion(0, 0, 1.6, 1.2, gxf.call(0, 0))
+	lb.cushion(0, 0, 1.4, 2.4, gxf.call(3.4, 1.6))
+	lb.cushion(0, 0, 1.3, 3.6, gxf.call(5.8, -1.2))
+	var gtops := [(gxf.call(0, 0) as Transform3D) * Vector3(0, 1.2, 0), (gxf.call(3.4, 1.6) as Transform3D) * Vector3(0, 2.4, 0), (gxf.call(5.8, -1.2) as Transform3D) * Vector3(0, 3.6, 0)]
+	lb.route("garden mounds", (gxf.call(-3.2, 0) as Transform3D).origin, gtops, ["garden"], "the tallest mound")
+	var gtop: Vector3 = gtops[2]
+	lb.mote_xf("garden", Transform3D(MossBall.frame_at(b.up_at(gtop), 0.0), gtop + b.up_at(gtop) * 0.5), 0.3)
+	lb.parasite_xf(Parasite.Kind.SMALL, "garden", gxf.call(-5, 6), 3.0)
+	lb.parasite_xf(Parasite.Kind.SMALL, "garden", gxf.call(6, 8), 3.0)
+	lb.mote_xf("garden", gxf.call(-6, -6), 1.2)
+	lb.mote_xf("garden", gxf.call(8, 4), 1.2)
+	lb.bloom_xf(gxf.call(-8, 2))
 
-	for r in [[land.x, land.y, 24], [fz.x, fz.y, 26], [kz.x, kz.y, 16]]:
+	for r in [[land.x, land.y, 24], [fz.x, fz.y, 26], [kz.x, kz.y, 16], [lgz.x, lgz.y, 10]]:
 		lb.food_region(r[0], r[1], r[2])
 	Levels._holes(lb, 16, 501, [[_dir(sz), 16], [_dir(hz), 14], [_dir(kz), 14]])
 	# Sparse ground cover, a stand of medium growth round the spire's foot, tall reeds far off.
@@ -699,8 +759,28 @@ static func hollow_grotto(lb: LevelBuilder) -> void:
 	lb.parasite(Parasite.Kind.SMALL, "far", p.x, p.y, 5.0)
 	p = R.call(-30, -170)
 	lb.mote("far", p.x, p.y)
+	# The Basalt Columns: a field of hexagonal-ish stone columns stepping up in a spiral to a high
+	# one with a Mote (another way up in this world of shafts).
+	var bcz: Vector2 = R.call(22, -118)
+	lb.zone("columns", bcz.x, bcz.y, 12)
+	var colxf := func(x: float, z: float) -> Transform3D: return lb.at(bcz.x, bcz.y, 0.0, x, 0, z)
+	var bctops := []
+	for k in 5:
+		var a := 1.2 * k
+		var bh := 1.1 + 1.1 * k
+		var bd := b.up_at((colxf.call(cos(a) * 2.6, sin(a) * 2.6) as Transform3D).origin)
+		lb.stone_column(bd, 0.95, bh)
+		bctops.append(b.surface_point(bd, bh))
+	lb.route("basalt columns", (colxf.call(5.4, 0) as Transform3D).origin, bctops, ["columns"], "the highest column")
+	var bct: Vector3 = bctops[4]
+	lb.mote_xf("columns", Transform3D(MossBall.frame_at(b.up_at(bct), 0.0), bct + b.up_at(bct) * 0.5), 0.3)
+	lb.parasite_xf(Parasite.Kind.SMALL, "columns", colxf.call(-6, 5), 3.0)
+	lb.parasite_xf(Parasite.Kind.MEDIUM, "columns", colxf.call(7, -5), 3.0)
+	lb.mote_xf("columns", colxf.call(-7, -4), 1.0)
+	lb.mote_xf("columns", colxf.call(6, 6), 1.0)
+	lb.bloom_xf(colxf.call(9, 0))
 
-	for r in [[land.x, land.y, 22], [fz.x, fz.y, 26], [vz.x, vz.y, 16], [uz.x, uz.y, 14], [shz.x, shz.y, 12]]:
+	for r in [[land.x, land.y, 22], [fz.x, fz.y, 26], [vz.x, vz.y, 16], [uz.x, uz.y, 14], [shz.x, shz.y, 12], [bcz.x, bcz.y, 10]]:
 		lb.food_region(r[0], r[1], r[2])
 	Levels._holes(lb, 18, 601, [[_dir(gz), 16], [_dir(kz), 13], [_dir(vz), 22], [_dir(cz), 18], [uz_dir, 14], [_dir(shz), 10]])
 	var clear := Levels._veg_keep_clear(lb, [[_dir(cz), 16.0], [_dir(shz), 8.0]])

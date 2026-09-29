@@ -954,6 +954,17 @@ func _test_eel() -> void:
 func _test_stalker() -> void:
 	var st := _crit("stalker", 4) as ReedStalker
 	var b := st.ball
+	# (The canyon's parasites graze nearby; this test is about the stalker alone, so they are held,
+	# but not the creatures.)
+	var held: Array = []
+	for pp in b.parasites:
+		if pp.is_physics_processing():
+			pp.set_physics_process(false)
+			held.append(pp)
+	var release := func() -> void:
+		for pp in held:
+			if is_instance_valid(pp):
+				pp.set_physics_process(true)
 	p.restore_full()
 	p.invuln_t = 0.0
 	# The reeds move where it is before it can be seen: with him well away, its wake bends them.
@@ -1016,6 +1027,7 @@ func _test_stalker() -> void:
 	place_at(b.index, b.surface_point(b.up_at(centre + fr.z * 32.0), 0.2), fr.z)
 	var back: float = await _until(func(): return not st.defeated, 2.0)
 	t.check("stalker_driven_off_then_returns", gone and back >= 0.0 and st._in_patch(st.global_position, 0.5), "")
+	release.call()
 	p.invuln_t = 0.0
 
 
@@ -1278,6 +1290,19 @@ func _test_completion_frozen() -> void:
 	for id in CatalogFrozen.V3:
 		if not cat.has(id):
 			missing.append(id)
+	# A save from before the expansion (everything v3 listed earned) keeps all of it and counts
+	# below 100% now (the new content is still to find); every bloom it could resume at is still one.
+	var v3_earned := {}
+	for id in CatalogFrozen.V3:
+		v3_earned[id] = true
+	var v3_pct: float = cat.percent(v3_earned)
+	var bloom_ok := true
+	for id in CatalogFrozen.V3:
+		if str(id).contains(".bloom."):
+			var bi := int(str(id).substr(1, str(id).find(".") - 1)) - 1
+			var k := int(str(id).get_slice(".", 2))
+			bloom_ok = bloom_ok and k < g.balls[bi].blooms.size() and str(g.balls[bi].blooms[k].get_meta("completion_id", "")) == str(id)
+	t.check("v3_save_migrates", v3_pct > 30.0 and v3_pct < 100.0 and bloom_ok, "a v3 save counts %.1f%% now; its blooms all resolve %s" % [v3_pct, bloom_ok])
 	t.check("shipped_completion_ids_kept", missing.is_empty() and CatalogFrozen.V3.size() == 172, "%d of %d v3 ids missing: %s" % [missing.size(), CatalogFrozen.V3.size(), str(missing.slice(0, 8))])
 	# Explicit ids: two parasites in one zone, the second authored as ".0"; the first takes ".1".
 	var b := g.balls[0]

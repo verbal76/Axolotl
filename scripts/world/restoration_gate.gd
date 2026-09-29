@@ -91,6 +91,9 @@ func _apply(k: float) -> void:
 		"column":
 			visible = k > 0.0
 			flow = k
+			for c in get_children():
+				if c is AudioStreamPlayer3D and k > 0.0 and not (c as AudioStreamPlayer3D).playing and is_inside_tree():
+					(c as AudioStreamPlayer3D).play()
 		_:
 			_set_solid(true)
 	if is_inside_tree():

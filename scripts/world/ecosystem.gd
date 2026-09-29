@@ -86,6 +86,13 @@ func _populate_ball(b: MossBall) -> void:
 			_puffer(b, MossBall.dir_ll(64, 66), 6.0, 1.5, 1)
 			if caves.size() > 0:
 				_eel(b, caves[0], 0)
+			# World expansion: shrimp over the Undercut Hollows, a snail on a coral shelf, a puffer in
+			# the Kelp Fields.
+			_shoal(b, MossBall.dir_ll(10, 28), 3.0, 1)
+			if routes.has("hollows shelf 0"):
+				var hs0: Array = routes["hollows shelf 0"]["tops"]
+				_snail(b, hs0[hs0.size() - 1], (hs0[hs0.size() - 1] as Vector3).lerp(hs0[hs0.size() - 2], 0.25), 0)
+			_puffer(b, MossBall.dir_ll(-50, -138), 4.0, 1.5, 2)
 		2:
 			# (Well away from the parasites' zones: a stalker should not harass a required fight.)
 			_stalker(b, MossBall.dir_ll(-55, 95), 10.0, 0)
@@ -117,6 +124,13 @@ func _populate_ball(b: MossBall) -> void:
 				if routes.has(name_):
 					_hopper(b, routes[name_]["tops"], 1, hk)
 					hk += 1
+			# World expansion: a hopper leading up the Great Trunk, a snail in the High Crown, shrimp
+			# in the Root Tangle.
+			if routes.has("great trunk"):
+				var gtt: Array = routes["great trunk"]["tops"]
+				_hopper(b, gtt.slice(0, 12), 1, 4)
+				_snail(b, gtt[gtt.size() - 2], (gtt[gtt.size() - 2] as Vector3).lerp(gtt[gtt.size() - 1], 0.3), 7)
+			_shoal(b, MossBall.dir_ll(-66, -100), 3.0, 0)
 		3:
 			_shoal(b, R.call(8, 10), 6.0, 0)
 			_shoal(b, R.call(14, 24), 4.0, 1)
@@ -126,12 +140,24 @@ func _populate_ball(b: MossBall) -> void:
 				_snail(b, at[at.size() - 1], at[at.size() - 2], 0)
 			if routes.has("terraces"):
 				_hopper(b, routes["terraces"]["tops"], 0, 0)
+			# World expansion: shrimp by the Grand Terraces, a hopper up them, a snail on the Twin.
+			_shoal(b, R.call(40, 120), 4.0, 2)
+			if routes.has("grand terraces"):
+				_hopper(b, routes["grand terraces"]["tops"], 0, 1)
+			if routes.has("terrace bridge"):
+				var tbt: Array = routes["terrace bridge"]["tops"]
+				_snail(b, tbt[tbt.size() - 1], (tbt[tbt.size() - 1] as Vector3).lerp(tbt[tbt.size() - 2], 0.2), 1)
 			for h in caves:
 				_crab(b, h, 0)
 		4:
-			_stalker(b, R.call(0, 40), 8.0, 0)
-			_stalker(b, R.call(0, 78), 8.0, 1)
+			# (Half their old spread in degrees: the canyon kept its width in metres as the ball doubled.)
+			_stalker(b, R.call(0, 40), 4.0, 0)
+			_stalker(b, R.call(0, 78), 4.0, 1)
 			_puffer(b, R.call(24, 60), 5.0, 3.2, 0)
+			# World expansion: a reed stalker in the Reed Maze (away from its bloom), shrimp in the
+			# Secret Clearing.
+			_stalker(b, R.call(12, -128), 4.0, 2)
+			_shoal(b, R.call(26, -132), 2.5, 0)
 			for h in caves:
 				_crab(b, h, 0)
 				_eel(b, h, 0)
@@ -149,12 +175,25 @@ func _populate_ball(b: MossBall) -> void:
 				var sh: Array = routes["shelves"]["tops"]
 				_snail(b, sh[1], (sh[1] as Vector3).lerp(sh[0], 0.2), 3)
 				_snail(b, sh[2], (sh[2] as Vector3).lerp(sh[1], 0.2), 4)
+			# World expansion: a hopper up the Sky Spire, snails on its leaves, shrimp at its foot.
+			if routes.has("sky spire"):
+				var skt: Array = routes["sky spire"]["tops"]
+				_hopper(b, skt.slice(0, 14), 1, 1)
+				for si in [8, 22]:
+					if si + 1 < skt.size():
+						_snail(b, skt[si], (skt[si] as Vector3).lerp(skt[si + 1], 0.25), 5 + si)
+			_shoal(b, R.call(34, -54), 4.0, 1)
 		6:
 			_shoal(b, R.call(10, 40), 4.0, 0)
 			_puffer(b, R.call(8, 42), 5.0, 1.6, 0)
 			if routes.has("high shelf"):
 				var hs: Array = routes["high shelf"]["tops"]
 				_snail(b, hs[hs.size() - 1], hs[hs.size() - 2], 0)
+			# World expansion: shrimp over the Undercut Ravine's upland, a snail on the Shaft's ledge.
+			_shoal(b, R.call(-44, 42), 3.0, 1)
+			if routes.has("shaft column"):
+				var sct: Array = routes["shaft column"]["tops"]
+				_snail(b, sct[sct.size() - 1], (sct[sct.size() - 1] as Vector3).lerp(sct[sct.size() - 2], 0.3), 1)
 			for i in caves.size():
 				if i == 0:
 					_crab(b, caves[i], 0)
