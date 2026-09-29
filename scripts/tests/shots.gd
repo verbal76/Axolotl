@@ -410,6 +410,13 @@ func run(runner) -> void:
 		await _report_shots(g)
 	if only == "camaudit":
 		await _camera_audit(g)
+	if only == "room":
+		await _room_shots(g, "room_murky")
+		for b in g.balls:
+			b.add_heal(Vector3.UP, 340.0, 0.0)
+		g.g_disp = 1.0
+		g.aquarium.apply(1.0)
+		await _room_shots(g, "room_clean")
 	if only == "gravel":
 		await _gravel_shots(g, "gravel_murky")
 		for b in g.balls:
@@ -443,6 +450,27 @@ func run(runner) -> void:
 		g.cam.pitch = -0.1
 		await t.seconds(1.5)
 		await t.shot("07_restored_under")
+
+
+## The bedroom (docs/AQUARIUM.md): the room view's composition, and a few corners of the room.
+func _room_shots(g: Game, tag: String) -> void:
+	g.player.invuln_t = 9999
+	var env: Environment = g.aquarium.env
+	var fog := env.fog_enabled
+	env.fog_enabled = false
+	g.cam.cinematic = true
+	var bed: Bedroom = g.aquarium.bedroom
+	var views := [["1view", bed.view_pos, bed.view_look], ["2desk", Vector3(-300, 500, 2000), Vector3(-1300, 100, 1000)],
+			["3bed", Vector3(-600, 400, 900), Vector3(1100, -300, 2400)], ["4tv", Vector3(400, 300, 1600), Vector3(-1200, 0, 2400)],
+			["5tank", Vector3(250, 120, 900), Vector3(0, -20, 0)]]
+	for v in views:
+		g.cam.cine_pos = v[1]
+		g.cam.cine_look = v[2]
+		g.cam.cine_up = Vector3.UP
+		await t.seconds(1.6)
+		await t.shot("%s_%s" % [tag, v[0]])
+	g.cam.cinematic = false
+	env.fog_enabled = fog
 
 
 ## The gravel (docs/AQUARIUM.md): close, normal and grazing views inside the tank, and one through

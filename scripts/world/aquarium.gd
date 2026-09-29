@@ -16,6 +16,9 @@ const NOISE := preload("res://assets/textures/noise_rgb.png")
 var env: Environment
 var sun: DirectionalLight3D
 var gravel_mat: ShaderMaterial
+## The bedroom round the tank, and the cool light the tank casts into it.
+var bedroom: Bedroom
+var tank_spill: OmniLight3D
 var pebble_mat: ShaderMaterial
 var glass_mats: Array[ShaderMaterial] = []
 var surface_mat: ShaderMaterial
@@ -92,7 +95,7 @@ func _build_light() -> void:
 	_room_light.omni_range = 6000
 	_room_light.omni_attenuation = 0.4
 	_room_light.light_energy = 1.4
-	_room_light.light_color = Color(1.0, 0.92, 0.8)
+	_room_light.light_color = Color(1.0, 0.86, 0.68)
 	_room_light.light_cull_mask = 1 << (ROOM_LAYER - 1)
 	add_child(_room_light)
 	var fill := OmniLight3D.new()
@@ -611,95 +614,23 @@ func _box(size: Vector3, pos: Vector3, mat: Material, parent: Node3D = null, rot
 	return mi
 
 
+## The bedroom (Bedroom: a lived-in late-80s / early-90s kid's room round the tank), the cool light
+## the tank throws on the things near it, and the incidental legs and hand.
 func _build_room() -> void:
-	var room := Node3D.new()
-	room.name = "Bedroom"
-	add_child(room)
-	var wall := _room_mat(Color(0.62, 0.72, 0.82))
-	var wall2 := _room_mat(Color(0.95, 0.85, 0.62))
-	var floor_m := _room_mat(Color(0.55, 0.38, 0.24))
-	var ceil_m := _room_mat(Color(0.93, 0.93, 0.9))
-	var X0 := -1600.0
-	var X1 := 1600.0
-	var Z0 := -330.0
-	var Z1 := 3100.0
-	var Y1 := FLOOR_Y + 2300.0
-	_box(Vector3(X1 - X0, 20, Z1 - Z0), Vector3(0, FLOOR_Y - 10, (Z0 + Z1) * 0.5), floor_m, room)
-	_box(Vector3(X1 - X0, 20, Z1 - Z0), Vector3(0, Y1, (Z0 + Z1) * 0.5), ceil_m, room)
-	_box(Vector3(X1 - X0, Y1 - FLOOR_Y, 20), Vector3(0, (FLOOR_Y + Y1) * 0.5, Z0), wall2, room)
-	_box(Vector3(X1 - X0, Y1 - FLOOR_Y, 20), Vector3(0, (FLOOR_Y + Y1) * 0.5, Z1), wall, room)
-	_box(Vector3(20, Y1 - FLOOR_Y, Z1 - Z0), Vector3(X0, (FLOOR_Y + Y1) * 0.5, (Z0 + Z1) * 0.5), wall, room)
-	_box(Vector3(20, Y1 - FLOOR_Y, Z1 - Z0), Vector3(X1, (FLOOR_Y + Y1) * 0.5, (Z0 + Z1) * 0.5), wall, room)
-	# Floorboards.
-	for i in 12:
-		_box(Vector3(X1 - X0, 2, 6), Vector3(0, FLOOR_Y + 1, Z0 + 280 * i), _room_mat(Color(0.42, 0.28, 0.17)), room)
-	# Rug.
-	_box(Vector3(1300, 6, 900), Vector3(-100, FLOOR_Y + 3, 1700), _room_mat(Color(0.35, 0.55, 0.75)), room)
-	_box(Vector3(1100, 7, 700), Vector3(-100, FLOOR_Y + 4, 1700), _room_mat(Color(0.95, 0.8, 0.35)), room)
-	# Tank stand / dresser with drawers.
-	var wood := _room_mat(Color(0.8, 0.62, 0.42))
-	# (Sized to the tank: a little wider and deeper than the glass.)
-	var dw := TANK_MAX.x - TANK_MIN.x + 40.0
-	var dd := TANK_MAX.z - TANK_MIN.z + 40.0
-	var dz := (TANK_MIN.z + TANK_MAX.z) * 0.5
-	_box(Vector3(dw, 690, dd), Vector3(0, FLOOR_Y + 345, dz), wood, room)
-	for i in 3:
-		_box(Vector3(dw - 60.0, 190, 10), Vector3(0, FLOOR_Y + 120 + i * 215, dz + dd * 0.5 + 5.0), _room_mat(Color(0.86, 0.7, 0.5)), room)
-		_box(Vector3(80, 18, 20), Vector3(0, FLOOR_Y + 120 + i * 215, dz + dd * 0.5 + 15.0), _room_mat(Color(0.3, 0.3, 0.32), 0.3), room)
-	# Bed.
-	_box(Vector3(1000, 300, 1900), Vector3(950, FLOOR_Y + 150, 2100), _room_mat(Color(0.6, 0.45, 0.32)), room)
-	_box(Vector3(1020, 140, 1500), Vector3(950, FLOOR_Y + 360, 2300), _room_mat(Color(0.4, 0.75, 0.55)), room)
-	_box(Vector3(1030, 80, 700), Vector3(950, FLOOR_Y + 380, 1900), _room_mat(Color(0.95, 0.55, 0.45)), room)
-	_box(Vector3(700, 150, 330), Vector3(950, FLOOR_Y + 430, 2900), _room_mat(Color(0.98, 0.98, 0.95)), room)
-	_box(Vector3(1000, 900, 60), Vector3(950, FLOOR_Y + 450, 3060), _room_mat(Color(0.55, 0.4, 0.3)), room)
-	# Desk with lamp, books and a toy.
-	_box(Vector3(900, 40, 550), Vector3(-1150, FLOOR_Y + 720, 1100), wood, room)
-	for lx in [-1550, -760]:
-		for lz in [860, 1340]:
-			_box(Vector3(40, 720, 40), Vector3(lx, FLOOR_Y + 360, lz), wood, room)
-	_box(Vector3(60, 400, 60), Vector3(-1350, FLOOR_Y + 940, 1000), _room_mat(Color(0.2, 0.2, 0.22), 0.3), room)
-	_box(Vector3(260, 160, 260), Vector3(-1350, FLOOR_Y + 1150, 1000), _room_mat(Color(1.0, 0.9, 0.55), 0.5, 1.8), room)
-	var cols := [Color(0.9, 0.3, 0.3), Color(0.3, 0.5, 0.9), Color(0.95, 0.8, 0.2), Color(0.4, 0.8, 0.45), Color(0.7, 0.4, 0.8)]
-	for i in 5:
-		_box(Vector3(40, 250 - i * 12, 190), Vector3(-1000 + i * 45, FLOOR_Y + 860 - i * 6, 1250), _room_mat(cols[i]), room)
-	# Toy dinosaur (simple blocky shapes).
-	var dino := _room_mat(Color(0.35, 0.75, 0.35))
-	_box(Vector3(220, 110, 90), Vector3(-850, FLOOR_Y + 820, 1000), dino, room)
-	_box(Vector3(90, 180, 70), Vector3(-730, FLOOR_Y + 900, 1000), dino, room)
-	_box(Vector3(120, 60, 70), Vector3(-680, FLOOR_Y + 990, 1000), dino, room)
-	_box(Vector3(160, 40, 40), Vector3(-990, FLOOR_Y + 820, 1000), dino, room, Vector3(0, 0, 0.3))
-	# Bookshelf.
-	_box(Vector3(80, 1600, 700), Vector3(X0 + 60, FLOOR_Y + 800, 2300), wood, room)
-	for s in 5:
-		_box(Vector3(300, 20, 700), Vector3(X0 + 150, FLOOR_Y + 150 + s * 330, 2300), wood, room)
-		for b in 9:
-			_box(Vector3(220, 230 - (b % 3) * 30, 50), Vector3(X0 + 150, FLOOR_Y + 280 + s * 330 - (b % 3) * 15, 2020 + b * 70), _room_mat(cols[(b + s) % 5]), room)
-	# Window with daylight.
-	_box(Vector3(30, 900, 1000), Vector3(X1 - 15, FLOOR_Y + 1300, 1000), _room_mat(Color(0.95, 0.95, 0.92)), room)
-	_box(Vector3(20, 780, 880), Vector3(X1 - 30, FLOOR_Y + 1300, 1000), _room_mat(Color(0.75, 0.9, 1.0), 0.5, 2.2), room)
-	_box(Vector3(24, 20, 880), Vector3(X1 - 36, FLOOR_Y + 1300, 1000), _room_mat(Color(0.95, 0.95, 0.92)), room)
-	_box(Vector3(24, 780, 20), Vector3(X1 - 36, FLOOR_Y + 1300, 1000), _room_mat(Color(0.95, 0.95, 0.92)), room)
-	# Curtains.
-	_box(Vector3(40, 1100, 220), Vector3(X1 - 60, FLOOR_Y + 1250, 420), _room_mat(Color(0.9, 0.5, 0.55)), room)
-	_box(Vector3(40, 1100, 220), Vector3(X1 - 60, FLOOR_Y + 1250, 1580), _room_mat(Color(0.9, 0.5, 0.55)), room)
-	# Door.
-	_box(Vector3(820, 2000, 30), Vector3(-500, FLOOR_Y + 1000, Z1 - 20), _room_mat(Color(0.92, 0.9, 0.85)), room)
-	_box(Vector3(60, 60, 60), Vector3(-200, FLOOR_Y + 1000, Z1 - 50), _room_mat(Color(0.8, 0.7, 0.3), 0.3), room)
-	# Poster behind the tank, a star-lamp and a ball on the floor.
-	_box(Vector3(700, 900, 8), Vector3(-80, 350, Z0 + 15), _room_mat(Color(0.2, 0.3, 0.55)), room)
-	_box(Vector3(500, 300, 10), Vector3(-80, 450, Z0 + 20), _room_mat(Color(0.95, 0.75, 0.3)), room)
-	_box(Vector3(260, 260, 10), Vector3(-200, 150, Z0 + 20), _room_mat(Color(0.4, 0.85, 0.7)), room)
-	var ball := MeshInstance3D.new()
-	var bs := SphereMesh.new()
-	bs.radius = 130
-	bs.height = 260
-	ball.mesh = bs
-	ball.material_override = _room_mat(Color(0.95, 0.35, 0.3))
-	ball.position = Vector3(300, FLOOR_Y + 130, 1500)
-	ball.layers = 1 << (ROOM_LAYER - 1)
-	room.add_child(ball)
-	_build_legs(room)
-	_build_hand(room)
+	bedroom = Bedroom.new()
+	add_child(bedroom)
+	bedroom.build(FLOOR_Y, ROOM_LAYER, TANK_MIN, TANK_MAX)
+	tank_spill = OmniLight3D.new()
+	tank_spill.name = "TankSpill"
+	tank_spill.position = Vector3(0, 60, TANK_MAX.z + 140)
+	tank_spill.omni_range = 1300.0
+	tank_spill.omni_attenuation = 1.4
+	tank_spill.light_color = Color(0.55, 0.8, 1.0)
+	tank_spill.light_energy = 0.6
+	tank_spill.light_cull_mask = 1 << (ROOM_LAYER - 1)
+	add_child(tank_spill)
+	_build_legs(bedroom)
+	_build_hand(bedroom)
 
 
 func _build_legs(room: Node3D) -> void:
