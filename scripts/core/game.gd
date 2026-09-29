@@ -33,6 +33,8 @@ var pause_menu: PauseMenu
 var quality: QualityScaler
 ## The aquarium experiences (docs/AQUARIUM.md): the room, inspection, Live Tank and Swim Mode.
 var presentation: Presentation
+## Treasure Hunt, the postgame search (docs/TREASURE_HUNT.md).
+var treasure: TreasurePlay
 
 var state := "title"          # title | play | aquarium (the experiences; the clock never counts)
 var cinematic := ""
@@ -251,6 +253,9 @@ func _build_world() -> void:
 	presentation.ui = PresentationUi.new()
 	presentation.ui.p = presentation
 	add_child(presentation.ui)
+	treasure = TreasurePlay.new()
+	treasure.g = self
+	add_child(treasure)
 	# Android's back gesture is handled (the aquarium steps back out, play opens the menu).
 	get_tree().quit_on_go_back = false
 
@@ -303,6 +308,8 @@ func start_play(immediate := false) -> void:
 		cam.snap_behind()
 	Settings.skip_title = false
 	_show_prompt("move")
+	if treasure != null:
+		treasure.refresh()
 	Boot.report_ready()
 
 
@@ -779,6 +786,10 @@ func lunge_contact(p: Axolotl) -> bool:
 	var head := p.head_position()
 	var chest := p.body_center()
 	var tip := head + p.facing * 0.2
+	# Treasure Hunt: only a lunge collects the current object (docs/TREASURE_HUNT.md).
+	if treasure != null and treasure.try_collect(p, chest, tip):
+		_hide_prompt("lunge", true)
+		return true
 	for f in p.ball.foods.duplicate():
 		if not is_instance_valid(f) or not f.is_catchable():
 			continue

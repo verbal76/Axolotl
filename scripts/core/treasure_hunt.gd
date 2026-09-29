@@ -103,8 +103,14 @@ static func begin_hunt(st: Dictionary, balls: Array, seed_v := -1) -> void:
 	var avoid: Array[Vector3] = []
 	for p in spots:
 		avoid.append(Vector3(p[0], p[1], p[2]))
-	st["targets"] = generate(int(st["seed"]), float(st["scale"]), balls, avoid)
+	st["targets"] = _as_saved(generate(int(st["seed"]), float(st["scale"]), balls, avoid))
 	st["active"] = true
+
+
+## Exactly as it will read back from the run save (JSON numbers), so the hunt in memory and the one
+## reloaded later are identical, not merely equivalent.
+static func _as_saved(v: Variant) -> Variant:
+	return JSON.parse_string(JSON.stringify(v))
 
 
 ## Records one find (the caller saves at once, before any celebration): exactly one step forward.
@@ -322,6 +328,6 @@ static func recover(st: Dictionary, index: int, balls: Array) -> bool:
 			others.append(target_pos((st["targets"] as Array)[j]))
 	var pick := _choose(b, candidates(b, scale, rng), others, [] as Array[Vector3], rng)
 	var pos: Vector3 = pick["pos"]
-	t["pos"] = [snappedf(pos.x, 0.001), snappedf(pos.y, 0.001), snappedf(pos.z, 0.001)]
-	t["recovered"] = int(t.get("recovered", 0)) + 1
+	t["pos"] = _as_saved([snappedf(pos.x, 0.001), snappedf(pos.y, 0.001), snappedf(pos.z, 0.001)])
+	t["recovered"] = float(int(t.get("recovered", 0)) + 1)
 	return true

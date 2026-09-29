@@ -7,6 +7,7 @@ extends CanvasLayer
 var _root: Control
 var _play: Button
 var _new_run: VBoxContainer
+var _treasure: Button
 var _run_info: Label
 var version_label: Label
 var title_label: Label
@@ -46,6 +47,11 @@ func _ready() -> void:
 	var colours := UiStyle.button("%s's colours" % GameVersion.CHARACTER_NAME, _on_colours)
 	colours.name = "GillColours"
 	box.add_child(colours)
+	# Treasure Hunt: shown only once the run is complete (100%); never a teaser before.
+	_treasure = UiStyle.button("Treasure Hunt", _on_treasure)
+	_treasure.name = "TreasureHunt"
+	_treasure.visible = false
+	box.add_child(_treasure)
 	var aq := UiStyle.button("Aquarium", _on_aquarium)
 	aq.name = "Aquarium"
 	box.add_child(aq)
@@ -81,6 +87,7 @@ func show_title() -> void:
 		lines.append(g.best_line())
 	_run_info.text = "\n".join(lines)
 	_run_info.visible = not lines.is_empty()
+	_treasure.visible = g.treasure != null and g.treasure.eligible()
 	visible = true
 	_play.grab_focus.call_deferred()
 
@@ -107,6 +114,12 @@ func _on_colours() -> void:
 
 
 ## The aquarium experiences (docs/AQUARIUM.md): the bedroom, the tank, Live Tank and Swim Mode.
+func _on_treasure() -> void:
+	Sfx.play("ui_tap", null, -6.0)
+	Game.inst.treasure.start()
+	Game.inst.start_play()
+
+
 func _on_aquarium() -> void:
 	Sfx.play("ui_tap", null, -6.0)
 	Game.inst.presentation.enter("title")

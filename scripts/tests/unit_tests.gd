@@ -14,7 +14,7 @@ func run(runner) -> void:
 	p.use_bot_input = true
 	await t.seconds(0.5)
 	var only: String = Settings.test_args.get("only", "")
-	for name_ in ["_test_startup", "_test_ota_and_version", "_test_mesh_winding", "_test_terrain", "_test_ravines", "_test_terrain_grounded", "_test_no_floating_platforms", "_test_parasite_locomotion", "_test_parasite_body_and_death", "_test_parasite_combat", "_test_gill_look", "_test_gill_idles", "_test_gill_colours", "_test_gill_patterns", "_test_tail_whip", "_test_ambient_sway", "_test_placements", "_test_tutorial_route", "_test_sphere_walk", "_test_jump_and_burst", "_test_coyote_and_buffer", "_test_swipe_direction_and_stages", "_test_hard_landing", "_test_food", "_test_food_reach", "_test_darter_and_burrower", "_test_food_repopulates", "_test_motes", "_test_checkpoint_and_regen", "_test_crumble", "_test_restoration_gates", "_test_bubble_columns", "_test_restoration_continuity", "_test_health_map", "_test_vortex", "_test_current", "_test_canopy", "_test_canopy_plain_jumps", "_test_climbs_physical", "_test_jungle_ladders_physical", "_test_leaf_geometry", "_test_leaf_footing", "_test_caves", "_test_mounds", "_test_vegetation", "_test_vortex_mouths_clear", "_test_route_audit", "_test_new_areas", "_test_ecosystem", "_test_music", "_test_run_clock", "_test_completion_catalog", "_test_completion_frozen", "_test_run_save_file", "_test_run_timer_live", "_test_run_continue", "_test_timer_integrity", "_test_resume_points_safe", "_phase_continue_write", "_phase_continue_read", "_test_upgrades", "_test_ui", "_test_menu_scrollbar", "_test_tier2_rules", "_test_tier2_world", "_test_ambient_fish", "_test_parasite_never_buried", "_test_tier2_loadout", "_test_aquarium_experiences", "_test_all_clear"]:
+	for name_ in ["_test_startup", "_test_ota_and_version", "_test_mesh_winding", "_test_terrain", "_test_ravines", "_test_terrain_grounded", "_test_no_floating_platforms", "_test_parasite_locomotion", "_test_parasite_body_and_death", "_test_parasite_combat", "_test_gill_look", "_test_gill_idles", "_test_gill_colours", "_test_gill_patterns", "_test_tail_whip", "_test_ambient_sway", "_test_placements", "_test_tutorial_route", "_test_sphere_walk", "_test_jump_and_burst", "_test_coyote_and_buffer", "_test_swipe_direction_and_stages", "_test_hard_landing", "_test_food", "_test_food_reach", "_test_darter_and_burrower", "_test_food_repopulates", "_test_motes", "_test_checkpoint_and_regen", "_test_crumble", "_test_restoration_gates", "_test_bubble_columns", "_test_restoration_continuity", "_test_health_map", "_test_vortex", "_test_current", "_test_canopy", "_test_canopy_plain_jumps", "_test_climbs_physical", "_test_jungle_ladders_physical", "_test_leaf_geometry", "_test_leaf_footing", "_test_caves", "_test_mounds", "_test_vegetation", "_test_vortex_mouths_clear", "_test_route_audit", "_test_new_areas", "_test_ecosystem", "_test_music", "_test_run_clock", "_test_completion_catalog", "_test_completion_frozen", "_test_run_save_file", "_test_run_timer_live", "_test_run_continue", "_test_timer_integrity", "_test_resume_points_safe", "_phase_continue_write", "_phase_continue_read", "_test_upgrades", "_test_ui", "_test_menu_scrollbar", "_test_tier2_rules", "_test_tier2_world", "_test_ambient_fish", "_test_parasite_never_buried", "_test_tier2_loadout", "_test_aquarium_experiences", "_test_all_clear", "_test_treasure_unlock", "_test_treasure_generation", "_test_treasure_play"]:
 		# "_phase_*" tests are halves of a relaunch test: they run only when asked for by name
 		# (in a child process started by _test_run_continue).
 		if name_.begins_with("_phase") and only != name_:
@@ -4331,7 +4331,7 @@ func _test_gill_idles() -> void:
 		var gap := starts[i] - ends[i - 1]
 		gap_lo = minf(gap_lo, gap)
 		gap_hi = maxf(gap_hi, gap)
-	t.check("idles_varied_not_repeated", kinds.size() == AxolotlModel.IDLE_LEN.size() and repeats == 0 and grams.size() > 4 and seq.size() >= 40 and seq.size() <= 150
+	t.check("idles_varied_not_repeated", kinds.size() == AxolotlModel.IDLE_RANDOM and repeats == 0 and grams.size() > 4 and seq.size() >= 40 and seq.size() <= 150
 			and gap_lo >= AxolotlModel.IDLE_GAP.x - 0.05 and gap_hi <= AxolotlModel.IDLE_GAP.y + 0.05,
 			"%d idles in 20 min, kinds %s, %d back-to-back repeats, %d different runs of four, gaps %.1f..%.1f s" % [seq.size(), str(kinds.keys()), repeats, grams.size(), gap_lo, gap_hi])
 	t.check("idles_leave_gameplay_rng_alone", r1 == r2, "")
@@ -5949,3 +5949,331 @@ func _test_all_clear() -> void:
 			str(on_disk["run"]["clock"]["finish_s"]), str(fin), g.run_save.last_save_result, g.run_save.read_only, g.run_save.path])
 	# (Expansion 6: clear water keeps a little haze, 0.007, so the far glass and room recede.)
 	t.check("aquarium_fully_clean", is_equal_approx(g.aquarium.clean, 1.0) and g.env.fog_density < 0.0075, "fog %.4f" % g.env.fog_density)
+
+
+# --- Treasure Hunt (docs/TREASURE_HUNT.md) ---------------------------------------------------
+# These run after _test_all_clear: every world restored through play (every gate open), as in
+# the real postgame. The run is then brought to exactly 100% the way a finished save would be.
+
+func _make_complete() -> void:
+	for id in g.completion.order:
+		if not g.run_save.earned().has(id):
+			g.run_save.earned()[id] = 0.0
+
+
+func _treasure_reset() -> void:
+	g.run_save.run()["treasure"] = {}
+	g.treasure.refresh()
+
+
+## Unlock: below 100% nothing (no button anywhere); at 100% the title and the pause menu offer it;
+## a save from before this feature (no "treasure" key at all) that is at 100% qualifies unchanged.
+func _test_treasure_unlock() -> void:
+	var earned0 := g.run_save.earned().duplicate()
+	var pct_before := g.completion_percent()
+	var tp: TreasurePlay = g.treasure
+	var below := not tp.eligible() and pct_before < 100.0
+	g.title.show_title()
+	var title_hidden: bool = not g.title._treasure.visible
+	g.title.hide_title()
+	g.pause_menu.open()
+	await t.frames(2)
+	var pause_hidden: bool = not g.pause_menu._treasure.visible
+	g.pause_menu.close()
+	t.check("treasure_locked_below_100", below and title_hidden and pause_hidden, "%.2f%%, title button %s, pause row %s" % [pct_before, not title_hidden, not pause_hidden])
+	_make_complete()
+	var at100 := tp.eligible() and is_equal_approx(g.completion_percent(), 100.0)
+	g.title.show_title()
+	var title_shown: bool = g.title._treasure.visible
+	g.title.hide_title()
+	g.pause_menu.open()
+	await t.frames(2)
+	var pause_shown: bool = g.pause_menu._treasure.visible and g.pause_menu._treasure.text != ""
+	g.pause_menu.close()
+	t.check("treasure_open_at_100", at100 and title_shown and pause_shown, "")
+	# An old save: the same finished run, written before Treasure Hunt existed.
+	var old: Dictionary = g.run_save.data.duplicate(true)
+	(old["run"] as Dictionary).erase("treasure")
+	var migrated := RunSave.migrate(old)
+	var c := Completion.new()
+	var old_pct: float = g.completion.percent(migrated["run"]["earned"])
+	var st := TreasureHunt.state_of(migrated["run"])
+	t.check("treasure_old_100_save_qualifies", migrated["run"].has("treasure") and TreasureHunt.eligible(old_pct) and not TreasureHunt.has_hunt(st)
+			and migrated["run"]["earned"] == g.run_save.earned(), "%.2f%%" % old_pct)
+	t.check("treasure_no_completion_change", Completion.CATALOG_VERSION == 4 and g.completion.size() == 348 and not g.completion.order.any(func(id): return "treasure" in id),
+			"catalog v%d, %d ids" % [Completion.CATALOG_VERSION, g.completion.size()])
+
+
+## Generation: 14 objects, all different, two per world, interleaved; the same seed gives the same
+## hunt, a new seed a new one; every spot valid; sizes 100% then 50% for good.
+func _test_treasure_generation() -> void:
+	var a := TreasureHunt.generate(424242, 1.0, g.balls)
+	var b2 := TreasureHunt.generate(424242, 1.0, g.balls)
+	var kinds := {}
+	var per := {}
+	var consecutive := 0
+	for i in a.size():
+		kinds[a[i]["kind"]] = true
+		per[a[i]["world"]] = int(per.get(a[i]["world"], 0)) + 1
+		if i > 0 and a[i]["world"] == a[i - 1]["world"]:
+			consecutive += 1
+	var world_by_world := true
+	for i in range(1, a.size()):
+		if int(a[i]["world"]) < int(a[i - 1]["world"]):
+			world_by_world = false
+	t.check("treasure_14_all_kinds_two_per_world", a.size() == 14 and kinds.size() == 14 and per.size() == 7 and per.values().all(func(n): return n == 2),
+			"%d targets, %d kinds, per world %s" % [a.size(), kinds.size(), str(per)])
+	t.check("treasure_order_interleaved", consecutive == 0 and not world_by_world, "worlds %s" % str(a.map(func(x): return x["world"] + 1)))
+	t.check("treasure_same_seed_same_hunt", a == b2, "")
+	var c2 := TreasureHunt.generate(99, 1.0, g.balls)
+	t.check("treasure_new_seed_new_hunt", c2.map(func(x): return x["kind"]) != a.map(func(x): return x["kind"])
+			and c2.map(func(x): return x["pos"]) != a.map(func(x): return x["pos"]), "")
+	# Every spot of 12 hunts (both sizes): in its world, on the ground, clear, not in a ravine.
+	var bad := []
+	var worst_alt := 0.0
+	for k in 12:
+		var hunt := TreasureHunt.generate(1000 + k * 7919, 1.0 if k % 2 == 0 else 0.5, g.balls)
+		var hp := {}
+		for tg in hunt:
+			var w: int = tg["world"]
+			hp[w] = int(hp.get(w, 0)) + 1
+			var bb: MossBall = g.balls[w]
+			var pos := TreasureHunt.target_pos(tg)
+			worst_alt = maxf(worst_alt, absf(bb.altitude(pos)))
+			var nearest := -1
+			var nd := INF
+			for ob in g.balls:
+				var dd: float = ob.altitude(pos)
+				if absf(dd) < nd:
+					nd = absf(dd)
+					nearest = ob.index
+			if nearest != w or not TreasureHunt.spot_ok(bb, pos, float(tg["scale"])):
+				bad.append("%s w%d" % [tg["kind"], w + 1])
+		for i in range(1, hunt.size()):
+			if hunt[i]["world"] == hunt[i - 1]["world"]:
+				bad.append("consecutive")
+		if not hp.values().all(func(n): return n == 2):
+			bad.append("per-world")
+	t.check("treasure_spots_valid", bad.is_empty() and worst_alt < 0.5, "12 hunts, 168 spots: %d bad %s; worst %.2f m off the ground" % [bad.size(), str(bad.slice(0, 5)), worst_alt])
+	# The global generator does not move when a hunt is generated.
+	seed(777)
+	var r0 := [randi(), randi()]
+	seed(777)
+	TreasureHunt.generate(5, 1.0, g.balls)
+	t.check("treasure_leaves_gameplay_rng_alone", [randi(), randi()] == r0, "")
+	# Sizes: first hunt 1, every later hunt 0.5 (never halved again).
+	t.check("treasure_sizes_first_then_half", TreasureHunt.scale_for_hunt(1) == 1.0 and TreasureHunt.scale_for_hunt(2) == 0.5
+			and TreasureHunt.scale_for_hunt(3) == 0.5 and TreasureHunt.scale_for_hunt(9) == 0.5, "")
+
+
+## A spot a couple of metres from the target that he can walk from (for the pickup tests).
+func _approach(b: MossBall, target: Vector3) -> Vector3:
+	var up := b.up_at(target)
+	var fr := MossBall.frame_at(up, 0.0)
+	for dist in [2.3, 3.0, 1.8]:
+		for k in 12:
+			var d := fr.z.rotated(up, TAU * k / 12.0)
+			var q := b.surface_point((target + d * dist - b.global_position).normalized())
+			if TreasureHunt.spot_ok(b, q, 0.3) and TreasureHunt.path_ok(b, q, target):
+				return q
+	return Vector3.INF
+
+
+## Lunges at the current object from a walkable spot near it; returns true if it was collected.
+func _lunge_at_current(tp: TreasurePlay) -> bool:
+	var st: Dictionary = tp.st()
+	var tg: Dictionary = TreasureHunt.current(st)
+	var b: MossBall = g.balls[int(tg["world"])]
+	var target: Vector3 = tp.node.global_position if tp.node else TreasureHunt.target_pos(tg)
+	var from := _approach(b, target)
+	if from == Vector3.INF:
+		return false
+	var dir := target - from
+	place_at(b.index, from + b.up_at(from) * 0.1, dir - b.up_at(from) * dir.dot(b.up_at(from)))
+	await t.seconds(0.4)
+	var idx0 := int(st["index"])
+	for tries in 3:
+		# Walk up close, then lunge (as a player would).
+		for k in 90:
+			var flat: Vector3 = target - p.global_position
+			flat -= p.up * flat.dot(p.up)
+			if flat.length() < 1.6 + tp.reach() * 0.5:
+				break
+			stick_toward(flat.normalized())
+			await t.frames(2)
+		p.bot_input = Vector2.ZERO
+		await press("lunge")
+		await t.seconds(0.6)
+		if int(st["index"]) > idx0:
+			return true
+	return false
+
+
+func _full_scale(kind: String) -> float:
+	var n := TreasureModels.node(kind, 1.0)
+	var k := n.scale.x
+	n.free()
+	return k
+
+
+func _test_treasure_play() -> void:
+	_make_complete()
+	_treasure_reset()
+	var tp: TreasurePlay = g.treasure
+	var pct0 := g.completion_percent()
+	var earned0 := g.run_save.earned().size()
+	var fin0: float = g.clock.finish_s
+	var run0: float = g.clock.run_s
+	p.restore_full()
+	p.invuln_t = 9999.0
+	for b in g.balls:
+		_hold_threats(b)
+	tp.start()
+	await t.frames(3)
+	var st: Dictionary = tp.st()
+	t.check("treasure_starts_first_hunt", TreasureHunt.has_hunt(st) and int(st["hunt"]) == 1 and float(st["scale"]) == 1.0 and tp.node != null
+			and tp.panel != null and tp.panel.current_name() == TreasureHunt.kind_name(TreasureHunt.current(st)["kind"]), "")
+	# Only the current object exists in the world.
+	var in_world := 0
+	for b in g.balls:
+		for n in b.get_children():
+			if n.has_meta("treasure_index"):
+				in_world += 1
+	t.check("treasure_only_current_exists", in_world == 1 and tp.node.get_meta("treasure_index") == 0, "%d in the world" % in_world)
+	# Save and reload reproduce it exactly.
+	g.save_run()
+	var back := RunSave.open(g.run_save.path)
+	var st2 := TreasureHunt.state_of(back.run())
+	t.check("treasure_reload_same_hunt", st2["targets"] == st["targets"] and int(st2["index"]) == 0 and int(st2["seed"]) == int(st["seed"]), "")
+	# Not collected by touching, by the tail or by Tier 2; not by anything but his lunge.
+	var tg: Dictionary = TreasureHunt.current(st)
+	var b0: MossBall = g.balls[int(tg["world"])]
+	var target: Vector3 = tp.node.global_position
+	var from := _approach(b0, target)
+	place_at(b0.index, from + b0.up_at(from) * 0.1, target - from)
+	await t.seconds(0.3)
+	for k in 80:
+		var flat: Vector3 = target - p.global_position
+		flat -= p.up * flat.dot(p.up)
+		stick_toward(flat.normalized())
+		await t.frames(2)
+	p.bot_input = Vector2.ZERO
+	var touched := p.global_position.distance_to(target) < 1.5
+	var idx_touch := int(st["index"])
+	await press("swipe")
+	await t.seconds(0.5)
+	var strikeable: bool = g._strikeable(p).any(func(x): return x == tp.node or (x is Node and (x as Node).is_ancestor_of(tp.node)))
+	var saved_t2 := g.tier2
+	g.tier2 = Tier2.new()
+	for id in Tier2.ORDER:
+		g.tier2.unlock(id)
+	var t2_fired := 0
+	for id in Tier2.ORDER:
+		g.tier2.equip(id)
+		g.tier2.ready_at = 0.0
+		if await _fire_tier2(3.0) >= 0.0:
+			t2_fired += 1
+		await t.seconds(0.3)
+	g.tier2 = saved_t2
+	t.check("treasure_not_by_touch_tail_or_tier2", touched and idx_touch == 0 and int(st["index"]) == 0 and not strikeable and t2_fired == 3 and tp.node != null,
+			"touching %s, index %d, strikeable %s, Tier 2 fired %d" % [touched, int(st["index"]), strikeable, t2_fired])
+	# A future object cannot be taken early: it does not exist yet, and nothing advances out of turn.
+	t.check("treasure_future_not_collectible", not TreasureHunt.collect(st, 1) and int(st["index"]) == 0, "")
+	# The lunge collects it: saved at once, one step, the celebration, then the next object.
+	var got := await _lunge_at_current(tp)
+	var saved := TreasureHunt.state_of(RunSave.open(g.run_save.path).run())
+	var dancing: bool = tp.celebrating and (p.state == "celebrate" or p.model.dancing())
+	t.check("treasure_lunge_collects", got and int(st["index"]) == 1 and int(saved["index"]) == 1 and tp.last.get("index", -1) == 0, "index %d, saved %d" % [int(st["index"]), int(saved["index"])])
+	t.check("treasure_celebration_runs", dancing and tp.node == null, "celebrating %s, state %s, dance %s" % [tp.celebrating, p.state, p.model.dancing()])
+	# During the celebration nothing more can be taken.
+	var double := tp.try_collect(p, p.body_center(), p.head_position())
+	await _until(func(): return not tp.celebrating, 6.0)
+	await t.frames(3)
+	t.check("treasure_no_double_and_clean_end", not double and int(st["index"]) == 1 and p.state == "normal" and p.controls_enabled and not p.model.dancing()
+			and tp.node != null and tp.node_index == 1 and absf(p.ball.altitude(p.global_position)) < 1.5,
+			"index %d, state %s, next shown %s, %.2f m up" % [int(st["index"]), p.state, tp.node != null, p.ball.altitude(p.global_position)])
+	# The celebration's effects draw on their own generators (the game's frames in between may use
+	# the global one legitimately, so this is checked on the effects themselves).
+	seed(99)
+	var q0 := [randi(), randi()]
+	seed(99)
+	for c in TreasurePlay.CONFETTI:
+		WaterFX.inst.sparkle(p.global_position, c, 9, 2.4, 0.06, 1.3)
+	tp._firework(p.global_position, p.up, 0.0)
+	t.check("treasure_celebration_leaves_rng_alone", [randi(), randi()] == q0, "")
+	# The aquarium experiences neither show nor change it.
+	var before: Array = st["targets"].duplicate(true)
+	g.presentation.enter("play")
+	await t.frames(3)
+	var hidden: bool = not tp.node.visible
+	g.presentation.go("swim")
+	await t.seconds(0.5)
+	g.presentation.exit()
+	await t.frames(3)
+	tp.stop()
+	tp.start()
+	await t.frames(3)
+	t.check("treasure_modes_do_not_change_it", hidden and st["targets"] == before and int(st["index"]) == 1 and tp.node.visible and tp.node_index == 1, "")
+	# A saved spot that became bad is replaced by a good one in the same world; same object, same place in the order.
+	var cur: Dictionary = TreasureHunt.current(st)
+	var cw: MossBall = g.balls[int(cur["world"])]
+	var buried := TreasureHunt.target_pos(cur) - cw.up_at(TreasureHunt.target_pos(cur)) * 3.0
+	cur["pos"] = [buried.x, buried.y, buried.z]
+	tp.stop()
+	tp.start()
+	await t.frames(3)
+	var fixed := TreasureHunt.current(st)
+	t.check("treasure_bad_spot_recovered", fixed["kind"] == cur["kind"] and int(fixed["world"]) == int(cur["world"]) and int(st["index"]) == 1
+			and TreasureHunt.spot_ok(cw, TreasureHunt.target_pos(fixed), float(fixed["scale"])) and int(fixed.get("recovered", 0)) == 1, "")
+	# The rest of the first hunt, each by a real lunge; then the finish.
+	var found := 1
+	var misses := []
+	for i in 13:
+		var k: String = TreasureHunt.current(st).get("kind", "")
+		if await _lunge_at_current(tp):
+			found += 1
+		else:
+			misses.append(k)
+			break
+		if i < 12:
+			await _until(func(): return not tp.celebrating, 6.0)
+			await t.frames(2)
+	await _until(func(): return tp.panel.card_open(), 8.0)
+	t.check("treasure_full_hunt_by_lunges", found == 14 and TreasureHunt.is_complete(st) and int(st["completed_hunts"]) == 1 and tp.panel.card_open(),
+			"found %d, missed %s" % [found, str(misses)])
+	t.check("treasure_never_touches_completion_or_clock", is_equal_approx(g.completion_percent(), pct0) and g.run_save.earned().size() == earned0
+			and g.clock.finish_s == fin0 and is_equal_approx(g.clock.run_s, run0), "%.2f%% -> %.2f%%, finish %.2f -> %.2f" % [pct0, g.completion_percent(), fin0, g.clock.finish_s])
+	# New hunt: new order, new places, half size.
+	var first: Array = st["targets"].duplicate(true)
+	(tp.panel._card.find_child("NewHunt", true, false) as Button).pressed.emit()
+	await t.frames(3)
+	var second: Array = st["targets"]
+	var moved := 0
+	for i in 14:
+		var pa := TreasureHunt.target_pos(first[i])
+		var nearest := INF
+		for q in second:
+			nearest = minf(nearest, pa.distance_to(TreasureHunt.target_pos(q)))
+		if nearest > 3.0:
+			moved += 1
+	t.check("treasure_second_hunt_new_and_half", int(st["hunt"]) == 2 and float(st["scale"]) == 0.5 and int(st["index"]) == 0 and not g.get_tree().paused
+			and second.map(func(x): return x["kind"]) != first.map(func(x): return x["kind"]) and moved >= 12
+			and tp.node != null and is_equal_approx(tp.node.scale.x / _full_scale(TreasureHunt.current(st)["kind"]), 0.5),
+			"hunt %d, scale %.2f, %d of 14 spots new" % [int(st["hunt"]), float(st["scale"]), moved])
+	var got2 := await _lunge_at_current(tp)
+	await _until(func(): return not tp.celebrating, 6.0)
+	t.check("treasure_half_size_still_collectible", got2 and int(st["index"]) == 1, "")
+	# A third hunt stays at half (not a quarter).
+	st["index"] = 14
+	st["completed_hunts"] = 2
+	tp.start()
+	await t.frames(2)
+	t.check("treasure_third_hunt_still_half", int(st["hunt"]) == 3 and float(st["scale"]) == 0.5, "scale %.2f" % float(st["scale"]))
+	# Quit right after a find: the save holds exactly that find.
+	var idx_a := int(st["index"])
+	var got3 := await _lunge_at_current(tp)
+	var on_disk := TreasureHunt.state_of(RunSave.open(g.run_save.path).run())
+	t.check("treasure_quit_mid_celebration_safe", got3 and int(on_disk["index"]) == idx_a + 1 and on_disk["targets"] == st["targets"], "")
+	await _until(func(): return not tp.celebrating, 6.0)
+	tp.stop()
+	await t.frames(2)

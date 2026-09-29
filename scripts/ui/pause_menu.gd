@@ -5,6 +5,7 @@ extends CanvasLayer
 
 var _loadout: Tier2Loadout
 var _aquarium: Button
+var _treasure: Button
 var _root: Control
 var _panel: PanelContainer
 var _status: Label
@@ -86,6 +87,10 @@ func _ready() -> void:
 	_aquarium = UiStyle.button("Aquarium", _open_aquarium)
 	_aquarium.name = "Aquarium"
 	v.add_child(_aquarium)
+	# Treasure Hunt (postgame, docs/TREASURE_HUNT.md): only once the run is at 100%.
+	_treasure = UiStyle.button("Treasure Hunt", _toggle_treasure)
+	_treasure.name = "TreasureHunt"
+	v.add_child(_treasure)
 	var restart := UiStyle.confirm_button("New Run", "Start a new run? This run's progress and time are replaced (your best finish is kept).",
 			"Start over", func(): Game.inst.restart_experience())
 	v.add_child(restart)
@@ -99,7 +104,7 @@ func _ready() -> void:
 	_startup.add_theme_color_override("font_color", Color(0.85, 0.95, 0.92, 0.6))
 	_startup.autowrap_mode = TextServer.AUTOWRAP_WORD_SMART
 	v.add_child(_startup)
-	_session_rows = [restart, title, _run_time, _run_detail, _loadout, _aquarium]
+	_session_rows = [restart, title, _run_time, _run_detail, _loadout, _aquarium, _treasure]
 	# His colours: a page of its own in place of the menu.
 	gill_page = GillPage.new()
 	gill_page.visible = false
@@ -174,6 +179,15 @@ func _slider(parent: Control, text: String) -> HSlider:
 	return s
 
 
+func _toggle_treasure() -> void:
+	var tp: TreasurePlay = Game.inst.treasure
+	close()
+	if tp.hunting():
+		tp.stop()
+	else:
+		tp.start()
+
+
 func _open_aquarium() -> void:
 	if gill_page.visible:
 		_close_gill()
@@ -213,6 +227,11 @@ func _refresh() -> void:
 		_loadout.visible = _loadout.visible and not _from_title
 		# (Not mid-cinematic, mid-fall or while dead: only from ordinary play.)
 		_aquarium.disabled = g.cinematic != "" or g.player.state != "normal"
+		var tp: TreasurePlay = g.treasure
+		_treasure.visible = not _from_title and tp != null and tp.eligible()
+		if tp != null and _treasure.visible:
+			_treasure.text = "Stop Treasure Hunt" if tp.hunting() else ("New Treasure Hunt" if TreasureHunt.is_complete(tp.st()) or not TreasureHunt.has_hunt(tp.st()) else "Resume Treasure Hunt")
+			_treasure.disabled = g.cinematic != "" or g.player.state != "normal"
 		_run_time.text = g.run_line()
 		var lines: Array[String] = []
 		lines.append("Game finished: " + ("yes" if g.clock.is_finished() else "not yet"))

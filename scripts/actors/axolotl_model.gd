@@ -100,8 +100,10 @@ var whip_tip_az := 0.0            # the tail tip's direction round his body (0 =
 
 # Idles (physical playtest of dev-000024): standing still, now and then he does one of five
 # little things (the owner added the look-up). Purely the model: the gameplay body, its collision and the camera never move.
-enum Idle { NONE = -1, LOOKAROUND, SCOOT, TILT, STRETCH, LOOKUP }
-const IDLE_LEN := [4.6, 3.8, 2.8, 3.4, 3.4]
+enum Idle { NONE = -1, LOOKAROUND, SCOOT, TILT, STRETCH, LOOKUP, DANCE }
+const IDLE_LEN := [4.6, 3.8, 2.8, 3.4, 3.4, 2.1]
+## The idles he picks himself (the dance is only for Treasure Hunt finds).
+const IDLE_RANDOM := 5
 ## When the stretch's yawn sounds (seconds into it).
 const YAWN_AT := 0.38
 const IDLE_FIRST := Vector2(4.0, 8.0)     # first idle after he stops
@@ -609,6 +611,16 @@ func whip_active() -> bool:
 # --- Idles ----------------------------------------------------------------------------------
 
 func _update_idle(dt: float) -> void:
+	# The Treasure Hunt dance plays through to its end whatever else is set (the controller holds
+	# him still meanwhile), then ends cleanly.
+	if idle_kind == Idle.DANCE:
+		idle_s += dt
+		if idle_s >= IDLE_LEN[Idle.DANCE] or dissolve > 0.0:
+			idle_kind = Idle.NONE
+			_still_s = 0.0
+			_idle_wait = -1.0
+			_idle_stride = 0.0
+		return
 	var busy := not idle_ok or dissolve > 0.0 or swipe_t >= 0.0 or _whip_s >= 0.0 or lunge_t >= 0.0 or burst_t >= 0.0 \
 			or hurt_t >= 0.0 or land_t >= 0.0 or happy_t >= 0.0 or perk_t >= 0.0 or surf > 0.0 or brace > 0.0 or not grounded
 	if busy:
@@ -640,10 +652,22 @@ func _update_idle(dt: float) -> void:
 	if _still_s >= _idle_wait:
 		# Any idle but the one just played, so no two in a row and no fixed order.
 		var pool: Array[int] = []
-		for k in IDLE_LEN.size():
+		for k in IDLE_RANDOM:
 			if k != _idle_last:
 				pool.append(k)
 		start_idle(pool[_fx.randi() % pool.size()])
+
+
+## A find in Treasure Hunt: up on his back legs for a happy butt-and-tail wiggle (docs/TREASURE_HUNT.md).
+func start_dance() -> void:
+	idle_kind = Idle.DANCE
+	idle_s = 0.0
+	idle_side = 1.0
+	happy_t = -1.0
+
+
+func dancing() -> bool:
+	return idle_kind == Idle.DANCE
 
 
 func start_idle(kind: int) -> void:
@@ -712,6 +736,29 @@ static func _idle_pose_at(kind: int, s: float, side: float) -> Dictionary:
 				spine[i] = Vector2(0.0, (-0.05 if i < 5 else 0.07) * moving)
 			p["gflap"] = 0.3 * (m1 + m2 + m3)
 			p["gflare"] = 0.35 * absf(look)
+		Idle.DANCE:
+			# Up onto the back legs, the hips and tail wiggling side to side (a goofy little victory
+			# shimmy), front paws up and waving, a big happy squint, then back down onto all fours.
+			var up := _env(s, 0.0, 0.3, 1.75, 2.05)
+			var th := 0.66 * up
+			var wig := sin(s * TAU * 3.3) * _env(s, 0.28, 0.42, 1.6, 1.8)
+			p["pivot"] = Vector3(0, 0.03, BONE_Z[REAR_BONE])
+			p["rot"] = Vector3(th, wig * 0.3, wig * 0.1)
+			p["pos"] = Vector3(0.0, 0.02 * absf(wig) * up, 0.0)
+			# The head stays level and faces front against the hips' swing.
+			p["head"] = Vector3(-th * 0.6, -wig * 0.28, wig * 0.12)
+			spine[REAR_BONE] = Vector2(-th, -wig * 0.3)
+			for i in range(REAR_BONE + 1, BONE_Z.size()):
+				var f := float(i - REAR_BONE) / float(BONE_Z.size() - 1 - REAR_BONE)
+				spine[i] = Vector2(-0.05 * up, sin(s * TAU * 3.3 - f * 1.4) * 0.26 * up)
+			p["wave"] = 0.2
+			var paw := 0.25 * sin(s * TAU * 3.3)
+			p["legs"] = [Vector3(-0.55, 0.95 + paw, 0.95), Vector3(-0.55, 0.95 - paw, 0.95), Vector3(0.45, 0.25, -0.1), Vector3(0.45, 0.25, -0.1)]
+			p["legw"] = up
+			p["eye"] = lerpf(1.0, 0.45, up)
+			p["mouth"] = 0.95 * up
+			p["gflap"] = 0.8 * up
+			p["gflare"] = 0.6 * up
 		Idle.TILT:
 			# A curious head tilt one way, a blink, then the other way.
 			var t1 := _env(s, 0.2, 0.6, 1.05, 1.35)

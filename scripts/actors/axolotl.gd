@@ -351,6 +351,14 @@ func _physics_process(dt: float) -> void:
 		if wish.length() > 0.2:
 			facing = wish.normalized()
 		_lunge_food = Game.inst.lunge_target(self, facing)
+		# Treasure Hunt: the same aim help toward the object he is after (when no food is nearer).
+		if _lunge_food == null and Game.inst.treasure != null:
+			var tc: Vector3 = Game.inst.treasure.aim(self, facing)
+			if tc != Vector3.INF:
+				var flat := tc - global_position
+				flat -= up * flat.dot(up)
+				if flat.length() > 0.2:
+					facing = flat.normalized()
 
 	# Tier 2: the button starts the equipped ability (when ready and nothing else is running); while
 	# it runs it steers him (docs/TIER2.md).
