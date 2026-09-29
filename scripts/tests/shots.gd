@@ -467,6 +467,14 @@ func run(runner) -> void:
 		g.g_disp = 1.0
 		g.aquarium.apply(1.0)
 		await _room_shots(g, "room_clean")
+	if only == "treasurehunt":
+		for id in g.completion.order:
+			g.run_save.earned()[id] = 0.0
+		for b in g.balls:
+			b.add_heal(Vector3.UP, 340.0, 0.0)
+		g.g_disp = 1.0
+		g.aquarium.apply(1.0)
+		await _treasure_hunt_shots(g)
 	if only == "treasures":
 		for b in g.balls:
 			b.add_heal(Vector3.UP, 340.0, 0.0)
@@ -544,6 +552,156 @@ func _room_shots(g: Game, tag: String) -> void:
 	env.fog_enabled = fog
 
 
+## A walkable spot a couple of metres from `target` (for the Treasure Hunt shots).
+func _th_approach(b: MossBall, target: Vector3, dist := 2.4) -> Vector3:
+	var up := b.up_at(target)
+	var fr := MossBall.frame_at(up, 0.0)
+	for dd in [dist, dist + 0.8, dist - 0.6]:
+		for k in 12:
+			var q := b.surface_point((target + fr.z.rotated(up, TAU * k / 12.0) * dd - b.global_position).normalized())
+			if TreasureHunt.spot_ok(b, q, 0.3) and TreasureHunt.path_ok(b, q, target):
+				return q
+	return b.surface_point((target + fr.z * dist - b.global_position).normalized())
+
+
+func _th_face(g: Game, tp: TreasurePlay, dist := 2.4) -> Array:
+	var tg: Dictionary = TreasureHunt.current(tp.st())
+	var b: MossBall = g.balls[int(tg["world"])]
+	var target: Vector3 = tp.node.global_position
+	var from := _th_approach(b, target, dist)
+	var up := b.up_at(from)
+	var dir := target - from
+	g.player.place(b, from + up * 0.1, dir - up * dir.dot(up))
+	g.audio.set_ball(b.index, false)
+	g.cam.snap_behind()
+	g.cam.pitch = 0.22
+	return [b, target, from]
+
+
+## Treasure Hunt in play (docs/TREASURE_HUNT.md): the HUD, a first-hunt object near him, the
+## pickup (confetti, fireworks, his dance), the finish card, and a second-hunt object at half size.
+func _treasure_hunt_shots(g: Game) -> void:
+	g.player.invuln_t = 9999
+	for b in g.balls:
+		for par in b.parasites:
+			par.visible = false
+			par.set_physics_process(false)
+	var tp: TreasurePlay = g.treasure
+	tp.start()
+	await t.seconds(2.5)
+	# The celebration on open ground, from the side: confetti, the fireworks overhead, the dance.
+	var ob := g.balls[0]
+	var od := MossBall.dir_ll(20.0, 60.0)
+	var ospot := ob.surface_point(od)
+	var oup := ob.up_at(ospot)
+	var ofr := MossBall.frame_at(oup, 0.0)
+	var tg0: Dictionary = TreasureHunt.current(tp.st())
+	tg0["pos"] = [ospot.x, ospot.y, ospot.z]
+	tg0["world"] = 0.0
+	tp._despawn()
+	tp.refresh()
+	await t.seconds(0.3)
+	g.player.place(ob, ospot - ofr.z * 1.7 + oup * 0.1, ofr.z)
+	g.cam.snap_behind()
+	await t.seconds(0.6)
+	var side := ofr.x
+	g.cam.cinematic = true
+	g.cam.cine_pos = ospot + side * 6.5 + oup * 2.2 - ofr.z * 1.0
+	g.cam.cine_look = ospot + oup * 1.6 - ofr.z * 1.0
+	g.cam.cine_up = oup
+	await t.seconds(0.8)
+	await t.shot("th_open_before")
+	Input.action_press("lunge")
+	await t.frames(2)
+	Input.action_release("lunge")
+	await t.seconds(0.2)
+	await t.shot("th_open_confetti")
+	await t.seconds(0.5)
+	await t.shot("th_open_fireworks")
+	await t.seconds(0.35)
+	await t.shot("th_open_fireworks2")
+	g.cam.cine_pos = g.player.global_position + side * 2.4 + oup * 0.9 + ofr.z * 0.3
+	g.cam.cine_look = g.player.global_position + oup * 0.7
+	for k in 4:
+		await t.seconds(0.28)
+		await t.shot("th_open_dance_%d" % k)
+	g.cam.cinematic = false
+	await t.seconds(2.5)
+	# The same object at first-hunt size and second-hunt size, side by side, beside him.
+	var cmp := []
+	for k in 2:
+		var n2 := TreasureModels.node("duck", 1.0 if k == 0 else 0.5)
+		ob.add_child(n2)
+		var gp := ob.surface_point((ospot + ofr.x * (k * 2.6 - 1.3) + ofr.z * 1.2 - ob.global_position).normalized())
+		n2.global_transform = Transform3D(Basis(ofr.x, ob.up_at(gp), ofr.z).rotated(ob.up_at(gp), PI * 0.8), gp).scaled_local(n2.scale)
+		cmp.append(n2)
+	g.player.place(ob, ospot - ofr.z * 1.0 + oup * 0.1, ofr.z)
+	g.cam.cinematic = true
+	g.cam.cine_pos = ospot + ofr.z * 6.0 + oup * 2.2
+	g.cam.cine_look = ospot + ofr.z * 0.8 + oup * 0.4
+	await t.seconds(1.0)
+	await t.shot("th_size_duck_full_vs_half")
+	for n2 in cmp:
+		n2.queue_free()
+	g.cam.cinematic = false
+	g.cam.snap_behind()
+	await t.seconds(0.5)
+	# The first four objects, each in its world, from behind him a couple of metres away (the
+	# HUD in the corner); the first one also close up; each collected by a lunge.
+	for n in 4:
+		var f := await _th_face(g, tp, 3.2)
+		await t.seconds(1.0)
+		await t.shot("th_%d_near_%s" % [n + 1, TreasureHunt.current(tp.st())["kind"]])
+		if n == 0:
+			var up: Vector3 = (f[0] as MossBall).up_at(f[1])
+			g.cam.cinematic = true
+			g.cam.cine_pos = (f[1] as Vector3) + up * 1.6 + ((f[2] as Vector3) - (f[1] as Vector3)).normalized() * 2.4
+			g.cam.cine_look = (f[1] as Vector3) + up * 0.4
+			g.cam.cine_up = up
+			await t.seconds(1.0)
+			await t.shot("th_1_close")
+			g.cam.cinematic = false
+			g.cam.snap_behind()
+		# Walk in and lunge.
+		for k in 60:
+			var flat: Vector3 = (f[1] as Vector3) - g.player.global_position
+			flat -= g.player.up * flat.dot(g.player.up)
+			if flat.length() < 1.9:
+				break
+			g.player.use_bot_input = true
+			var cf: Vector3 = -g.cam.global_basis.z
+			cf = (cf - g.player.up * cf.dot(g.player.up)).normalized()
+			var cr := cf.cross(g.player.up)
+			var d := flat.normalized()
+			g.player.bot_input = Vector2(d.dot(cr), d.dot(cf))
+			await t.frames(2)
+		g.player.bot_input = Vector2.ZERO
+		Input.action_press("lunge")
+		await t.frames(2)
+		Input.action_release("lunge")
+		await t.seconds(3.0)
+	await t.shot("th_after_finds")
+	# The finish: straight to the last object.
+	var st: Dictionary = tp.st()
+	st["index"] = 13
+	tp.refresh()
+	await t.seconds(0.5)
+	var f2 := await _th_face(g, tp, 2.0)
+	await t.seconds(0.6)
+	Input.action_press("lunge")
+	await t.frames(2)
+	Input.action_release("lunge")
+	await t.seconds(1.2)
+	await t.shot("th_final_pickup")
+	await t.seconds(3.0)
+	await t.shot("th_complete_card")
+	(tp.panel._card.find_child("NewHunt", true, false) as Button).pressed.emit()
+	await t.seconds(1.0)
+	await t.shot("th_new_hunt_message")
+	await t.seconds(3.0)
+	var f3 := await _th_face(g, tp, 3.2)
+	await t.seconds(1.0)
+	await t.shot("th_hunt2_near_%s" % TreasureHunt.current(st)["kind"])
 ## The fourteen Treasure Hunt objects (docs/TREASURE_HUNT.md): each alone, close, on open ground in
 ## a restored world, then the whole set in a row for scale against him.
 func _treasure_shots(g: Game) -> void:

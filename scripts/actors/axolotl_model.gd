@@ -740,17 +740,17 @@ static func _idle_pose_at(kind: int, s: float, side: float) -> Dictionary:
 			# Up onto the back legs, the hips and tail wiggling side to side (a goofy little victory
 			# shimmy), front paws up and waving, a big happy squint, then back down onto all fours.
 			var up := _env(s, 0.0, 0.3, 1.75, 2.05)
-			var th := 0.66 * up
+			var th := 0.92 * up
 			var wig := sin(s * TAU * 3.3) * _env(s, 0.28, 0.42, 1.6, 1.8)
 			p["pivot"] = Vector3(0, 0.03, BONE_Z[REAR_BONE])
-			p["rot"] = Vector3(th, wig * 0.3, wig * 0.1)
+			p["rot"] = Vector3(th, wig * 0.36, wig * 0.12)
 			p["pos"] = Vector3(0.0, 0.02 * absf(wig) * up, 0.0)
 			# The head stays level and faces front against the hips' swing.
 			p["head"] = Vector3(-th * 0.6, -wig * 0.28, wig * 0.12)
 			spine[REAR_BONE] = Vector2(-th, -wig * 0.3)
 			for i in range(REAR_BONE + 1, BONE_Z.size()):
 				var f := float(i - REAR_BONE) / float(BONE_Z.size() - 1 - REAR_BONE)
-				spine[i] = Vector2(-0.05 * up, sin(s * TAU * 3.3 - f * 1.4) * 0.26 * up)
+				spine[i] = Vector2(-0.05 * up, sin(s * TAU * 3.3 - f * 1.4) * 0.34 * up)
 			p["wave"] = 0.2
 			var paw := 0.25 * sin(s * TAU * 3.3)
 			p["legs"] = [Vector3(-0.55, 0.95 + paw, 0.95), Vector3(-0.55, 0.95 - paw, 0.95), Vector3(0.45, 0.25, -0.1), Vector3(0.45, 0.25, -0.1)]

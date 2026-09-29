@@ -223,9 +223,17 @@ func show_found(kind_name: String, found: int, final: bool) -> void:
 		_flash(_msg, "Found the %s!" % kind_name.to_lower(), 2.4)
 
 
+var _tweens := {}
+
+
 func _flash(l: Label, text: String, hold: float) -> void:
 	l.text = text
+	# (A new note replaces the one still fading, rather than being faded out by it.)
+	var old: Tween = _tweens.get(l)
+	if old and old.is_valid():
+		old.kill()
 	var tw := create_tween()
+	_tweens[l] = tw
 	tw.tween_property(l, "modulate:a", 1.0, 0.25)
 	tw.tween_interval(hold)
 	tw.tween_property(l, "modulate:a", 0.0, 0.6)
