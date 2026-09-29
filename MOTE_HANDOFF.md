@@ -19,7 +19,7 @@ kept below as history.
 | **Release commit** (APK + OTA source) | `104605727ab2bc48f6b0b6e2d56a0fd44127c5be` (`1046057`) |
 | **The one Android app** | **Mote**, `com.verbal76.axolotl`. The separate Mote Dev app is **retired** (owner, 2026-09-27). |
 | **Current APK** | **`mote-v0.1.0-b22.apk`** (artifact `mote-android-v0.1.0-b22`), Android build 22, bundled baseline `1046057` |
-| **Current OTA / channel pointer** | **`dev-000025`**, built from `8c92e5b` (the dev-000024 playtest polish and his colours; game content validated at `969e4bb`; includes dev-000015..24). dev-000014 = b22's own game |
+| **Current OTA / channel pointer** | **`dev-000028`**, built from `bf46566` (the major world expansion: seven substantial worlds, catalog v4; game content validated at `3526b3e`; includes dev-000015..25). dev-000026 and dev-000027 were never published (their publish runs stopped on two test-measurement failures, fixed). dev-000014 = b22's own game |
 | Runtime | `android-godot-4.7.2-r5` |
 | Game version / save schema | `0.1.0` / `1` |
 | Requirement authority | `docs/REQUIREMENTS_LEDGER.md` (sections G, F, O, V, N, C, A, R, S, P, M, **E1** and the **MOTE OPEN ITEMS EXPANSION LIST**) |
@@ -403,6 +403,22 @@ is expected; tap **Install anyway**.
 
 ## 11. Current OTA
 
+**Latest: `dev-000028`** (OTA publish #28, run 36522462374): source `bf46566af05b4ee60387c9afd5cd7f2f239960d4`,
+runtime r5, PCK `a4c5f8dc8d3623adafb0494c98499805c929e8f3a566b601816660c1075a162b` (9,384,212 bytes, 38 baked shader
+caches), save schema 1. **The major world expansion** (ledger WX, `docs/WORLD_EXPANSION.md`): every moss ball about twice
+the radius in a wider tank; ravines with forgiving falls; easy / skilled / exploration routes; bubble columns, a glide
+shaft and current streams; restoration that changes the geography; new regions, creature groups and discoveries in every
+world; catalog v4 (348 ids; v3 saves migrate with nothing lost); the Settings scrollbar touch target. Game content
+validated at `3526b3e`; `bf46566` adds only two unit-test measurement fixes (the publishes of `c0d6cdf` and `05a299f`
+stopped on them before publishing anything, so dev-000026 and dev-000027 do not exist). Verified from the public URLs:
+- signature against the pinned key (`a003a45c…0cf2`);
+- hash and size;
+- baked shaders and inspector (INSPECT OK, game 0.1.0);
+- the new sources in the pack (`world_expansion`, `restoration_gate`, `catalog_frozen`, `bubble_column.gdshader`, …);
+- a b22 client (bundled `1046057`, `scripts/boot` identical) discovers, downloads, verifies and stages it;
+- 71 checks pass run from the pack (ravines, gates, columns, new areas, ecosystem, catalog v4, migration, routes, scrollbar);
+- Build & Verify #38 green, no APK.
+
 **Latest: `dev-000025`** (OTA publish #25, run 36486884032, 8 min 38 s): source `8c92e5b0baae9ab72058b467f4fdea5a4ca47118`,
 runtime r5, PCK `333d6cd69e2b548eff37b16caf5c004d1f29048a542342ec7fd1891325dc52af` (9,285,292 bytes, 38 baked shader caches),
 save schema 1. **Playtest polish** (ledger PT): five idles and a yawn; a tail whip that sweeps the arc, which is drawn over
@@ -677,13 +693,16 @@ These are implemented but lack automated evidence. They are **not** unimplemente
       - check the page shows his face in the little preview.
     - **Frame rate:** jungle, terraces and a healed ball, with the plants moving.
 
-17. **After the world-expansion OTA (ledger WX) is active:**
+17. **After the world-expansion OTA (ledger WX, dev-000028) is active:**
     - **Settings scrollbar:** in Settings, drag the scrollbar on the right with a thumb, from its
       middle and from its edge: easy to grab; swiping the list still scrolls it; the sliders and
       switches beside it still work.
     - **Old save:** Continue the run that was in progress before the update. Nothing earned is lost
       (the percentage drops, because there is much more to find); Gill resumes at his last bloom or
       the arrival point, standing on solid ground; the timer and any finish are unchanged.
+    - **Continue with a raised bridge:** heal the Meadow's tutorial glade (the stem bridge rises),
+      leave to the title screen, Continue, and walk across the stem bridge: it must be solid (a
+      bridge opened on Continue once kept its collision on the ravine floor; fixed before release).
     - **Mossy Meadow:** the tutorial feels exactly as before; after it, the Great Ravine lies across
       the upland (the fallen stem rises into a bridge when the tutorial parasite is cleared). Walk
       off a rim into it once: one frond, and he is back on the rim. Try the stepping stones and a
@@ -709,7 +728,7 @@ repository. Do not name, open or use any other game repository in Mote developme
 
 - **Released:** one Mote APK (b22, r5) with everything approved bundled, OTA on `dev`, channel pointer
   reconciled to dev-000014 (the APK's own game). CI green on `1046057`.
-- **Delivered after b22:** dev-000015 (phone-playtest fixes, ledger P) and dev-000016 (ball 3 canopy climb, P-06) and dev-000017 (owner's music, M) and dev-000018 (Expansion 1: timer + completion foundation, E1; music finish, M-03) and dev-000019 (Expansion 2: living terrain + cave repair, E2) and dev-000020 (Expansion 3: reactive vegetation, E3) and dev-000021/22 (Expansion 4: world expansion, E4) and dev-000023 (Expansion 5: ecosystem, E5) and dev-000024 (Expansion 6: final integration pass, E6) and dev-000025 (playtest polish and his colours, PT), by OTA only.
+- **Delivered after b22:** dev-000015 (phone-playtest fixes, ledger P) and dev-000016 (ball 3 canopy climb, P-06) and dev-000017 (owner's music, M) and dev-000018 (Expansion 1: timer + completion foundation, E1; music finish, M-03) and dev-000019 (Expansion 2: living terrain + cave repair, E2) and dev-000020 (Expansion 3: reactive vegetation, E3) and dev-000021/22 (Expansion 4: world expansion, E4) and dev-000023 (Expansion 5: ecosystem, E5) and dev-000024 (Expansion 6: final integration pass, E6) and dev-000025 (playtest polish and his colours, PT) and dev-000028 (the major world expansion, WX), by OTA only.
 - **MOTE OPEN ITEMS EXPANSION LIST** (also in the ledger; each item is one dev OTA, authorised separately):
 
   [x] 1. Timer + completion foundation (dev-000018)
@@ -721,8 +740,8 @@ repository. Do not name, open or use any other game repository in Mote developme
 
   New completion-bearing content must extend the catalog as `docs/COMPLETION.md` describes.
 - **Expansion list:** all six items are done (dev-000018, dev-000019, dev-000020, dev-000021/22, dev-000023, dev-000024). Do not begin Expansion 7 unless the owner asks for it.
-- **Next task:** the owner's phone checks (§16), including items 15 (Expansion 6) and 16 (dev-000025).
-- **Next development:** the major world expansion ("seven substantial worlds"), owner brief 2026-09-28. Design notes: `docs/WORLD_EXPANSION.md`. It ships as one OTA.
+- **Next task:** the owner's phone checks (§16), including items 15 (Expansion 6), 16 (dev-000025) and 17 (the world expansion, dev-000028).
+- **World expansion:** done and shipped as one OTA (dev-000028). Per the brief's stop condition: no further expansion, no eighth moss ball, no RPG systems and no new polish pass unless the owner asks.
 - **After that:** continue from the owner's feedback. Game-layer changes reach b22 by OTA on push
   (that push is also the first OTA a b22 phone downloads). Native changes need `--bump` and a new APK.
 
