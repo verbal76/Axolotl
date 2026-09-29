@@ -1894,6 +1894,8 @@ func _test_bubble_columns() -> void:
 	var glide_ok := false
 	var glide_detail := "no glide shaft on Canopy Spire"
 	if not shaft.is_empty():
+		# (Canopy Spire's own parasites held too: one wandering into him is not what this measures.)
+		var release6 := _hold_threats(b6)
 		p.restore_full()
 		var hp0 := p.health
 		var ext0 := int(g.stats["extreme_landings"])
@@ -1906,6 +1908,7 @@ func _test_bubble_columns() -> void:
 		glide_ok = sink > 1.0 and sink < 2.4 and p.health == hp0 and int(g.stats["extreme_landings"]) == ext0 and int(g.stats["hard_landings"]) == hard0
 		glide_detail = "sinking at %.1f m/s; health %d -> %d; hard landings +%d, extreme +%d" % [sink, hp0, p.health,
 				int(g.stats["hard_landings"]) - hard0, int(g.stats["extreme_landings"]) - ext0]
+		release6.call()
 	t.check("glide_shaft_floats_him_down", glide_ok, glide_detail)
 	# A dormant column (its zone not healed) does nothing; healing the zone sets it flowing.
 	var at := MossBall.dir_ll(-10, -40)
@@ -2967,17 +2970,24 @@ func _test_motes() -> void:
 	m.vel = Vector3.ZERO
 	# Pass beside where the mote actually is (it wanders up to ~3.5 from its anchor).
 	var mp := m.global_position - m.anchor_up * (m.global_position - m.anchor).dot(m.anchor_up)
+	# (No food near it: a lunge homing in on food is a catch, not a near miss, and pushes nothing.)
+	for f in b.foods.duplicate():
+		if is_instance_valid(f) and f.global_position.distance_to(mp) < 6.0:
+			b.foods.erase(f)
+			f.queue_free()
 	place_at(0, mp + m.anchor_up * 0.3 - fwd * 1.8 + side * 1.6, fwd)
 	await t.frames(2)
 	await press("lunge")
 	var v0 := m.vel
 	var dv := 0.0
+	var hit := false
 	for k in 24:
 		await t.frames(1)
+		hit = hit or p.lunge_hit
 		dv = maxf(dv, (m.vel - v0).length())
 		v0 = m.vel
 	m.set_physics_process(true)
-	t.check("mote_pushed_by_near_miss", m.is_available() and dv > 0.6, "velocity change %.2f" % dv)
+	t.check("mote_pushed_by_near_miss", m.is_available() and dv > 0.6, "velocity change %.2f (lunge hit something: %s)" % [dv, hit])
 	await t.seconds(1.5)
 	# Aim and lunge: captured, dives into the moss, restores the patch.
 	var r0 := b.restoration
