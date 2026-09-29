@@ -110,7 +110,7 @@ func _spawn(idx: int) -> void:
 	var scale := float(t.get("scale", 1.0))
 	# A saved spot that is no longer good (the world changed, or damage): a new spot in the same
 	# world for the same object; the order and the progress stay.
-	if not TreasureHunt.spot_ok(b, TreasureHunt.target_pos(t), scale):
+	if not TreasureHunt.target_ok(b, t):
 		TreasureHunt.recover(s, idx, g.balls)
 		g.save_run()
 	var pos := TreasureHunt.target_pos(t)

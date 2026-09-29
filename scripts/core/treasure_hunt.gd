@@ -30,6 +30,13 @@ const SPREAD := 0.35
 const AVOID_PREVIOUS := 6.0
 ## Terrain, platforms and leaves (what blocks or buries a treasure).
 const SOLID_MASK := 1 | 2 | 8
+## Where a treasure can be (owner): out on the ground, hidden in tall grass, high up on a leaf, on
+## top of a rock, or in a cave. The first hunt mostly keeps to the ground and the grass, with a few
+## high or cave spots to show the idea; every later hunt draws evenly on all of them. A world with
+## no spot of the kind a slot asks for gives another kind it has (every world has ground).
+const SPOT_KINDS := ["ground", "grass", "leaf", "rock", "cave"]
+const FIRST_BAG := ["ground", "ground", "ground", "ground", "ground", "ground", "grass", "grass", "grass", "grass", "grass", "leaf", "rock", "cave"]
+const LATER_BAG := ["ground", "ground", "grass", "grass", "grass", "leaf", "leaf", "leaf", "rock", "rock", "rock", "cave", "cave", "cave"]
 
 
 static func kind_name(kind: String) -> String:
@@ -137,20 +144,193 @@ static func generate(seed_v: int, scale: float, balls: Array, avoid: Array[Vecto
 		kinds.append(k[0])
 	_shuffle(kinds, rng)
 	var worlds := world_order(rng)
+	var bag: Array = (FIRST_BAG if scale >= NORMAL_SCALE else LATER_BAG).duplicate()
+	_shuffle(bag, rng)
 	var targets: Array = []
 	var chosen: Array[Vector3] = []
-	var cands := {}
+	var sets := {}
 	for i in COUNT:
 		var w: int = worlds[i]
 		var b: MossBall = balls[w]
-		if not cands.has(w):
-			cands[w] = candidates(b, scale, rng)
-		var pick := _choose(b, cands[w], chosen, avoid, rng)
+		if not sets.has(w):
+			sets[w] = spot_sets(b, scale, rng)
+		var want: String = bag[i]
+		var pick := {}
+		# The kind this slot asks for; if this world has none left (spread, not repeating last
+		# time): in the first hunt the ground or grass, later the other kinds, ending with the ground.
+		var order: Array = ["ground", "grass"] if scale >= NORMAL_SCALE else ["grass", "rock", "leaf", "cave", "ground"]
+		for k in [want] + order:
+			var list: Array = sets[w].get(k, [])
+			if list.is_empty():
+				continue
+			pick = _choose(b, list, chosen, avoid, rng, false)
+			if not pick.is_empty():
+				break
+		if pick.is_empty():
+			pick = _choose(b, sets[w]["ground"], chosen, avoid, rng)
 		var pos: Vector3 = pick["pos"]
 		chosen.append(pos)
 		targets.append({"kind": kinds[i], "world": w, "pos": [snappedf(pos.x, 0.001), snappedf(pos.y, 0.001), snappedf(pos.z, 0.001)],
-				"yaw": snappedf(rng.randf() * 360.0, 0.1), "scale": scale})
+				"yaw": snappedf(rng.randf() * 360.0, 0.1), "scale": scale, "spot": pick.get("spot", "ground")})
 	return targets
+
+
+## Every valid spot in a world, by kind: {"ground": [...], "grass": [...], "leaf": [...], "rock":
+## [...], "cave": [...]}, each entry {pos, cover, spot}. Deterministic for the rng.
+static func spot_sets(b: MossBall, scale: float, rng: RandomNumberGenerator) -> Dictionary:
+	var out := {"ground": [], "grass": [], "leaf": [], "rock": [], "cave": []}
+	var tall := tall_grass(b)
+	for c in candidates(b, scale, rng):
+		var k := "grass" if _grass_count(tall, c["pos"]) >= 3 else "ground"
+		if k == "grass" and not _grass_edge(b, tall, c["pos"]):
+			continue
+		c["spot"] = k
+		out[k].append(c)
+	# More grass: spots in the tall reeds (they hide what is in them; he walks through them). Always
+	# at a clump's edge, never deep inside it, so a glimpse of it shows from the open.
+	var an := anchors(b)
+	var step := maxi(1, tall.size() / 60)
+	for i in range(0, tall.size(), step):
+		var gp := b.surface_point((tall[i] - b.global_position).normalized())
+		if not spot_ok(b, gp, scale) or _grass_count(tall, gp) < 3 or not _grass_edge(b, tall, gp):
+			continue
+		for a in an:
+			if a.distance_to(gp) < 14.0 and path_ok(b, a, gp):
+				out["grass"].append({"pos": gp, "cover": 4, "spot": "grass"})
+				break
+	# High up: the tops of the world's climbs (the leaves, ledges, towers and terraces its routes
+	# and the route audit climb to), on a leaf or on stone.
+	var builder: Variant = b.get_meta("builder") if b.has_meta("builder") else null
+	if builder != null:
+		var seen: Array[Vector3] = []
+		for h in builder.bot_hints:
+			if h.has("tops"):
+				for top in h["tops"]:
+					# (Long climbs list many tops a step apart: one perch per couple of metres.)
+					var dup := false
+					for q in seen:
+						if q.distance_squared_to(top) < 4.0:
+							dup = true
+							break
+					if dup:
+						continue
+					seen.append(top)
+					var perch := perch_point(b, top, scale)
+					if not perch.is_empty():
+						out[perch["spot"]].append(perch)
+			if h.has("cave"):
+				for cp in cave_points(b, h, scale):
+					out["cave"].append(cp)
+	return out
+
+
+## Tall-reed positions in a world (world space), from its vegetation's saved placements.
+static func tall_grass(b: MossBall) -> Array[Vector3]:
+	var out: Array[Vector3] = []
+	for mmi in b.find_children("Veg_tall*", "MultiMeshInstance3D", true, false):
+		var parent := (mmi as Node).get_parent() as Node3D
+		for x in (mmi as Node).get_meta("veg_transforms", []):
+			out.append(parent.global_transform * (x as Transform3D).origin)
+	return out
+
+
+## Open water within a couple of metres on some side of `p` (a clump's edge, not its heart).
+static func _grass_edge(b: MossBall, tall: Array[Vector3], p: Vector3) -> bool:
+	var up := b.up_at(p)
+	var fr := MossBall.frame_at(up, 0.0)
+	for k in 8:
+		if _grass_count(tall, p + fr.z.rotated(up, TAU * k / 8.0) * 1.8) < 2:
+			return true
+	return false
+
+
+static func _grass_count(tall: Array[Vector3], p: Vector3) -> int:
+	var n := 0
+	for q in tall:
+		if q.distance_squared_to(p) < 1.96:
+			n += 1
+	return n
+
+
+## A perch at a climb's top: the leaf or stone under `top`, level and broad enough for the object
+## to rest on, nothing solid where it sits, room to reach it, well above the ground.
+static func perch_point(b: MossBall, top: Vector3, scale: float) -> Dictionary:
+	var space := b.get_world_3d().direct_space_state
+	var up := b.up_at(top)
+	var hit := space.intersect_ray(PhysicsRayQueryParameters3D.create(top + up * 1.5, top - up * 2.0, SOLID_MASK))
+	if hit.is_empty() or (hit["normal"] as Vector3).dot(up) < 0.72:
+		return {}
+	var p: Vector3 = hit["position"]
+	if b.altitude(p) < 0.8:
+		return {}
+	var col: Object = hit["collider"]
+	if not col is StaticBody3D or col in b.crumbles:
+		return {}
+	if not perch_ok(b, p, scale):
+		return {}
+	var leaf: bool = (col as Node).has_meta("leaves") or (col as Node).get_parent().has_meta("leaves")
+	return {"pos": p, "cover": 2, "spot": "leaf" if leaf else "rock"}
+
+
+## The object can rest at `p` up on a leaf or stone: level all round under it (it would not hang
+## off the edge), nothing solid where it sits, room above.
+static func perch_ok(b: MossBall, p: Vector3, scale: float) -> bool:
+	var space := b.get_world_3d().direct_space_state
+	var up := b.up_at(p)
+	var fr := MossBall.frame_at(up, 0.0)
+	var r := 1.3 * scale * 0.28
+	for k in 4:
+		var o := p + fr.z.rotated(up, TAU * k / 4.0 + 0.4) * r
+		var h := space.intersect_ray(PhysicsRayQueryParameters3D.create(o + up * 0.6, o - up * 0.5, SOLID_MASK))
+		if h.is_empty() or absf(((h["position"] as Vector3) - p).dot(up)) > 0.25:
+			return false
+	var size := 1.3 * scale
+	var sh := SphereShape3D.new()
+	sh.radius = size * 0.4
+	var q := PhysicsShapeQueryParameters3D.new()
+	q.shape = sh
+	q.transform = Transform3D(Basis(), p + up * (size * 0.5 + 0.12))
+	q.collision_mask = SOLID_MASK
+	if not space.intersect_shape(q, 1).is_empty():
+		return false
+	return space.intersect_ray(PhysicsRayQueryParameters3D.create(p + up * 0.2, p + up * 1.3, SOLID_MASK)).is_empty()
+
+
+## Spots on a cave's floor (it is walked in by its door): round its middle, each in plain sight of
+## the doorway at body height, resting on the floor, with room above.
+static func cave_points(b: MossBall, h: Dictionary, scale: float) -> Array:
+	var out := []
+	var space := b.get_world_3d().direct_space_state
+	var centre: Vector3 = h["centre"]
+	var door: Vector3 = h["door"]
+	var up := b.up_at(centre)
+	var fr := MossBall.frame_at(up, 0.0)
+	var rad := float(h.get("radius", 4.0))
+	for k in 6:
+		var o := centre + fr.z.rotated(up, TAU * k / 6.0) * rad * 0.4
+		var g := space.intersect_ray(PhysicsRayQueryParameters3D.create(o + up * 1.5, o - up * 2.5, SOLID_MASK))
+		if g.is_empty() or (g["normal"] as Vector3).dot(up) < 0.8:
+			continue
+		var p: Vector3 = g["position"]
+		if not perch_ok(b, p, scale):
+			continue
+		var du := b.up_at(door)
+		if not space.intersect_ray(PhysicsRayQueryParameters3D.create(door + du * 0.45, p + up * 0.45, SOLID_MASK)).is_empty():
+			continue
+		out.append({"pos": p, "cover": 6, "spot": "cave"})
+	return out
+
+
+## Whether a saved target's spot still holds (by its kind: ground spots on the terrain surface,
+## perches and cave floors on what they rest on).
+static func target_ok(b: MossBall, t: Dictionary) -> bool:
+	var pos := target_pos(t)
+	var scale := float(t.get("scale", 1.0))
+	match str(t.get("spot", "ground")):
+		"leaf", "rock", "cave":
+			return perch_ok(b, pos, scale)
+		_:
+			return spot_ok(b, pos, scale)
 
 
 ## Fourteen slots, two per world, shuffled with no world twice in a row (and never world by world).
@@ -211,7 +391,7 @@ static func candidates(b: MossBall, scale: float, rng: RandomNumberGenerator) ->
 	return out
 
 
-static func _choose(b: MossBall, cands: Array, chosen: Array[Vector3], avoid: Array[Vector3], rng: RandomNumberGenerator) -> Dictionary:
+static func _choose(b: MossBall, cands: Array, chosen: Array[Vector3], avoid: Array[Vector3], rng: RandomNumberGenerator, fallback := true) -> Dictionary:
 	var spread := b.radius * SPREAD
 	var tiers := [[], [], []]
 	for c in cands:
@@ -232,6 +412,8 @@ static func _choose(b: MossBall, cands: Array, chosen: Array[Vector3], avoid: Ar
 	for t in tiers:
 		if not t.is_empty():
 			return t[rng.randi() % t.size()]
+	if not fallback:
+		return {}
 	# No spread-out spot left (only with very few candidates): the nearest-to-valid fallback is any
 	# candidate at all, and failing that the arrival point, which is always reachable.
 	if not cands.is_empty():
@@ -326,8 +508,17 @@ static func recover(st: Dictionary, index: int, balls: Array) -> bool:
 	for j in (st["targets"] as Array).size():
 		if j != index:
 			others.append(target_pos((st["targets"] as Array)[j]))
-	var pick := _choose(b, candidates(b, scale, rng), others, [] as Array[Vector3], rng)
+	var sets := spot_sets(b, scale, rng)
+	var pick := {}
+	for k in [str(t.get("spot", "ground")), "ground", "grass"]:
+		if not (sets[k] as Array).is_empty():
+			pick = _choose(b, sets[k], others, [] as Array[Vector3], rng, false)
+			if not pick.is_empty():
+				break
+	if pick.is_empty():
+		pick = _choose(b, sets["ground"], others, [] as Array[Vector3], rng)
 	var pos: Vector3 = pick["pos"]
+	t["spot"] = pick.get("spot", "ground")
 	t["pos"] = _as_saved([snappedf(pos.x, 0.001), snappedf(pos.y, 0.001), snappedf(pos.z, 0.001)])
 	t["recovered"] = float(int(t.get("recovered", 0)) + 1)
 	return true

@@ -6031,15 +6031,26 @@ func _test_treasure_generation() -> void:
 	# Every spot of 12 hunts (both sizes): in its world, on the ground, clear, not in a ravine.
 	var bad := []
 	var worst_alt := 0.0
+	var kinds_seen := {}
+	var first_special := []
+	var later_special := []
 	for k in 12:
 		var hunt := TreasureHunt.generate(1000 + k * 7919, 1.0 if k % 2 == 0 else 0.5, g.balls)
 		var hp := {}
+		var special := 0
 		for tg in hunt:
 			var w: int = tg["world"]
 			hp[w] = int(hp.get(w, 0)) + 1
 			var bb: MossBall = g.balls[w]
 			var pos := TreasureHunt.target_pos(tg)
-			worst_alt = maxf(worst_alt, absf(bb.altitude(pos)))
+			kinds_seen[tg["spot"]] = int(kinds_seen.get(tg["spot"], 0)) + 1
+			if tg["spot"] in ["ground", "grass"]:
+				worst_alt = maxf(worst_alt, absf(bb.altitude(pos)))
+			else:
+				special += 1
+				# Up high or in a cave: resting on something, never inside the ground.
+				if bb.altitude(pos) < -0.3:
+					bad.append("%s buried" % tg["spot"])
 			var nearest := -1
 			var nd := INF
 			for ob in g.balls:
@@ -6047,13 +6058,19 @@ func _test_treasure_generation() -> void:
 				if absf(dd) < nd:
 					nd = absf(dd)
 					nearest = ob.index
-			if nearest != w or not TreasureHunt.spot_ok(bb, pos, float(tg["scale"])):
-				bad.append("%s w%d" % [tg["kind"], w + 1])
+			if nearest != w or not TreasureHunt.target_ok(bb, tg):
+				bad.append("%s %s w%d" % [tg["kind"], tg["spot"], w + 1])
 		for i in range(1, hunt.size()):
 			if hunt[i]["world"] == hunt[i - 1]["world"]:
 				bad.append("consecutive")
 		if not hp.values().all(func(n): return n == 2):
 			bad.append("per-world")
+		(first_special if k % 2 == 0 else later_special).append(special)
+	# Owner: ground, tall grass, high on a leaf, on a rock, in a cave; the first hunt mostly on
+	# the ground and grass with a few of the others, later hunts drawing on all of them.
+	t.check("treasure_spot_kinds_mixed", TreasureHunt.SPOT_KINDS.all(func(sk): return kinds_seen.has(sk))
+			and first_special.all(func(n): return n >= 1 and n <= 4) and later_special.all(func(n): return n >= 6),
+			"kinds %s; first hunts' high/cave/rock %s, later %s" % [str(kinds_seen), str(first_special), str(later_special)])
 	t.check("treasure_spots_valid", bad.is_empty() and worst_alt < 0.5, "12 hunts, 168 spots: %d bad %s; worst %.2f m off the ground" % [bad.size(), str(bad.slice(0, 5)), worst_alt])
 	# The global generator does not move when a hunt is generated.
 	seed(777)
@@ -6070,6 +6087,18 @@ func _test_treasure_generation() -> void:
 func _approach(b: MossBall, target: Vector3) -> Vector3:
 	var up := b.up_at(target)
 	var fr := MossBall.frame_at(up, 0.0)
+	# Up on a leaf or rock, or in a cave: a spot on the same surface beside it.
+	if b.altitude(target) > 0.5 or not TreasureHunt.spot_ok(b, target, 0.3):
+		var space := g.get_world_3d().direct_space_state
+		for dist in [1.6, 2.1, 1.2]:
+			for k in 12:
+				var o: Vector3 = target + fr.z.rotated(up, TAU * k / 12.0) * dist
+				var h := space.intersect_ray(PhysicsRayQueryParameters3D.create(o + up * 1.0, o - up * 1.2, TreasureHunt.SOLID_MASK))
+				if h.is_empty() or absf(((h["position"] as Vector3) - target).dot(up)) > 0.35 or (h["normal"] as Vector3).dot(up) < 0.7:
+					continue
+				var q: Vector3 = h["position"]
+				if space.intersect_ray(PhysicsRayQueryParameters3D.create(q + up * 0.45, target + up * 0.45, TreasureHunt.SOLID_MASK)).is_empty():
+					return q
 	for dist in [2.3, 3.0, 1.8]:
 		for k in 12:
 			var d := fr.z.rotated(up, TAU * k / 12.0)

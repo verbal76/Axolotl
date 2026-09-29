@@ -475,6 +475,14 @@ func run(runner) -> void:
 		g.g_disp = 1.0
 		g.aquarium.apply(1.0)
 		await _treasure_hunt_shots(g)
+	if only == "thspots":
+		for id in g.completion.order:
+			g.run_save.earned()[id] = 0.0
+		for b in g.balls:
+			b.add_heal(Vector3.UP, 340.0, 0.0)
+		g.g_disp = 1.0
+		g.aquarium.apply(1.0)
+		await _treasure_spot_shots(g)
 	if only == "treasures":
 		for b in g.balls:
 			b.add_heal(Vector3.UP, 340.0, 0.0)
@@ -550,6 +558,65 @@ func _room_shots(g: Game, tag: String) -> void:
 		await t.shot("%s_%s" % [tag, v[0]])
 	g.cam.cinematic = false
 	env.fog_enabled = fog
+
+
+## One Treasure Hunt spot of each kind (owner: high on a leaf, on a rock, in a cave, in tall grass,
+## out on the ground), as he comes up to it: from behind him, then a closer look.
+func _treasure_spot_shots(g: Game) -> void:
+	g.player.invuln_t = 9999
+	for b in g.balls:
+		for par in b.parasites:
+			par.visible = false
+			par.set_physics_process(false)
+	var wanted := [["leaf", 2], ["leaf", 5], ["rock", 0], ["rock", 3], ["cave", 6], ["cave", 1], ["grass", 4], ["grass", 0], ["ground", 1]]
+	var objs := ["duck", "gnome", "toaster", "cone", "tv", "microscope", "skateboard", "fire_hat", "toy_car"]
+	var n := 0
+	for w in wanted:
+		var b: MossBall = g.balls[w[1]]
+		var rng := RandomNumberGenerator.new()
+		rng.seed = 11 + n
+		var sets := TreasureHunt.spot_sets(b, 1.0, rng)
+		var list: Array = sets[w[0]]
+		if list.is_empty():
+			continue
+		var pos: Vector3 = list[rng.randi() % list.size()]["pos"]
+		var node := TreasureModels.node(objs[n % objs.size()], 1.0)
+		b.add_child(node)
+		var up := b.up_at(pos)
+		node.global_transform = Transform3D(Basis(MossBall.frame_at(up, 0.0).x, up, MossBall.frame_at(up, 0.0).z).rotated(up, 0.7), pos).scaled_local(node.scale)
+		# Stand him a few metres off on the same surface (or the ground below) and look past him.
+		var fr := MossBall.frame_at(up, 0.0)
+		var from := pos
+		var space := g.get_world_3d().direct_space_state
+		for dd in [3.0, 2.2, 4.0]:
+			var found := false
+			for k in 12:
+				var o: Vector3 = pos + fr.z.rotated(up, TAU * k / 12.0) * dd
+				var h := space.intersect_ray(PhysicsRayQueryParameters3D.create(o + up * 1.2, o - up * 3.0, TreasureHunt.SOLID_MASK))
+				if h.is_empty() or (h["normal"] as Vector3).dot(up) < 0.7:
+					continue
+				if space.intersect_ray(PhysicsRayQueryParameters3D.create((h["position"] as Vector3) + up * 0.5, pos + up * 0.5, TreasureHunt.SOLID_MASK)).is_empty():
+					from = h["position"]
+					found = true
+					break
+			if found:
+				break
+		var dir := pos - from
+		g.player.place(b, from + up * 0.15, dir - up * dir.dot(up))
+		g.audio.set_ball(b.index, false)
+		g.cam.snap_behind()
+		g.cam.pitch = 0.2
+		await t.seconds(1.3)
+		await t.shot("thspot_%d_%s_w%d" % [n, w[0], b.index + 1])
+		g.cam.cinematic = true
+		g.cam.cine_pos = pos + up * 1.6 + (from - pos).normalized() * 2.6
+		g.cam.cine_look = pos + up * 0.4
+		g.cam.cine_up = up
+		await t.seconds(0.8)
+		await t.shot("thspot_%d_%s_w%d_close" % [n, w[0], b.index + 1])
+		g.cam.cinematic = false
+		node.queue_free()
+		n += 1
 
 
 ## A walkable spot a couple of metres from `target` (for the Treasure Hunt shots).
