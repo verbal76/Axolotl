@@ -19,7 +19,7 @@ kept below as history.
 | **Release commit** (APK + OTA source) | `104605727ab2bc48f6b0b6e2d56a0fd44127c5be` (`1046057`) |
 | **The one Android app** | **Mote**, `com.verbal76.axolotl`. The separate Mote Dev app is **retired** (owner, 2026-09-27). |
 | **Current APK** | **`mote-v0.1.0-b22.apk`** (artifact `mote-android-v0.1.0-b22`), Android build 22, bundled baseline `1046057` |
-| **Current OTA / channel pointer** | **`dev-000028`**, built from `bf46566` (the major world expansion: seven substantial worlds, catalog v4; game content validated at `3526b3e`; includes dev-000015..25). dev-000026 and dev-000027 were never published (their publish runs stopped on two test-measurement failures, fixed). dev-000014 = b22's own game |
+| **Current OTA / channel pointer** | **`dev-000029`**, built from `1ad34ea` (the master held package: Tier 2, the aquarium experiences, the tank, the pufferfish repair; game content validated at `fc08131`; includes dev-000015..28). dev-000028 (`bf46566`) was the world expansion. dev-000026 and dev-000027 were never published. dev-000014 = b22's own game |
 | Runtime | `android-godot-4.7.2-r5` |
 | Game version / save schema | `0.1.0` / `1` |
 | Requirement authority | `docs/REQUIREMENTS_LEDGER.md` (sections G, F, O, V, N, C, A, R, S, P, M, **E1** and the **MOTE OPEN ITEMS EXPANSION LIST**) |
@@ -403,7 +403,44 @@ is expected; tap **Install anyway**.
 
 ## 11. Current OTA
 
-**Latest: `dev-000028`** (OTA publish #28, run 36522462374): source `bf46566af05b4ee60387c9afd5cd7f2f239960d4`,
+**Latest: `dev-000029`** (OTA publish #29, run 36602426289, published 2026-09-29 17:23:48 UTC):
+- **Source:** `1ad34ea3c1adfdb5b0dda7623c3b8d131f6d732a`.
+- **Identities:** runtime `android-godot-4.7.2-r5`, game 0.1.0, save schema 1, catalog v4.
+- **PCK:** `a4c1f12a181a7e60a043db49d15a736619d80049da1c53fc40264827a2cdda79`, 10,870,736 bytes, 38 baked shader caches.
+
+**The master held package** (ledger AQ; `docs/TIER2.md`, `docs/AQUARIUM.md`):
+- **Tier 2:** Water Cannon, Bubble Blast and Gill Rush, found at shrines in Worlds 3, 5 and 7, with one button and a pause-menu loadout.
+- **The aquarium experiences** (from the title and the pause menu):
+  - the late-80s / early-90s bedroom;
+  - Aquarium Inspection;
+  - Live Tank;
+  - Swim Mode.
+- **Fish:** 13 ambient fish, including three bala sharks.
+- **Gravel:** the rebuilt gravel floor.
+- **Pufferfish:** it can be beaten.
+- **Found in qualification and fixed:**
+  - a parasite could be left buried in the terrain;
+  - startup went from about 10.4 s to about 8 s (pattern swatches drawn off the main thread; gravel heights computed once).
+
+**Release gates:**
+- **Local, on `fc08131` (the published game content):**
+  - unit suite 446/446;
+  - playthroughs seed 7 and 4242: 23/23 each, 100% by play;
+  - OTA end-to-end 42/42.
+- **CI:** OTA publish #29 and Build & Verify #39 both green.
+
+**Verified from the public URLs:**
+- the pointer (dev-000029, seq 29);
+- the manifest (source `1ad34ea`, runtime r5, game 0.1.0, schema 1);
+- the signature against the pinned key (`a003a45c…0cf2`);
+- the PCK hash and size;
+- the baked shaders;
+- the inspector (INSPECT OK);
+- the new sources in the pack (`tier2_shrine`, `presentation`, `swimmer`, `gravel2_*`, `pufferfish`);
+- 116/116 unit checks run from the published pack;
+- the b22 update client (bundled `1046057`) finds it compatible, downloads it and stages it, with a matching SHA.
+
+**Previous: `dev-000028`** (OTA publish #28, run 36522462374): source `bf46566af05b4ee60387c9afd5cd7f2f239960d4`,
 runtime r5, PCK `a4c5f8dc8d3623adafb0494c98499805c929e8f3a566b601816660c1075a162b` (9,384,212 bytes, 38 baked shader
 caches), save schema 1. **The major world expansion** (ledger WX, `docs/WORLD_EXPANSION.md`): every moss ball about twice
 the radius in a wider tank; ravines with forgiving falls; easy / skilled / exploration routes; bubble columns, a glide
@@ -717,6 +754,28 @@ These are implemented but lack automated evidence. They are **not** unimplemente
     - **Frame rate:** anywhere busy, especially Mossy Meadow's glade looking over the ravine and a
       healed Current Hollows.
 
+18. **After the master held package (ledger AQ, dev-000029) is active:**
+    - **Startup:** from a cold start to the title should feel quicker than dev-000028.
+    - **Pufferfish:** swipe one three times: it puffs, sinks toward you, and is beaten; it comes
+      back to its patch later.
+    - **Tier 2:** touch the glowing shell at World 3's High Crown (Water Cannon), World 5's Secret
+      Clearing (Bubble Blast) and World 7's Glow Chamber (Gill Rush). Check:
+      - the new button above-left of Jump, and its glyph;
+      - the cooldown ring and ready flash;
+      - the practice targets;
+      - swapping in the pause menu's Tier 2 row.
+      Say whether each ability feels good and reads clearly on the phone.
+    - **Aquarium:** from the title ("Aquarium") and from the pause menu. Try:
+      - the bedroom view, then tap the tank for Inspection and drag round the glass;
+      - Live Tank (touch to show Back and View, then cycle the views);
+      - Swim Mode (stick, drag to look, Up / Down / Faster).
+      Android back steps out one level at a time. Coming back from the pause menu, Gill is exactly
+      where he was and the run timer has not moved.
+    - **The tank:** the fish, including the three bala sharks (the biggest, a skittish trio); the
+      new gravel up close; the dirty glass from the room while the tank is murky.
+    - **Frame rate:** in the worlds (about +9% frame time on the software-renderer proxy) and in
+      each aquarium mode.
+
 Record results in the ledger (O-19, A-05, R-01, R-14, R-19, S-03, S-06, S-14, F-07, F-09, P-01, P-03, P-06, M-01, M-03, E1-01, E1-07, E1-09, E2-01, E2-02, E2-04, E2-05, E3-01, E3-02, E3-04, E4-01..E4-05, E5-02..E5-06, E6) only with the owner's evidence.
 
 ## 17. Repository isolation
@@ -740,7 +799,7 @@ repository. Do not name, open or use any other game repository in Mote developme
 
   New completion-bearing content must extend the catalog as `docs/COMPLETION.md` describes.
 - **Expansion list:** all six items are done (dev-000018, dev-000019, dev-000020, dev-000021/22, dev-000023, dev-000024). Do not begin Expansion 7 unless the owner asks for it.
-- **Next task:** the owner's phone checks (§16), including items 15 (Expansion 6), 16 (dev-000025) and 17 (the world expansion, dev-000028).
+- **Next task:** the owner's phone checks (§16), including items 15 (Expansion 6), 16 (dev-000025), 17 (the world expansion, dev-000028) and 18 (the master held package, dev-000029).
 - **World expansion:** done and shipped as one OTA (dev-000028). Per the brief's stop condition: no further expansion, no eighth moss ball, no RPG systems and no new polish pass unless the owner asks.
 - **Master held package (ledger AQ):**
   - Contents:
@@ -751,7 +810,7 @@ repository. Do not name, open or use any other game repository in Mote developme
     - the rebuilt gravel;
     - the late-80s / early-90s bedroom.
   - Docs: `docs/TIER2.md` and `docs/AQUARIUM.md`.
-  - Shipped as one dev OTA; its number and identities are recorded in §0 and §11 by the documentation commit that follows the release.
+  - Shipped as **dev-000029** (source `1ad34ea`, verified; §11).
   - Per the brief: STOP after it; start nothing new unless the owner asks.
 - **After that:** continue from the owner's feedback. Game-layer changes reach b22 by OTA on push
   (that push is also the first OTA a b22 phone downloads). Native changes need `--bump` and a new APK.
