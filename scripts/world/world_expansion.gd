@@ -396,7 +396,7 @@ static func canopy_spire(lb: LevelBuilder) -> void:
 	var b := lb.ball
 	var R := func(dlat: float, dlon: float) -> Vector2: return _rel(5, 2, dlat, dlon)
 	b.food_weights = [0.55, 0.3, 0.15]
-	b.food_target = 5
+	b.food_target = 12
 	var land: Vector2 = R.call(0, 0)
 	lb.zone("landing", land.x, land.y, 30)
 	var sz: Vector2 = R.call(-10, 120)
@@ -448,9 +448,10 @@ static func canopy_spire(lb: LevelBuilder) -> void:
 	lb.parasite(Parasite.Kind.MEDIUM, "spire", p.x, p.y, 8.0)
 
 	# The shelves: overhanging rocks stepping up (a second, shorter climb).
+	# (Half the old angular spacing: the ball doubled, the steps between the shelves did not.)
 	var h0: Vector2 = R.call(24, 44)
-	var h1: Vector2 = R.call(30, 56)
-	var h2: Vector2 = R.call(38, 66)
+	var h1: Vector2 = R.call(27, 50)
+	var h2: Vector2 = R.call(31, 55)
 	var sh0 := lb.shelf(h0.x, h0.y, 1.2, 2.0, 1.0)
 	var sh1 := lb.shelf(h1.x, h1.y, 2.3, 1.9, 0.9)
 	var sh2 := lb.shelf(h2.x, h2.y, 3.4, 2.1, 1.0)
@@ -464,7 +465,7 @@ static func canopy_spire(lb: LevelBuilder) -> void:
 	lb.mote("shelves", p.x, p.y)
 
 	# The far side: a sparse slope and a lone large parasite.
-	lb.hill(fz.x, fz.y, 7.0, 1.4)
+	lb.hill(fz.x, fz.y, 14.0, 2.0)
 	p = R.call(0, -140)
 	lb.parasite(Parasite.Kind.LARGE, "far", p.x, p.y, 12.0)
 	p = R.call(24, -110)
@@ -472,14 +473,62 @@ static func canopy_spire(lb: LevelBuilder) -> void:
 	p = R.call(-20, -100)
 	lb.bloom(p.x, p.y)
 
-	for r in [[land.x, land.y, 30], [fz.x, fz.y, 40]]:
+	lb.freeze_ids()
+
+	# ---- World expansion: Canopy Spire at radius 32 --------------------------------------------
+	var kz: Vector2 = R.call(42, -62)
+	lb.zone("sky", kz.x, kz.y, 22)
+	# The Sky Spire: a 31 m spiral climb (a quarter turn and a metre a leaf) to a crown with the
+	# whole aquarium below; a Mote halfway up; beside it the glide shaft, a wide gentle down-draft
+	# he can drift down from the crown in (the safe way down; missing it is an extreme drop, which
+	# never takes the last frond).
+	var kxf := b.xform_on_dir(_dir(kz), 0.0, 20.0)
+	var ksp: Array = lb.canopy_spiral(kxf, 30, 0.8, 1.0, SPIRE_TURN, 31.5, 1.2)
+	var kcrown := []
+	for k in 2:
+		var a := deg_to_rad(SPIRE_TURN * ksp.size() + 150.0 * k)
+		var dir := Vector3(cos(a), 0.0, sin(a))
+		var cx := kxf * Transform3D(Basis(Vector3.UP, atan2(dir.x, dir.z) + PI), Vector3(dir.x * 1.3, 30.4 + 0.3 * k, dir.z * 1.3))
+		lb.leaf_xf(cx, 3.8, 2.8)
+		kcrown.append(cx)
+	var ktops := []
+	for xf in ksp:
+		ktops.append(Levels.leaf_mid(xf, 1.5, 0.0).origin + (xf as Transform3D).basis.y * 0.1)
+	var kc0: Transform3D = kcrown[0]
+	ktops.append(Levels.leaf_mid(kc0, 1.6, 0.0).origin + kc0.basis.y * 0.1)
+	var ks0: Transform3D = ksp[0]
+	var kstart := b.surface_point(b.up_at(Levels.leaf_mid(ks0, 4.4, 0.0).origin), 0.0)
+	lb.route("sky spire mid", kstart, ktops.slice(0, 16), ["sky"], "the Sky Spire, half way")
+	lb.route("sky spire", kstart, ktops, ["sky"], "the Sky Spire's crown")
+	var k15: Transform3D = ksp[15]
+	lb.mote_xf("sky", Levels.leaf_mid(k15, 1.5, 0.0).translated_local(Vector3(0, 0.6, 0)), 0.3)
+	lb.mote_xf("sky", Levels.leaf_mid(kc0, 2.6, 0.0).translated_local(Vector3(0, 0.6, 0)), 0.4)
+	lb.bloom_xf(Levels.leaf_mid(kc0, 1.6, 0.0))
+	var shaft_dir := b.up_at(kxf * Vector3(-7.5, 0, 0))
+	lb.bubble_column(shaft_dir, 2.6, 31.0, -1.6)
+	lb.bot_hints.append({"glide": true, "base": b.surface_point(shaft_dir), "top": kxf * Vector3(-7.5, 30.0, 0), "radius": 2.6})
+	lb.parasite(Parasite.Kind.SMALL, "sky", kz.x - 8, kz.y + 12, 4.0)
+	lb.parasite(Parasite.Kind.MEDIUM, "sky", kz.x + 6, kz.y - 16, 4.0)
+	lb.mote("sky", kz.x - 12, kz.y - 8)
+	# More of the landing, the shelves and the far side.
+	p = R.call(-30, 20)
+	lb.parasite(Parasite.Kind.SMALL, "landing", p.x, p.y, 5.0)
+	p = R.call(20, 16)
+	lb.mote("landing", p.x, p.y)
+	p = R.call(-30, -150)
+	lb.mote("far", p.x, p.y)
+	p = R.call(30, -150)
+	lb.parasite(Parasite.Kind.SMALL, "far", p.x, p.y, 5.0)
+
+	for r in [[land.x, land.y, 24], [fz.x, fz.y, 26], [kz.x, kz.y, 16]]:
 		lb.food_region(r[0], r[1], r[2])
-	Levels._holes(lb, 6, 501, [[_dir(sz), 16], [_dir(hz), 14]])
+	Levels._holes(lb, 16, 501, [[_dir(sz), 16], [_dir(hz), 14], [_dir(kz), 14]])
 	# Sparse ground cover, a stand of medium growth round the spire's foot, tall reeds far off.
-	var clear := Levels._veg_keep_clear(lb, [[_dir(sz), 5.0]])
-	_short_cover(lb, 900, 511, clear, Levels._stands(512, 0.0))
-	Vegetation.field(b, "medium", _dir(sz), 16.0, 300, 513, {"avoid": clear, "clumps": 5})
-	Vegetation.field(b, "tall", _dir(fz), 18.0, 380, 514, {"avoid": clear, "clumps": 4})
+	var clear := Levels._veg_keep_clear(lb, [[_dir(sz), 5.0], [_dir(kz), 6.0], [shaft_dir, 6.0]])
+	_short_cover(lb, 3600, 511, clear, Levels._stands(512, 0.0))
+	Vegetation.field(b, "medium", _dir(sz), 16.0, 700, 513, {"avoid": clear, "clumps": 8})
+	Vegetation.field(b, "tall", _dir(fz), 18.0, 900, 514, {"avoid": clear, "clumps": 8})
+	Vegetation.field(b, "medium", _dir(kz), 14.0, 500, 515, {"avoid": clear, "clumps": 6})
 
 
 # =========================================================================================

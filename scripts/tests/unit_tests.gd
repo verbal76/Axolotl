@@ -1850,6 +1850,29 @@ func _test_bubble_columns() -> void:
 	await t.seconds(1.0)
 	p.bot_input = Vector2.ZERO
 	await wait_grounded()
+	# Canopy Spire's glide shaft: dropped in near its top he sinks gently all the way down and lands
+	# unhurt (no hard or extreme landing).
+	var b6 := g.balls[5]
+	var shaft: Array = []
+	for c in b6.columns:
+		if float(c[4]) < 0.0:
+			shaft = c
+	var glide_ok := false
+	var glide_detail := "no glide shaft on Canopy Spire"
+	if not shaft.is_empty():
+		p.restore_full()
+		var hp0 := p.health
+		var ext0 := int(g.stats["extreme_landings"])
+		var hard0 := int(g.stats["hard_landings"])
+		place_at(5, (shaft[0] as Vector3) + (shaft[1] as Vector3) * 24.0, MossBall.frame_at(shaft[1], 0.0).z)
+		g.audio.set_ball(5, false)
+		await t.seconds(2.0)
+		var sink := -p.velocity.dot(p.up)
+		await wait_grounded(20.0)
+		glide_ok = sink > 1.0 and sink < 2.4 and p.health == hp0 and int(g.stats["extreme_landings"]) == ext0 and int(g.stats["hard_landings"]) == hard0
+		glide_detail = "sinking at %.1f m/s; health %d -> %d; hard landings +%d, extreme +%d" % [sink, hp0, p.health,
+				int(g.stats["hard_landings"]) - hard0, int(g.stats["extreme_landings"]) - ext0]
+	t.check("glide_shaft_floats_him_down", glide_ok, glide_detail)
 	# A dormant column (its zone not healed) does nothing; healing the zone sets it flowing.
 	var at := MossBall.dir_ll(-10, -40)
 	b.add_zone("probe_col", at, 4.0)
@@ -4839,15 +4862,28 @@ func _spirals() -> Array:
 			for xf in h["spiral"]:
 				ls.append([xf, 3.0, Levels.SPIRAL_LEAF_W])
 			out.append([b2, ls])
+	# Canopy Spire's spirals (the spire and, since the world expansion, the Sky Spire): each one's
+	# leaves, grouped by the stem they grow round.
 	var b5 := g.balls[5]
-	var sp := []
+	var groups := []
 	for n in (b5.get_meta("builder") as LevelBuilder).root.get_children():
 		if n is StaticBody3D and n.has_meta("leaves") and (n as StaticBody3D).collision_layer == 2:
 			var e: Array = n.get_meta("leaves")[0]
-			if is_equal_approx(e[1], 3.0):
-				sp.append(e)
-	sp.sort_custom(func(a, c): return b5.altitude((a[0] as Transform3D).origin) < b5.altitude((c[0] as Transform3D).origin))
-	out.append([b5, sp])
+			if not is_equal_approx(e[1], 3.0):
+				continue
+			var d := b5.up_at((e[0] as Transform3D).origin)
+			var placed := false
+			for gr in groups:
+				if d.angle_to(gr[0]) * b5.radius < 6.0:
+					gr[1].append(e)
+					placed = true
+					break
+			if not placed:
+				groups.append([d, [e]])
+	for gr in groups:
+		var sp: Array = gr[1]
+		sp.sort_custom(func(a, c): return b5.altitude((a[0] as Transform3D).origin) < b5.altitude((c[0] as Transform3D).origin))
+		out.append([b5, sp])
 	return out
 
 

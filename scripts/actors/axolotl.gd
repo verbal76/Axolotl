@@ -282,11 +282,17 @@ func _physics_process(dt: float) -> void:
 	# A bubble column carries him up (off the ground too) to hang bobbing near its top; he can
 	# burst again from there.
 	var lift := ball.lift_at(global_position) if ball != null and not ball.columns.is_empty() else 0.0
-	_in_column = lift > 0.0
-	if _in_column:
+	# (A glide shaft is a column with a gentle down-draft: he sinks slowly, steering as he likes.)
+	_in_column = lift != 0.0
+	if _in_column and lift > 0.0:
 		vup = maxf(lift, 2.5) if grounded else move_toward(vup, lift, LIFT_ACCEL * dt)
 		grounded = false
 		burst_available = true
+	elif _in_column and not grounded:
+		vup = move_toward(vup, lift, LIFT_ACCEL * dt)
+	# (Carried by a column or drifting down a shaft is no fall: a fall counts from where he leaves it.)
+	if _in_column:
+		apex_r = _r()
 	# The lunge rises or dips so the mouth meets food floating above or below it.
 	if lunge_t >= 0.0 and not lunge_hit and _lunge_target_valid():
 		var dh := (_lunge_food.catch_point() - head_position()).dot(up)

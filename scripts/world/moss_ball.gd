@@ -889,6 +889,8 @@ func lift_at(world_pos: Vector3) -> float:
 		if (off - (c[1] as Vector3) * along).length() > float(c[2]):
 			continue
 		var flow: float = 1.0 if c.size() < 6 or c[5] == null else (c[5] as RestorationGate).flow
+		if float(c[4]) < 0.0:
+			return float(c[4]) * flow   # (a glide shaft sinks him evenly all the way down)
 		return float(c[4]) * flow * (1.0 - smoothstep(float(c[3]) - 1.5, float(c[3]), along))
 	return 0.0
 
