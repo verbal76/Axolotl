@@ -1,6 +1,6 @@
 class_name Tier2
 extends RefCounted
-## Gill's Tier-2 abilities (docs/TIER2.md): Water Cannon, Bubble Blast, Gill Rush. Tail Swipe stays the
+## The axolotl's Tier-2 abilities (docs/TIER2.md): Water Cannon, Bubble Blast, Gill Rush. Tail Swipe stays the
 ## basic attack; these are extra options found by exploring, one per world, in a fixed order
 ## (World 3, World 5, World 7), each at a shrine at one of that world's landmarks.
 ##
@@ -16,7 +16,8 @@ const BUBBLE := "bubble"
 const RUSH := "rush"
 ## In unlock order.
 const ORDER := [CANNON, BUBBLE, RUSH]
-const NAMES := {CANNON: "Water Cannon", BUBBLE: "Bubble Blast", RUSH: "Gill Rush"}
+## (The rush carries the character's name, from its one canonical source.)
+const NAMES := {CANNON: "Water Cannon", BUBBLE: "Bubble Blast", RUSH: GameVersion.CHARACTER_NAME + " Rush"}
 const BLURBS := {
 	CANNON: "A focused jet at whatever you face.",
 	BUBBLE: "A shockwave that pushes everything back.",

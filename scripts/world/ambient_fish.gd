@@ -1,7 +1,7 @@
 class_name AmbientFish
 extends Node3D
 ## About ten decorative aquarium fish (docs/AQUARIUM.md), at a middle scale (owner): 6 to 14 times
-## Gill's length, so they read as fish in the whole-tank views and glide past impressively in play,
+## the axolotl's length, so they read as fish in the whole-tank views and glide past impressively in play,
 ## without dwarfing the moss balls. Noncombatants that make the tank feel
 ## inhabited. They are not creatures of the ecosystem, not enemies, food or completion entries; nothing
 ## can target or hurt them. Four kinds, each with its own size, colours, speed, preferred depth and

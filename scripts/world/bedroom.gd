@@ -1,6 +1,6 @@
 class_name Bedroom
 extends Node3D
-## The bedroom round Gill's aquarium (docs/AQUARIUM.md): a lived-in late-1980s / early-1990s kid's
+## The bedroom round the axolotl's aquarium (docs/AQUARIUM.md): a lived-in late-1980s / early-1990s kid's
 ## room, slightly chaotic and warm, with the aquarium on its stand as the focal point. Built from
 ## simple shapes merged into a few meshes (one per material: most parts share one vertex-coloured
 ## material), so the whole room is a handful of draw calls. Everything is on Aquarium.ROOM_LAYER.

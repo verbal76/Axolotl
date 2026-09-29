@@ -2,7 +2,7 @@ class_name Tier2Combat
 extends Node
 ## Executes the equipped Tier-2 ability (docs/TIER2.md). No manual aiming: the player chooses when
 ## and roughly where (the way Gill faces); Gill handles the precision. Each ability is a short
-## authored moment inside Gill's normal movement (he keeps his collision; the camera is never
+## authored moment inside his normal movement (he keeps his collision; the camera is never
 ## snapped) and then control returns.
 ##
 ## - Water Cannon: the valid hostile closest to his facing (shortest signed angle, so +10 and -10
