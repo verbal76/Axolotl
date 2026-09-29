@@ -2719,8 +2719,11 @@ func _swipe_at(par: Parasite, behind: bool) -> void:
 
 
 ## Stand 1.1 from the parasite, facing `fwd`, with the parasite `deg` degrees off that facing.
+## The parasite is held still meanwhile (a small one darts when he appears beside it, which would
+## change the very angle being tested); the caller lets it go again.
 func _place_at_angle(par: Parasite, deg: float) -> void:
 	await controls_ready()
+	par.set_physics_process(false)
 	var b := par.ball
 	var up := b.up_at(par.global_position)
 	var fwd := MossBall.frame_at(up, 0).z * -1.0
@@ -2740,12 +2743,14 @@ func _test_swipe_direction_and_stages() -> void:
 	await _place_at_angle(small, 65.0)
 	g.player_swipe(p)
 	t.check("swipe_hits_270_arc", not small.is_alive(), "hp %d" % small.hp)
+	small.set_physics_process(true)
 	# Aim assist: a parasite dead ahead gets swept after a part-way turn.
 	var ahead := first_alive(0, Parasite.Kind.SMALL, "meadow")
 	await _place_at_angle(ahead, 0.0)
 	var f0 := p.facing
 	await press("swipe")
 	await t.seconds(0.4)
+	ahead.set_physics_process(true)
 	var turned := rad_to_deg(f0.angle_to(p.facing))
 	t.check("swipe_aim_turns_and_hits_ahead", not ahead.is_alive() and turned > 20.0 and turned < 62.0, "hp %d turned %.0f deg" % [ahead.hp, turned])
 	small = first_alive(0, Parasite.Kind.SMALL, "east")
