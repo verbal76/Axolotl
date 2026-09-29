@@ -10,8 +10,8 @@ extends Node
 ## Built lazily: nothing here costs startup (models, placements and the icon are made when a hunt
 ## is played), and none of it touches completion, the run clock or any generator but the hunt's.
 
-const DANCE_S := 2.1
-const FINALE_S := 3.0
+const DANCE_S := 2.8
+const FINALE_S := 3.6
 ## Extra reach for the lunge beyond the object's own size (phones: forgiving, never pixel-exact).
 const REACH := 0.55
 ## Lunge aim help toward the current object (like food): range and cone.
@@ -201,7 +201,7 @@ func _celebrate(p: Axolotl, at: Vector3, final: bool) -> void:
 	var up := p.ball.up_at(at)
 	# Confetti: a puff of colours where it was (the pooled water effects: bounded, self-clearing).
 	for c in CONFETTI:
-		WaterFX.inst.sparkle(at, c, 9 if not final else 16, 2.4, 0.06, 1.3)
+		WaterFX.inst.sparkle(at, c, 14 if not final else 18, 2.8, 0.13, 1.6)
 	_firework(at + up * 0.3, up, 0.0)
 	_firework(at + up * 0.3 + p.facing.cross(up) * 0.8, up, 0.35)
 	if final:
@@ -237,13 +237,13 @@ func _celebrate(p: Axolotl, at: Vector3, final: bool) -> void:
 	refresh()
 
 
-## A small firework: a spark rising a few metres, then a burst (pooled effects; nothing is left).
+## A small firework: a spark rising a couple of metres, then a burst (pooled effects; nothing is left).
 func _firework(from: Vector3, up: Vector3, delay: float) -> void:
 	if delay > 0.0:
 		await get_tree().create_timer(delay, false).timeout
 	var col: Color = CONFETTI[_rng.randi() % CONFETTI.size()]
-	var rise := 3.2 + _rng.randf() * 1.2
-	WaterFX.inst._spawn_puff(from, up * rise / 0.55, 0.55, 0.09, Color(1.0, 0.95, 0.8, 0.95), 0.0)
+	var rise := 2.2 + _rng.randf() * 0.8
+	WaterFX.inst._spawn_puff(from, up * rise / 0.55, 0.55, 0.15, Color(1.0, 0.95, 0.8, 0.95), 0.0)
 	await get_tree().create_timer(0.55, false).timeout
-	WaterFX.inst.sparkle(from + up * rise, col, 22, 2.6, 0.06, 1.0)
-	WaterFX.inst.sparkle(from + up * rise, Color(1.0, 1.0, 0.9, 0.9), 8, 1.2, 0.04, 0.6)
+	WaterFX.inst.sparkle(from + up * rise, col, 26, 3.2, 0.12, 1.1)
+	WaterFX.inst.sparkle(from + up * rise, Color(1.0, 1.0, 0.9, 0.9), 8, 1.4, 0.09, 0.6)

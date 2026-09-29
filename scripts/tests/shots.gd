@@ -689,8 +689,8 @@ func _treasure_hunt_shots(g: Game) -> void:
 	await t.shot("th_open_fireworks2")
 	g.cam.cine_pos = g.player.global_position + side * 2.4 + oup * 0.9 + ofr.z * 0.3
 	g.cam.cine_look = g.player.global_position + oup * 0.7
-	for k in 4:
-		await t.seconds(0.28)
+	for k in 6:
+		await t.seconds(0.3)
 		await t.shot("th_open_dance_%d" % k)
 	g.cam.cinematic = false
 	await t.seconds(2.5)

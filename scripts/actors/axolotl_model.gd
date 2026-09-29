@@ -101,7 +101,7 @@ var whip_tip_az := 0.0            # the tail tip's direction round his body (0 =
 # Idles (physical playtest of dev-000024): standing still, now and then he does one of five
 # little things (the owner added the look-up). Purely the model: the gameplay body, its collision and the camera never move.
 enum Idle { NONE = -1, LOOKAROUND, SCOOT, TILT, STRETCH, LOOKUP, DANCE }
-const IDLE_LEN := [4.6, 3.8, 2.8, 3.4, 3.4, 2.1]
+const IDLE_LEN := [4.6, 3.8, 2.8, 3.4, 3.4, 2.8]
 ## The idles he picks himself (the dance is only for Treasure Hunt finds).
 const IDLE_RANDOM := 5
 ## When the stretch's yawn sounds (seconds into it).
@@ -739,9 +739,9 @@ static func _idle_pose_at(kind: int, s: float, side: float) -> Dictionary:
 		Idle.DANCE:
 			# Up onto the back legs, the hips and tail wiggling side to side (a goofy little victory
 			# shimmy), front paws up and waving, a big happy squint, then back down onto all fours.
-			var up := _env(s, 0.0, 0.3, 1.75, 2.05)
+			var up := _env(s, 0.0, 0.3, 2.45, 2.75)
 			var th := 0.92 * up
-			var wig := sin(s * TAU * 3.3) * _env(s, 0.28, 0.42, 1.6, 1.8)
+			var wig := sin(s * TAU * 3.3) * _env(s, 0.28, 0.42, 2.3, 2.5)
 			p["pivot"] = Vector3(0, 0.03, BONE_Z[REAR_BONE])
 			p["rot"] = Vector3(th, wig * 0.36, wig * 0.12)
 			p["pos"] = Vector3(0.0, 0.02 * absf(wig) * up, 0.0)

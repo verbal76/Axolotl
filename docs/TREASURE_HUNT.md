@@ -42,8 +42,10 @@ The objects have no story and no explanation. The joke is that they are there at
 
 - **Order:** the fourteen objects are shuffled. The worlds visited are fourteen slots, two per
   world, shuffled so that no world appears twice in a row and never world by world.
-- **Placement:** each object's spot is a short checked walk from a proven-reachable anchor in its
-  world. Anchors are blooms (where he respawns), burrower holes and the arrival point.
+- **Placement:** every spot is proven reachable. A ground or grass spot is a short checked walk
+  from an anchor in its world; anchors are blooms (where he respawns), burrower holes and the
+  arrival point. A leaf or rock spot is at the top of a climb the world's routes prove, and a cave
+  spot is on a cave's floor in sight of its mouth.
 - **Checks on every candidate spot:**
   - on the terrain surface, neither buried nor floating (within 0.5 m);
   - not in or on a ravine;
@@ -56,6 +58,23 @@ The objects have no story and no explanation. The joke is that they are there at
 - **Choosing among spots:** spots with a little cover are preferred, so the player has to look.
   A world's two objects sit apart, at least 35% of its radius. The previous hunt's spots are
   avoided.
+- **Hiding places:** each spot is one of five kinds (`TreasureHunt.SPOT_KINDS`):
+
+  | Kind | Where | Checked by |
+  |---|---|---|
+  | Ground | open ground near an anchor | the checks above |
+  | Tall grass | in a clump of tall reeds, always at its edge so a glimpse shows from the open (he swims through reeds, which part around him) | the checks above, 3+ reeds within 1.4 m, open water within 1.8 m on some side |
+  | Leaf | high on a plant's leaf, at the top of a climb the world's routes prove | `perch_point`: level, broad enough (four footprint rays), clear, head room, 0.8 m+ above the ground, not a crumbling leaf |
+  | Rock | on top of a stone ledge, tower or terrace at a proven climb's top | the same as a leaf |
+  | Cave | on a cave's floor, in sight of its mouth at body height | `cave_points` plus the leaf checks |
+
+- **The mix:**
+  - The **first hunt is easier**: mostly ground (6) and tall grass (5), plus one leaf, one rock
+    and one cave (`FIRST_BAG`).
+  - **Later hunts** (half size) mix everything: 2 ground, 3 each of grass, leaf, rock and cave
+    (`LATER_BAG`).
+  - A world without a kind (no leaves in most worlds, no reeds in worlds 3 and 4, no cave in world
+    6) falls back to another kind. The first hunt falls back only to ground or grass.
 - **Saved as generated:** the seed, order, positions and yaw are all saved. A reload reproduces
   the hunt exactly, and only **New hunt** generates again.
 - **Recovery:** a saved spot that later fails the checks (the world changed, or the save was
@@ -78,7 +97,7 @@ The objects have no story and no explanation. The joke is that they are there at
   - a puff of confetti in five colours;
   - two small fireworks, five for the fourteenth. These use pooled water effects, so they are
     bounded and nothing is left behind.
-  - Gill rises onto his back legs for a happy butt-and-tail wiggle (`Idle.DANCE`, 2.1 s). He is
+  - Gill rises onto his back legs for a happy butt-and-tail wiggle (`Idle.DANCE`, 2.8 s). He is
     held still and invulnerable meanwhile, then control returns.
 - **The HUD** (top left, under the run timer) shows only "TREASURE HUNT", a rendered picture of
   the current object, its name and "n / 14". There is no list, no world, no arrow and no distance.
@@ -116,6 +135,8 @@ The unit suite runs these after `_test_all_clear`, on worlds restored through pl
   - interleaved order;
   - the same seed gives the same hunt, a new seed a new one;
   - 168 spots over 12 hunts, all valid;
+  - every kind of hiding place appears; the first hunt has 1–3 high, rock or cave spots and later
+    hunts 7–9;
   - the gameplay RNG is untouched;
   - full size then half, for good.
 - **`_test_treasure_play`:**
@@ -136,3 +157,5 @@ The unit suite runs these after `_test_all_clear`, on worlds restored through pl
   - `--only=treasures`: the fourteen objects;
   - `--only=treasurehunt`: HUD, finds in several worlds, the celebration, the dance, the finish
     card, the new hunt, full versus half size.
+  - `--only=thspots`: one spot of each kind (two leaves, two rocks, two caves, two in tall grass,
+    one on open ground), each from where he stands and close up.
