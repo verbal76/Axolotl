@@ -459,9 +459,36 @@ phone-verified.
 
 ## TH — Treasure Hunt postgame mode (owner brief, 2026-09-29)
 
-One dev OTA, no APK. Design: `docs/TREASURE_HUNT.md`. **Status: held, not published.** The first
-qualification of `8c12b15` failed seed 4242 twice. Treasure Hunt stays unpublished until one final
-candidate passes every gate.
+One dev OTA, no APK. Design: `docs/TREASURE_HUNT.md`. The first qualification of `8c12b15` failed
+seed 4242 twice (TH-B1, TH-B2 below, both playthrough-bot defects).
+
+**Qualification of the final candidate `e8dc1d0`** (fresh user data, one run each; nothing is
+phone-verified):
+
+| Gate | Result |
+|---|---|
+| Unit suite | Passed |
+| Seed 7 playthrough | 23/23, ALL CLEAR 5,760 s, 100% at 7,468 s |
+| Seed 4242 playthrough | 23/23, ALL CLEAR 3,411 s, 100% at 5,383 s |
+| OTA end-to-end | 42/42, including an offline seed 4242 run by the exported game; usable at 7.9 s with a hanging channel |
+
+**Measured alone against dev-000029 `1ad34ea`:**
+- Startup to a usable title, headless, 3 alternating runs each: median 8,059 vs 8,029 ms (+0.4%, noise).
+- Frame time, software renderer, 20 views including Room, Inspection, Live Tank and Swim, best of
+  two A-B-A-B passes: median 176.1 vs 178.4 ms/frame (-1.2%); every view within ±11%.
+- Memory: video memory 157.4 MB, unchanged; RAM +2.2 MB, peak +4 MB.
+
+Game 0.1.0, save schema 1, catalog v4 (348), runtime r5. No APK.
+
+| ID | Requirement | Status | Evidence |
+|---|---|---|---|
+| TH-01 | Unlocks at 100% only, old 100% saves included | I+V | `_test_treasure_unlock` |
+| TH-02 | 14 objects, two per world, interleaved, seeded, saved, isolated RNG | I+V | `_test_treasure_generation` |
+| TH-03 | Hiding places (ground, tall grass at a clump's edge, leaf, rock, cave); easier first hunt (owner) | I+V | `treasure_spot_kinds_mixed`; `--only=thspots` shots |
+| TH-04 | Lunge-only pickup; the find saved before the celebration | I+V | `_test_treasure_play` |
+| TH-05 | Celebration: confetti, fireworks, Gill's 2.8 s rear-up dance; finale and card after 14 | I+V | `--only=treasurehunt` shots |
+| TH-06 | Full size first hunt, exactly half from the second on | I+V | `treasure_second_hunt_half`, duck full-vs-half shot |
+| TH-07 | No completion ids; timer, gameplay RNG and aquarium modes untouched | I+V | unit checks; catalog v4 348 |
 
 | ID | Requirement | Status | Evidence |
 |---|---|---|---|
