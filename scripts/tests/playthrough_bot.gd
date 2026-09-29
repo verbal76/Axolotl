@@ -134,6 +134,43 @@ func run(runner) -> void:
 					t.check("debug_eel_%s" % (c as CaveEel).threat_id, (c as CaveEel).defeated, "")
 		_report()
 		return
+	if Settings.test_args.get("start", "") == "cross":
+		# Debug scenario: the planned way from --from=lat,lon to --to=lat,lon on --ball=N, every
+		# restoration gate open, repeated --n times (ravine falls counted).
+		g.start_play(true)
+		var xb := g.balls[int(Settings.test_args.get("ball", "1")) - 1]
+		for gt in xb.gates:
+			(gt as RestorationGate).open(false)
+			t.log_line("gate %s %s: open %s at %.2f m up" % [gt.zone_id, gt.kind, gt.is_open, xb.altitude(gt.global_position)])
+		var fr := str(Settings.test_args.get("from", "56,33")).split(",")
+		var to := str(Settings.test_args.get("to", "67,42")).split(",")
+		var d0 := MossBall.dir_ll(float(fr[0]), float(fr[1]))
+		var d1 := MossBall.dir_ll(float(to[0]), float(to[1]))
+		p.max_health = 6
+		await wait(1.0)
+		if Settings.test_args.has("section"):
+			# Cross-section of what stands across the way at --section=lat,lon (east-west, 3 m each side).
+			var sc := str(Settings.test_args["section"]).split(",")
+			var sd := MossBall.dir_ll(float(sc[0]), float(sc[1]))
+			var fx := MossBall.frame_at(sd, 0.0).x
+			var space := g.get_world_3d().direct_space_state
+			for i in range(-12, 13):
+				var at := xb.surface_point(sd, 0.0) + fx * (i * 0.25)
+				var u := xb.up_at(at)
+				var q := PhysicsRayQueryParameters3D.create(at + u * 6.0, at - u * 5.0, 1)
+				var hit := space.intersect_ray(q)
+				t.log_line("section %+.2f m: %s" % [i * 0.25, "nothing" if hit.is_empty() else "%.2f m up, slope %.0f deg, %s (origin %.2f m up)" % [xb.altitude(hit["position"]), rad_to_deg((hit["normal"] as Vector3).angle_to(xb.up_at(hit["position"]))),
+						str(hit["collider"]), xb.altitude((hit["collider"] as Node3D).global_position)]])
+		for k in int(Settings.test_args.get("n", "3")):
+			p.place(xb, xb.surface_point(d0, 0.3), MossBall.frame_at(d0, 0.0).z)
+			p.restore_full()
+			g.audio.set_ball(xb.index, false)
+			await wait(1.0)
+			var falls0 := int(g.stats.get("ravine_falls", 0))
+			var ok := await goto(xb.surface_point(d1), 1.5, 60.0, null, false)
+			t.log_line("cross %d: arrived %s, ravine falls %d" % [k, ok, int(g.stats.get("ravine_falls", 0)) - falls0])
+		_report()
+		return
 	if Settings.test_args.get("start", "") == "clear":
 		# Debug scenario: one world cleared completely from its arrival point (--ball=N).
 		g.start_play(true)
@@ -576,9 +613,14 @@ func goto(target: Variant, radius := 0.9, timeout := 45.0, allow_vortex: Vortex 
 	var last := p.global_position
 	var escalate := 0
 	var side := 1.0
+	var falls0 := int(g.stats.get("ravine_falls", 0))
 	while el < timeout:
 		var tgt: Vector3 = target.call() if target is Callable else target
 		var flat := tangent_to(tgt)
+		# (Off a crossing and put back on a rim, maybe not at its end: that leg is over.)
+		if _crossing and int(g.stats.get("ravine_falls", 0)) > falls0:
+			set_stick(Vector2.ZERO)
+			return false
 		goto_info = "d=%.1f pos=%s" % [flat.length(), str(Levels._latlon(p.ball.up_at(p.global_position)).round())]
 		if flat.length() < radius and absf(height_of(tgt)) < 2.5:
 			set_stick(Vector2.ZERO)
@@ -673,12 +715,32 @@ func _follow_plan(tgt: Vector3, allow_vortex: Vortex, fight: bool) -> bool:
 	t.log_line("plan %s -> %s via %s" % [str(Levels._latlon(p.ball.up_at(p.global_position)).round()), str(Levels._latlon(p.ball.up_at(tgt)).round()),
 			str(legs.map(func(w): return Levels._latlon(p.ball.up_at(w[0])).round()))])
 	_planning = true
-	for leg in legs:
+	for i in legs.size():
+		var leg: Array = legs[i]
 		_crossing = leg[1]
-		await goto(leg[0], 1.0, 40.0, allow_vortex, fight)
+		# (Right at a bridge's end before stepping on: a narrow stem is easy to miss from a metre off.)
+		var lining_up: bool = i + 1 < legs.size() and legs[i + 1][1]
+		var ok := await goto(leg[0], 0.4 if lining_up else 1.0, 40.0, allow_vortex, fight)
+		if _crossing and not ok:
+			var key := str(p.ball.index) + str((leg[0] as Vector3).round())
+			_failed_crossings[key] = int(_failed_crossings.get(key, 0)) + 1
+			t.log_line("crossing to %s failed (%d); planning again from here" % [str(Levels._latlon(p.ball.up_at(leg[0])).round()), _failed_crossings[key]])
+			_crossing = false
+			_planning = false
+			_replans += 1
+			if _replans > 6:
+				_replans = 0
+				return false
+			return await _follow_plan(tgt, allow_vortex, fight)
+	_replans = 0
 	_crossing = false
 	_planning = false
 	return true
+
+
+## Crossings the bot fell off (ball + far end -> times): after two it walks round instead.
+var _failed_crossings := {}
+var _replans := 0
 
 
 ## Whether walking straight from `a` to `c` on the current ball keeps off every ravine.
@@ -769,6 +831,8 @@ func _plan_ravines(a: Vector3, c: Vector3) -> Array:
 		if cr.has("stones") or (cr["gate"] != null and not (cr["gate"] as RestorationGate).is_open):
 			continue
 		for pair in [[cr["a"], cr["b"]], [cr["b"], cr["a"]]]:
+			if int(_failed_crossings.get(str(b.index) + str((pair[1] as Vector3).round()), 0)) >= 2:
+				continue
 			if _clear_path(a, pair[0]) and _clear_path(pair[1], c):
 				var cost3: float = a.distance_to(pair[0]) + (pair[0] as Vector3).distance_to(pair[1]) + (pair[1] as Vector3).distance_to(c) + 6.0
 				if cost3 < best_cost:

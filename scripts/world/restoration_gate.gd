@@ -56,6 +56,9 @@ func open(animate: bool) -> void:
 		sync_to_physics = false
 		_apply(1.0)
 		sync_to_physics = sync
+		# (The body too: with physics sync on, moving the node alone left the collision where it
+		# stood shut, so a resumed save's raised bridge had nothing under it.)
+		PhysicsServer3D.body_set_state(get_rid(), PhysicsServer3D.BODY_STATE_TRANSFORM, global_transform)
 		set_meta("settled", true)
 		return
 	_t = 0.0

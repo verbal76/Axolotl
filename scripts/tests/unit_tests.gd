@@ -773,7 +773,15 @@ func _test_ecosystem() -> void:
 					why.append("ball %d glow-worms %d" % [b.index + 1, (c as GlowWorms).count])
 			"snail", "hopper":
 				if b.altitude(c.global_position) < 1.0:
-					why.append("ball %d %s on the ground" % [b.index + 1, c.species])
+					why.append("ball %d %s on the ground (%.2f m up)" % [b.index + 1, c.species, b.altitude(c.global_position)])
+				# (A hopper can land on any step of its climb, so every one of them must be up off the moss.)
+				if c.species == "hopper":
+					var hop := c as LeafHopper
+					for si in hop.steps.size():
+						var perch := hop._perch(si)
+						if b.altitude(perch) < 1.0:
+							why.append("ball %d hopper perch %d at %.2f m" % [b.index + 1, si, b.altitude(perch)])
+							break
 			"puffer":
 				if b.altitude(c.global_position) < 1.2:
 					why.append("ball %d puffer low" % (b.index + 1))
@@ -1847,7 +1855,10 @@ func _test_restoration_gates() -> void:
 	await t.frames(1)
 	b.restore_event("probe_resume", res.global_position)
 	var at_once := res.is_open and res.global_transform.origin.distance_to(res.open_xf.origin) < 0.01
-	t.check("gate_open_on_resume", at_once, "open in the same frame %s (zone %s, gates on ball %d)" % [at_once, str(b.zones.get("probe_resume", {})), b.gates.size()])
+	# (And its collision with it: the body, not only the drawn node, stands open.)
+	await t.frames(2)
+	var solid_res: float = top_hit.call(res)
+	t.check("gate_open_on_resume", at_once and solid_res < 0.05, "open in the same frame %s, solid at its open top within %.3f m (zone %s, gates on ball %d)" % [at_once, solid_res, str(b.zones.get("probe_resume", {})), b.gates.size()])
 	for gt in [rise, grow, res]:
 		b.gates.erase(gt)
 		b.zones.erase(gt.zone_id)

@@ -217,8 +217,11 @@ func _snail(b: MossBall, p0: Vector3, p1: Vector3, i: int) -> void:
 
 
 func _hopper(b: MossBall, steps: Array, start: int, i: int) -> void:
-	if steps.size() >= 3:
-		LeafHopper.new().place(b, steps, start, _seed(b, "hopper", i))
+	# (Only the leaves of the climb: a first step at the moss would drop it to the ground when it
+	# leaps back down from the top.)
+	var up_steps := steps.filter(func(s: Vector3) -> bool: return b.altitude(s) >= 1.2)
+	if up_steps.size() >= 3:
+		LeafHopper.new().place(b, up_steps, start, _seed(b, "hopper", i))
 
 
 ## A crab guards a grotto's mouth: beside the approach, facing out.
