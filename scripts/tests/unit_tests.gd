@@ -14,10 +14,10 @@ func run(runner) -> void:
 	p.use_bot_input = true
 	await t.seconds(0.5)
 	var only: String = Settings.test_args.get("only", "")
-	for name_ in ["_test_startup", "_test_ota_and_version", "_test_mesh_winding", "_test_terrain", "_test_ravines", "_test_terrain_grounded", "_test_no_floating_platforms", "_test_parasite_locomotion", "_test_parasite_body_and_death", "_test_parasite_combat", "_test_gill_look", "_test_gill_idles", "_test_gill_colours", "_test_gill_patterns", "_test_tail_whip", "_test_ambient_sway", "_test_placements", "_test_tutorial_route", "_test_sphere_walk", "_test_jump_and_burst", "_test_coyote_and_buffer", "_test_swipe_direction_and_stages", "_test_hard_landing", "_test_food", "_test_food_reach", "_test_darter_and_burrower", "_test_food_repopulates", "_test_motes", "_test_checkpoint_and_regen", "_test_crumble", "_test_restoration_gates", "_test_bubble_columns", "_test_restoration_continuity", "_test_health_map", "_test_vortex", "_test_current", "_test_canopy", "_test_canopy_plain_jumps", "_test_climbs_physical", "_test_jungle_ladders_physical", "_test_leaf_geometry", "_test_leaf_footing", "_test_caves", "_test_mounds", "_test_vegetation", "_test_vortex_mouths_clear", "_test_route_audit", "_test_new_areas", "_test_ecosystem", "_test_music", "_test_run_clock", "_test_completion_catalog", "_test_completion_frozen", "_test_run_save_file", "_test_run_timer_live", "_test_run_continue", "_test_timer_integrity", "_test_resume_points_safe", "_phase_continue_write", "_phase_continue_read", "_test_upgrades", "_test_ui", "_test_menu_scrollbar", "_test_tier2_rules", "_test_tier2_world", "_test_ambient_fish", "_test_parasite_never_buried", "_test_tier2_loadout", "_test_aquarium_experiences", "_test_all_clear", "_test_treasure_unlock", "_test_treasure_generation", "_test_treasure_play"]:
+	for name_ in ["_test_startup", "_test_ota_and_version", "_test_mesh_winding", "_test_terrain", "_test_ravines", "_test_terrain_grounded", "_test_no_floating_platforms", "_test_parasite_locomotion", "_test_parasite_body_and_death", "_test_parasite_combat", "_test_gill_look", "_test_gill_idles", "_test_gill_colours", "_test_gill_patterns", "_test_tail_whip", "_test_ambient_sway", "_test_placements", "_test_tutorial_route", "_test_sphere_walk", "_test_jump_and_burst", "_test_coyote_and_buffer", "_test_swipe_direction_and_stages", "_test_hard_landing", "_test_food", "_test_food_reach", "_test_darter_and_burrower", "_test_food_repopulates", "_test_motes", "_test_checkpoint_and_regen", "_test_crumble", "_test_restoration_gates", "_test_bubble_columns", "_test_restoration_continuity", "_test_health_map", "_test_vortex", "_test_current", "_test_canopy", "_test_canopy_plain_jumps", "_test_climbs_physical", "_test_jungle_ladders_physical", "_test_leaf_geometry", "_test_leaf_footing", "_test_caves", "_test_mounds", "_test_vegetation", "_test_vortex_mouths_clear", "_test_route_audit", "_test_new_areas", "_test_ecosystem", "_test_music", "_test_run_clock", "_test_completion_catalog", "_test_completion_frozen", "_test_run_save_file", "_test_run_timer_live", "_test_run_continue", "_test_timer_integrity", "_test_resume_points_safe", "_phase_continue_write", "_phase_continue_read", "_test_upgrades", "_test_ui", "_test_menu_scrollbar", "_test_tier2_rules", "_test_tier2_world", "_test_ambient_fish", "_test_parasite_never_buried", "_test_tier2_loadout", "_test_aquarium_experiences", "_test_all_clear", "_test_treasure_unlock", "_test_treasure_generation", "_test_treasure_play", "_phase_treasure_stress"]:
 		# "_phase_*" tests are halves of a relaunch test: they run only when asked for by name
 		# (in a child process started by _test_run_continue).
-		if name_.begins_with("_phase") and only != name_:
+		if name_.begins_with("_phase") and not only.split(",", false).has(name_):
 			continue
 		# (--only may list several, comma-separated: to run tests together in one process.)
 		var picked := only == ""
@@ -6087,7 +6087,14 @@ func _test_treasure_generation() -> void:
 func _approach(b: MossBall, target: Vector3) -> Vector3:
 	var up := b.up_at(target)
 	var fr := MossBall.frame_at(up, 0.0)
-	# Up on a leaf or rock, or in a cave: a spot on the same surface beside it.
+	# Up on a leaf or rock: the spot beside it the game promised when it chose the place.
+	if b.altitude(target) > 0.5:
+		var tg: Dictionary = TreasureHunt.current(g.treasure.st())
+		if str(tg.get("spot", "")) in ["leaf", "rock"]:
+			var ap := TreasureHunt.approach_point(b, TreasureHunt.target_pos(tg), float(tg.get("scale", 1.0)))
+			if ap != Vector3.INF:
+				return ap
+	# In a cave (or anywhere else): a spot on the same surface beside it.
 	if b.altitude(target) > 0.5 or not TreasureHunt.spot_ok(b, target, 0.3):
 		var space := g.get_world_3d().direct_space_state
 		for dist in [1.6, 2.1, 1.2]:
@@ -6121,7 +6128,20 @@ func _lunge_at_current(tp: TreasurePlay) -> bool:
 	place_at(b.index, from + b.up_at(from) * 0.1, dir - b.up_at(from) * dir.dot(b.up_at(from)))
 	await t.seconds(0.4)
 	var idx0 := int(st["index"])
+	tp.near_miss = INF
 	for tries in 3:
+		if tries > 0:
+			# (As a player would after a miss: step round it and try from another side.)
+			var side := target - p.global_position
+			side -= p.up * side.dot(p.up)
+			var around := target - side.normalized().rotated(p.up, 1.75 * (1.0 if tries == 1 else -1.0)) * 1.8
+			for k in 60:
+				var fl: Vector3 = around - p.global_position
+				fl -= p.up * fl.dot(p.up)
+				if fl.length() < 0.4:
+					break
+				stick_toward(fl.normalized())
+				await t.frames(2)
 		# Walk up close, then lunge (as a player would).
 		for k in 90:
 			var flat: Vector3 = target - p.global_position
@@ -6136,6 +6156,52 @@ func _lunge_at_current(tp: TreasurePlay) -> bool:
 		if int(st["index"]) > idx0:
 			return true
 	return false
+
+
+## Stress (run by name only, after _test_all_clear): --hunts=N seeded hunts from --seed0, every
+## object attempted by a real approach and lunge; each miss is logged (seed, kind, spot, world,
+## position) and then skipped so the rest of the hunt is still tried.
+func _phase_treasure_stress() -> void:
+	_make_complete()
+	var tp: TreasurePlay = g.treasure
+	var hunts := int(Settings.test_args.get("hunts", "8"))
+	var seed0 := int(Settings.test_args.get("seed0", "1000"))
+	var tried := 0
+	var missed := []
+	for h in hunts:
+		_treasure_reset()
+		var st: Dictionary = tp.st()
+		# (Every other hunt a second hunt, so both sizes are covered.)
+		if h % 2 == 1:
+			TreasureHunt.begin_hunt(st, g.balls, seed0 + h * 7919 + 1)
+		TreasureHunt.begin_hunt(st, g.balls, seed0 + h * 7919)
+		st["active"] = true
+		tp._despawn()
+		tp.refresh()
+		await t.frames(3)
+		for i in TreasureHunt.COUNT:
+			var tg: Dictionary = TreasureHunt.current(st)
+			tried += 1
+			if await _lunge_at_current(tp):
+				await _until(func(): return not tp.celebrating, 8.0)
+				await t.frames(2)
+				if tp.panel.card_open():
+					tp.panel._close_card()
+			else:
+				var b: MossBall = g.balls[int(tg["world"])]
+				var pos := TreasureHunt.target_pos(tg)
+				var from := _approach(b, tp.node.global_position if tp.node else pos)
+				missed.append("%s/%s" % [tg["kind"], tg.get("spot", "")])
+				t.log_line("STRESS MISS seed %d hunt %d idx %d kind %s spot %s world %d scale %.2f pos %s alt %.2f approach %s (%.2f m) reach %.2f near miss %.2f, him at %s" % [
+						int(st["seed"]), int(st["hunt"]), i, tg["kind"], tg.get("spot", ""), int(tg["world"]) + 1, float(tg.get("scale", 1.0)),
+						str(pos.snapped(Vector3.ONE * 0.01)), b.altitude(pos), str(from.snapped(Vector3.ONE * 0.01)) if from != Vector3.INF else "none",
+						from.distance_to(pos) if from != Vector3.INF else -1.0, tp.reach(), tp.near_miss, str(p.global_position.snapped(Vector3.ONE * 0.01))])
+				TreasureHunt.collect(st, int(st["index"]))
+				tp._despawn()
+				tp.refresh()
+				await t.frames(3)
+	t.log_line("STRESS %d of %d collected; misses %s" % [tried - missed.size(), tried, str(missed)])
+	t.check("treasure_stress_all_collectible", missed.is_empty(), "%d missed of %d" % [missed.size(), tried])
 
 
 func _full_scale(kind: String) -> float:
@@ -6254,6 +6320,35 @@ func _test_treasure_play() -> void:
 	var fixed := TreasureHunt.current(st)
 	t.check("treasure_bad_spot_recovered", fixed["kind"] == cur["kind"] and int(fixed["world"]) == int(cur["world"]) and int(st["index"]) == 1
 			and TreasureHunt.spot_ok(cw, TreasureHunt.target_pos(fixed), float(fixed["scale"])) and int(fixed.get("recovered", 0)) == 1, "")
+	# dev-000030 (2026-09-29): tower and shelf tops with no room beside the object could hold it, so a
+	# hunt could not be finished. Those tops are no longer hiding places, and a saved hunt whose
+	# current object sits on one moves it (same world, same object) when it is shown.
+	# (Each checked at the size that had no room: the world-2 top has room for a half-size object.)
+	var perch_bad := [[2, Vector3(-67.37, -17.74, -127.34), 1.0], [2, Vector3(-67.37, -17.74, -127.34), 0.5],
+			[2, Vector3(-65.43, -19.99, -127.99), 1.0], [2, Vector3(-65.43, -19.99, -127.99), 0.5], [1, Vector3(160.5, -21.69, -17.13), 1.0]]
+	var perch_rejected := 0
+	for pb in perch_bad:
+		if not TreasureHunt.target_ok(g.balls[pb[0]], {"spot": "rock", "pos": [pb[1].x, pb[1].y, pb[1].z], "scale": pb[2]}):
+			perch_rejected += 1
+	var cur2: Dictionary = TreasureHunt.current(st)
+	var cur2_was := cur2.duplicate(true)
+	cur2["world"] = float(perch_bad[0][0])
+	cur2["spot"] = "rock"
+	cur2["pos"] = [perch_bad[0][1].x, perch_bad[0][1].y, perch_bad[0][1].z]
+	tp.stop()
+	tp.start()
+	await t.frames(3)
+	var perch_moved: Dictionary = TreasureHunt.current(st)
+	var perch_mb: MossBall = g.balls[int(perch_moved["world"])]
+	var perch_moved_ok: bool = int(perch_moved["world"]) == perch_bad[0][0] and TreasureHunt.target_pos(perch_moved).distance_to(perch_bad[0][1]) > 0.5 \
+			and TreasureHunt.target_ok(perch_mb, perch_moved)
+	t.check("treasure_no_perch_without_room", perch_rejected == 5 and perch_moved_ok, "%d of 5 bad tops rejected; moved to %s (%s)" % [perch_rejected, str(TreasureHunt.target_pos(perch_moved).round()), perch_moved.get("spot", "")])
+	# (Back to the hunt as it was, for the rest of the test.)
+	for key in cur2_was:
+		cur2[key] = cur2_was[key]
+	tp._despawn()
+	tp.refresh()
+	await t.frames(3)
 	# The rest of the first hunt, each by a real lunge; then the finish.
 	var found := 1
 	var misses := []

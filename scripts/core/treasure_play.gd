@@ -26,6 +26,8 @@ var node_index := -1
 var celebrating := false
 ## The last find, for tests and diagnostics: {index, kind, at, final}.
 var last := {}
+## The nearest a lunge came to the current object without collecting it (m beyond reach; tests).
+var near_miss := INF
 var _rng := RandomNumberGenerator.new()
 
 
@@ -168,7 +170,9 @@ func try_collect(p: Axolotl, chest: Vector3, tip: Vector3) -> bool:
 	if not hunting() or celebrating or node == null or p.ball != g.balls[node_index_world()]:
 		return false
 	var c := target_center()
-	if seg_dist(c, chest, tip) > reach():
+	var d := seg_dist(c, chest, tip)
+	if d > reach():
+		near_miss = minf(near_miss, d - reach())
 		return false
 	_collect(p, c)
 	return true

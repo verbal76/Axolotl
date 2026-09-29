@@ -29,6 +29,8 @@ const OFFSET_MAX := 9.0
 const SPREAD := 0.35
 const AVOID_PREVIOUS := 6.0
 ## Terrain, platforms and leaves (what blocks or buries a treasure).
+## No hiding place within this of a vortex pool's mouth (m, along the ground).
+const VORTEX_CLEAR := 7.0
 const SOLID_MASK := 1 | 2 | 8
 ## Where a treasure can be (owner): out on the ground, hidden in tall grass, high up on a leaf, on
 ## top of a rock, or in a cave. The first hunt mostly keeps to the ground and the grass, with a few
@@ -266,7 +268,7 @@ static func perch_point(b: MossBall, top: Vector3, scale: float) -> Dictionary:
 	var col: Object = hit["collider"]
 	if not col is StaticBody3D or col in b.crumbles:
 		return {}
-	if not perch_ok(b, p, scale):
+	if not perch_ok(b, p, scale) or not perch_approach(b, p, scale) or not clear_of_vortices(b, p):
 		return {}
 	var leaf: bool = (col as Node).has_meta("leaves") or (col as Node).get_parent().has_meta("leaves")
 	return {"pos": p, "cover": 2, "spot": "leaf" if leaf else "rock"}
@@ -294,6 +296,49 @@ static func perch_ok(b: MossBall, p: Vector3, scale: float) -> bool:
 	if not space.intersect_shape(q, 1).is_empty():
 		return false
 	return space.intersect_ray(PhysicsRayQueryParameters3D.create(p + up * 0.2, p + up * 1.3, SOLID_MASK)).is_empty()
+
+
+## Up on a leaf or stone there must be room for him beside it: a standable spot on the same surface
+## within a lunge of it (level, clear for his body, a clear line to its middle). A tower or shelf
+## top the object would fill is not a hiding place: he could not stand there to collect it.
+static func perch_approach(b: MossBall, p: Vector3, scale: float) -> bool:
+	return approach_point(b, p, scale) != Vector3.INF
+
+
+## The standable spot beside a perch that perch_approach found (INF if none).
+static func approach_point(b: MossBall, p: Vector3, scale: float) -> Vector3:
+	var space := b.get_world_3d().direct_space_state
+	var up := b.up_at(p)
+	var fr := MossBall.frame_at(up, 0.0)
+	var size := 1.3 * scale
+	var body := SphereShape3D.new()
+	body.radius = 0.3
+	for dist in [1.1 + size * 0.2, 1.5 + size * 0.2, 0.8 + size * 0.2]:
+		for k in 12:
+			var o: Vector3 = p + fr.z.rotated(up, TAU * k / 12.0) * dist
+			var h := space.intersect_ray(PhysicsRayQueryParameters3D.create(o + up * 1.0, o - up * 1.0, SOLID_MASK))
+			if h.is_empty() or absf(((h["position"] as Vector3) - p).dot(up)) > 0.3 or (h["normal"] as Vector3).dot(up) < 0.75:
+				continue
+			var q: Vector3 = h["position"]
+			# Firm footing under all of him, not a sliver at the edge.
+			var firm := true
+			for j in 4:
+				var f := q + fr.x.rotated(up, TAU * j / 4.0) * 0.25
+				var fh := space.intersect_ray(PhysicsRayQueryParameters3D.create(f + up * 0.5, f - up * 0.5, SOLID_MASK))
+				if fh.is_empty() or absf(((fh["position"] as Vector3) - q).dot(up)) > 0.2:
+					firm = false
+					break
+			if not firm:
+				continue
+			var qs := PhysicsShapeQueryParameters3D.new()
+			qs.shape = body
+			qs.transform = Transform3D(Basis(), q + up * 0.36)
+			qs.collision_mask = SOLID_MASK
+			if not space.intersect_shape(qs, 1).is_empty():
+				continue
+			if space.intersect_ray(PhysicsRayQueryParameters3D.create(q + up * 0.45, p + up * (size * 0.45), SOLID_MASK)).is_empty():
+				return q
+	return Vector3.INF
 
 
 ## Spots on a cave's floor (it is walked in by its door): round its middle, each in plain sight of
@@ -327,7 +372,9 @@ static func target_ok(b: MossBall, t: Dictionary) -> bool:
 	var pos := target_pos(t)
 	var scale := float(t.get("scale", 1.0))
 	match str(t.get("spot", "ground")):
-		"leaf", "rock", "cave":
+		"leaf", "rock":
+			return perch_ok(b, pos, scale) and perch_approach(b, pos, scale) and clear_of_vortices(b, pos)
+		"cave":
 			return perch_ok(b, pos, scale)
 		_:
 			return spot_ok(b, pos, scale)
@@ -426,6 +473,17 @@ static func _choose(b: MossBall, cands: Array, chosen: Array[Vector3], avoid: Ar
 ## A treasure of `scale` can rest at ground point `p`: on the terrain surface (not buried, not
 ## floating), not on or in a ravine, fairly level, nothing solid where it would sit, room above for
 ## him to come at it, inside the tank.
+## Well away from the world's vortex pools: going for it must never sweep him off to another world.
+static func clear_of_vortices(b: MossBall, p: Vector3) -> bool:
+	for v in b.vortices:
+		var m: Vector3 = (v as Vortex).mouth_pos((v as Vortex).ball_b == b)
+		var d := p - m
+		var up := b.up_at(m)
+		if (d - up * d.dot(up)).length() < VORTEX_CLEAR:
+			return false
+	return true
+
+
 static func spot_ok(b: MossBall, p: Vector3, scale: float) -> bool:
 	var dir := (p - b.global_position).normalized()
 	if b.ravine_at(dir) != "" or b.ravine_carve(dir) > 0.15:
@@ -433,7 +491,7 @@ static func spot_ok(b: MossBall, p: Vector3, scale: float) -> bool:
 	if absf(b.altitude(p)) > 0.5:
 		return false
 	var box := AABB(Aquarium.TANK_MIN, Aquarium.TANK_MAX - Aquarium.TANK_MIN)
-	if not box.has_point(p):
+	if not box.has_point(p) or not clear_of_vortices(b, p):
 		return false
 	var space := b.get_world_3d().direct_space_state
 	var up := b.up_at(p)

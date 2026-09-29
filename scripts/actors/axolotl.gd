@@ -351,10 +351,14 @@ func _physics_process(dt: float) -> void:
 		if wish.length() > 0.2:
 			facing = wish.normalized()
 		_lunge_food = Game.inst.lunge_target(self, facing)
-		# Treasure Hunt: the same aim help toward the object he is after (when no food is nearer).
-		if _lunge_food == null and Game.inst.treasure != null:
+		# Treasure Hunt: the same aim help toward the object he is after, unless food is nearer (then
+		# the lunge goes for the food, as always).
+		if Game.inst.treasure != null:
 			var tc: Vector3 = Game.inst.treasure.aim(self, facing)
+			if tc != Vector3.INF and _lunge_food != null and (_lunge_food as Node3D).global_position.distance_to(global_position) <= tc.distance_to(global_position):
+				tc = Vector3.INF
 			if tc != Vector3.INF:
+				_lunge_food = null
 				var flat := tc - global_position
 				flat -= up * flat.dot(up)
 				if flat.length() > 0.2:
