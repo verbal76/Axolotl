@@ -10,22 +10,25 @@ extends Node3D
 ##   gourami x2  medium, slow, solitary, curious (drift toward Gill, then away)
 ##   cory    x2  small catfish near the gravel, stopping often (timid)
 ##   angel   x1  tall and slow, high in the water (solitary, wary)
+##   bala    x3  bala sharks (owner): the largest fish, silver torpedoes with black-edged fins; a
+##               fast, skittish trio cruising the open middle and upper water (scatter together)
 ## Steering is a light boid: a wandering waypoint in the kind's depth band, a turn-rate limit,
-## schooling for tetras, and avoidance of the glass, the gravel, every moss ball and Gill. Gill
+## schooling for tetras and bala sharks, and avoidance of the glass, the gravel, every moss ball and Gill. Gill
 ## coming close alerts them; very close, or a bump, sends them darting away from him (a school
 ## scatters, then regroups). Everything runs on this node's own random generator, never the global
 ## one gameplay and the test bot rely on, so the fish never change what the game does.
 
-const COUNT := 10
+const COUNT := 13
 ## Tank interior (a margin inside the glass, above the gravel).
 const MARGIN := 10.0
 const KINDS := {
 	"tetra": {"len": 4.0, "speed": 7.0, "turn": 2.6, "band": [0.35, 0.7], "school": true, "timid": 1.0, "col": [Color(0.3, 0.55, 0.95), Color(0.95, 0.3, 0.25), Color(0.85, 0.9, 0.95)]},
 	"gourami": {"len": 8.0, "speed": 4.0, "turn": 1.3, "band": [0.25, 0.65], "school": false, "timid": 0.3, "col": [Color(0.75, 0.62, 0.45), Color(0.5, 0.65, 0.8), Color(0.92, 0.85, 0.7)]},
 	"cory": {"len": 5.0, "speed": 3.0, "turn": 2.0, "band": [0.0, 0.05], "school": false, "timid": 0.8, "col": [Color(0.62, 0.58, 0.5), Color(0.25, 0.22, 0.2), Color(0.88, 0.84, 0.78)]},
+	"bala": {"len": 11.0, "speed": 9.0, "turn": 1.6, "band": [0.45, 0.85], "school": true, "timid": 1.2, "col": [Color(0.8, 0.83, 0.86), Color(0.05, 0.05, 0.06), Color(0.9, 0.8, 0.45)]},
 	"angel": {"len": 8.5, "speed": 3.2, "turn": 1.0, "band": [0.55, 0.85], "school": false, "timid": 0.6, "col": [Color(0.88, 0.86, 0.8), Color(0.15, 0.15, 0.18), Color(0.95, 0.75, 0.35)]},
 }
-const ROSTER := ["tetra", "tetra", "tetra", "tetra", "tetra", "gourami", "gourami", "cory", "cory", "angel"]
+const ROSTER := ["tetra", "tetra", "tetra", "tetra", "tetra", "gourami", "gourami", "cory", "cory", "angel", "bala", "bala", "bala"]
 const FISH_SHADER := preload("res://shaders/ambient_fish.gdshader")
 
 var fish: Array = []
@@ -60,7 +63,7 @@ func _spawn(kind: String, i: int) -> void:
 	mi.material_override = mat
 	mi.cast_shadow = GeometryInstance3D.SHADOW_CASTING_SETTING_OFF
 	mi.set_instance_shader_parameter("phase", rng.randf() * TAU)
-	mi.set_instance_shader_parameter("wag", 7.0 if kind == "tetra" else 4.0)
+	mi.set_instance_shader_parameter("wag", {"tetra": 7.0, "bala": 4.5}.get(kind, 4.0))
 	mi.set_instance_shader_parameter("size", k["len"] * 0.5)
 	add_child(mi)
 	var pos := _free_point(kind)
@@ -107,20 +110,22 @@ func _gill_point() -> Vector3:
 func step(dt: float, gill: Vector3) -> void:
 	if dt <= 0.0:
 		return
-	# The tetras' school: its centre and heading.
-	var sc := Vector3.ZERO
-	var sv := Vector3.ZERO
-	var sn := 0
+	# Each schooling kind's school (the tetras, the bala sharks): its centre and heading.
+	var schools := {}
 	for f in fish:
-		if f["kind"] == "tetra":
-			sc += f["pos"]
-			sv += f["vel"]
-			sn += 1
-	if sn > 0:
-		sc /= sn
-		sv /= sn
+		if KINDS[f["kind"]]["school"]:
+			var sch: Array = schools.get(f["kind"], [Vector3.ZERO, Vector3.ZERO, 0])
+			sch[0] += f["pos"]
+			sch[1] += f["vel"]
+			sch[2] += 1
+			schools[f["kind"]] = sch
+	for kind in schools:
+		var sch: Array = schools[kind]
+		sch[0] /= sch[2]
+		sch[1] /= sch[2]
 	for f in fish:
-		_steer(f, dt, gill, sc, sv, sn)
+		var sch: Array = schools.get(f["kind"], [Vector3.ZERO, Vector3.ZERO, 0])
+		_steer(f, dt, gill, sch[0], sch[1], sch[2])
 
 
 func _steer(f: Dictionary, dt: float, gill: Vector3, sc: Vector3, sv: Vector3, sn: int) -> void:
@@ -139,11 +144,11 @@ func _steer(f: Dictionary, dt: float, gill: Vector3, sc: Vector3, sv: Vector3, s
 	if f["pause_t"] > 0.0:
 		f["pause_t"] -= dt
 		want *= 0.12
-	# Schooling (tetras): toward the school, along its heading, not too close to each other.
+	# Schooling (tetras, bala sharks): toward the school, along its heading, not too close.
 	if k["school"] and sn > 1 and f["alarm"] < 0.5:
 		want = want * 0.45 + (sc - pos).limit_length(1.0) * speed * 0.35 + sv.limit_length(speed) * 0.35
 		for o in fish:
-			if o != f and o["kind"] == "tetra":
+			if o != f and o["kind"] == f["kind"]:
 				var d: Vector3 = pos - (o["pos"] as Vector3)
 				var gap: float = k["len"] * 1.3
 				if d.length() < gap and d.length() > 0.001:
@@ -159,7 +164,7 @@ func _steer(f: Dictionary, dt: float, gill: Vector3, sc: Vector3, sv: Vector3, s
 			f["flee"] = (-to_g).normalized() * speed * (1.8 + react)
 			if k["school"]:
 				for o in fish:
-					if o["kind"] == "tetra" and (o["pos"] as Vector3).distance_to(pos) < body_len * 3.0:
+					if o["kind"] == f["kind"] and (o["pos"] as Vector3).distance_to(pos) < body_len * 3.0:
 						o["alarm"] = maxf(o["alarm"], 0.8)
 						o["flee"] = ((o["pos"] as Vector3) - gill).normalized() * speed * 2.2
 		elif dg < 7.0 + body_len * 1.5 and f["kind"] == "gourami" and f["alarm"] <= 0.0:
@@ -250,6 +255,9 @@ func _mesh_for(kind: String) -> ArrayMesh:
 		"cory":
 			h_scale = 0.85
 			w_scale = 0.75
+		"bala":
+			h_scale = 0.95
+			w_scale = 0.45
 	var st := SurfaceTool.new()
 	st.begin(Mesh.PRIMITIVE_TRIANGLES)
 	var rings := 12
@@ -278,6 +286,13 @@ func _mesh_for(kind: String) -> ArrayMesh:
 					c = cols[1] if fmod(u * 3.2, 1.0) < 0.28 else cols[0]
 				"gourami":
 					c = cols[0].lerp(cols[1], 0.5 + 0.5 * sin(a + u * 5.0)) if sin(a) > -0.3 else cols[2]
+				"bala":
+					# Silver, a darker steel back and a faint lateral line.
+					c = cols[0].darkened(0.3).lerp(Color(0.45, 0.52, 0.6), 0.4) if sin(a) > 0.55 else cols[0]
+					if absf(sin(a)) < 0.12 and u > 0.15 and u < 0.9:
+						c = cols[0].darkened(0.18)
+					if sin(a) < -0.6:
+						c = cols[0].lightened(0.15)
 				"cory":
 					c = cols[1] if (fmod(u * 7.0 + a, 1.3) < 0.3 and sin(a) > 0.0) else (cols[2] if sin(a) < -0.4 else cols[0])
 			st.set_color(c)
@@ -294,9 +309,11 @@ func _mesh_for(kind: String) -> ArrayMesh:
 	var fin_col: Color = cols[2] if kind != "tetra" else Color(0.9, 0.95, 1.0, 1.0)
 	var tail := Vector3(0, 0, L)
 	var tail_h := L * (0.5 if kind != "angel" else 0.9)
+	# (Bala sharks' fins are yellowish with black edges: their outer points are black.)
+	var edge_col: Color = cols[1] if kind == "bala" else fin_col
 	var tri := func(p0: Vector3, p1: Vector3, p2: Vector3, u0: float, u1: float, u2: float) -> void:
-		for q in [[p0, u0], [p1, u1], [p2, u2]]:
-			st.set_color(fin_col)
+		for q in [[p0, u0, fin_col], [p1, u1, edge_col], [p2, u2, fin_col]]:
+			st.set_color(q[2])
 			st.set_uv(Vector2(q[1], 0))
 			st.add_vertex(q[0])
 		st.add_index(base)
@@ -309,7 +326,13 @@ func _mesh_for(kind: String) -> ArrayMesh:
 	tri.call(tail - Vector3(0, 0, L * 0.12), tail + Vector3(0, tail_h, L * 0.55), tail + Vector3(0, 0, L * 0.3), 0.95, 1.2, 1.1)
 	tri.call(tail - Vector3(0, 0, L * 0.12), tail + Vector3(0, -tail_h, L * 0.55), tail + Vector3(0, 0, L * 0.3), 0.95, 1.2, 1.1)
 	var dors_h := L * (0.25 if kind != "angel" else 0.95)
-	tri.call(Vector3(0, L * 0.3 * h_scale, -L * 0.1), Vector3(0, L * 0.3 * h_scale + dors_h, L * 0.35), Vector3(0, L * 0.25 * h_scale, L * 0.45), 0.45, 0.7, 0.72)
+	# (Rooted a little inside the back, so it never floats off a slim body.)
+	var dy := L * (0.2 if kind == "bala" else 0.3) * h_scale
+	tri.call(Vector3(0, dy, -L * 0.1), Vector3(0, dy + dors_h * (1.5 if kind == "bala" else 1.0), L * 0.35), Vector3(0, dy * 0.85, L * 0.45), 0.45, 0.7, 0.72)
+	if kind == "bala":
+		# Pelvic and anal fins under the body.
+		tri.call(Vector3(0, -L * 0.18 * h_scale, -L * 0.2), Vector3(0, -L * 0.18 * h_scale - L * 0.2, L * 0.02), Vector3(0, -L * 0.16 * h_scale, L * 0.05), 0.35, 0.45, 0.47)
+		tri.call(Vector3(0, -L * 0.12 * h_scale, L * 0.3), Vector3(0, -L * 0.12 * h_scale - L * 0.17, L * 0.5), Vector3(0, -L * 0.1 * h_scale, L * 0.55), 0.62, 0.74, 0.76)
 	if kind == "angel":
 		tri.call(Vector3(0, -L * 0.3 * h_scale, -L * 0.05), Vector3(0, -L * 0.3 * h_scale - dors_h, L * 0.4), Vector3(0, -L * 0.25 * h_scale, L * 0.45), 0.45, 0.72, 0.72)
 	# Eyes: two dark discs.

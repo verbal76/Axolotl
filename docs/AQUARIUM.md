@@ -32,7 +32,7 @@ on render layer `Aquarium.ROOM_LAYER` (2).
 
 ## Ambient fish (`scripts/world/ambient_fish.gd`, `shaders/ambient_fish.gdshader`)
 
-There are 10 fish at a middle scale, about 6–14× Gill's length (owner decision):
+There are 13 fish at a middle scale, about 6–18× Gill's length (owner decision):
 
 | Kind | Count | Behaviour |
 |---|---|---|
@@ -40,6 +40,7 @@ There are 10 fish at a middle scale, about 6–14× Gill's length (owner decisio
 | Gourami | 2 | Slow and curious |
 | Cory | 2 | Stay near the gravel and stop often |
 | Angel | 1 | Tall, slow and high in the water |
+| Bala shark | 3 | Owner-requested, and the largest fish (length 11). Silver torpedoes with black-edged yellow fins: a fast, skittish trio cruising the open middle and upper water. They bolt together and regroup. |
 
 - **Steering.** A light boid steers them: a wandering waypoint in each kind's depth band, a
   turn-rate limit, and avoidance of the glass, the gravel and every moss ball (with a margin).
@@ -48,7 +49,8 @@ There are 10 fish at a middle scale, about 6–14× Gill's length (owner decisio
 - **Noncombatants.** They are never targeted, never hurt and never completion entries.
 - **Randomness.** They use their own random generator, never the global one, so the playthroughs are
   unchanged.
-- **Test:** `_test_ambient_fish` (5 checks).
+- **Test:** `_test_ambient_fish` (6 checks, including `bala_trio_bolts_and_regroups`).
+- **Renders:** `--test=shots --only=bala`.
 
 ## Bedroom (`scripts/world/bedroom.gd`, `tools/gen_room.py`)
 

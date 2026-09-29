@@ -417,6 +417,12 @@ func run(runner) -> void:
 		g.g_disp = 1.0
 		g.aquarium.apply(1.0)
 		await _room_shots(g, "room_clean")
+	if only == "bala":
+		for b in g.balls:
+			b.add_heal(Vector3.UP, 340.0, 0.0)
+		g.g_disp = 1.0
+		g.aquarium.apply(1.0)
+		await _bala_shots(g)
 	if only == "tier2":
 		await _tier2_shots(g)
 	if only == "aquarium":
@@ -480,6 +486,41 @@ func _room_shots(g: Game, tag: String) -> void:
 		await t.shot("%s_%s" % [tag, v[0]])
 	g.cam.cinematic = false
 	env.fog_enabled = fog
+
+
+## The bala sharks (owner): close beside the trio in Swim Mode, from the side and behind, and the
+## whole tank in Live Tank.
+func _bala_shots(g: Game) -> void:
+	var pr := g.presentation
+	pr.enter("play")
+	pr.go("swim")
+	await t.seconds(0.5)
+	var balas: Array = g.fish.fish.filter(func(f): return f["kind"] == "bala")
+	for k in 3:
+		var c := Vector3.ZERO
+		var v := Vector3.ZERO
+		for f in balas:
+			c += f["pos"]
+			v += f["vel"]
+		c /= balas.size()
+		var fwd := Vector3(v.x, 0, v.z).normalized() if Vector3(v.x, 0, v.z).length() > 0.1 else Vector3.FORWARD
+		var side := fwd.cross(Vector3.UP).normalized()
+		var off: Vector3 = [side * 9.0, -fwd * 11.0 + Vector3.UP * 2.0, side * -7.0 + fwd * 8.0][k]
+		pr.swimmer.global_position = c + off
+		pr.swimmer.velocity = Vector3.ZERO
+		var look := (c - pr.swimmer.global_position).normalized()
+		pr.swimmer.cam_yaw = atan2(-look.x, -look.z)
+		pr.swimmer.cam_pitch = asin(clampf(look.y, -1.0, 1.0))
+		pr.swimmer.model.visible = false
+		await t.frames(3)
+		await t.shot("bala_%d" % k)
+		pr.swimmer.model.visible = true
+		await t.seconds(1.5)
+	pr.go("live")
+	pr.live_view = 0
+	await t.seconds(3.0)
+	await t.shot("bala_live")
+	pr.exit()
 
 
 ## Tier 2 (docs/TIER2.md): each ability mid-effect at the World 3 shrine's practice targets, the

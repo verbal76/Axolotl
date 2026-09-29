@@ -4516,7 +4516,7 @@ func _test_ambient_fish() -> void:
 	var kinds := {}
 	for f in af.fish:
 		kinds[f["kind"]] = int(kinds.get(f["kind"], 0)) + 1
-	t.check("fish_ten_of_four_kinds", af.fish.size() == AmbientFish.COUNT and kinds.size() == 4, str(kinds))
+	t.check("fish_thirteen_of_five_kinds", af.fish.size() == AmbientFish.COUNT and AmbientFish.COUNT == 13 and kinds.size() == 5 and kinds.get("bala", 0) == 3, str(kinds))
 	var targeted := 0
 	for b in g.balls:
 		var saved := p.ball
@@ -4571,6 +4571,27 @@ func _test_ambient_fish() -> void:
 	for f in tets:
 		spread = maxf(spread, c.distance_to(f["pos"]))
 	t.check("fish_scatter_then_regroup", d1 > d0 + 3.0 and alarmed >= 2 and calm and spread < 30.0, "darted %.1f -> %.1f m; %d tetras alarmed; calm again %s; school within %.1f m" % [d0, d1, alarmed, calm, spread])
+	# The bala sharks (owner): the largest fish, a skittish trio that bolts together and regroups.
+	var balas := af.fish.filter(func(f): return f["kind"] == "bala")
+	var bl: Dictionary = balas[0]
+	var bgill: Vector3 = (bl["pos"] as Vector3) + Vector3(0.8, 0, 0)
+	var bd0: float = bgill.distance_to(bl["pos"])
+	for i in 45:
+		af.step(1.0 / 60.0, bgill)
+	var bd1: float = bgill.distance_to(bl["pos"])
+	var b_alarmed := balas.filter(func(f): return f["alarm"] > 0.2).size()
+	for i in 60 * 25:
+		af.step(1.0 / 60.0, Vector3.INF)
+	var bc := Vector3.ZERO
+	for f in balas:
+		bc += f["pos"]
+	bc /= balas.size()
+	var b_spread := 0.0
+	for f in balas:
+		b_spread = maxf(b_spread, bc.distance_to(f["pos"]))
+	var largest: bool = AmbientFish.KINDS.keys().all(func(k): return AmbientFish.KINDS[k]["len"] <= AmbientFish.KINDS["bala"]["len"])
+	t.check("bala_trio_bolts_and_regroups", largest and bd1 > bd0 + 4.0 and b_alarmed >= 2 and b_spread < 45.0,
+			"largest %s; darted %.1f -> %.1f; %d alarmed; trio within %.1f" % [largest, bd0, bd1, b_alarmed, b_spread])
 	for i in st.size():
 		af.fish[i]["pos"] = st[i][0]
 		af.fish[i]["vel"] = st[i][1]
