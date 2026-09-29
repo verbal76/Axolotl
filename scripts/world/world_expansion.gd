@@ -43,10 +43,17 @@ static func terrace_steps(lb: LevelBuilder) -> void:
 	var b := lb.ball
 	var R := func(dlat: float, dlon: float) -> Vector2: return _rel(3, 0, dlat, dlon)
 	b.food_weights = [0.5, 0.35, 0.15]
-	b.food_target = 6
+	b.food_target = 14
 	var land: Vector2 = R.call(0, 0)
-	lb.hill(land.x + 30, land.y + 150, 7.0, 1.4)
-	lb.hill(land.x - 60, land.y + 120, 6.0, 1.2)
+	lb.hill(land.x + 30, land.y + 150, 14.0, 2.0)
+	lb.hill(land.x - 60, land.y + 120, 12.0, 1.7)
+	# World expansion (radius 18 -> 36): the Stone Field, an upland with a sunken basin crossed
+	# on stone columns (registered before anything stands on the ground).
+	var sf: Vector2 = R.call(-45, 20)
+	var sf_dir := _dir(sf)
+	b.add_plateau(sf_dir, lb.m2deg(18.0) * PI / 180.0, 3.0, 8.0)
+	var sfp := func(x: float, z: float) -> Vector3: return lb.at(sf.x, sf.y, 0.0, x, 0, z).origin
+	lb.ravine([Levels._latlon(b.up_at(sfp.call(-4.6, 0))), Levels._latlon(b.up_at(sfp.call(4.6, 0)))], 9.0, 3.0, 1.2, "b4.stone_field")
 
 	lb.zone("landing", land.x, land.y, 26)
 	# (Clear of the vortex to Hollow Grotto, which opens about 25 degrees south-west of here.)
@@ -75,7 +82,7 @@ static func terrace_steps(lb: LevelBuilder) -> void:
 	var side := MossBall.frame_at(up_t, 0.0).x
 	# Tiers follow the ball's curve, so a point on one is its height above the local ground.
 	var tp := func(r: float, h: float) -> Vector3: return b.surface_point(b.up_at(tiers[0].global_position + side * r), h)
-	lb.route("terraces", tp.call(9.5, 0.0), [tp.call(5.8, 1.25), tp.call(2.6, 2.45), tp.call(0.4, 3.65)], ["terraces"], "terrace crown")
+	lb.route("terraces", tp.call(9.2, 0.0), [tp.call(5.8, 1.25), tp.call(2.6, 2.45), tp.call(0.4, 3.65)], ["terraces"], "terrace crown")
 	p = R.call(36, 60)
 	lb.parasite(Parasite.Kind.MEDIUM, "terraces", p.x, p.y, 9.0)
 	p = R.call(6, 58)
@@ -94,10 +101,10 @@ static func terrace_steps(lb: LevelBuilder) -> void:
 	var line: Array = arch.get_meta("top_line")
 	var mid: Vector3 = line[line.size() / 2]
 	var ll := Levels._latlon(b.up_at(mid))
-	lb.mote("arch", ll.x, ll.y + 3.0, -1.4, 1.0)   # beneath it (its search starts under the slab)
+	lb.mote("arch", ll.x, ll.y + lb.m2deg(0.95) / cos(deg_to_rad(ll.x)), -1.4, 1.0)   # beneath it (its search starts under the slab)
 	lb.mote_xf("arch", Transform3D(MossBall.frame_at(b.up_at(mid), 0.0), mid + b.up_at(mid) * 0.5), 0.5)
 	var a_start: Vector3 = b.surface_point(b.up_at(line[0]), 0.0) - (line[3] - line[0]).normalized() * 1.2
-	lb.route("arch", b.surface_point(b.up_at(a_start), 0.0), [line[4], line[9], line[line.size() / 2]], ["arch"], "arch top")
+	lb.route("arch", b.surface_point(b.up_at(a_start), 0.0), [line[2], line[4], line[9], line[line.size() / 2]], ["arch"], "arch top")
 	p = R.call(-30, -70)
 	lb.parasite(Parasite.Kind.SMALL, "arch", p.x, p.y, 8.0)
 
@@ -122,13 +129,95 @@ static func terrace_steps(lb: LevelBuilder) -> void:
 	p = R.call(30, 140)
 	lb.bloom(p.x, p.y)
 
-	for r in [[land.x, land.y, 30], [tz.x + 20, tz.y + 30, 25], [fz.x, fz.y, 35]]:
+	lb.freeze_ids()
+
+	# ---- World expansion: Terrace Steps at radius 36 ------------------------------------------
+	var gz: Vector2 = R.call(40, 120)
+	lb.zone("grand", gz.x, gz.y, 22)
+	lb.zone("field", sf.x, sf.y, 18)
+	# The Grand Terraces (four broad tiers, the safe way up: walk each ring round to its next step)
+	# and the Twin Terrace, joined at the third tier by a natural stone bridge.
+	var grand := lb.terrace(gz.x, gz.y, [[10.0, 1.2], [7.5, 2.4], [5.0, 3.6], [2.6, 4.8]])
+	var gbase: Vector3 = (grand[0] as Node3D).global_position
+	var gup := b.up_at(gbase)
+	var gfr := MossBall.frame_at(gup, 0.0)
+	var gp := func(dirv: Vector3, r: float, h: float) -> Vector3: return b.surface_point(b.up_at(gbase + dirv * r), h)
+	lb.route("grand terraces", gp.call(gfr.x, 11.9, 0.0), [gp.call(gfr.x, 8.7, 1.2), gp.call(gfr.x, 6.2, 2.4), gp.call(gfr.x, 3.8, 3.6), gp.call(gfr.x, 0.6, 4.8)], ["grand"], "the Grand Terraces' crown")
+	var gtop: Vector3 = gp.call(gfr.x, 0.0, 4.8)
+	lb.mote_xf("grand", Transform3D(MossBall.frame_at(b.up_at(gtop), 0.0), gtop + b.up_at(gtop) * 0.6), 0.5)
+	lb.bloom_xf(Transform3D(MossBall.frame_at(b.up_at(gtop), 0.0), gp.call(-gfr.x, 1.4, 4.8)))
+	var twin_dir := b.up_at(gbase + gfr.z * 19.0)
+	var twin_ll := Levels._latlon(twin_dir)
+	var twin := lb.terrace(twin_ll.x, twin_ll.y, [[6.0, 1.2], [4.0, 2.4], [2.2, 3.6]])
+	var tbase: Vector3 = (twin[0] as Node3D).global_position
+	var bridge_a: Vector3 = gp.call(gfr.z, 4.4, 3.6)
+	var tdir := (gbase - tbase).normalized()
+	var bridge_b := b.surface_point(b.up_at(tbase + tdir * 1.6), 3.6)
+	var gbr := lb.bridge(bridge_a, bridge_b, 0.4, 2.0, 0.8)
+	var gbl: Array = gbr.get_meta("top_line")
+	# (Up the side away from the bridge, round the third tier's ring to it, and across.)
+	var ring := []
+	for k in range(1, 5):
+		ring.append(gp.call(gfr.x.slerp(gfr.z, k / 4.0).normalized(), 3.9, 3.6))
+	lb.route("terrace bridge", gp.call(gfr.x, 11.9, 0.0), [gp.call(gfr.x, 8.7, 1.2), gp.call(gfr.x, 6.2, 2.4), gp.call(gfr.x, 3.9, 3.6)] + ring + [bridge_a, gbl[6], gbl[10], gbl[14], bridge_b],
+			["grand"], "the Twin Terrace over the bridge")
+	var tt := b.surface_point(b.up_at(tbase), 3.6)
+	lb.mote_xf("grand", Transform3D(MossBall.frame_at(b.up_at(tt), 0.0), tt + b.up_at(tt) * 0.6), 0.4)
+	lb.parasite(Parasite.Kind.MEDIUM, "grand", gz.x - 16, gz.y - 6, 4.0)
+	lb.parasite(Parasite.Kind.SMALL, "grand", gz.x + 12, gz.y + 22, 4.0)
+	lb.mote("grand", gz.x - 20, gz.y + 20)
+	# The Stone Field: across the basin on stone columns (the technical way, a mote on the middle
+	# one), round its rim (the safe way), or, once the landing heals, over the broad stones that
+	# rise out of the basin floor.
+	var cols := [[-1.5, -4.0], [1.2, -1.6], [-1.2, 1.0], [1.4, 3.6]]
+	var ctops := []
+	for c in cols:
+		var cd := b.up_at(sfp.call(c[0], c[1]))
+		lb.stone_column(cd, 0.75, 3.1)
+		ctops.append(b.surface_point(cd, 3.1))
+	var rim_n := b.surface_point(b.up_at(sfp.call(-1.5, -6.9)))
+	var rim_s := b.surface_point(b.up_at(sfp.call(1.4, 6.9)))
+	lb.route("stone field", rim_n, ctops, ["field"], "the far column")
+	lb.bot_hints[lb.bot_hints.size() - 1]["exit"] = [rim_s]
+	lb.crossings.append({"a": rim_n, "b": rim_s, "stones": ctops, "gate": null})
+	var mcol: Vector3 = ctops[3]
+	lb.mote_xf("field", Transform3D(MossBall.frame_at(b.up_at(mcol), 0.0), mcol + b.up_at(mcol) * 0.5), 0.3)
+	var first_stone: RestorationGate = null
+	var rtops := []
+	for z in [-3.9, -1.3, 1.3, 3.9]:
+		var rs := lb.rising_stone("landing", b.up_at(sfp.call(4.2, z)), 1.3, 3.05)
+		rtops.append(rs.get_meta("top_point"))
+		if first_stone == null:
+			first_stone = rs
+	var rs_a := b.surface_point(b.up_at(sfp.call(4.2, -6.9)))
+	var rs_b := b.surface_point(b.up_at(sfp.call(4.2, 6.9)))
+	lb.crossings.append({"a": rs_a, "b": rs_b, "gate": first_stone})
+	# (Audited as the risen path: until the landing heals the stones are buried.)
+	lb.bot_hints.append({"route": "risen stones", "audit": true, "gated": true, "start": rs_a, "tops": rtops + [rs_b], "zones": [], "goal": "across the Stone Field"})
+	lb.parasite(Parasite.Kind.SMALL, "field", sf.x + 12, sf.y - 14, 4.0)
+	lb.parasite(Parasite.Kind.SMALL, "field", sf.x - 12, sf.y + 16, 4.0)
+	lb.mote("field", sf.x + 14, sf.y + 10)
+	lb.bloom(sf.x + 16, sf.y - 2)
+	# More of the landing, the arch and the far side.
+	p = R.call(-20, -20)
+	lb.parasite(Parasite.Kind.SMALL, "landing", p.x, p.y, 5.0)
+	p = R.call(18, 20)
+	lb.mote("landing", p.x, p.y)
+	p = R.call(-40, -70)
+	lb.mote("arch", p.x, p.y)
+	p = R.call(0, 140)
+	lb.parasite(Parasite.Kind.SMALL, "far", p.x, p.y, 5.0)
+	p = R.call(-30, 170)
+	lb.mote("far", p.x, p.y)
+
+	for r in [[land.x, land.y, 24], [tz.x + 20, tz.y + 30, 20], [fz.x, fz.y, 24], [gz.x, gz.y, 16], [sf.x, sf.y, 14]]:
 		lb.food_region(r[0], r[1], r[2])
-	Levels._holes(lb, 8, 301, [[_dir(tz), 18], [_dir(cv), 14], [_dir(az), 14]])
+	Levels._holes(lb, 20, 301, [[_dir(tz), 18], [_dir(cv), 14], [_dir(az), 14], [_dir(gz), 16], [sf_dir, 14], [twin_dir, 8]])
 	# Open, low growth: sunny and readable; a few medium clumps.
-	var clear := Levels._veg_keep_clear(lb)
-	_short_cover(lb, 1800, 311, clear)
-	Vegetation.field(b, "medium", _dir(R.call(-28, 130)), 12.0, 260, 312, {"avoid": clear, "clumps": 4})
+	var clear := Levels._veg_keep_clear(lb, [[_dir(gz), 16.0], [twin_dir, 10.0], [sf_dir, 16.0]])
+	_short_cover(lb, 7000, 311, clear)
+	Vegetation.field(b, "medium", _dir(R.call(-28, 130)), 12.0, 700, 312, {"avoid": clear, "clumps": 8})
+	Vegetation.field(b, "medium", _dir(R.call(10, -110)), 10.0, 500, 313, {"avoid": clear, "clumps": 6})
 
 
 # =========================================================================================

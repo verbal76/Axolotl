@@ -601,7 +601,8 @@ func _test_route_audit() -> void:
 					prev = tp
 					continue
 				var hit := _floor_probe(space, tp, up)
-				var floor_ok := not hit.is_empty() and rad_to_deg((hit["normal"] as Vector3).angle_to(up)) < 52.0
+				# (A path that rises once a zone heals is checked as risen: its spacing, not its floor.)
+				var floor_ok: bool = h.get("gated", false) or (not hit.is_empty() and rad_to_deg((hit["normal"] as Vector3).angle_to(up)) < 52.0)
 				var qh := PhysicsRayQueryParameters3D.create(tp + up * 0.2, tp + up * 1.4, p.collision_mask)
 				var head_ok := space.intersect_ray(qh).is_empty()
 				var rise := (tp - prev).dot(up)

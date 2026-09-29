@@ -517,6 +517,40 @@ func stone_column(dir: Vector3, radius: float, height: float) -> StaticBody3D:
 	return body
 
 
+## A stepping stone that rises out of the ground at `dir` to `height` when `zone` heals
+## (RestorationGate "rise": buried until then; it never rises into him). Flat mossy top;
+## collision is its drawn faces.
+func rising_stone(zone_id: String, dir: Vector3, radius: float, height: float) -> RestorationGate:
+	var open_xf := ball.xform_on_dir(dir)
+	var closed_xf := open_xf.translated_local(Vector3(0, -height - 0.4, 0))
+	var cm := CylinderMesh.new()
+	cm.top_radius = radius
+	cm.bottom_radius = radius * 1.1
+	cm.height = height + 0.6
+	cm.radial_segments = 14
+	cm.rings = 5
+	var gt := RestorationGate.new()
+	var cs := CollisionShape3D.new()
+	var shape := ConcavePolygonShape3D.new()
+	var faces := cm.get_faces()
+	for i in faces.size():
+		faces[i] += Vector3(0, cm.height * 0.5 - 0.6, 0)
+	shape.set_faces(faces)
+	cs.shape = shape
+	gt.add_child(cs)
+	var mi := MeshInstance3D.new()
+	mi.mesh = cm
+	mi.position = Vector3(0, cm.height * 0.5 - 0.6, 0)
+	mi.material_override = ball.moss_material
+	gt.add_child(mi)
+	gt.setup(ball, zone_id, "rise", closed_xf, open_xf, 2.5)
+	gt.set_meta("top", height)
+	gt.set_meta("top_point", open_xf * Vector3(0, height, 0))
+	gt.set_meta("terrain_kind", "rising stone")
+	root.add_child(gt)
+	return gt
+
+
 ## A fallen stem lying in a ravine that rises into a bridge from `p0` to `p1` (rim points) when
 ## `zone` heals (RestorationGate "rise"). Its top is walkable; the crossing is registered for the
 ## bot once it stands.
