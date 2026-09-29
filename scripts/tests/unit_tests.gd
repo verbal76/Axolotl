@@ -448,8 +448,16 @@ func _test_vegetation() -> void:
 	t.check("wake_follows_axolotl", run > 0.8 and far < 0.01 and ahead > 0.3, "around him %.2f, 5 m away %.3f, just ahead %.2f" % [run, far, ahead])
 	t.check("wake_grows_with_speed", rest < creep and creep < run * 0.85 and rest < 0.6, "standing %.2f, creeping %.2f, running %.2f" % [rest, creep, run])
 	# Behind him the plants recover progressively; when he stops, the wake settles and stays settled.
+	# (Measured where the trail is strongest 1-3 m behind: its samples lie about 0.6 m apart at a
+	# run, so one fixed spot can fall between two of them.)
 	var passed := p.global_position - p.facing * 2.0
-	var just := g.wake.bend_at(b, b.surface_point(b.up_at(passed), 0.0), 2.2).length()
+	var just := 0.0
+	for i in 21:
+		var q := p.global_position - p.facing * (1.0 + i * 0.1)
+		var bq := g.wake.bend_at(b, b.surface_point(b.up_at(q), 0.0), 2.2).length()
+		if bq > just:
+			just = bq
+			passed = q
 	p.bot_input = Vector2.ZERO
 	await t.seconds(0.6)
 	var mid := g.wake.bend_at(b, b.surface_point(b.up_at(passed), 0.0), 2.2).length()
