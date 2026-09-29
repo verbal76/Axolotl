@@ -61,6 +61,7 @@ func run(runner) -> void:
 		var pb := g.balls[int(Settings.test_args.get("ball", "3")) - 1]
 		var dd := MossBall.dir_ll(float(Settings.test_args.get("lat", "0")), float(Settings.test_args.get("lon", "0")))
 		var top := pb.surface_point(dd, 20.0)
+		t.log_line("probe: terrain %.2f m above the base sphere, ravine cut %.2f m ('%s'), %d hills, %d ravines" % [pb.terrain_height(dd), pb.ravine_carve(dd), pb.ravine_at(dd), pb.hills.size(), pb.carves.size()])
 		var space := g.get_world_3d().direct_space_state
 		var excl: Array[RID] = []
 		for k in 8:
@@ -131,6 +132,20 @@ func run(runner) -> void:
 					await wait(1.0)
 					await _fight_eel(c as CaveEel)
 					t.check("debug_eel_%s" % (c as CaveEel).threat_id, (c as CaveEel).defeated, "")
+		_report()
+		return
+	if Settings.test_args.get("start", "") == "clear":
+		# Debug scenario: one world cleared completely from its arrival point (--ball=N).
+		g.start_play(true)
+		var cb := g.balls[int(Settings.test_args.get("ball", "2")) - 1]
+		p.place(cb, cb.surface_point(cb.arrival_dir, 0.3), MossBall.frame_at(cb.arrival_dir, 0.0).z)
+		g.audio.set_ball(cb.index, false)
+		p.max_health = 6
+		p.restore_full()
+		await wait(1.0)
+		var t0 := sim_time
+		await clear_ball(cb.index, 1.01, [])
+		t.check("debug_clear_ball%d" % (cb.index + 1), cb.completed, "%.2f in %.0f s, deaths %d, ravine falls %d" % [cb.restoration, sim_time - t0, int(g.stats["deaths"]), int(g.stats.get("ravine_falls", 0))])
 		_report()
 		return
 	if Settings.test_args.get("start", "") == "meadow":
@@ -735,7 +750,7 @@ func _plan_ravines(a: Vector3, c: Vector3) -> Array:
 			var cost: float = a.distance_to(w) + w.distance_to(c)
 			if cost < best_cost:
 				best_cost = cost
-				best = [w]
+				best = [[w, false]]
 	for w1 in ends:
 		if not _clear_path(a, w1):
 			continue
@@ -778,7 +793,10 @@ func ride_column(h: Dictionary) -> bool:
 			break
 	set_stick(Vector2.ZERO)
 	await tick()
-	return absf(height_of(ledge)) < 0.7 and tangent_to(ledge).length() < 1.8
+	var ok := absf(height_of(ledge)) < 0.7 and tangent_to(ledge).length() < 1.8
+	if not ok:
+		t.log_line("column %s: missed the ledge (%.1f m below it, %.1f m across; rose to %.1f m up)" % [h["route"], height_of(ledge), tangent_to(ledge).length(), p.ball.altitude(p.global_position)])
+	return ok
 
 
 func detour(dir: Vector3, side: float, angle_deg: float, time: float) -> void:
@@ -1093,9 +1111,13 @@ func fight_parasite(par: Parasite, timeout := 25.0) -> bool:
 			if p.ball.ravine_carve(p.ball.up_at(cp)) > 0.3:
 				t.log_line("fight: %s parasite is down in a ravine; leaving it" % par.zone_id)
 				break
+			# (Only along a planned way round; with none, leave it for later.)
 			var t0 := sim_time
-			await goto(func(): return par.global_position, 2.0, minf(30.0, timeout - el))
+			var went := await _follow_plan(cp, null, false)
 			el += sim_time - t0
+			if not went:
+				t.log_line("fight: no way round to the %s parasite; leaving it for now" % par.zone_id)
+				break
 			continue
 		if dist > 1.5 or absf(height_of(cp)) > 1.0:
 			if absf(height_of(cp)) > 1.0 and dist < 2.5:
@@ -1312,7 +1334,13 @@ func _collect_tasks(b: MossBall, lb: LevelBuilder, skip_zones: Array, done: Dict
 	for h in lb.bot_hints:
 		if h.has("tower") and (not done.has("tower") or done.has("retry_tower")):
 			tasks.append({"kind": "tower", "hint": h, "pos": func(): return b.surface_point(MossBall.dir_ll(h["lat"], h["lon"]))})
-		if h.has("mesa") and (not done.has("mesa") or done.has("retry_mesa")):
+		# (With a bubble column up to the mesa that is not flowing yet, come back once it is: that
+		# is the easy way up; the swaying platforms are the skilled one.)
+		var col_waiting := false
+		for hh in lb.bot_hints:
+			if str(hh.get("route", "")) == "mesa column" and b.lift_at((hh["start"] as Vector3) + b.up_at(hh["start"]) * 0.5) <= 0.0:
+				col_waiting = true
+		if h.has("mesa") and not col_waiting and (not done.has("mesa") or done.has("retry_mesa")):
 			tasks.append({"kind": "mesa", "hint": h, "pos": func(): return b.surface_point(MossBall.dir_ll(h["site"][0], h["site"][1]))})
 		if h.has("canopy") and (not done.has("canopy") or done.has("retry_canopy")):
 			tasks.append({"kind": "canopy", "hint": h, "pos": func(): return (h["spiral"][0] as Transform3D).origin})
@@ -1452,8 +1480,7 @@ func mesa(b: MossBall, h: Dictionary) -> void:
 		chain.append(func(): return lf.global_transform * Vector3(0, lf._stem_len + 0.15, 0))
 	chain.append(lb.at(S[0], S[1], S[2], 0, 6.3, 1.2).origin)
 	for attempt in 4:
-		await goto(start, 0.8, 40.0)
-		if await hop_chain(chain, 2, start):
+		if await _up_mesa(b, lb, start, chain):
 			break
 	var on_top := func() -> bool: return height_of(b.surface_point(b.up_at(p.global_position))) < -5.0
 	mark("on mesa top: %s" % str(on_top.call()))
@@ -1466,10 +1493,22 @@ func mesa(b: MossBall, h: Dictionary) -> void:
 				if not on_top.call():
 					# Knocked or backed off the mesa: ride the living platforms back up first.
 					t.log_line("mesa: off the top before mote attempt %d; climbing back" % attempt)
-					await goto(start, 0.8, 40.0)
-					await hop_chain(chain, 2, start)
+					await _up_mesa(b, lb, start, chain)
 				var ok := await lunge_at(func(): return m.global_position, 15.0, true)
 				t.log_line("mesa mote attempt %d: %s (on top %s, mote h %.2f above him)" % [attempt, "caught" if ok else "missed", on_top.call(), height_of(m.global_position)])
+
+
+## Up onto the mesa: by its bubble column once that flows (the arrival meadow healed), otherwise
+## over the swaying living platforms.
+func _up_mesa(b: MossBall, lb: LevelBuilder, start: Vector3, chain: Array) -> bool:
+	for hh in lb.bot_hints:
+		if str(hh.get("route", "")) == "mesa column" and b.lift_at((hh["start"] as Vector3) + b.up_at(hh["start"]) * 0.5) > 0.0:
+			if await ride_column(hh):
+				var tops: Array = hh["tops"]
+				await goto(tops[tops.size() - 1], 0.8, 8.0)
+				return true
+	await goto(start, 0.8, 40.0)
+	return await hop_chain(chain, 2, start)
 
 
 func canopy(b: MossBall, h: Dictionary) -> void:

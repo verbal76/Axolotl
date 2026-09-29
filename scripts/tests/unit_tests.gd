@@ -14,7 +14,7 @@ func run(runner) -> void:
 	p.use_bot_input = true
 	await t.seconds(0.5)
 	var only: String = Settings.test_args.get("only", "")
-	for name_ in ["_test_startup", "_test_ota_and_version", "_test_mesh_winding", "_test_terrain", "_test_ravines", "_test_terrain_grounded", "_test_no_floating_platforms", "_test_parasite_locomotion", "_test_parasite_body_and_death", "_test_parasite_combat", "_test_gill_look", "_test_gill_idles", "_test_gill_colours", "_test_gill_patterns", "_test_tail_whip", "_test_ambient_sway", "_test_placements", "_test_tutorial_route", "_test_sphere_walk", "_test_jump_and_burst", "_test_coyote_and_buffer", "_test_swipe_direction_and_stages", "_test_hard_landing", "_test_food", "_test_food_reach", "_test_darter_and_burrower", "_test_food_repopulates", "_test_motes", "_test_checkpoint_and_regen", "_test_crumble", "_test_restoration_gates", "_test_restoration_continuity", "_test_health_map", "_test_vortex", "_test_current", "_test_canopy", "_test_canopy_plain_jumps", "_test_climbs_physical", "_test_jungle_ladders_physical", "_test_leaf_geometry", "_test_leaf_footing", "_test_caves", "_test_mounds", "_test_vegetation", "_test_vortex_mouths_clear", "_test_route_audit", "_test_new_areas", "_test_ecosystem", "_test_music", "_test_run_clock", "_test_completion_catalog", "_test_completion_frozen", "_test_run_save_file", "_test_run_timer_live", "_test_run_continue", "_test_timer_integrity", "_test_resume_points_safe", "_phase_continue_write", "_phase_continue_read", "_test_upgrades", "_test_ui", "_test_menu_scrollbar", "_test_all_clear"]:
+	for name_ in ["_test_startup", "_test_ota_and_version", "_test_mesh_winding", "_test_terrain", "_test_ravines", "_test_terrain_grounded", "_test_no_floating_platforms", "_test_parasite_locomotion", "_test_parasite_body_and_death", "_test_parasite_combat", "_test_gill_look", "_test_gill_idles", "_test_gill_colours", "_test_gill_patterns", "_test_tail_whip", "_test_ambient_sway", "_test_placements", "_test_tutorial_route", "_test_sphere_walk", "_test_jump_and_burst", "_test_coyote_and_buffer", "_test_swipe_direction_and_stages", "_test_hard_landing", "_test_food", "_test_food_reach", "_test_darter_and_burrower", "_test_food_repopulates", "_test_motes", "_test_checkpoint_and_regen", "_test_crumble", "_test_restoration_gates", "_test_bubble_columns", "_test_restoration_continuity", "_test_health_map", "_test_vortex", "_test_current", "_test_canopy", "_test_canopy_plain_jumps", "_test_climbs_physical", "_test_jungle_ladders_physical", "_test_leaf_geometry", "_test_leaf_footing", "_test_caves", "_test_mounds", "_test_vegetation", "_test_vortex_mouths_clear", "_test_route_audit", "_test_new_areas", "_test_ecosystem", "_test_music", "_test_run_clock", "_test_completion_catalog", "_test_completion_frozen", "_test_run_save_file", "_test_run_timer_live", "_test_run_continue", "_test_timer_integrity", "_test_resume_points_safe", "_phase_continue_write", "_phase_continue_read", "_test_upgrades", "_test_ui", "_test_menu_scrollbar", "_test_all_clear"]:
 		# "_phase_*" tests are halves of a relaunch test: they run only when asked for by name
 		# (in a child process started by _test_run_continue).
 		if name_.begins_with("_phase") and only != name_:
@@ -593,8 +593,9 @@ func _test_route_audit() -> void:
 				# really there all the way, not a jump.
 				if h.get("lift", false) and k == 1:
 					var carried := true
+					# (A column that flows once its zone heals is checked as it will be.)
 					for f in [0.1, 0.4, 0.7, 0.9]:
-						carried = carried and b.lift_at(prev.lerp(tp, f) + up * 0.2) > 0.0
+						carried = carried and b.in_column(prev.lerp(tp, f) + up * 0.2)
 					if not carried:
 						bad.append("ball %d %s: no bubble column from its vent to its top" % [b.index + 1, h["route"]])
 					prev = tp
@@ -655,7 +656,7 @@ func _test_route_audit() -> void:
 			var gap := ((first - st) - up * rise).length()
 			# (A bubble column's climb begins at its vent: the bubbles show where.)
 			if h.get("lift", false):
-				rise = 0.0 if b.lift_at(st + up * 0.5) > 0.0 else 99.0
+				rise = 0.0 if b.in_column(st + up * 0.5) else 99.0
 				gap = 0.0
 			worst_first = maxf(worst_first, rise)
 			if not on_ground or rise > 1.6 or gap > 3.5:
@@ -828,11 +829,9 @@ func _test_ecosystem() -> void:
 				if bad:
 					unfair.append("ball %d %s near %s" % [b.index + 1, c.species, Levels._latlon(b.up_at(sp)).round()])
 	t.check("eco_no_threats_at_respawn_or_arrival", unfair.is_empty(), str(unfair))
-	await _test_crab()
-	await _test_eel()
-	await _test_stalker()
-	await _test_puffer()
-	await _test_ambient()
+	for sub in [_test_crab, _test_eel, _test_stalker, _test_puffer, _test_ambient]:
+		await sub.call()
+		t.log_line("after %s: deaths %d, cinematic '%s', on ball %d at %s" % [sub.get_method(), int(g.stats["deaths"]), g.cinematic, p.ball.index + 1, str(Levels._latlon(p.ball.up_at(p.global_position)).round())])
 	# Cost: every creature near the axolotl on the busiest ball, per physics frame.
 	place(2, 28, -26)
 	await t.seconds(0.6)
@@ -1022,6 +1021,9 @@ func _test_puffer() -> void:
 	var aside := b.surface_point(b.up_at(pf.global_position + MossBall.frame_at(b.up_at(under), 0).z * 2.0), 0.2)
 	place_at(b.index, aside, under - aside)
 	g.audio.set_ball(b.index, false)
+	# (From calm: an earlier visit may have left it puffed, frozen so while he was far away.)
+	pf.inflate = 0.0
+	pf.puffed = false
 	var tin: float = await _until(func(): return pf.inflate > 0.99, 3.0)
 	t.check("puffer_puffs_up_near", tin >= PufferFish_INFLATE_MIN and pf.puffed, "fully puffed after %.2f s" % tin)
 	# Touching it puffed hurts once (then a pause); a swipe bats it away, it is not beaten.
@@ -1047,6 +1049,9 @@ const PufferFish_INFLATE_MIN := 0.5
 
 
 func _test_ambient() -> void:
+	# (Behaviour only: nothing here may hurt him, e.g. a parasite grazing near the shoal.)
+	p.restore_full()
+	p.invuln_t = 999.0
 	# Shrimp scatter when he rushes at them, and drift back together.
 	var sh := _crit("shrimp", 0) as ShrimpShoal
 	var b := sh.ball
@@ -1058,7 +1063,8 @@ func _test_ambient() -> void:
 		return sh.scatter > 0.9, 4.0)
 	p.bot_input = Vector2.ZERO
 	var calm: float = await _until(func(): return sh.scatter < 0.05, 12.0)
-	t.check("shrimp_scatter_then_regroup", ran >= 0.0 and calm >= 0.0, "scattered after %.2f s, regrouped %.2f s later" % [ran, calm])
+	t.check("shrimp_scatter_then_regroup", ran >= 0.0 and calm >= 0.0, "scattered after %.2f s, regrouped %.2f s later (he is %.1f m from them, grounded %s, speed %.1f, at %s, deaths %d, ravine falls %d, cine %s)" % [ran, calm,
+			p.global_position.distance_to(sh.centre), p.grounded, p.velocity.length(), str(Levels._latlon(b.up_at(p.global_position)).round()), int(g.stats["deaths"]), int(g.stats.get("ravine_falls", 0)), g.cinematic])
 	# A snail tucks into its shell when he comes close.
 	var sn := _crit("snail", 5) as CanopySnail
 	b = sn.ball
@@ -1142,8 +1148,8 @@ func _test_new_areas() -> void:
 
 ## Pinned: the current game's completion ids (sha256 of the ids in catalog order). A change means
 ## completion content changed: bump Completion.CATALOG_VERSION, update docs/COMPLETION.md, re-pin.
-const CATALOG_IDS_SHA := "dfa00efd0d2e160fe26bafd4f31945b5381fc6fe2ac681457f9cb84429b31206"
-const CATALOG_SIZE := 222
+const CATALOG_IDS_SHA := "b46b9692b9b344db328033aaad49dec984195f3b7d3697b06ff9ee494f493075"
+const CATALOG_SIZE := 223
 
 
 ## The timer's rules on a bare clock: start, what counts, background, finish, frame rates.
@@ -1646,7 +1652,9 @@ func first_alive(ball_i: int, kind: int, zone := "") -> Parasite:
 # --- tests -------------------------------------------------------------------------------
 
 func _surface_height(b: MossBall, dir: Vector3, h_hint: float) -> float:
-	var top := b.surface_point(dir, h_hint + 3.0)
+	# (From just above where it should stand: a Mote tucked under an overhang stands on the
+	# ground beneath it, not on the overhang.)
+	var top := b.surface_point(dir, maxf(h_hint, 0.0) + 0.6)
 	var q := PhysicsRayQueryParameters3D.create(top, b.global_position, 1 | 2)
 	var hit := g.get_world_3d().direct_space_state.intersect_ray(q)
 	return -99.0 if hit.is_empty() else b.altitude(hit.position)
@@ -1818,6 +1826,66 @@ func _test_restoration_gates() -> void:
 	for v in vortex_eased:
 		v.strength = vortex_eased[v]
 	release.call()
+
+
+## World expansion: a bubble column carries him up and he hangs near its top (burst restored);
+## a column tied to a zone stays still until that zone heals, then flows.
+func _test_bubble_columns() -> void:
+	var b := g.balls[0]
+	var lb: LevelBuilder = b.get_meta("builder")
+	var release := _hold_threats(b)
+	var pocket := MossBall.dir_ll(74, 62)
+	place_at(0, b.surface_point(pocket, 0.1), MossBall.frame_at(pocket, 0.0).z)
+	p.bot_input = Vector2.ZERO
+	var top_h := 0.0
+	for i in 60 * 3:
+		await t.frames(1)
+		top_h = maxf(top_h, height())
+	var hang := height()
+	t.check("bubble_column_lifts_and_holds", top_h > 4.0 and hang > 3.5 and p.burst_available and not p.grounded,
+			"rose to %.1f m, hanging at %.1f m, burst ready %s" % [top_h, hang, p.burst_available])
+	# Swim off the top: he falls back to the ground as usual.
+	p.bot_input = Vector2(0, 1)
+	await t.seconds(1.0)
+	p.bot_input = Vector2.ZERO
+	await wait_grounded()
+	# A dormant column (its zone not healed) does nothing; healing the zone sets it flowing.
+	var at := MossBall.dir_ll(-10, -40)
+	b.add_zone("probe_col", at, 4.0)
+	b.register_event("probe_col")
+	var saved := [b.events_total, b.events_done, b.restoration, b.completed]
+	var eased := [g.g_disp, g.ball_disp[0]]
+	var vortex_eased := {}
+	for v in g.vortices:
+		vortex_eased[v] = v.strength
+	var n_cols := b.columns.size()
+	lb.bubble_column(at, 0.9, 4.5, 5.0, "probe_col")
+	var gate: RestorationGate = b.columns[n_cols][5]
+	place_at(0, b.surface_point(at, 0.1), MossBall.frame_at(at, 0.0).z)
+	await t.seconds(1.5)
+	var still := height()
+	b.complete_event("probe_col", b.surface_point(at))
+	await t.seconds(3.0)
+	var lifted := height()
+	t.check("bubble_column_flows_when_healed", still < 0.3 and lifted > 3.0 and gate.flow >= 1.0 and gate.visible,
+			"%.1f m before healing, %.1f m after (flow %.1f)" % [still, lifted, gate.flow])
+	b.columns.resize(n_cols)
+	b.gates.erase(gate)
+	b.zones.erase("probe_col")
+	gate.queue_free()
+	b.events_total = saved[0] - 1
+	b.events_done = saved[1]
+	b.restoration = saved[2]
+	b.completed = saved[3]
+	g.g_disp = eased[0]
+	g.ball_disp[0] = eased[1]
+	for v in vortex_eased:
+		v.strength = vortex_eased[v]
+	release.call()
+	p.bot_input = Vector2(0, 1)
+	await t.seconds(0.8)
+	p.bot_input = Vector2.ZERO
+	await wait_grounded()
 
 
 ## World expansion: a ravine cut through a plateau. Its floor is the ball's base surface; the

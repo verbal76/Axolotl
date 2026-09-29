@@ -338,7 +338,12 @@ func _physics_process(dt: float) -> void:
 			facing = wish.normalized()
 		_lunge_food = Game.inst.lunge_target(self, facing)
 
-	var cur := ball.current_at(global_position) * (0.45 if grounded else 1.0) + ext_vel
+	# (A current stream carries him along and holds him at its height.)
+	var stream := ball.stream_at(global_position) if ball != null and not ball.streams.is_empty() else Vector3.ZERO
+	if stream != Vector3.ZERO and not grounded:
+		vup = move_toward(vup, 0.0, 30.0 * dt)
+	# (Inside a bubble column its upflow shelters him from the ball's current.)
+	var cur := ball.current_at(global_position) * (0.0 if _in_column else (0.45 if grounded else 1.0)) + ext_vel + stream
 	velocity = vh + up * vup + cur
 	var was_grounded := grounded
 	var pre_vup := vup

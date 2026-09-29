@@ -72,11 +72,11 @@ func _populate_ball(b: MossBall) -> void:
 			# stalker in the tall ferns away from the grove's bloom).
 			_shoal(b, MossBall.dir_ll(-20, 58), 4.0, 2)
 			_shoal(b, MossBall.dir_ll(62, 118), 4.0, 3)
-			for rn in ["meadow stone", "heights terraces"]:
+			for rn in ["meadow stone", "heights terraces", "lookout rock"]:
 				if routes.has(rn):
 					var tops: Array = routes[rn]["tops"]
 					var top: Vector3 = tops[tops.size() - 1]
-					_snail(b, top, top + MossBall.frame_at(b.up_at(top), 40.0).z * 0.5, 0 if rn == "meadow stone" else 1)
+					_snail(b, top, top + MossBall.frame_at(b.up_at(top), 40.0).z * 0.5, ["meadow stone", "heights terraces", "lookout rock"].find(rn))
 			if routes.has("heights terraces"):
 				_hopper(b, routes["heights terraces"]["tops"], 0, 0)
 			_stalker(b, MossBall.dir_ll(-44, -66), 6.0, 1)

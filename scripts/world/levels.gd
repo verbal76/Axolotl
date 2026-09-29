@@ -10,7 +10,7 @@ class_name Levels
 ## radius as they are rebuilt and still keep 35 m or more of water between any two.)
 const CENTERS := [Vector3(0, 0, 0), Vector3(182, 21, -49), Vector3(-70, 28, -168),
 		Vector3(-14, 35, 154), Vector3(210, -28, 84), Vector3(-224, 42, -84), Vector3(-182, 0, 98)]
-const RADII := [48.0, 28.0, 30.0, 18.0, 26.0, 16.0, 22.0]
+const RADII := [48.0, 56.0, 30.0, 18.0, 26.0, 16.0, 22.0]
 const NAMES := ["Mossy Meadow", "Current Hollows", "Giant Stems", "Terrace Steps", "Reed Canyon", "Canopy Spire", "Hollow Grotto"]
 ## Vortex links [from, to]: the original chain first, then the branches. A link opens when its
 ## "from" ball is 70% restored and then works both ways.
@@ -217,7 +217,8 @@ static func _veg_keep_clear(lb: LevelBuilder, extra: Array = []) -> Callable:
 	for body in lb.root.get_children():
 		if body is StaticBody3D and body.get_meta("grounded", "") == "cushion":
 			list.append([b.up_at(body.global_position), deg.call(float(body.get_meta("radius")) * 1.9)])
-	return func(d: Vector3) -> bool: return _near_any(d, list)
+	# (Ravines stay bare, so their edges read as the drop they are.)
+	return func(d: Vector3) -> bool: return _near_any(d, list) or b.ravine_carve(d) > 0.1
 
 
 ## Dense stands with clearings: Callable(dir) -> true where a stand grows (smooth noise over the
@@ -591,6 +592,22 @@ static func _ball1(lb: LevelBuilder) -> void:
 	lb.mote("roots", -60, -158)
 	lb.mote("roots", -66, -148)
 
+	# ---- Optional discoveries (nothing needs them) ------------------------------------------------
+	# A bloom tucked inside Root Hollows; a bubble pocket by the glade that carries him up just for
+	# the view (the first bubble column he meets); Lookout Rock on the far upland, stepped tiers
+	# to a view over the tank, where a snail lives.
+	lb.bloom(-65, -156)
+	lb.bubble_column(MossBall.dir_ll(74, 62), 1.0, 5.5, 4.5)
+	var look := lb.terrace(67, -160, [[4.6, 1.2], [3.4, 2.4], [2.3, 3.6], [1.3, 4.8]])
+	var lbase: Vector3 = (look[0] as Node3D).global_position
+	var lup := b.up_at(lbase)
+	var ltops := []
+	for k in 4:
+		var r_in: float = [3.9, 2.8, 1.8, 0.0][k]
+		ltops.append(b.surface_point(b.up_at(lbase + MossBall.frame_at(lup, 0.0).z * r_in), float(look[k].get_meta("top"))) if k < 3 else lbase + lup * 4.8)
+	lb.bot_hints.append({"route": "lookout rock", "audit": true, "start": b.surface_point(b.up_at(lbase + MossBall.frame_at(lup, 0.0).z * 6.4)),
+			"tops": ltops, "zones": [], "goal": "Lookout Rock"})
+
 	# ---- Food, holes, growth -----------------------------------------------------------------
 	for r in [[28, 0, 24], [12, 95, 24], [15, -90, 24], [-38, 170, 26], [-58, 10, 24], [62, 60, 20], [62, -60, 20],
 			[-22, 56, 14], [-36, -76, 14], [64, 150, 16]]:
@@ -610,7 +627,7 @@ static func _ball1(lb: LevelBuilder) -> void:
 	# Reactive vegetation: medium growth through the meadow, a tall reed bed in the southern hills
 	# where the large parasite roams, tall ferns in the Fern Grove, medium growth in Root Hollows.
 	# The tutorial, the ravine crossings, caves, blooms, motes, holes and platforms are kept clear.
-	var clear := _veg_keep_clear(lb, [[MossBall.dir_ll(78, 0), 9.0], [MossBall.dir_ll(GREAT_RAVINE_LAT, 0), 6.0],
+	var clear := _veg_keep_clear(lb, [[MossBall.dir_ll(78, 0), 9.0], [MossBall.dir_ll(GREAT_RAVINE_LAT, 0), 6.0], [MossBall.dir_ll(74, 62), 3.0], [MossBall.dir_ll(67, -160), 8.0],
 			[MossBall.dir_ll(GREAT_RAVINE_LAT, -25.5), 5.0], [MossBall.dir_ll(64.5, -110), 6.0], [MossBall.dir_ll(-25, 60), 5.0]])
 	Vegetation.field(b, "medium", MossBall.dir_ll(28, 10), 14.0, 1500, 101, {"avoid": clear, "clumps": 12})
 	Vegetation.field(b, "tall", MossBall.dir_ll(-58, 34), 12.0, 1600, 102, {"avoid": clear, "clumps": 9, "fill": 0.35, "edge": 0.7})
@@ -635,10 +652,16 @@ static func _ball2(lb: LevelBuilder) -> void:
 	var b := lb.ball
 	b.current_axis = Vector3.UP
 	b.current_strength = 3.0
-	lb.hill(2, 58, 8.0, 2.2)
-	lb.hill(-18, 168, 9.0, 1.8)
+	lb.hill(2, 58, 16.0, 3.0)
+	lb.hill(-18, 168, 18.0, 2.5)
+	lb.hill(40, -150, 16.0, 2.4)
+	lb.hill(-60, 80, 14.0, 2.2)
 	b.food_weights = [0.45, 0.35, 0.2]
-	b.food_target = 8
+	b.food_target = 16
+	# World expansion (radius 28 -> 56): the Current Shelf, an upland cut through by the Cut, a
+	# ravine the current blows straight across.
+	b.add_plateau(MossBall.dir_ll(-25, 110), lb.m2deg(26.0) * PI / 180.0, 3.5, 10.0)
+	lb.ravine([Vector2(-13, 110), Vector2(-25, 110.5), Vector2(-37, 110)], 4.4, 3.5, 1.4, "b2.the_cut")
 	# Re-create materials now that the current is known.
 	for m in b.field_materials:
 		m.set_shader_parameter("current_axis", b.current_axis)
@@ -705,29 +728,101 @@ static func _ball2(lb: LevelBuilder) -> void:
 	lb.mote("far", 0, -168)
 	lb.bloom(-4, 146)
 
-	for r in [[-5, -75, 32], [62, 40, 35], [0, 60, 30], [-55, 0, 38], [-10, 160, 45]]:
+	lb.freeze_ids()
+
+	# ---- World expansion: Current Hollows at radius 56 ------------------------------------------
+	lb.zone("cut", -25, 110, 22)
+	lb.zone("hollows", 10, 28, 16)
+	lb.zone("kelp", -42, -150, 18)
+	lb.zone("still", 80, -40, 14)
+	# The Cut: across it on the current bridge (a stream carrying him east over it), with a burst
+	# jump downstream (the current helps; upstream it fights him), over the kelp leaf that grows
+	# across once the east ridge heals, or on foot round either end.
+	var cut_side := lb.m2deg(2.2 + 1.4 + 0.9) / cos(deg_to_rad(25.0))
+	lb.current_stream(b.surface_point(MossBall.dir_ll(-25, 110.5 - cut_side)), b.surface_point(MossBall.dir_ll(-25, 110.5 + cut_side)), 1.3, 7.0)
+	var kl := lb.m2deg(2.2 + 1.4 + 0.9) / cos(deg_to_rad(18.0))
+	lb.leaf_bridge("east", b.surface_point(MossBall.dir_ll(-18, 110.2 - kl)), b.surface_point(MossBall.dir_ll(-18, 110.2 + kl)), 2.6)
+	lb.parasite(Parasite.Kind.SMALL, "cut", -20, 100, 4.0)
+	lb.parasite(Parasite.Kind.MEDIUM, "cut", -30, 121, 4.0)
+	lb.parasite(Parasite.Kind.SMALL, "cut", -35, 99, 4.0)
+	lb.mote("cut", -14, 102)
+	lb.mote("cut", -36, 120)
+	lb.mote("cut", -8, 118)
+	lb.bloom(-26, 100)
+	# Undercut Hollows: coral shelves overhanging the moss, Motes tucked in the shade beneath, and
+	# a bubble column up to the highest shelf.
+	var hshelves := [[6.0, 22.0, 2.8, 2.6], [12.0, 30.0, 3.4, 2.8], [4.0, 36.0, 2.8, 2.4]]
+	for hi in hshelves.size():
+		var hs: Array = hshelves[hi]
+		lb.shelf(hs[0], hs[1], hs[2], hs[3], 1.0)
+		if hi == 1:
+			continue   # (the highest is reached by the column)
+		# A mound beside each lower shelf: up onto it, a plain jump at a time.
+		var sgn := -1.0 if hi == 0 else 1.0
+		var step_lon: float = hs[1] + sgn * lb.m2deg(float(hs[3]) + 2.1) / cos(deg_to_rad(hs[0]))
+		lb.cushion(hs[0], step_lon, 1.0, 1.4)
+		var edge_lon: float = hs[1] + sgn * lb.m2deg(float(hs[3]) - 0.8) / cos(deg_to_rad(hs[0]))
+		lb.bot_hints.append({"route": "hollows shelf %d" % hi,
+				"start": b.surface_point(MossBall.dir_ll(hs[0], step_lon + sgn * lb.m2deg(3.0) / cos(deg_to_rad(hs[0])))),
+				"tops": [b.surface_point(MossBall.dir_ll(hs[0], step_lon), 1.4), b.surface_point(MossBall.dir_ll(hs[0], edge_lon), hs[2]),
+				b.surface_point(MossBall.dir_ll(hs[0], hs[1]), hs[2])], "zones": ["hollows"], "goal": "a coral shelf"})
+	for hi in [0, 2]:
+		var hs2: Array = hshelves[hi]
+		lb.mote("hollows", hs2[0], hs2[1], hs2[2], 0.5)
+	var hc := MossBall.dir_ll(12.0, 30.0 - lb.m2deg(4.6) / cos(deg_to_rad(12.0)))
+	lb.bubble_column(hc, 0.9, 4.8)
+	var htop := b.surface_point(MossBall.dir_ll(12.0, 30.0), 3.4)
+	lb.bot_hints.append({"route": "hollows column", "lift": true, "start": b.surface_point(hc),
+			"tops": [b.surface_point(hc, 4.4), htop], "zones": ["hollows"], "goal": "the high coral shelf"})
+	lb.mote_xf("hollows", Transform3D(MossBall.frame_at(b.up_at(htop), 0.0), htop + b.up_at(htop) * 0.5), 0.4)
+	lb.parasite(Parasite.Kind.SMALL, "hollows", 14, 18, 4.0)
+	lb.parasite(Parasite.Kind.MEDIUM, "hollows", 0, 30, 4.0).make_spitter()
+	lb.mote("hollows", 16, 40)
+	lb.bloom(18, 26)
+	# The mesa shortcut: once the arrival meadow heals, a column starts to flow beside the mesa, up
+	# past its top (the swaying platforms stay the skilled way up).
+	var mcol := lb.at(S[0], S[1], S[2], -6.8, 0, 0).origin
+	lb.bubble_column(b.up_at(mcol), 1.0, 7.8, 5.0, "arrive")
+	lb.bot_hints.append({"route": "mesa column", "audit": true, "lift": true, "start": b.surface_point(b.up_at(mcol)),
+			"tops": [b.surface_point(b.up_at(mcol), 7.2), lb.at(S[0], S[1], S[2], -3.4, 6.3, 0).origin, lb.at(S[0], S[1], S[2], 0, 6.3, -0.2).origin], "zones": ["mesa"], "goal": "mesa top"})
+	# Kelp Fields on the far southern side: tall swaying kelp stands, Motes hidden among them.
+	lb.parasite(Parasite.Kind.SMALL, "kelp", -38, -142, 5.0)
+	lb.parasite(Parasite.Kind.MEDIUM, "kelp", -48, -160, 5.0)
+	lb.mote("kelp", -34, -158)
+	lb.mote("kelp", -50, -140)
+	lb.mote("kelp", -44, -170)
+	lb.bloom(-40, -150)
+	# The Still Pool: the sheltered cap where the current never reaches.
+	lb.parasite(Parasite.Kind.SMALL, "still", 78, -20, 4.0)
+	lb.mote("still", 84, -70)
+	lb.mote("still", 76, -55)
+	lb.bloom(82, -30)
+
+	for r in [[-5, -75, 26], [62, 40, 26], [0, 60, 24], [-55, 0, 28], [-10, 160, 30], [-25, 110, 18], [10, 28, 14],
+			[-42, -150, 16], [80, -40, 12]]:
 		lb.food_region(r[0], r[1], r[2])
-	_holes(lb, 12, 202, [[MossBall.dir_ll(15, -20), 12], [MossBall.dir_ll(72, 110), 14]])
+	_holes(lb, 28, 202, [[MossBall.dir_ll(15, -20), 12], [MossBall.dir_ll(72, 110), 14], [MossBall.dir_ll(-25, 110), 8], [MossBall.dir_ll(10, 28), 8]])
 
 	# Long flowing grasses bending with the current; broad leaves; tall stems.
-	var avoid := [[MossBall.dir_ll(15, -20), 9.0], [_vortex_dir(1, 2), 5.0], [_vortex_dir(1, 0), 5.0]]
-	var ok := func(dd: Vector3) -> bool: return not _near_any(dd, avoid)
+	var avoid := [[MossBall.dir_ll(15, -20), 9.0], [_vortex_dir(1, 2), 5.0], [_vortex_dir(1, 0), 5.0], [_vortex_dir(1, 4), 5.0],
+			[MossBall.dir_ll(-25, 110.5), 6.0], [MossBall.dir_ll(-18, 110.2), 5.0], [MossBall.dir_ll(10, 28), 10.0]]
+	var ok := func(dd: Vector3) -> bool: return not _near_any(dd, avoid) and b.ravine_carve(dd) < 0.1
 	# The long grass grows in dense stands with open clearings between them (same number of
 	# plants, so the stands are thicker), rather than an even carpet.
 	var stands := _stands(20, -0.15)
 	var ok_tall := func(dd: Vector3) -> bool: return ok.call(dd) and stands.call(dd)
 	var grass := b.make_veg_material(Color(0.07, 0.36, 0.18), Color(0.45, 0.8, 0.32),
 			Vegetation.family_params("tall", 3.0).merged({"sway": 0.3, "sway_speed": 1.8, "cam_fade": 2.0}, true))
-	b.scatter(MeshLib.tuft_mesh(4, 0.1, 3.0, 0.15, 4, 6, 0.2), grass, 2100, 21, 0.7, 1.4, ok_tall)
+	b.scatter(MeshLib.tuft_mesh(4, 0.1, 3.0, 0.15, 4, 6, 0.2), grass, 6000, 21, 0.7, 1.4, ok_tall)
 	var short := b.make_veg_material(Color(0.06, 0.32, 0.16), Color(0.3, 0.66, 0.34), Vegetation.family_params("short", 0.4).merged({"sway": 0.2}, true))
-	b.scatter(MeshLib.tuft_mesh(5, 0.07, 0.4, 0.12, 5, 3, 0.3), short, 3200, 22, 0.8, 1.3)
+	b.scatter(MeshLib.tuft_mesh(5, 0.07, 0.4, 0.12, 5, 3, 0.3), short, 9000, 22, 0.8, 1.3)
 	# (Owner reference: "fire and ice" hosta leaves, a white centre with green margins.)
 	var ice := b.make_veg_material(Color(0.06, 0.32, 0.16), Color(0.3, 0.66, 0.34), Vegetation.family_params("short", 0.4).merged({"sway": 0.2,
 			"variegate": 1.0, "vari_style": 1.0, "vari_stripe": Color(0.94, 0.96, 0.9)}, true))
-	b.scatter(MeshLib.broadleaf_mesh(4, 0.9, 7), ice, 260, 23, 1.0, 1.6, ok)
+	b.scatter(MeshLib.broadleaf_mesh(4, 0.9, 7), ice, 700, 23, 1.0, 1.6, ok)
 	var rng := RandomNumberGenerator.new()
 	rng.seed = 24
-	for k in 34:
+	for k in 90:
 		var lat := rng.randf_range(-70, 70)
 		var lon := rng.randf_range(-180, 180)
 		var dd := MossBall.dir_ll(lat, lon)
@@ -738,6 +833,16 @@ static func _ball2(lb: LevelBuilder) -> void:
 		# A drooping frond, not a flat leaf: out of reach, so it must not look like a platform.
 		lb.leaf_xf(b.xform_on_dir(dd, h - 0.3, rng.randf() * 360.0).rotated_local(Vector3.RIGHT, deg_to_rad(-55.0)), rng.randf_range(1.8, 2.8),
 				rng.randf_range(1.2, 1.8) * 0.45, false)
+	# World expansion: the Kelp Fields' tall stands, and coral under the Undercut Hollows' shelves.
+	var clear2 := _veg_keep_clear(lb, [[MossBall.dir_ll(-25, 110.5), 6.0], [MossBall.dir_ll(-18, 110.2), 5.0]])
+	Vegetation.field(b, "tall", MossBall.dir_ll(-42, -150), 12.0, 1300, 201, {"avoid": clear2, "clumps": 9, "fill": 0.4, "edge": 0.6})
+	Vegetation.field(b, "medium", MossBall.dir_ll(-25, 124), 9.0, 380, 202, {"avoid": clear2, "clumps": 5})
+	var hol := MossBall.dir_ll(8, 30)
+	var in_hollows := func(dd: Vector3) -> bool: return dd.angle_to(hol) < deg_to_rad(13.0) and not clear2.call(dd)
+	for k in 2:
+		var col: Array = ACCENTS[1][k]
+		var cmat := b.make_veg_material(col[0], col[1], Vegetation.family_params("short", 0.45).merged({"sway": 0.12, "wake_gain": 0.7, "cam_fade": 1.0}, true))
+		b.coral_nodes += b.scatter(MeshLib.coral_mesh(5 + k * 2, 0.75 + k * 0.15, 960 + k), cmat, 220, 960 + k, 1.1, 2.4, in_hollows, 70.0)
 
 
 # =========================================================================================

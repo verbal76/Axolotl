@@ -243,6 +243,8 @@ func terrace(lat: float, lon: float, tiers: Array) -> Array:
 		var body := _terrain_body(xf, res, "terrace" if k == 0 else "terrace tier")
 		body.set_meta("top", top)
 		body.set_meta("radius", r)
+		# (Where its top is: `top` is measured from the ground, not from the tier's own base.)
+		body.set_meta("top_point", base_xf * Vector3(0, top, 0))
 		out.append(body)
 		below = top
 	return out
@@ -446,6 +448,23 @@ func fixed(node: Object, id: String) -> Object:
 	return node
 
 
+## Stamps every completion-bearing node authored so far with the id the catalog has always given
+## it (positional, as Completion.build_from_world assigns them), so content added afterwards can
+## never shift an id a save has earned. Call once the original content is authored.
+func freeze_ids() -> void:
+	var tag := Completion.ball_tag(ball.index)
+	var taken := Completion._fixed_ids(ball.parasites + ball.motes + ball.upgrades + ball.blooms)
+	var n := {}
+	for par in ball.parasites:
+		fixed(par, Completion._id_for(par, "%s.%s.parasite" % [tag, par.zone_id], n, taken))
+	for m in ball.motes:
+		fixed(m, Completion._id_for(m, "%s.%s.mote" % [tag, m.zone_id], n, taken))
+	for u in ball.upgrades:
+		fixed(u, Completion._id_for(u, "%s.cave" % tag, n, taken))
+	for bl in ball.blooms:
+		fixed(bl, Completion._id_for(bl, "%s.bloom" % tag, n, taken))
+
+
 ## Metres to degrees of arc on this ball.
 func m2deg(m: float) -> float:
 	return rad_to_deg(m / ball.radius)
@@ -532,6 +551,34 @@ func fallen_stem_bridge(zone_id: String, p0: Vector3, p1: Vector3, r: float) -> 
 	return gt
 
 
+## A great kelp leaf that unfurls across a ravine from rim `p0` to rim `p1` when `zone` heals
+## (RestorationGate "grow": a bud until then; solid once fully grown). Registered as a crossing.
+func leaf_bridge(zone_id: String, p0: Vector3, p1: Vector3, width := 2.4) -> RestorationGate:
+	var up := ball.up_at((p0 + p1) * 0.5)
+	var along := p1 - p0
+	along -= up * along.dot(up)
+	var len := along.length() + 2.0
+	var fwd := along.normalized()
+	# The leaf runs along its local -Z from its base, a metre back from the near rim.
+	var base := p0 - fwd * 1.0 + up * 0.08
+	var xf := Transform3D(Basis(up.cross(-fwd).normalized(), up, -fwd), base)
+	var gt := RestorationGate.new()
+	for shape in MeshLib.leaf_collision_shapes(len, width):
+		var cs := CollisionShape3D.new()
+		cs.shape = shape
+		gt.add_child(cs)
+	var mi := MeshInstance3D.new()
+	mi.mesh = MeshLib.platform_leaf_mesh(len, width, false)
+	mi.material_override = leaf_mat
+	gt.add_child(mi)
+	gt.setup(ball, zone_id, "grow", xf, xf, 3.0)
+	gt.set_meta("floats_by_design", "a kelp leaf grown across a ravine")
+	gt.set_meta("terrain_kind", "leaf bridge")
+	root.add_child(gt)
+	crossings.append({"a": p0, "b": p1, "gate": gt})
+	return gt
+
+
 ## A curtain of hanging roots across a doorway at `xf` (its -Z faces out), `width` by `height`;
 ## it draws up out of the way when `zone` heals (RestorationGate "retract"). Solid while closed.
 func root_curtain(zone_id: String, xf: Transform3D, width: float, height: float, seed_v: int) -> RestorationGate:
@@ -567,10 +614,19 @@ func root_curtain(zone_id: String, xf: Transform3D, width: float, height: float,
 
 ## A bubble column rising `height` m from the ground at `dir`, `radius` m across: he is carried up
 ## it and hangs near the top (MossBall.lift_at). A ring of stones marks its vent.
-func bubble_column(dir: Vector3, radius: float, height: float, speed := 5.0) -> void:
+func bubble_column(dir: Vector3, radius: float, height: float, speed := 5.0, zone_id := "") -> void:
 	var base := ball.surface_point(dir, 0.0)
 	var up := ball.up_at(base)
-	ball.columns.append([base, up, radius, height, speed])
+	# (With a zone: dormant until that zone heals, then it starts to flow, a new way up.)
+	var gate: RestorationGate = null
+	var holder: Node3D = root
+	if zone_id != "":
+		gate = RestorationGate.new()
+		var at_base := Transform3D(MossBall.frame_at(up, 0.0), base)
+		gate.setup(ball, zone_id, "column", at_base, at_base, 2.0)
+		root.add_child(gate)
+		holder = gate
+	ball.columns.append([base, up, radius, height, speed, gate])
 	var mm := MultiMesh.new()
 	mm.transform_format = MultiMesh.TRANSFORM_3D
 	mm.mesh = QuadMesh.new()
@@ -593,7 +649,7 @@ func bubble_column(dir: Vector3, radius: float, height: float, speed := 5.0) -> 
 	mmi.cast_shadow = GeometryInstance3D.SHADOW_CASTING_SETTING_OFF
 	mmi.top_level = true
 	mmi.visibility_range_end = 90.0
-	root.add_child(mmi)
+	holder.add_child(mmi)
 	# The vent: a low ring of pebbles (decoration; no collision to trip on).
 	var ring := MeshInstance3D.new()
 	var st := SurfaceTool.new()
@@ -609,7 +665,51 @@ func bubble_column(dir: Vector3, radius: float, height: float, speed := 5.0) -> 
 	ring.material_override = shell_mat
 	root.add_child(ring)
 	ring.global_transform = Transform3D(MossBall.frame_at(up, 0.0), base)
-	bot_hints.append({"column": true, "base": base, "up": up, "radius": radius, "height": height})
+	bot_hints.append({"column": true, "base": base, "up": up, "radius": radius, "height": height, "gate": gate})
+
+
+## A current stream from `from` to `to` (points on the ground; it runs a metre above the straight
+## line between them): he is carried along it at `speed` m/s. With a zone, it starts to flow when
+## that zone heals. Registered as a crossing for the bot when it spans a ravine.
+func current_stream(from: Vector3, to: Vector3, radius := 1.2, speed := 7.0, zone_id := "") -> void:
+	var up := ball.up_at((from + to) * 0.5)
+	var dir := (to - from)
+	dir -= up * dir.dot(up)
+	var length := dir.length()
+	dir = dir.normalized()
+	var gate: RestorationGate = null
+	var holder: Node3D = root
+	if zone_id != "":
+		gate = RestorationGate.new()
+		var at_base := Transform3D(MossBall.frame_at(up, 0.0), from)
+		gate.setup(ball, zone_id, "column", at_base, at_base, 2.0)
+		root.add_child(gate)
+		holder = gate
+	ball.streams.append([from, dir, up, radius, length, speed, gate])
+	var mm := MultiMesh.new()
+	mm.transform_format = MultiMesh.TRANSFORM_3D
+	mm.mesh = QuadMesh.new()
+	mm.instance_count = int(clampf(length * 9.0, 40.0, 160.0))
+	var rng := RandomNumberGenerator.new()
+	rng.seed = hash(from.snapped(Vector3.ONE * 0.1))
+	for i in mm.instance_count:
+		mm.set_instance_transform(i, Transform3D(Basis(), Vector3(rng.randf(), rng.randf(), rng.randf())))
+	mm.custom_aabb = AABB(from - Vector3.ONE * (length + radius), Vector3.ONE * 2.0 * (length + radius))
+	var mmi := MultiMeshInstance3D.new()
+	mmi.multimesh = mm
+	var bm := ShaderMaterial.new()
+	bm.shader = preload("res://shaders/bubble_column.gdshader")
+	bm.set_shader_parameter("base_pos", from + up * 1.0)
+	bm.set_shader_parameter("up_dir", dir)
+	bm.set_shader_parameter("radius", radius * 0.8)
+	bm.set_shader_parameter("height", length)
+	bm.set_shader_parameter("speed", speed * 0.8)
+	mmi.material_override = bm
+	mmi.cast_shadow = GeometryInstance3D.SHADOW_CASTING_SETTING_OFF
+	mmi.top_level = true
+	mmi.visibility_range_end = 90.0
+	holder.add_child(mmi)
+	crossings.append({"a": from, "b": to, "gate": gate, "stream": true})
 
 
 ## A giant sea fan (landmark): a lattice of branching ribs in one gently rippled sheet, `height`

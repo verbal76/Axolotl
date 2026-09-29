@@ -7,7 +7,8 @@ extends AnimatableBody3D
 ##   "grow"     grows from a bud at `closed_xf` to full size at `open_xf`; solid only once grown
 ##              (leaves unfurling into stepping stones);
 ##   "retract"  shrinks away from `closed_xf` into `open_xf`; stops blocking at once (debris
-##              clearing from a tunnel).
+##              clearing from a tunnel);
+##   "column"   a bubble column that starts flowing (its bubbles appear, it lifts) once healed.
 ## Healed live it plays out over `duration`; resumed from a save it is simply open. It never moves
 ## into him: it waits while he stands where it is going. Children (meshes, collision shapes) are
 ## built by the level in the gate's open pose.
@@ -22,6 +23,8 @@ var open_xf := Transform3D.IDENTITY
 var duration := 2.5
 var is_open := false
 var _t := -1.0
+## How strongly a "column" gate's bubbles flow (0 shut, 1 full).
+var flow := 0.0
 
 
 func setup(p_ball: MossBall, p_zone: String, p_kind: String, p_closed: Transform3D, p_open: Transform3D, p_duration := 2.5) -> void:
@@ -62,7 +65,7 @@ func open(animate: bool) -> void:
 func _physics_process(dt: float) -> void:
 	if _t < 0.0:
 		return
-	if kind != "retract" and _player_in_way():
+	if kind in ["rise", "grow"] and _player_in_way():
 		return
 	_t += dt / duration
 	var k := smoothstep(0.0, 1.0, minf(_t, 1.0))
@@ -85,6 +88,9 @@ func _apply(k: float) -> void:
 			var s2 := lerpf(1.0, 0.1, k)
 			xf.basis = xf.basis.scaled(Vector3(s2, s2, s2))
 			_set_solid(k <= 0.0)
+		"column":
+			visible = k > 0.0
+			flow = k
 		_:
 			_set_solid(true)
 	if is_inside_tree():

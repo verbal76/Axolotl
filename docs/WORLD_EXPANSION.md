@@ -111,3 +111,58 @@ dev-000025. Mossy Meadow first as the template, then worlds 2–7 (not clones).
 9. Mixed degree and metre units, and about 60 hard-coded `dir_ll` calls in tests, the bot and
    shots.
 10. Restoration-gated geometry has to be safe in both states and on resume.
+
+## What was built (framework)
+
+- **Stable ids (X1).** Content may carry `meta fixed_id`; `CatalogFrozen.V3` holds the 172
+  shipped ids and a test proves every one still exists. Catalog v4 appends only.
+- **Terrain (X2).** Cube-sphere tiles (8 m, 10×10 quads), 24 render chunks per ball and a far
+  LOD mesh; concave collision per raised tile. Plateaus, and ravines carved into them
+  (`add_ravine`), with the base sphere as the floor. Standing on a ravine floor (not on a
+  bridge or stone above it) costs one frond and puts Gill back on the rim
+  (`Game.ravine_fall`, `Axolotl.ravine_return_point`); on the last frond it is a normal death.
+- **Health map (X3a).** A 512×256 equirect texture per ball; no splat cap.
+- **Regional activation (X3b).** Parasites, motes and food tick only within 55 m of Gill;
+  ground and vegetation chunks below the camera's horizon are not drawn.
+- **Restoration gates (X3c).** `RestorationGate` (rise / grow / retract): opens when its zone
+  heals, at once on a resumed save, and never moves into Gill.
+- **Tank (X4a).** Ball centres spread 1.4× and the tank enlarged so every ball can double.
+- **Traversal toys (X4c).** Bubble columns (`MossBall.lift_at`): he is carried up and hangs at
+  the top, with his burst restored. Stone columns, fallen-stem bridges, root curtains and the sea
+  fan are LevelBuilder vocabulary.
+- **Bot (X4c).** Paths round ravines (end-arounds, or a standing bridge), rides columns, enters
+  walled hollows by their door, and never follows a target down into a ravine.
+
+## Mossy Meadow (world 1, the template)
+
+Radius 24 → 48 m (surface 7,240 → 28,950 m², 4×). The original content keeps its places on the
+ball (so it is twice as far apart) and its completion ids; the tutorial keeps its size in metres
+(`Levels.TUT_*`, measured along the upland surface).
+
+| Region | What is there |
+|---|---|
+| Glade Upland (tut, rim) | The tutorial on a 3.5 m upland over the north, its escarpment falling to the lowlands between latitude 54 and 40 |
+| Great Ravine (rim) | 47 m long, 3.6 m floor: walk round either end (easy), two stone columns (skilled), a burst straight over (skilled), or the fallen stem that rises into a bridge when the glade heals |
+| Split Crack (crack) | A narrower cut in the western upland, crossed by a natural stone bridge with a Mote on it |
+| The Heights (heights) | Three-tier terraces on the eastern upland, a hopper leading up them, a Mote and a snail on top |
+| Moss Meadow (meadow) | Rolling lowland fields; the Meadow Stone (a shelf reached from a mound) |
+| East Tower lands (east) | The brittle tower and the vortex to Current Hollows |
+| Coral Garden (coral) | A 7.5 m sea fan (landmark), dense tube corals, a coral shelf, a shrimp shoal |
+| Southern Reed Hills (south) | The large parasite and its reed stalker among the reeds |
+| West Stone Ridge (west) | A crest walk with a Mote, a natural arch, the hidden moss cave |
+| Fern Grove (fern) | Tall ferns, two bubble columns up to high shelves, a second reed stalker |
+| Root Hollows (roots) | Walled by six ridges; a root curtain draws up when the Southern Reed Hills heal, or climb in over a wall |
+
+| Measure | Before | After |
+|---|---|---|
+| Completion ids on the ball | 25 | 75 |
+| Restoration events (parasites + Motes) | 19 | 64 |
+| Blooms (respawn points) | 4 | 9 |
+| Registered climbs | 3 | 18 |
+| Restoration gates | 0 | 2 |
+| Creature groups (ecosystem) | 4 | 10 |
+| Bot: tutorial, then the whole ball cleared | — | 454 s of play (seed 7), no deaths, 1 ravine fall |
+
+The bot plays about two to three times faster than a first-time player, so the ball is roughly
+15–25 minutes for a casual player, as the brief asks. The vortex to world 2 still opens at 70%
+(45 of 64 events).

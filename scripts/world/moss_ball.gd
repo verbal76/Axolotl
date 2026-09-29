@@ -46,7 +46,8 @@ var blooms: Array = []
 var crumbles: Array = []
 ## Restoration gates (RestorationGate): geography that changes when its zone heals.
 var gates: Array = []
-## Bubble columns (world expansion traversal toy): [base (world), up, radius, height, speed].
+## Bubble columns (world expansion traversal toy): [base (world), up, radius, height, speed,
+## gate (RestorationGate of kind "column", or null: always flowing)].
 ## Inside one he is carried up to near its top, where he hangs until he swims off.
 var columns: Array = []
 var flex_leaves: Array = []
@@ -842,6 +843,41 @@ func zone_health(zone_id: String) -> float:
 
 # --- Bubble columns -----------------------------------------------------------------------
 
+## Current streams (world expansion, Current Hollows): [base (world), dir (unit, tangent), up,
+## radius, length, speed, gate or null]. A jet of moving water about a metre up that carries him
+## along it, holding him at its height (a current bridge).
+var streams: Array = []
+
+
+## The stream velocity at `world_pos` (zero outside every stream): full speed along its middle,
+## easing in over its first and out over its last 1.5 m.
+func stream_at(world_pos: Vector3) -> Vector3:
+	for st in streams:
+		var off: Vector3 = world_pos - (st[0] as Vector3)
+		var dir: Vector3 = st[1]
+		var along := off.dot(dir)
+		var length: float = st[4]
+		if along < 0.0 or along > length:
+			continue
+		var axis_pt: Vector3 = (st[0] as Vector3) + dir * along + (st[2] as Vector3) * 1.0
+		if world_pos.distance_to(axis_pt) > float(st[3]):
+			continue
+		var flow: float = 1.0 if st[6] == null else (st[6] as RestorationGate).flow
+		var k := smoothstep(0.0, 1.5, along) * (1.0 - smoothstep(length - 1.5, length, along))
+		return dir * float(st[5]) * flow * maxf(k, 0.25)
+	return Vector3.ZERO
+
+
+## Whether `world_pos` is inside a bubble column's reach (flowing or not yet).
+func in_column(world_pos: Vector3) -> bool:
+	for c in columns:
+		var off: Vector3 = world_pos - (c[0] as Vector3)
+		var along: float = off.dot(c[1])
+		if along >= -0.5 and along <= float(c[3]) and (off - (c[1] as Vector3) * along).length() <= float(c[2]):
+			return true
+	return false
+
+
 ## The upward speed a bubble column carries him at `world_pos` (0 outside every column): full
 ## speed low down, easing to nothing over its top 1.5 m, so he rises to the top and hangs there.
 func lift_at(world_pos: Vector3) -> float:
@@ -852,7 +888,8 @@ func lift_at(world_pos: Vector3) -> float:
 			continue
 		if (off - (c[1] as Vector3) * along).length() > float(c[2]):
 			continue
-		return float(c[4]) * (1.0 - smoothstep(float(c[3]) - 1.5, float(c[3]), along))
+		var flow: float = 1.0 if c.size() < 6 or c[5] == null else (c[5] as RestorationGate).flow
+		return float(c[4]) * flow * (1.0 - smoothstep(float(c[3]) - 1.5, float(c[3]), along))
 	return 0.0
 
 
