@@ -290,7 +290,8 @@ func ladder_stem(stem_xf_: Transform3D, stem_h: float, r0: float, r1: float, ben
 		var y: float = levels[i][0]
 		var len: float = levels[i][1]
 		var w: float = levels[i][2]
-		var a := deg_to_rad(heading0 + turn_deg * i)
+		# (A level may give its own heading: a tapering trunk turns less where it is thick.)
+		var a := deg_to_rad(float(levels[i][3]) if levels[i].size() > 3 else heading0 + turn_deg * i)
 		var dir := Vector3(cos(a), 0.0, sin(a))
 		# The bent stem's axis at this height (MeshLib.stem_mesh bends along local x).
 		var t := (y + 0.5) / (stem_h + 0.5)

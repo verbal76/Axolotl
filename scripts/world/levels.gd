@@ -10,7 +10,7 @@ class_name Levels
 ## radius as they are rebuilt and still keep 35 m or more of water between any two.)
 const CENTERS := [Vector3(0, 0, 0), Vector3(182, 21, -49), Vector3(-70, 28, -168),
 		Vector3(-14, 35, 154), Vector3(210, -28, 84), Vector3(-224, 42, -84), Vector3(-182, 0, 98)]
-const RADII := [48.0, 56.0, 30.0, 18.0, 26.0, 16.0, 22.0]
+const RADII := [48.0, 56.0, 60.0, 18.0, 26.0, 16.0, 22.0]
 const NAMES := ["Mossy Meadow", "Current Hollows", "Giant Stems", "Terrace Steps", "Reed Canyon", "Canopy Spire", "Hollow Grotto"]
 ## Vortex links [from, to]: the original chain first, then the branches. A link opens when its
 ## "from" ball is 70% restored and then works both ways.
@@ -903,7 +903,7 @@ const SPIRAL_LEAF_W := 2.4
 static func _ball3(lb: LevelBuilder) -> void:
 	var b := lb.ball
 	b.food_weights = [0.25, 0.3, 0.45]
-	b.food_target = 8
+	b.food_target = 16
 
 	lb.zone("arrive", 0, 65, 32)
 	lb.zone("lower", 25, 20, 32)
@@ -1020,18 +1020,85 @@ static func _ball3(lb: LevelBuilder) -> void:
 	lb.mote("far", 4, -170)
 	lb.bloom(-5, 148)
 
-	for r in [[0, 65, 30], [25, 20, 30], [-40, 0, 38], [-10, 160, 45], [8, -60, 25]]:
+	lb.freeze_ids()
+
+	# ---- World expansion: Giant Stems at radius 60 ---------------------------------------------
+	lb.zone("crown", 45, 112, 16)
+	lb.zone("tangle", -66, -100, 16)
+	# The Great Trunk: a 30 m giant laddered all the way up to the High Crown, broad leaves round
+	# its top with a Mote and a bloom (the view across the whole aquarium).
+	var gt_dir := MossBall.dir_ll(45, 112)
+	var gxf := b.xform_on_dir(gt_dir, 0.0, 30.0)
+	var crown_h := 30.0
+	# (A trunk this thick takes a gentler spiral than a jungle stem: 60 degrees and 1.3 m a leaf,
+	# so each is a plain jump from the last; the top three are the crown's broad leaves.)
+	lb.stem_xf(gxf, crown_h, 1.8, 1.1, true, 0.0001)
+	var glevels := []
+	var gy := LADDER_START
+	var gh := 20.0
+	while gy < crown_h - 0.6:
+		glevels.append([gy, LADDER_LEAF_LEN, LADDER_LEAF_W, gh])
+		# (Turning just enough that neighbours are clear of each other: less where it is thick.)
+		gh += lerpf(75.0, LADDER_TURN, gy / crown_h)
+		gy += 1.0
+	for k in 3:
+		var lv: Array = glevels[glevels.size() - 1 - k]
+		glevels[glevels.size() - 1 - k] = [lv[0], 3.8, 2.8, lv[3]]
+	lb.ladder_stem(gxf, crown_h, 1.8, 1.1, 0.0001, glevels, 20.0, 0.0, "great trunk")
+	var groute: Dictionary = lb.bot_hints[lb.bot_hints.size() - 1]
+	groute.erase("audit")
+	groute["zones"] = ["crown"]
+	var gtops: Array = groute["tops"]
+	var crown_top: Vector3 = gtops[gtops.size() - 1]
+	lb.mote_xf("crown", Transform3D(MossBall.frame_at(b.up_at(crown_top), 0.0), crown_top + b.up_at(crown_top) * 0.6), 0.4)
+	var crown_mid: Vector3 = gtops[gtops.size() - 3]
+	lb.bloom_xf(Transform3D(MossBall.frame_at(b.up_at(crown_mid), 0.0), crown_mid))
+	lb.parasite(Parasite.Kind.MEDIUM, "crown", 41, 104, 4.0)
+	lb.parasite(Parasite.Kind.SMALL, "crown", 50, 124, 4.0)
+	lb.mote("crown", 38, 118)
+	# The canopy shortcut: once the lower jungle heals, a bubble column beside the giant spiral
+	# lifts him to its eighth leaf, halfway up.
+	var sp8: Transform3D = spiral[8]
+	var sp8_mid := leaf_mid(sp8, 2.2, 0.0)
+	# (Between the spiral's lines of leaves, at 100 degrees round the stem: clear of every leaf
+	# below it, and away from where the climb starts.)
+	var col_at := C.p(cos(deg_to_rad(100.0)) * 5.5, 0, sin(deg_to_rad(100.0)) * 5.5).origin
+	var col_dir := b.up_at(col_at)
+	lb.bubble_column(col_dir, 0.9, b.altitude(sp8_mid.origin) + 1.4, 5.5, "lower")
+	lb.bot_hints.append({"route": "canopy column", "audit": true, "lift": true, "start": b.surface_point(col_dir),
+			"tops": [b.surface_point(col_dir, b.altitude(sp8_mid.origin) + 1.0), sp8_mid.origin], "zones": [], "goal": "halfway up the giant spiral"})
+	# The Root Tangle on the underside: old roots arching over one another into low tunnels, Motes
+	# in the shade beneath and on top.
+	var tangle := [[-60, -112, -70, -92], [-72, -114, -60, -90], [-58, -98, -74, -104], [-66, -120, -66, -82]]
+	for ta in tangle:
+		lb.arch(ta[0], ta[1], ta[2], ta[3], 1.7, 2.2, 0.9)
+	lb.parasite(Parasite.Kind.SMALL, "tangle", -62, -96, 3.5)
+	lb.parasite(Parasite.Kind.MEDIUM, "tangle", -70, -108, 3.5)
+	lb.parasite(Parasite.Kind.SMALL, "tangle", -56, -110, 3.5)
+	lb.mote("tangle", -66, -101)
+	lb.mote("tangle", -60, -86)
+	lb.mote("tangle", -74, -96)
+	lb.bloom(-64, -120)
+	# More of the lower and far jungle.
+	lb.parasite(Parasite.Kind.SMALL, "lower", 38, 30, 5.0)
+	lb.parasite(Parasite.Kind.SMALL, "far", 20, 140, 5.0)
+	lb.mote("lower", 14, 44)
+	lb.mote("far", -30, 176)
+	lb.mote("far", 26, -150)
+
+	for r in [[0, 65, 26], [25, 20, 26], [-40, 0, 30], [-10, 160, 32], [8, -60, 20], [45, 112, 14], [-66, -100, 14]]:
 		lb.food_region(r[0], r[1], r[2])
-	_holes(lb, 16, 303, [[MossBall.dir_ll(28, -30), 8], [drop_dir, 6], [MossBall.dir_ll(-46, 8), 14]])
+	_holes(lb, 32, 303, [[MossBall.dir_ll(28, -30), 8], [drop_dir, 6], [MossBall.dir_ll(-46, 8), 14], [gt_dir, 6], [MossBall.dir_ll(-66, -100), 12]])
 
 	# --- Dense jungle: towering stems with leaves, tall blades, ferns. Clearings kept open.
 	var keep := [[MossBall.dir_ll(28, -30), 16.0], [drop_dir, 9.0], [_vortex_dir(2, 1), 9.0], [MossBall.dir_ll(-46, 8), 18.0], [_vortex_dir(2, 5), 9.0],
-			[MossBall.dir_ll(5, 70), 4.0], [MossBall.dir_ll(-27, 22), 4.0], [MossBall.dir_ll(-5, 148), 4.0]]
+			[MossBall.dir_ll(5, 70), 4.0], [MossBall.dir_ll(-27, 22), 4.0], [MossBall.dir_ll(-5, 148), 4.0],
+			[gt_dir, 12.0], [MossBall.dir_ll(-66, -100), 18.0], [col_dir, 5.0]]
 	var rng := RandomNumberGenerator.new()
 	rng.seed = 33
 	var made := 0
 	var placed := []
-	while made < 70:
+	while made < 140:
 		var lat := rng.randf_range(-78, 78)
 		var lon := rng.randf_range(-180, 180)
 		var dd := MossBall.dir_ll(lat, lon)
@@ -1064,9 +1131,9 @@ static func _ball3(lb: LevelBuilder) -> void:
 	var stands := _stands(30, -0.2)
 	var ok_tall := func(dd: Vector3) -> bool: return ok.call(dd) and stands.call(dd)
 	var tall := b.make_veg_material(Color(0.06, 0.3, 0.06), Color(0.4, 0.7, 0.16), Vegetation.family_params("tall", 4.2).merged({"cam_fade": 2.4}, true))
-	b.scatter(MeshLib.tuft_mesh(3, 0.18, 4.2, 0.2, 5, 6, 0.25), tall, 1300, 31, 0.8, 1.4, ok_tall)
+	b.scatter(MeshLib.tuft_mesh(3, 0.18, 4.2, 0.2, 5, 6, 0.25), tall, 4000, 31, 0.8, 1.4, ok_tall)
 	var fern := b.make_veg_material(Color(0.05, 0.28, 0.06), Color(0.3, 0.62, 0.14), Vegetation.family_params("medium", 1.2).merged({"sway": 0.16, "cam_fade": 1.6, "wake_gain": 0.8,
 			"variegate": 0.8, "vari_style": 0.0, "vari_edge": Color(0.9, 0.42, 0.55), "vari_stripe": Color(0.88, 0.93, 0.7)}, true))
-	b.scatter(MeshLib.broadleaf_mesh(7, 1.4, 6), fern, 520, 32, 1.0, 1.8, ok)
+	b.scatter(MeshLib.broadleaf_mesh(7, 1.4, 6), fern, 1500, 32, 1.0, 1.8, ok)
 	var short := b.make_veg_material(Color(0.05, 0.26, 0.05), Color(0.3, 0.6, 0.14), Vegetation.family_params("short", 0.4))
-	b.scatter(MeshLib.tuft_mesh(5, 0.07, 0.4, 0.12, 8, 3, 0.3), short, 3200, 34, 0.8, 1.3)
+	b.scatter(MeshLib.tuft_mesh(5, 0.07, 0.4, 0.12, 8, 3, 0.3), short, 9000, 34, 0.8, 1.3)

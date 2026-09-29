@@ -166,3 +166,31 @@ ball (so it is twice as far apart) and its completion ids; the tutorial keeps it
 The bot plays about two to three times faster than a first-time player, so the ball is roughly
 15–25 minutes for a casual player, as the brief asks. The vortex to world 2 still opens at 70%
 (45 of 64 events).
+
+**Mossy Meadow review (performance).** Frame time on the standard views, software renderer (CI
+style: only the relative change means anything), dev-000025 source against this build with
+Meadow and Current Hollows rebuilt: Meadow views −34% / −21% / −1% (the horizon culling more than
+pays for the bigger ball), cave −21%…+21% elsewhere, restored views +13…+16%. Triangles up to
+1.75× on Meadow views (882k at the busiest); video memory 98 → 113 MB. The final performance pass
+revisits triangle counts for phones.
+
+**Review verdict.** The template works: the ravine reads as a hazard with four crossings, the
+upland gives gentle verticality, restoration raises a bridge and opens a doorway, the bot clears
+the ball without deaths, and both full playthroughs reach a legitimate 100%. Worlds 2–7 follow
+with their own identities (not Meadow's layout).
+
+## Current Hollows (world 2)
+
+Radius 28 → 56. Water movement and terrain cuts.
+
+| Region | What is there |
+|---|---|
+| The Current Shelf (cut) | An upland cut through by the Cut (24 m, 4.4 m floor) with the ball's current blowing straight across: the current bridge (a stream that carries him over), a burst jump downstream (the current helps; upstream it fights), a kelp leaf that grows across when the east ridge heals, or round either end |
+| Undercut Hollows (hollows) | Overhanging coral shelves with Motes on top: step mounds up the lower two, a bubble column up the highest; a spitter parasite |
+| The Mesa (mesa) | The swaying living platforms in the current (skilled), and a bubble column that starts to flow when the arrival meadow heals (easy) |
+| Kelp Fields (kelp) | Tall kelp stands on the far southern side, Motes among them |
+| The Still Pool (still) | The sheltered cap where the current never reaches |
+| Arrival meadow, north cap cave, east ridge, south tower, far side | As before, twice as far apart |
+
+Inside a bubble column the current no longer pushes (its upflow shelters him), so columns work on
+current balls. Bot: the whole ball cleared in 428 s of play, no deaths.

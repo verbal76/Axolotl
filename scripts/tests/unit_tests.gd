@@ -1655,7 +1655,7 @@ func _surface_height(b: MossBall, dir: Vector3, h_hint: float) -> float:
 	# (From just above where it should stand: a Mote tucked under an overhang stands on the
 	# ground beneath it, not on the overhang.)
 	var top := b.surface_point(dir, maxf(h_hint, 0.0) + 0.6)
-	var q := PhysicsRayQueryParameters3D.create(top, b.global_position, 1 | 2)
+	var q := PhysicsRayQueryParameters3D.create(top, b.global_position, 1 | 2 | LevelBuilder.CLIMB_LAYER)
 	var hit := g.get_world_3d().direct_space_state.intersect_ray(q)
 	return -99.0 if hit.is_empty() else b.altitude(hit.position)
 
@@ -3312,7 +3312,8 @@ func _test_jungle_ladders_physical() -> void:
 	var leaves := 0
 	p.invuln_t = 999
 	for h in (b.get_meta("builder") as LevelBuilder).bot_hints:
-		if not (h.has("route") and str(h["route"]).begins_with("jungle")):
+		# (Every jungle stem, and the Great Trunk up to the High Crown.)
+		if not (h.has("route") and (str(h["route"]).begins_with("jungle") or str(h["route"]) == "great trunk")):
 			continue
 		n += 1
 		var tops: Array = h["tops"]
@@ -3321,7 +3322,7 @@ func _test_jungle_ladders_physical() -> void:
 		if reached < tops.size():
 			bad.append("%s %d/%d" % [h["route"], reached, tops.size()])
 	p.invuln_t = 0.0
-	t.check("jungle_ladders_climbed_with_plain_jumps", n == 70 and bad.is_empty(), "%d stems, %d leaves; short: %s" % [n, leaves, str(bad)])
+	t.check("jungle_ladders_climbed_with_plain_jumps", n >= 71 and bad.is_empty(), "%d stems, %d leaves; short: %s" % [n, leaves, str(bad)])
 
 
 ## Expansion 6 (timer integrity): dying and respawning, and travelling by vortex, never reset or

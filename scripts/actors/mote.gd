@@ -159,7 +159,8 @@ func _physics_process(dt: float) -> void:
 		return
 	if state == "init":
 		var top := ball.surface_point(_dir, h_hint + 3.0)
-		var q := PhysicsRayQueryParameters3D.create(top, ball.global_position, 1 | 2)
+		# (Climbing leaves count: a Mote may perch high on a ladder of them, like the High Crown.)
+		var q := PhysicsRayQueryParameters3D.create(top, ball.global_position, 1 | 2 | LevelBuilder.CLIMB_LAYER)
 		var hit := get_world_3d().direct_space_state.intersect_ray(q)
 		anchor = hit.position if not hit.is_empty() else ball.surface_point(_dir)
 		anchor_up = ball.up_at(anchor)
@@ -247,6 +248,6 @@ func capture() -> void:
 	_t = 0.0
 	_dive_from = global_position
 	var up := ball.up_at(global_position)
-	var q := PhysicsRayQueryParameters3D.create(global_position, global_position - up * 4.0, 1 | 2)
+	var q := PhysicsRayQueryParameters3D.create(global_position, global_position - up * 4.0, 1 | 2 | LevelBuilder.CLIMB_LAYER)
 	var hit := get_world_3d().direct_space_state.intersect_ray(q)
 	_dive_to = (hit.position if not hit.is_empty() else anchor) - up * 0.25
