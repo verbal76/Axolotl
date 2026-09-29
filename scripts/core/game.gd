@@ -632,9 +632,6 @@ func swipe_aim(p: Axolotl) -> Vector3:
 	var best := Vector3.ZERO
 	var bd := INF
 	for par in _strikeable(p):
-		# (Aim assist never turns him toward a pufferfish: swiping one only bats it away.)
-		if par is Pufferfish:
-			continue
 		var flat := _swipe_offset(p, par)
 		if flat != Vector3.ZERO and flat.length() < bd:
 			bd = flat.length()

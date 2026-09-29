@@ -2,9 +2,11 @@ class_name Pufferfish
 extends Critter
 ## A slow pufferfish drifting in open water above ridges and open ground (docs/ECOSYSTEM.md). It
 ## hangs at about the height of the axolotl's jumps and climbs, not at ground level. When he comes
-## near it puffs up over INFLATE_TIME (grows, spikes out, yellows: the telegraph) and stays puffed a
-## while after he leaves. Touching it puffed hurts; a swipe only bats it away (it cannot be beaten),
-## so the thing to do is to go round it or wait for it to drift clear.
+## near it puffs up over INFLATE_TIME (grows, spikes out, yellows: the telegraph), bobs down toward
+## him, and stays puffed a while after he leaves. Touching it puffed hurts. Each tail swipe that lands
+## knocks it back and costs it one of HP (a bright flash and a pop say so); the last one deflates it
+## and it drifts off, back in its patch RETURN_AFTER later when he is elsewhere, like the reed stalker.
+## Beating it is not a completion entry (only discovering the species is).
 
 const NOTICE_R := 3.4
 const INFLATE_TIME := 0.6
@@ -13,6 +15,13 @@ const BODY_R := 0.28
 const PUFFED_R := 0.9
 const CONTACT_CD := 1.6
 const SPIKES := 18
+const HP := 3
+## After a hit it cannot be hit again for this long (so one swipe never counts twice).
+const HIT_CD := 0.35
+## Back in its patch this long (play time) after it was beaten, when he is elsewhere.
+const RETURN_AFTER := 120.0
+## Puffed near him, it sinks toward this height above his body centre (it faces the intruder).
+const FACE_UP := 0.7
 
 var home_dir := Vector3.UP
 var home_deg := 8.0
@@ -27,6 +36,9 @@ var _wander_t := 0.0
 var _ground_alt := 0.0
 var _ground_t := 0.0
 var _body: MeshInstance3D
+var hit_cd := 0.0
+var gone_at := 0.0
+var _flash := 0.0
 
 
 func place(p_ball: MossBall, p_home: Vector3, p_deg: float, p_hover: float, seed_v: int) -> void:
@@ -39,6 +51,7 @@ func place(p_ball: MossBall, p_home: Vector3, p_deg: float, p_hover: float, seed
 	_build()
 	_ground_alt = ball.altitude(ball.surface_point(home_dir))
 	global_position = ball.surface_point(home_dir, hover)
+	hp = HP
 
 
 func late_place() -> void:
@@ -187,7 +200,14 @@ static func _puffer_mesh() -> ArrayMesh:
 
 
 func tick(dt: float) -> void:
+	if defeated:
+		var p0 := player()
+		if Game.inst.clock.play_s - gone_at > RETURN_AFTER and (p0 == null or p0.ball != ball or p0.global_position.distance_to(ball.surface_point(home_dir)) > 20.0):
+			_return()
+		return
 	contact_cd = maxf(0.0, contact_cd - dt)
+	hit_cd = maxf(0.0, hit_cd - dt)
+	_flash = maxf(0.0, _flash - dt * 4.0)
 	var p := player()
 	var near := player_here() and p.body_center().distance_to(global_position) < NOTICE_R
 	if near:
@@ -216,7 +236,12 @@ func tick(dt: float) -> void:
 		_ground_t = 0.5
 		var g := ground_under(global_position, GROUND_MASK, 0.5, hover + 6.0)
 		_ground_alt = ball.altitude(g["position"]) if g else _ground_alt
-	var alt_err := (_ground_alt + hover) - ball.altitude(global_position)
+	var want_alt := _ground_alt + hover
+	# Puffed with him close: it sinks to face him (never below FACE_UP over his body centre), so a
+	# swipe can reach it and its spines are a real threat.
+	if puffed and near:
+		want_alt = minf(want_alt, maxf(_ground_alt + 0.9, ball.altitude(p.body_center()) + FACE_UP))
+	var alt_err := want_alt - ball.altitude(global_position)
 	var target_v := _wander * (1.0 - inflate * 0.8) + home_pull + ball.current_at(global_position) * 0.35 + up * clampf(alt_err, -0.6, 0.6)
 	_vel = _vel.lerp(target_v, clampf(dt * 1.5, 0.0, 1.0))
 	global_position += _vel * dt
@@ -240,6 +265,7 @@ func _pose(_dt: float) -> void:
 	fwd = fwd.normalized()
 	global_basis = Basis(fwd.cross(up).normalized(), up, -fwd).orthonormalized()
 	_mat.set_shader_parameter("inflate", inflate)
+	_body.scale = Vector3.ONE * (1.0 + _flash * 0.12)
 
 
 func wake_points() -> Array:
@@ -247,26 +273,63 @@ func wake_points() -> Array:
 
 
 func hittable() -> bool:
-	return true
+	return not defeated
 
 
-func closest_body_point(_p: Vector3) -> Vector3:
-	return global_position
+## The point of its (puffed or calm) body nearest `pt`: a swipe reaches its surface, not its centre.
+func closest_body_point(pt: Vector3) -> Vector3:
+	var d := pt - global_position
+	if d.length() < 0.001:
+		return global_position
+	return global_position + d.normalized() * minf(radius(), d.length())
 
 
+## (closest_body_point already lies on its surface.)
 func body_extent() -> float:
-	return radius()
+	return 0.08
 
 
-## Batted away (it cannot be beaten), and puffed up at once.
-func hit(_stages: int, from_pos: Vector3) -> bool:
-	var away := (global_position - from_pos).normalized()
-	_vel = away * 4.0
+## Struck: knocked back and puffed at once; each landed hit (at most one per HIT_CD) costs one of HP,
+## and the last one beats it. Returns true when the hit landed.
+func hit(stages: int, from_pos: Vector3) -> bool:
+	if defeated or hit_cd > 0.0:
+		return false
+	hit_cd = HIT_CD
+	# Knocked back along the ground (not up out of reach): about a body length, so he can follow up.
+	var up := ball.up_at(global_position)
+	var away := global_position - from_pos
+	away -= up * away.dot(up)
+	away = away.normalized() if away.length() > 0.01 else -global_basis.z
+	_vel = away * 2.4
 	puffed = true
 	calm_t = 0.0
+	hp -= maxi(1, stages)
+	_flash = 1.0
+	WaterFX.inst.sparkle(global_position, Color(1.0, 0.92, 0.55, 0.9), 10, 1.4, 0.06, 0.6)
 	Sfx.play("puff_bounce", global_position)
+	if hp <= 0:
+		_beaten()
 	return true
 
 
-func is_alive() -> bool:
-	return true
+func _beaten() -> void:
+	defeated = true
+	gone_at = Game.inst.clock.play_s
+	puffed = false
+	inflate = 0.0
+	visible = false
+	WaterFX.inst.sparkle(global_position, Color(0.95, 1.0, 0.8, 0.9), 18, 1.8, 0.07, 1.0)
+	Sfx.play("drain", global_position, -4.0)
+	Game.inst.critter_defeated(self)
+
+
+## Back in its patch after a while, when the axolotl is elsewhere.
+func _return() -> void:
+	defeated = false
+	visible = true
+	hp = HP
+	hit_cd = 0.0
+	puffed = false
+	inflate = 0.0
+	_vel = Vector3.ZERO
+	global_position = ball.surface_point(home_dir, _ground_alt + hover)

@@ -1073,9 +1073,74 @@ func _test_puffer() -> void:
 	pf.global_position = p.body_center() + b.up_at(p.global_position) * 0.4
 	await t.frames(20)
 	t.check("puffer_contact_hurts_once", h1 == h0 - 1 and p.health >= h1 - 0, "health %d -> %d -> %d" % [h0, h1, p.health])
-	var hit_ok := pf.hit(1, p.global_position)
+	p.invuln_t = 0.0
+	p.restore_full()
+	await _test_puffer_beaten()
+
+
+## The pufferfish can be beaten with the tail swipe, pressed as a player would (it was unbeatable:
+## hit() only batted it away, and the one hovering 3.2 m up over Reed Canyon's crests floated out of
+## the swipe's reach). Standing under that one: it notices him, puffs, sinks to face him, and three
+## swipes that land beat it. Each hit knocks it back; it is never left unhittable; beaten, it is gone
+## (no contact damage, nothing to hit), earns nothing, and returns to its patch later.
+func _test_puffer_beaten() -> void:
+	var pf: Pufferfish = null
+	for c in g.ecosystem.all_critters():
+		if c is Pufferfish and (pf == null or (c as Pufferfish).hover > pf.hover):
+			pf = c
+	var b := pf.ball
+	var release := _hold_threats(b)
+	g.ecosystem.set_physics_process(true)   # (the puffer itself must run; nothing else nearby does)
+	for c in g.ecosystem.all_critters():
+		if c != pf and c.ball == b:
+			c.set_active(false)
+	p.restore_full()
+	p.invuln_t = 999.0
+	pf.hp = Pufferfish.HP
+	pf.puffed = false
+	pf.inflate = 0.0
+	var home := b.surface_point(pf.home_dir, 0.2)
+	place_at(b.index, home, MossBall.frame_at(pf.home_dir, 0).z)
+	var start_gap: float = b.altitude(pf.global_position) - b.altitude(p.body_center())
+	var reach: float = await _until(func(): return g._swipe_offset(p, pf) != Vector3.ZERO, 6.0)
+	var earned0: int = g.run_save.earned().size()
+	var presses := 0
+	var landed := 0
+	var hp_seen := []
+	for i in 12:
+		if pf.defeated:
+			break
+		# Keep it in reach, as a player would step toward it; then swipe.
+		for k in 40:
+			var flat: Vector3 = pf.global_position - p.global_position
+			flat -= p.up * flat.dot(p.up)
+			if flat.length() < 1.3 and g._swipe_offset(p, pf) != Vector3.ZERO:
+				break
+			stick_toward(flat.normalized())
+			await t.frames(3)
+		p.bot_input = Vector2.ZERO
+		var hp0 := pf.hp
+		await press("swipe")
+		presses += 1
+		await t.seconds(0.45)
+		if pf.hp < hp0:
+			landed += 1
+			hp_seen.append(pf.hp)
+	var stuck: bool = pf.hit_cd > Pufferfish.HIT_CD + 0.01
+	t.check("puffer_beaten_by_tail_swipes", pf.defeated and landed == Pufferfish.HP and hp_seen == [2, 1, 0], "from %.1f m above him it came into reach after %.1f s; %d presses, %d landed %s, beaten %s" % [start_gap, reach, presses, landed, str(hp_seen), pf.defeated])
+	var h0 := p.health
+	p.invuln_t = 0.0
+	pf.global_position = p.body_center()
 	await t.frames(10)
-	t.check("puffer_batted_not_beaten", hit_ok and pf.is_alive() and pf.visible and (pf.global_position - p.global_position).length() > 0.5, "")
+	t.check("puffer_beaten_is_gone", not pf.visible and not pf.hittable() and not pf.is_alive() and p.health == h0 and not stuck and g.run_save.earned().size() == earned0, "visible %s hittable %s health %d -> %d earned %d -> %d" % [pf.visible, pf.hittable(), h0, p.health, earned0, g.run_save.earned().size()])
+	g.clock.play_s += Pufferfish.RETURN_AFTER + 1.0
+	place_at(b.index, b.surface_point(b.up_at(home + MossBall.frame_at(pf.home_dir, 0).z * 30.0), 0.2), MossBall.frame_at(pf.home_dir, 0).z)
+	var back: float = await _until(func(): return not pf.defeated, 2.0)
+	t.check("puffer_returns_later", back >= 0.0 and pf.visible and pf.hp == Pufferfish.HP, "")
+	for c in g.ecosystem.all_critters():
+		c.set_active(false)
+	g.ecosystem.active = []
+	release.call()
 	p.invuln_t = 0.0
 	p.restore_full()
 
