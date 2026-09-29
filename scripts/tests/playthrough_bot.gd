@@ -134,6 +134,32 @@ func run(runner) -> void:
 					t.check("debug_eel_%s" % (c as CaveEel).threat_id, (c as CaveEel).defeated, "")
 		_report()
 		return
+	if Settings.test_args.get("start", "") == "stats":
+		# Debug: the completion ids and per-ball content counts (for reports).
+		g.start_play(true)
+		t.log_line("IDS " + JSON.stringify(g.completion.order))
+		for sb in g.balls:
+			var slb: LevelBuilder = sb.get_meta("builder")
+			var climbs := 0
+			for h in slb.bot_hints:
+				if h.has("route"):
+					climbs += 1
+			var lo := INF
+			var hi := -INF
+			for k in 2000:
+				var dd := Vector3(sin(k * 2.39996) * sqrt(1.0 - pow(1.0 - 2.0 * (k + 0.5) / 2000.0, 2.0)), 1.0 - 2.0 * (k + 0.5) / 2000.0, cos(k * 2.39996) * sqrt(1.0 - pow(1.0 - 2.0 * (k + 0.5) / 2000.0, 2.0))).normalized()
+				lo = minf(lo, sb.terrain_height(dd) - sb.ravine_carve(dd))
+				hi = maxf(hi, sb.terrain_height(dd))
+			var top := 0.0
+			for h in slb.bot_hints:
+				if h.has("tops"):
+					for tp in h["tops"]:
+						top = maxf(top, sb.altitude(tp) + sb.terrain_height(sb.up_at(tp)))
+			t.log_line("BALL %d radius %.0f parasites %d motes %d blooms %d upgrades %d critters %d gates %d columns %d streams %d ravines %d crossings %d climbs %d events %d terrain %.1f..%.1f m highest climb top %.1f m" % [sb.index + 1, sb.radius,
+					sb.parasites.size(), sb.motes.size(), sb.blooms.size(), sb.upgrades.size(), sb.critters.size(), sb.gates.size(), sb.columns.size(), sb.streams.size(),
+					slb.ravines.size(), slb.crossings.size(), climbs, sb.events_total, lo, hi, top])
+		_report()
+		return
 	if Settings.test_args.get("start", "") == "cross":
 		# Debug scenario: the planned way from --from=lat,lon to --to=lat,lon on --ball=N, every
 		# restoration gate open, repeated --n times (ravine falls counted).

@@ -155,12 +155,12 @@ ball (so it is twice as far apart) and its completion ids; the tutorial keeps it
 
 | Measure | Before | After |
 |---|---|---|
-| Completion ids on the ball | 25 | 75 |
+| Completion ids on the ball | 25 | 76 |
 | Restoration events (parasites + Motes) | 19 | 64 |
-| Blooms (respawn points) | 4 | 9 |
-| Registered climbs | 3 | 18 |
+| Blooms (respawn points) | 4 | 10 |
+| Registered climbs | 3 | 19 |
 | Restoration gates | 0 | 2 |
-| Creature groups (ecosystem) | 4 | 10 |
+| Creature groups (ecosystem) | 4 | 11 |
 | Bot: tutorial, then the whole ball cleared | — | 454 s of play (seed 7), no deaths, 1 ravine fall |
 
 The bot plays about two to three times faster than a first-time player, so the ball is roughly
@@ -264,6 +264,24 @@ Radius 22 → 44. Caves and underground exploration.
 Bot: cleared in 288 s, no deaths.
 
 ## Across the program
+
+- **Per world, before → after** (measured from the builds; `--start=stats`):
+
+  | World | Radius (m) | Restoration events | Blooms | Registered climbs | Creature groups | Highest climb top (m) | Bot clear (s) |
+  |---|---|---|---|---|---|---|---|
+  | Mossy Meadow | 24 → 48 | 19 → 64 | 4 → 10 | 3 → 19 | 4 → 11 | 4.2 → 8.3 | 454 |
+  | Current Hollows | 28 → 56 | 22 → 42 | 5 → 9 | 3 → 7 | 5 → 8 | 6.3 → 7.2 | 428 |
+  | Giant Stems | 30 → 60 | 23 → 38 | 5 → 7 | 73 → 145 | 16 → 19 | 19.2 → 29.0 | 664 |
+  | Terrace Steps | 18 → 36 | 13 → 33 | 3 → 6 | 4 → 9 | 7 → 10 | 3.9 → 4.8 | 317 |
+  | Reed Canyon | 26 → 52 | 12 → 30 | 3 → 6 | 5 → 5 | 6 → 8 | 3.9 → 3.9 | 313 |
+  | Canopy Spire | 16 → 32 | 10 → 24 | 3 → 5 | 4 → 7 | 7 → 11 | 13.9 → 30.6 | 204 |
+  | Hollow Grotto | 22 → 44 | 11 → 31 | 3 → 5 | 3 → 8 | 8 → 12 | 3.9 → 7.0 | 288 |
+
+  Surface area is 4× on every ball; restoration events grew 1.7–3.4×, so events per square metre
+  fell on most balls. Density comes also from the climbs, crossings, columns, creatures, discoveries
+  and vegetation, which these counts do not include. The brief's 5–6× is not met by events alone.
+- **Whole game (bot, seeds 7 / 4242):** finish 1,672 / 1,646 s → 3,351 / 3,832 s; 100% 2,863 / 2,524 s
+  → 6,018 / 5,442 s (about 2–2.3× longer). Normal finish 86.8% / 88.4% → 87.9% / 88.2%.
 
 - **Vortex pacing.** The threshold stays 70% of a ball's events. With three to five times as many
   events the vortex now comes after most of a world has been played (Mossy Meadow: 45 of 64 events,
