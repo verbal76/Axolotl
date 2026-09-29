@@ -108,6 +108,8 @@ func _ready() -> void:
 	StartupTrace.mark("first frame drawn: %s usable" % state)
 	loading_stages = loading.stages.duplicate()
 	loading.finish()
+	# (The colours page's pattern swatches, drawn off the main thread now that the game is up.)
+	GillLook.warm_patterns()
 	ready_done = true
 	startup_finished.emit()
 	if Settings.test_mode != "":

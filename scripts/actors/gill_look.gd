@@ -70,6 +70,33 @@ const UPLOAD := "upload"
 const UPLOAD_PATH := "user://gill_pattern.png"
 const PATTERN_PX := 256
 static var _cache := {}
+## Built-in patterns drawn ahead on a worker thread (warm_patterns), waiting to become textures.
+static var _drawn := {}
+static var _drawn_lock := Mutex.new()
+
+
+## Draws the built-in patterns on a worker thread once the game is up (drawing them pixel by pixel
+## took about 2 s of every startup when the colours page was built); pattern_texture then only
+## wraps the finished image. Safe to call more than once.
+static func warm_patterns() -> void:
+	WorkerThreadPool.add_task(_draw_all, false, "draw the pattern swatches")
+
+
+static func _draw_all() -> void:
+	for pat in PATTERNS:
+		var id: String = pat[0]
+		if id == "none":
+			continue
+		_drawn_lock.lock()
+		var have := _drawn.has(id)
+		_drawn_lock.unlock()
+		if have:
+			continue
+		var img := draw_pattern(id)
+		img.generate_mipmaps()
+		_drawn_lock.lock()
+		_drawn[id] = img
+		_drawn_lock.unlock()
 
 
 static func pattern_texture(id: String) -> Texture2D:
@@ -82,10 +109,15 @@ static func pattern_texture(id: String) -> Texture2D:
 		if FileAccess.file_exists(UPLOAD_PATH):
 			img = Image.load_from_file(UPLOAD_PATH)
 	else:
-		img = draw_pattern(id)
+		_drawn_lock.lock()
+		img = _drawn.get(id, null)
+		_drawn_lock.unlock()
+		if img == null:
+			img = draw_pattern(id)
 	if img == null or img.is_empty():
 		return null
-	img.generate_mipmaps()
+	if not img.has_mipmaps():
+		img.generate_mipmaps()
 	var tex := ImageTexture.create_from_image(img)
 	_cache[id] = tex
 	return tex

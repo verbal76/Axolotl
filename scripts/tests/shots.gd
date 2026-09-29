@@ -1371,6 +1371,13 @@ func _colour_shots(g: Game) -> void:
 	Settings.set_gill_pattern(GillLook.UPLOAD, 1, 2)
 	await t.seconds(0.5)
 	await t.shot("pattern_page_upload")
+	# The pattern swatches themselves (drawn off the main thread since this package).
+	var psc := g.pause_menu.gill_page.find_child("*", false, false) as ScrollContainer
+	var pb := g.pause_menu.gill_page.find_child("Pattern_spots", true, false) as Control
+	if psc and pb:
+		psc.ensure_control_visible(pb)
+		await t.seconds(0.4)
+		await t.shot("pattern_page_swatches")
 	(g.pause_menu.gill_page.find_child("Done", true, false) as Button).pressed.emit()
 	_close(g, head2 + gf2 * 1.3 + gr2 * 1.2 + gu2 * 0.9, head2 - gf2 * 0.3, gu2)
 	await t.seconds(0.5)

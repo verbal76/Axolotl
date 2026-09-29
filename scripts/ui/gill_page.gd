@@ -119,6 +119,8 @@ func _on_visibility() -> void:
 	var on := is_visible_in_tree()
 	_vp.render_target_update_mode = SubViewport.UPDATE_ALWAYS if on else SubViewport.UPDATE_DISABLED
 	preview.set_process(on)
+	if on:
+		_style_patterns()
 
 
 ## A small stage of his own: soft aquarium light, a slow sway, and his idles.
@@ -274,9 +276,12 @@ func _style_swatches() -> void:
 ## Each pattern swatch shows its pattern; the chosen one is ringed white. "Mine" appears once a
 ## picture has been uploaded.
 func _style_patterns() -> void:
+	# (The swatches' pictures only once the page is open: drawing them cost startup ~2 s.)
+	var shown := is_visible_in_tree()
 	for id in _patterns:
 		var b := _patterns[id] as Button
-		b.icon = GillLook.pattern_texture(id) if id != "none" else null
+		if shown:
+			b.icon = GillLook.pattern_texture(id) if id != "none" else null
 		if id == GillLook.UPLOAD:
 			b.visible = GillLook.has_upload()
 		var chosen: bool = id == Settings.gill_pattern
