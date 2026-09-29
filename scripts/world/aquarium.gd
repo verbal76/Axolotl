@@ -56,12 +56,14 @@ func build(p_env: Environment) -> void:
 	env = p_env
 	_build_light()
 	_build_gravel()
+	StartupTrace.mark("aquarium: gravel")
 	_build_glass()
 	_build_surface()
 	_build_bubbler()
 	_build_snail()
 	_build_plants()
 	_build_room()
+	StartupTrace.mark("aquarium: bedroom and the rest")
 	apply(0.0)
 
 
@@ -145,6 +147,21 @@ static func floor_point(x: float, z: float) -> Vector3:
 
 
 static var _floor_noise: FastNoiseLite
+var _hgrid := PackedFloat32Array()
+var _hn := Vector2i.ZERO
+
+
+## The floor as built (bilinear between the grid's heights): what the pebbles sit on.
+func _grid_point(x: float, z: float) -> Vector3:
+	var fx := clampf((x - TANK_MIN.x) / FLOOR_STEP, 0.0, _hn.x - 1.001)
+	var fz := clampf((z - TANK_MIN.z) / FLOOR_STEP, 0.0, _hn.y - 1.001)
+	var i := int(fx)
+	var j := int(fz)
+	var u := fx - i
+	var v := fz - j
+	var n := _hn.x
+	var h := lerpf(lerpf(_hgrid[j * n + i], _hgrid[j * n + i + 1], u), lerpf(_hgrid[(j + 1) * n + i], _hgrid[(j + 1) * n + i + 1], u), v)
+	return Vector3(x, TANK_MIN.y + h, z)
 ## [x, z, radius, height]: gravel heaped round the plant clumps and the bubbler's stone.
 const FLOOR_FEATURES := [[175.0, -165.0, 28.0, 4.5], [-200.0, -175.0, 34.0, 4.0], [-205.0, 120.0, 34.0, 4.0], [200.0, 115.0, 34.0, 3.5],
 		[60.0, -185.0, 30.0, 3.5], [-80.0, 130.0, 30.0, 3.0]]
@@ -177,17 +194,29 @@ func _build_gravel() -> void:
 	# The floor: a height mesh (real piles, hollows and a bank toward the back).
 	var st := SurfaceTool.new()
 	st.begin(Mesh.PRIMITIVE_TRIANGLES)
+	# (Heights computed once on the grid; normals from the neighbours, and the pebbles placed on
+	# the same grid, so startup evaluates the floor once per vertex.)
 	var nx := int(ceil((TANK_MAX.x - TANK_MIN.x) / FLOOR_STEP)) + 1
 	var nz := int(ceil((TANK_MAX.z - TANK_MIN.z) / FLOOR_STEP)) + 1
+	_hgrid = PackedFloat32Array()
+	_hgrid.resize(nx * nz)
+	_hn = Vector2i(nx, nz)
+	for j in nz:
+		for i in nx:
+			_hgrid[j * nx + i] = floor_h(minf(TANK_MIN.x + i * FLOOR_STEP, TANK_MAX.x), minf(TANK_MIN.z + j * FLOOR_STEP, TANK_MAX.z))
 	for j in nz:
 		for i in nx:
 			var x := minf(TANK_MIN.x + i * FLOOR_STEP, TANK_MAX.x)
 			var z := minf(TANK_MIN.z + j * FLOOR_STEP, TANK_MAX.z)
-			var e := 0.6
-			var n := Vector3(floor_h(x - e, z) - floor_h(x + e, z), 2.0 * e, floor_h(x, z - e) - floor_h(x, z + e)).normalized()
+			var i0 := maxi(i - 1, 0)
+			var i1 := mini(i + 1, nx - 1)
+			var j0 := maxi(j - 1, 0)
+			var j1 := mini(j + 1, nz - 1)
+			var n := Vector3((_hgrid[j * nx + i0] - _hgrid[j * nx + i1]) / ((i1 - i0) * FLOOR_STEP), 1.0,
+					(_hgrid[j0 * nx + i] - _hgrid[j1 * nx + i]) / ((j1 - j0) * FLOOR_STEP)).normalized()
 			st.set_normal(n)
 			st.set_color(Color.WHITE)
-			st.add_vertex(floor_point(x, z))
+			st.add_vertex(Vector3(x, TANK_MIN.y + _hgrid[j * nx + i], z))
 	for j in nz - 1:
 		for i in nx - 1:
 			var a := j * nx + i
@@ -223,7 +252,7 @@ func _build_gravel() -> void:
 					var basis := Basis(Vector3.UP, rng.randf() * TAU) * Basis(Vector3(rng.randf() - 0.5, 0, rng.randf() - 0.5).normalized(), rng.randf() * 0.35)
 					basis = basis.scaled(Vector3(r * rng.randf_range(0.9, 1.3), r * sy, r))
 					# Partly buried: its middle 10-40% of its height above the surface.
-					var p := floor_point(x, z) + Vector3.UP * r * sy * rng.randf_range(0.1, 0.4)
+					var p := _grid_point(x, z) + Vector3.UP * r * sy * rng.randf_range(0.1, 0.4)
 					xfs.append(Transform3D(basis, p))
 					cols.append(_stone_col(rng))
 				pebble_tiles.append(_pebble_mm(small if mesh_k == 0 else big, xfs, cols, Vector3(x0 + PEBBLE_TILE * 0.5, TANK_MIN.y, z0 + PEBBLE_TILE * 0.5), PEBBLE_RANGE))
@@ -248,7 +277,7 @@ func _build_gravel() -> void:
 		var r := 4.0 + pow(rng.randf(), 2.2) * 6.0
 		var sy := rng.randf_range(0.5, 0.82)
 		var basis := (Basis(Vector3.UP, rng.randf() * TAU) * Basis(Vector3.RIGHT, rng.randf_range(-0.2, 0.2))).scaled(Vector3(r * rng.randf_range(0.9, 1.35), r * sy, r))
-		sx.append(Transform3D(basis, floor_point(x, z) + Vector3.UP * r * sy * rng.randf_range(0.05, 0.3)))
+		sx.append(Transform3D(basis, _grid_point(x, z) + Vector3.UP * r * sy * rng.randf_range(0.05, 0.3)))
 		sc.append(_stone_col(rng))
 	var stones := _pebble_mm(big, sx, sc, Vector3.ZERO, 0.0)
 	stones.name = "GravelStones"

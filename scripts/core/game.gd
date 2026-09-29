@@ -235,8 +235,10 @@ func _build_world() -> void:
 
 	hud = Hud.new()
 	add_child(hud)
+	StartupTrace.mark("HUD built")
 	pause_menu = PauseMenu.new()
 	add_child(pause_menu)
+	StartupTrace.mark("pause menu built")
 	title = TitleScreen.new()
 	add_child(title)
 	quality = QualityScaler.new()
