@@ -21,6 +21,8 @@ var wake: Wake
 var t2: Tier2Combat
 ## Expansion 5's creatures: placement, activation near the axolotl, discovery (docs/ECOSYSTEM.md).
 var ecosystem: Ecosystem
+## The decorative aquarium fish (noncombatants; docs/AQUARIUM.md).
+var fish: AmbientFish
 var balls: Array[MossBall] = []
 var vortices: Array[Vortex] = []
 var player: Axolotl
@@ -222,6 +224,10 @@ func _build_world() -> void:
 	ecosystem = Ecosystem.new()
 	add_child(ecosystem)
 	ecosystem.populate(balls)
+	fish = AmbientFish.new()
+	fish.name = "AmbientFish"
+	add_child(fish)
+	fish.setup(Aquarium.TANK_MIN, Aquarium.TANK_MAX, balls)
 	StartupTrace.mark("creatures placed")
 	await _stage("Setting up the tank")
 

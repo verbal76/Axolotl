@@ -9,7 +9,6 @@ const TANK_MAX := Vector3(290, 150, 220)
 const FLOOR_Y := -825.0
 const ROOM_LAYER := 2
 
-const GRAVEL_TEX := preload("res://assets/textures/gravel.png")
 const GRIME_TEX := preload("res://assets/textures/grime.png")
 const ALGAE_TEX := preload("res://assets/textures/algae_mask.png")
 const NOISE := preload("res://assets/textures/noise_rgb.png")
@@ -105,50 +104,140 @@ func _build_light() -> void:
 	add_child(fill)
 
 
+## The floor's height above TANK_MIN.y at (x, z) (docs/AQUARIUM.md): banked up toward the back glass as
+## aquascapes are, gently rolling, heaped against the glass, gathered round the plant clumps and the
+## bubbler, and dipping where the ooze lies. Everything on the floor stands on this.
+static func floor_h(x: float, z: float) -> float:
+	if _floor_noise == null:
+		_floor_noise = FastNoiseLite.new()
+		_floor_noise.seed = 4411
+		_floor_noise.frequency = 0.012
+		_floor_noise.fractal_octaves = 3
+	var back := clampf((TANK_MAX.z - z) / (TANK_MAX.z - TANK_MIN.z), 0.0, 1.0)
+	var h := 2.5 + back * back * 13.0
+	h += _floor_noise.get_noise_2d(x, z) * 4.0 + _floor_noise.get_noise_2d(x * 4.1 + 300.0, z * 4.1) * 1.1
+	# Heaped against the glass.
+	var wall := minf(minf(x - TANK_MIN.x, TANK_MAX.x - x), minf(z - TANK_MIN.z, TANK_MAX.z - z))
+	h += 3.5 * pow(clampf(1.0 - wall / 16.0, 0.0, 1.0), 2.0)
+	for f in FLOOR_FEATURES:
+		var d := Vector2(x - f[0], z - f[1]).length()
+		var k := clampf(1.0 - d / f[2], 0.0, 1.0)
+		h += f[3] * k * k * (3.0 - 2.0 * k)
+	return maxf(h, 0.3)
+
+
+## The floor's surface point at (x, z).
+static func floor_point(x: float, z: float) -> Vector3:
+	return Vector3(x, TANK_MIN.y + floor_h(x, z), z)
+
+
+static var _floor_noise: FastNoiseLite
+## [x, z, radius, height]: gravel heaped round the plant clumps and the bubbler's stone.
+const FLOOR_FEATURES := [[175.0, -165.0, 28.0, 4.5], [-200.0, -175.0, 34.0, 4.0], [-205.0, 120.0, 34.0, 4.0], [200.0, 115.0, 34.0, 3.5],
+		[60.0, -185.0, 30.0, 3.5], [-80.0, 130.0, 30.0, 3.0]]
+const FLOOR_STEP := 4.0
+const PEBBLE_TILE := 48.0
+## Near-camera 3D pebbles are drawn only this close (the textured floor carries them beyond).
+const PEBBLE_RANGE := 100.0
+const GRAVEL2_TEX := preload("res://assets/textures/gravel2_albedo.png")
+const GRAVEL2_NRM := preload("res://assets/textures/gravel2_normal.png")
+const STONE_COLS := [Color(0.4, 0.39, 0.37), Color(0.44, 0.41, 0.36), Color(0.47, 0.41, 0.32), Color(0.35, 0.28, 0.22),
+		Color(0.24, 0.23, 0.22), Color(0.3, 0.3, 0.29), Color(0.56, 0.53, 0.48)]
+const STONE_WEIGHTS := [0.22, 0.2, 0.16, 0.14, 0.12, 0.12, 0.04]
+var pebble_tiles: Array[MultiMeshInstance3D] = []
+
+
 func _build_gravel() -> void:
 	gravel_mat = ShaderMaterial.new()
 	gravel_mat.shader = preload("res://shaders/gravel.gdshader")
-	gravel_mat.set_shader_parameter("gravel_tex", GRAVEL_TEX)
+	gravel_mat.set_shader_parameter("gravel_tex", GRAVEL2_TEX)
+	gravel_mat.set_shader_parameter("gravel_nrm", GRAVEL2_NRM)
 	gravel_mat.set_shader_parameter("grime_tex", GRIME_TEX)
-	var mi := MeshInstance3D.new()
-	var pm := PlaneMesh.new()
-	pm.size = Vector2(TANK_MAX.x - TANK_MIN.x, TANK_MAX.z - TANK_MIN.z)
-	pm.subdivide_width = 8
-	pm.subdivide_depth = 8
-	mi.mesh = pm
-	mi.material_override = gravel_mat
-	mi.position = Vector3((TANK_MIN.x + TANK_MAX.x) * 0.5, TANK_MIN.y, (TANK_MIN.z + TANK_MAX.z) * 0.5)
-	add_child(mi)
-	# 3D pebbles for depth.
 	pebble_mat = ShaderMaterial.new()
-	pebble_mat.shader = preload("res://shaders/gravel.gdshader")
-	pebble_mat.set_shader_parameter("gravel_tex", GRAVEL_TEX)
+	pebble_mat.shader = gravel_mat.shader
+	pebble_mat.set_shader_parameter("gravel_tex", GRAVEL2_TEX)
+	pebble_mat.set_shader_parameter("gravel_nrm", GRAVEL2_NRM)
 	pebble_mat.set_shader_parameter("grime_tex", GRIME_TEX)
-	pebble_mat.set_shader_parameter("tile", 0.35)
 	pebble_mat.set_shader_parameter("pebble", true)
 	for m in [gravel_mat, pebble_mat]:
 		m.set_shader_parameter("lamp_dir", light_params["lamp_dir"])
-	var mm := MultiMesh.new()
-	mm.transform_format = MultiMesh.TRANSFORM_3D
-	var sm := SphereMesh.new()
-	sm.radius = 1.0
-	sm.height = 2.0
-	sm.radial_segments = 8
-	sm.rings = 4
-	mm.mesh = sm
-	mm.instance_count = 1400
+	# The floor: a height mesh (real piles, hollows and a bank toward the back).
+	var st := SurfaceTool.new()
+	st.begin(Mesh.PRIMITIVE_TRIANGLES)
+	var nx := int(ceil((TANK_MAX.x - TANK_MIN.x) / FLOOR_STEP)) + 1
+	var nz := int(ceil((TANK_MAX.z - TANK_MIN.z) / FLOOR_STEP)) + 1
+	for j in nz:
+		for i in nx:
+			var x := minf(TANK_MIN.x + i * FLOOR_STEP, TANK_MAX.x)
+			var z := minf(TANK_MIN.z + j * FLOOR_STEP, TANK_MAX.z)
+			var e := 0.6
+			var n := Vector3(floor_h(x - e, z) - floor_h(x + e, z), 2.0 * e, floor_h(x, z - e) - floor_h(x, z + e)).normalized()
+			st.set_normal(n)
+			st.set_color(Color.WHITE)
+			st.add_vertex(floor_point(x, z))
+	for j in nz - 1:
+		for i in nx - 1:
+			var a := j * nx + i
+			for q in [a, a + 1, a + nx, a + 1, a + nx + 1, a + nx]:
+				st.add_index(q)
+	var floor_mi := MeshInstance3D.new()
+	floor_mi.name = "GravelFloor"
+	floor_mi.mesh = st.commit()
+	floor_mi.material_override = gravel_mat
+	add_child(floor_mi)
 	var rng := RandomNumberGenerator.new()
 	rng.seed = 5
-	for i in mm.instance_count:
-		var p := Vector3(rng.randf_range(TANK_MIN.x + 5, TANK_MAX.x - 5), TANK_MIN.y, rng.randf_range(TANK_MIN.z + 5, TANK_MAX.z - 5))
-		var s := rng.randf_range(2.5, 5.0)
-		var b := Basis(Vector3.UP, rng.randf() * TAU).scaled(Vector3(s * rng.randf_range(0.8, 1.3), s * 0.55, s))
-		mm.set_instance_transform(i, Transform3D(b, p))
-	var mmi := MultiMeshInstance3D.new()
-	mmi.multimesh = mm
-	mmi.material_override = pebble_mat
-	mmi.cast_shadow = GeometryInstance3D.SHADOW_CASTING_SETTING_OFF
-	add_child(mmi)
+	var small := _pebble_mesh(1, 11)
+	var big := _pebble_mesh(2, 23)
+	# Near-camera pebbles: tiles of instanced pebbles, drawn only within PEBBLE_RANGE (their
+	# silhouettes and parallax are what close views need); denser where gravel gathers.
+	var tx := int(ceil((TANK_MAX.x - TANK_MIN.x) / PEBBLE_TILE))
+	var tz := int(ceil((TANK_MAX.z - TANK_MIN.z) / PEBBLE_TILE))
+	for tj in tz:
+		for ti in tx:
+			var x0 := TANK_MIN.x + ti * PEBBLE_TILE
+			var z0 := TANK_MIN.z + tj * PEBBLE_TILE
+			for mesh_k in 2:
+				var xfs := []
+				var cols := []
+				var count := 150 if mesh_k == 0 else 40
+				for i in count:
+					var x := minf(x0 + rng.randf() * PEBBLE_TILE, TANK_MAX.x - 1.5)
+					var z := minf(z0 + rng.randf() * PEBBLE_TILE, TANK_MAX.z - 1.5)
+					var r := (1.0 + pow(rng.randf(), 2.0) * 1.4) if mesh_k == 0 else (2.2 + pow(rng.randf(), 1.6) * 2.4)
+					var sy := rng.randf_range(0.45, 0.75)
+					var basis := Basis(Vector3.UP, rng.randf() * TAU) * Basis(Vector3(rng.randf() - 0.5, 0, rng.randf() - 0.5).normalized(), rng.randf() * 0.35)
+					basis = basis.scaled(Vector3(r * rng.randf_range(0.9, 1.3), r * sy, r))
+					# Partly buried: its middle 10-40% of its height above the surface.
+					var p := floor_point(x, z) + Vector3.UP * r * sy * rng.randf_range(0.1, 0.4)
+					xfs.append(Transform3D(basis, p))
+					cols.append(_stone_col(rng))
+				pebble_tiles.append(_pebble_mm(small if mesh_k == 0 else big, xfs, cols, Vector3(x0 + PEBBLE_TILE * 0.5, TANK_MIN.y, z0 + PEBBLE_TILE * 0.5), PEBBLE_RANGE))
+	# Larger stones scattered over the whole floor (drawn from anywhere: they give the whole-tank
+	# views their depth), gathering round the plants and the bubbler.
+	var sx := []
+	var sc := []
+	for i in 260:
+		var x: float
+		var z: float
+		if i < 90:
+			var f: Array = FLOOR_FEATURES[i % FLOOR_FEATURES.size()]
+			var a := rng.randf() * TAU
+			var d: float = f[2] * sqrt(rng.randf()) * 0.9
+			x = f[0] + cos(a) * d
+			z = f[1] + sin(a) * d
+		else:
+			x = rng.randf_range(TANK_MIN.x + 4, TANK_MAX.x - 4)
+			z = rng.randf_range(TANK_MIN.z + 4, TANK_MAX.z - 4)
+		x = clampf(x, TANK_MIN.x + 5, TANK_MAX.x - 5)
+		z = clampf(z, TANK_MIN.z + 5, TANK_MAX.z - 5)
+		var r := 4.0 + pow(rng.randf(), 2.2) * 6.0
+		var sy := rng.randf_range(0.5, 0.82)
+		var basis := (Basis(Vector3.UP, rng.randf() * TAU) * Basis(Vector3.RIGHT, rng.randf_range(-0.2, 0.2))).scaled(Vector3(r * rng.randf_range(0.9, 1.35), r * sy, r))
+		sx.append(Transform3D(basis, floor_point(x, z) + Vector3.UP * r * sy * rng.randf_range(0.05, 0.3)))
+		sc.append(_stone_col(rng))
+	var stones := _pebble_mm(big, sx, sc, Vector3.ZERO, 0.0)
+	stones.name = "GravelStones"
 	# Pockets of ooze among the gravel; each clears at its own restoration threshold.
 	var ooze_mat := StandardMaterial3D.new()
 	ooze_mat.albedo_color = Color(0.16, 0.2, 0.08)
@@ -156,7 +245,9 @@ func _build_gravel() -> void:
 	ooze_mat.metallic_specular = 0.8
 	for i in 34:
 		var root := Node3D.new()
-		root.position = Vector3(rng.randf_range(-190, 190), TANK_MIN.y, rng.randf_range(-170, 120))
+		var ox := rng.randf_range(-190, 190)
+		var oz := rng.randf_range(-170, 120)
+		root.position = floor_point(ox, oz) - Vector3.UP * 0.6
 		add_child(root)
 		for k in rng.randi_range(2, 4):
 			var b := MeshInstance3D.new()
@@ -171,6 +262,87 @@ func _build_gravel() -> void:
 			b.scale = Vector3(1.0, 0.35, 1.0)
 			root.add_child(b)
 		ooze.append([root, rng.randf_range(0.03, 0.93)])
+
+
+func _stone_col(rng: RandomNumberGenerator) -> Color:
+	var r := rng.randf()
+	var acc := 0.0
+	for k in STONE_COLS.size():
+		acc += STONE_WEIGHTS[k]
+		if r <= acc:
+			var c: Color = STONE_COLS[k]
+			return c * rng.randf_range(0.85, 1.12)
+	return STONE_COLS[0]
+
+
+func _pebble_mm(mesh: Mesh, xfs: Array, cols: Array, centre: Vector3, range_end: float) -> MultiMeshInstance3D:
+	var mm := MultiMesh.new()
+	mm.transform_format = MultiMesh.TRANSFORM_3D
+	mm.use_custom_data = true
+	mm.mesh = mesh
+	mm.instance_count = xfs.size()
+	for i in xfs.size():
+		mm.set_instance_transform(i, xfs[i])
+		mm.set_instance_custom_data(i, cols[i])
+	var mmi := MultiMeshInstance3D.new()
+	mmi.multimesh = mm
+	mmi.material_override = pebble_mat
+	mmi.cast_shadow = GeometryInstance3D.SHADOW_CASTING_SETTING_OFF
+	if range_end > 0.0:
+		# (Its own position is the tile's centre, so the range is measured from there.)
+		mmi.position = centre
+		for i in xfs.size():
+			var xf: Transform3D = xfs[i]
+			mm.set_instance_transform(i, Transform3D(xf.basis, xf.origin - centre))
+		mmi.visibility_range_end = range_end + PEBBLE_TILE * 0.7
+	add_child(mmi)
+	return mmi
+
+
+## A pebble: a subdivided octahedron (`level` 1 or 2) pushed out to a sphere and made lumpy and
+## irregular (never a clean ball), unit size. Vertex colour red: 1 on top, darker toward the bottom
+## where it sinks into the gravel (contact shading).
+func _pebble_mesh(level: int, seed_v: int) -> ArrayMesh:
+	var r := RandomNumberGenerator.new()
+	r.seed = seed_v
+	var verts := [Vector3(1, 0, 0), Vector3(-1, 0, 0), Vector3(0, 1, 0), Vector3(0, -1, 0), Vector3(0, 0, 1), Vector3(0, 0, -1)]
+	var tris := [[0, 2, 4], [4, 2, 1], [1, 2, 5], [5, 2, 0], [4, 3, 0], [1, 3, 4], [5, 3, 1], [0, 3, 5]]
+	for l in level:
+		var nt := []
+		var mid := {}
+		var midpoint := func(a: int, b: int) -> int:
+			var key := "%d_%d" % [mini(a, b), maxi(a, b)]
+			if mid.has(key):
+				return mid[key]
+			verts.append(((verts[a] as Vector3) + (verts[b] as Vector3)).normalized())
+			mid[key] = verts.size() - 1
+			return verts.size() - 1
+		for t in tris:
+			var ab: int = midpoint.call(t[0], t[1])
+			var bc: int = midpoint.call(t[1], t[2])
+			var ca: int = midpoint.call(t[2], t[0])
+			nt.append_array([[t[0], ab, ca], [ab, t[1], bc], [ca, bc, t[2]], [ab, bc, ca]])
+		tris = nt
+	var lumps := [Vector3(r.randf() - 0.5, r.randf() - 0.5, r.randf() - 0.5).normalized(), Vector3(r.randf() - 0.5, r.randf() - 0.5, r.randf() - 0.5).normalized()]
+	var st := SurfaceTool.new()
+	st.begin(Mesh.PRIMITIVE_TRIANGLES)
+	for v in verts:
+		var d := (v as Vector3).normalized()
+		var k := 1.0 + 0.12 * d.dot(lumps[0]) - 0.1 * absf(d.dot(lumps[1])) + r.randf_range(-0.05, 0.05)
+		# A flatter base.
+		var p := d * k
+		if p.y < -0.3:
+			p.y = lerpf(p.y, -0.35, 0.6)
+		st.set_color(Color(clampf(0.35 + (p.y + 0.4) * 0.9, 0.35, 1.0), 0, 0))
+		st.add_vertex(p)
+	# (Godot's front faces wind clockwise seen from outside: the octahedron above is counter-
+	# clockwise, so each triangle goes in reversed.)
+	for t in tris:
+		st.add_index(t[0])
+		st.add_index(t[2])
+		st.add_index(t[1])
+	st.generate_normals()
+	return st.commit()
 
 
 func _build_glass() -> void:
@@ -275,7 +447,7 @@ func _build_surface() -> void:
 
 
 func _build_bubbler() -> void:
-	var base := Vector3(175, TANK_MIN.y, -165)
+	var base := floor_point(175, -165)
 	var stone := MeshInstance3D.new()
 	var cm := CylinderMesh.new()
 	cm.top_radius = 7
@@ -395,7 +567,9 @@ void fragment() {
 	var xfs := []
 	for c in clusters:
 		for i in 22:
-			var p: Vector3 = c + Vector3(rng.randf_range(-22, 22), TANK_MIN.y, rng.randf_range(-16, 16))
+			var px: float = c.x + rng.randf_range(-22, 22)
+			var pz: float = c.z + rng.randf_range(-16, 16)
+			var p: Vector3 = floor_point(px, pz) - Vector3.UP * 0.8
 			var hgt := rng.randf_range(80, 190)
 			var b := Basis(Vector3.UP, rng.randf() * TAU).scaled(Vector3(rng.randf_range(1.5, 2.5), hgt, 1.0))
 			xfs.append(Transform3D(b, p))
@@ -617,8 +791,8 @@ func apply(g: float) -> void:
 func _process(dt: float) -> void:
 	# Snail grazing slowly around the gravel.
 	_snail_t += dt * 0.006
-	var p := Vector3(cos(_snail_t) * 150.0, TANK_MIN.y, sin(_snail_t) * 105.0 - 20.0)
-	var p2 := Vector3(cos(_snail_t + 0.01) * 150.0, TANK_MIN.y, sin(_snail_t + 0.01) * 105.0 - 20.0)
+	var p := floor_point(cos(_snail_t) * 150.0, sin(_snail_t) * 105.0 - 20.0)
+	var p2 := floor_point(cos(_snail_t + 0.01) * 150.0, sin(_snail_t + 0.01) * 105.0 - 20.0)
 	snail.position = p
 	snail.look_at(p2, Vector3.UP)
 	if _legs_t >= 0.0:

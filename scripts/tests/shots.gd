@@ -410,6 +410,13 @@ func run(runner) -> void:
 		await _report_shots(g)
 	if only == "camaudit":
 		await _camera_audit(g)
+	if only == "gravel":
+		await _gravel_shots(g, "gravel_murky")
+		for b in g.balls:
+			b.add_heal(Vector3.UP, 340.0, 0.0)
+		g.g_disp = 1.0
+		g.aquarium.apply(1.0)
+		await _gravel_shots(g, "gravel_clean")
 	if only == "leafclose":
 		await _leaf_close(g, g.balls[2], "leaf_close")
 		for b in g.balls:
@@ -436,6 +443,27 @@ func run(runner) -> void:
 		g.cam.pitch = -0.1
 		await t.seconds(1.5)
 		await t.shot("07_restored_under")
+
+
+## The gravel (docs/AQUARIUM.md): close, normal and grazing views inside the tank, and one through
+## the front glass from the room.
+func _gravel_shots(g: Game, tag: String) -> void:
+	g.player.invuln_t = 9999
+	g.cam.cinematic = true
+	var views := [
+		["1close", Vector3(118, -94, 70), Vector3(112, -108, 52)],
+		["2normal", Vector3(150, -62, 150), Vector3(100, -104, 90)],
+		["3grazing", Vector3(-150, -104, 170), Vector3(-110, -106, 110)],
+		["4back", Vector3(-40, -80, 40), Vector3(-60, -100, -150)],
+		["5glass", Vector3(40, -70, 330), Vector3(20, -100, 150)],
+	]
+	for v in views:
+		g.cam.cine_pos = v[1]
+		g.cam.cine_look = v[2]
+		g.cam.cine_up = Vector3.UP
+		await t.seconds(1.6)
+		await t.shot("%s_%s" % [tag, v[0]])
+	g.cam.cinematic = false
 
 
 func _ball_shots(g: Game, tag: String) -> void:

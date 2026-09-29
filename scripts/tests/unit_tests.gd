@@ -14,7 +14,7 @@ func run(runner) -> void:
 	p.use_bot_input = true
 	await t.seconds(0.5)
 	var only: String = Settings.test_args.get("only", "")
-	for name_ in ["_test_startup", "_test_ota_and_version", "_test_mesh_winding", "_test_terrain", "_test_ravines", "_test_terrain_grounded", "_test_no_floating_platforms", "_test_parasite_locomotion", "_test_parasite_body_and_death", "_test_parasite_combat", "_test_gill_look", "_test_gill_idles", "_test_gill_colours", "_test_gill_patterns", "_test_tail_whip", "_test_ambient_sway", "_test_placements", "_test_tutorial_route", "_test_sphere_walk", "_test_jump_and_burst", "_test_coyote_and_buffer", "_test_swipe_direction_and_stages", "_test_hard_landing", "_test_food", "_test_food_reach", "_test_darter_and_burrower", "_test_food_repopulates", "_test_motes", "_test_checkpoint_and_regen", "_test_crumble", "_test_restoration_gates", "_test_bubble_columns", "_test_restoration_continuity", "_test_health_map", "_test_vortex", "_test_current", "_test_canopy", "_test_canopy_plain_jumps", "_test_climbs_physical", "_test_jungle_ladders_physical", "_test_leaf_geometry", "_test_leaf_footing", "_test_caves", "_test_mounds", "_test_vegetation", "_test_vortex_mouths_clear", "_test_route_audit", "_test_new_areas", "_test_ecosystem", "_test_music", "_test_run_clock", "_test_completion_catalog", "_test_completion_frozen", "_test_run_save_file", "_test_run_timer_live", "_test_run_continue", "_test_timer_integrity", "_test_resume_points_safe", "_phase_continue_write", "_phase_continue_read", "_test_upgrades", "_test_ui", "_test_menu_scrollbar", "_test_tier2_rules", "_test_tier2_world", "_test_all_clear"]:
+	for name_ in ["_test_startup", "_test_ota_and_version", "_test_mesh_winding", "_test_terrain", "_test_ravines", "_test_terrain_grounded", "_test_no_floating_platforms", "_test_parasite_locomotion", "_test_parasite_body_and_death", "_test_parasite_combat", "_test_gill_look", "_test_gill_idles", "_test_gill_colours", "_test_gill_patterns", "_test_tail_whip", "_test_ambient_sway", "_test_placements", "_test_tutorial_route", "_test_sphere_walk", "_test_jump_and_burst", "_test_coyote_and_buffer", "_test_swipe_direction_and_stages", "_test_hard_landing", "_test_food", "_test_food_reach", "_test_darter_and_burrower", "_test_food_repopulates", "_test_motes", "_test_checkpoint_and_regen", "_test_crumble", "_test_restoration_gates", "_test_bubble_columns", "_test_restoration_continuity", "_test_health_map", "_test_vortex", "_test_current", "_test_canopy", "_test_canopy_plain_jumps", "_test_climbs_physical", "_test_jungle_ladders_physical", "_test_leaf_geometry", "_test_leaf_footing", "_test_caves", "_test_mounds", "_test_vegetation", "_test_vortex_mouths_clear", "_test_route_audit", "_test_new_areas", "_test_ecosystem", "_test_music", "_test_run_clock", "_test_completion_catalog", "_test_completion_frozen", "_test_run_save_file", "_test_run_timer_live", "_test_run_continue", "_test_timer_integrity", "_test_resume_points_safe", "_phase_continue_write", "_phase_continue_read", "_test_upgrades", "_test_ui", "_test_menu_scrollbar", "_test_tier2_rules", "_test_tier2_world", "_test_ambient_fish", "_test_all_clear"]:
 		# "_phase_*" tests are halves of a relaunch test: they run only when asked for by name
 		# (in a child process started by _test_run_continue).
 		if name_.begins_with("_phase") and only != name_:
@@ -4507,6 +4507,76 @@ func _test_gill_patterns() -> void:
 ## dev-000025 phone test: the menus' scrollbar must be easy to grab with a thumb. Its touch area
 ## is at least 3x the 8 px the default theme gave it (UiStyle.SCROLL_TOUCH_W), inside the panel,
 ## covering no button, toggle or slider; grabbing it on its undrawn part and dragging scrolls.
+## The ambient fish (docs/AQUARIUM.md): about ten, four kinds; never targets, never completion; the
+## gameplay random sequence is the same with or without them; they stay in the water (inside the
+## glass, above the gravel, out of every moss ball); Gill close makes them dart off, a school
+## scatters and regroups.
+func _test_ambient_fish() -> void:
+	var af: AmbientFish = g.fish
+	var kinds := {}
+	for f in af.fish:
+		kinds[f["kind"]] = int(kinds.get(f["kind"], 0)) + 1
+	t.check("fish_ten_of_four_kinds", af.fish.size() == AmbientFish.COUNT and kinds.size() == 4, str(kinds))
+	var targeted := 0
+	for b in g.balls:
+		var saved := p.ball
+		p.ball = b
+		for x in g._strikeable(p):
+			if x.get_parent() == af or x == af:
+				targeted += 1
+		p.ball = saved
+	var in_catalog := g.completion.order.filter(func(id): return id.contains("fish") or id.contains("tetra") or id.contains("gourami")).size()
+	t.check("fish_never_targets_or_completion", targeted == 0 and in_catalog == 0 and not af.fish.any(func(f): return f["node"] is Critter), "targetable %d, catalog ids %d" % [targeted, in_catalog])
+	# Determinism: stepping the fish never touches the global generator.
+	var st := af.fish.map(func(f): return [f["pos"], f["vel"], f["goal"]])
+	seed(4242)
+	var r0 := [randi(), randi()]
+	seed(4242)
+	for i in 600:
+		af.step(1.0 / 60.0, Vector3.INF)
+	var r1 := [randi(), randi()]
+	t.check("fish_leave_gameplay_rng_alone", r0 == r1, "")
+	# Two minutes of swimming: always inside the tank, never inside a moss ball.
+	var worst_out := 0.0
+	var worst_in := -INF
+	var paused := 0
+	for i in 60 * 120:
+		af.step(1.0 / 60.0, Vector3.INF)
+		if i % 30 == 0:
+			for f in af.fish:
+				var pos: Vector3 = f["pos"]
+				worst_out = maxf(worst_out, (pos - pos.clamp(af.tank_min, af.tank_max)).length())
+				for o in af.obstacles:
+					worst_in = maxf(worst_in, (o[1] as float) - 9.0 - pos.distance_to(o[0]))
+				if (f["vel"] as Vector3).length() < 1.0:
+					paused += 1
+	t.check("fish_stay_in_the_water", worst_out < 0.01 and worst_in < 0.0 and paused > 0, "outside the tank by %.2f, inside a ball by %.2f, paused samples %d" % [worst_out, worst_in, paused])
+	# A bump: Gill right beside a tetra sends it (and its school) darting off; later they regroup.
+	var tet: Dictionary = af.fish.filter(func(f): return f["kind"] == "tetra")[0]
+	var gill: Vector3 = (tet["pos"] as Vector3) + Vector3(0.5, 0, 0)
+	var d0: float = gill.distance_to(tet["pos"])
+	for i in 45:
+		af.step(1.0 / 60.0, gill)
+	var d1: float = gill.distance_to(tet["pos"])
+	var alarmed := af.fish.filter(func(f): return f["kind"] == "tetra" and f["alarm"] > 0.2).size()
+	for i in 60 * 25:
+		af.step(1.0 / 60.0, Vector3.INF)
+	var calm := af.fish.all(func(f): return f["alarm"] <= 0.0)
+	var tets := af.fish.filter(func(f): return f["kind"] == "tetra")
+	var c := Vector3.ZERO
+	for f in tets:
+		c += f["pos"]
+	c /= tets.size()
+	var spread := 0.0
+	for f in tets:
+		spread = maxf(spread, c.distance_to(f["pos"]))
+	t.check("fish_scatter_then_regroup", d1 > d0 + 3.0 and alarmed >= 2 and calm and spread < 30.0, "darted %.1f -> %.1f m; %d tetras alarmed; calm again %s; school within %.1f m" % [d0, d1, alarmed, calm, spread])
+	for i in st.size():
+		af.fish[i]["pos"] = st[i][0]
+		af.fish[i]["vel"] = st[i][1]
+		af.fish[i]["goal"] = st[i][2]
+
+
 # --- Tier 2 (docs/TIER2.md) ---------------------------------------------------------------
 
 ## The rules on their own: angles (wraparound), Water Cannon's pick, Bubble Blast's volume, Gill
