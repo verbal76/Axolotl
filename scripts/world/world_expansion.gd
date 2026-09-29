@@ -372,6 +372,13 @@ static func reed_canyon(lb: LevelBuilder) -> void:
 	lb.mote("secret", sc_c.x, sc_c.y + 2)
 	lb.mote("secret", sc_c.x - 2, sc_c.y - 2)
 	lb.bloom(sc_c.x + 1, sc_c.y - 1)
+	# The Bubble Blast shrine in the Secret Clearing (Tier 2, docs/TIER2.md): three practice
+	# targets round it among the clearing's plants, so the shockwave's reach and the plants it
+	# blows back are plain to see.
+	var shp := b.surface_point(lb.d(sc_c.x - 2, sc_c.y + 1.5))
+	var shu := b.up_at(shp)
+	var shf := MossBall.frame_at(shu, 0.0)
+	lb.shrine(Tier2.BUBBLE, shp, [shp + shu * 0.9 + shf.x * 2.4, shp + shu * 0.9 - shf.x * 2.2 + shf.z * 1.0, shp + shu * 0.9 + shf.z * 2.6])
 	# The Reed Wall at the canyon's end: dense reeds across the way out towards the maze that
 	# part (draw up and away) once the canyon heals, a shortcut; until then go round.
 	var rw := b.xform_on_dir(_dir(R.call(0, 104)), 0.0, 90.0)
@@ -725,6 +732,12 @@ static func hollow_grotto(lb: LevelBuilder) -> void:
 	lb.mote_xf("chamber", Transform3D(MossBall.frame_at(chup, 0.0), chc + MossBall.frame_at(chup, 0.0).x * 5.0), 0.6)
 	lb.mote_xf("chamber", Transform3D(MossBall.frame_at(chup, 0.0), chc - MossBall.frame_at(chup, 0.0).x * 5.0), 0.6)
 	lb.parasite(Parasite.Kind.SMALL, "chamber", cz.x - 14, cz.y + 6, 4.0)
+	# The Gill Rush shrine in the Glow Chamber (Tier 2, docs/TIER2.md): three practice targets
+	# spread through the chamber, one after another, for the 1-2-3 chain.
+	var chfr := MossBall.frame_at(chup, 0.0)
+	var chsh := b.surface_point(chup, b.altitude(chc)) + chfr.z * 3.5
+	lb.shrine(Tier2.RUSH, chsh, [chc + chup * 1.0 - chfr.z * 0.5 + chfr.x * 2.5, chc + chup * 1.0 - chfr.z * 3.0,
+			chc + chup * 1.0 - chfr.z * 1.0 - chfr.x * 2.8])
 	# The Undercut Ravine: through a basalt upland, crossed on arched stone bridges (or round).
 	for bx in [-5.5, 5.5]:
 		var ba := b.surface_point(b.up_at(uzp.call(bx, -5.4)))

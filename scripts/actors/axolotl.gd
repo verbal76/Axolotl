@@ -225,7 +225,15 @@ func _physics_process(dt: float) -> void:
 	var want_jump := controls_enabled and Input.is_action_just_pressed("jump")
 	var want_swipe := controls_enabled and Input.is_action_just_pressed("swipe")
 	var want_lunge := controls_enabled and Input.is_action_just_pressed("lunge")
-	_acted = want_jump or want_swipe or want_lunge
+	var want_special := controls_enabled and Input.is_action_just_pressed("special")
+	_acted = want_jump or want_swipe or want_lunge or want_special
+	# (A Tier-2 ability is a short authored moment: nothing else starts while it runs.)
+	var t2: Tier2Combat = Game.inst.t2 if Game.inst else null
+	var t2_busy := t2 != null and t2.active != ""
+	if t2_busy:
+		want_jump = false
+		want_swipe = false
+		want_lunge = false
 
 	var vup := velocity.dot(up)
 	var vh := velocity - up * vup
@@ -344,6 +352,15 @@ func _physics_process(dt: float) -> void:
 			facing = wish.normalized()
 		_lunge_food = Game.inst.lunge_target(self, facing)
 
+	# Tier 2: the button starts the equipped ability (when ready and nothing else is running); while
+	# it runs it steers him (docs/TIER2.md).
+	if want_special and not t2_busy and swipe_t < 0.0 and lunge_t < 0.0 and t2 != null:
+		t2_busy = t2.try_start(self)
+	if t2_busy and t2.active != "":
+		var drive: Array = t2.drive(self, dt, vh)
+		vh = drive[0]
+		if not is_nan(float(drive[1])):
+			vup = drive[1]
 	# (A current stream carries him along and holds him at its height.)
 	var stream := ball.stream_at(global_position) if ball != null and not ball.streams.is_empty() else Vector3.ZERO
 	if stream != Vector3.ZERO and not grounded:
@@ -650,6 +667,8 @@ func idle_allowed() -> bool:
 	if state != "normal" or not controls_enabled or not grounded or _acted:
 		return false
 	if swipe_t >= 0.0 or lunge_t >= 0.0 or hurt_lock > 0.0 or land_lock > 0.0 or fall_danger or invuln_t > 0.0:
+		return false
+	if Game.inst != null and Game.inst.t2 != null and Game.inst.t2.active != "":
 		return false
 	if move_input.length() > 0.05 or ext_vel.length() > 0.05:
 		return false

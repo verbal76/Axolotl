@@ -1054,6 +1054,13 @@ static func _ball3(lb: LevelBuilder) -> void:
 	lb.mote_xf("crown", Transform3D(MossBall.frame_at(b.up_at(crown_top), 0.0), crown_top + b.up_at(crown_top) * 0.6), 0.4)
 	var crown_mid: Vector3 = gtops[gtops.size() - 3]
 	lb.bloom_xf(Transform3D(MossBall.frame_at(b.up_at(crown_mid), 0.0), crown_mid))
+	# The Water Cannon shrine on the High Crown (Tier 2, docs/TIER2.md): practice targets float
+	# round the crown at its height, out over the drop, for a first shot at whatever he faces.
+	var crown_sh: Vector3 = gtops[gtops.size() - 2]
+	var cup := b.up_at(crown_top)
+	var cfr := MossBall.frame_at(cup, 0.0)
+	lb.shrine(Tier2.CANNON, crown_sh, [crown_top + cup * 1.0 + cfr.z * 5.0, crown_top + cup * 1.4 + cfr.x * 5.5 - cfr.z * 1.5,
+			crown_top + cup * 0.8 - cfr.x * 5.0 + cfr.z * 2.0])
 	lb.parasite(Parasite.Kind.MEDIUM, "crown", 41, 104, 4.0)
 	lb.parasite(Parasite.Kind.SMALL, "crown", 50, 124, 4.0)
 	lb.mote("crown", 38, 118)

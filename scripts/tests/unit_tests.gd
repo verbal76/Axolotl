@@ -14,7 +14,7 @@ func run(runner) -> void:
 	p.use_bot_input = true
 	await t.seconds(0.5)
 	var only: String = Settings.test_args.get("only", "")
-	for name_ in ["_test_startup", "_test_ota_and_version", "_test_mesh_winding", "_test_terrain", "_test_ravines", "_test_terrain_grounded", "_test_no_floating_platforms", "_test_parasite_locomotion", "_test_parasite_body_and_death", "_test_parasite_combat", "_test_gill_look", "_test_gill_idles", "_test_gill_colours", "_test_gill_patterns", "_test_tail_whip", "_test_ambient_sway", "_test_placements", "_test_tutorial_route", "_test_sphere_walk", "_test_jump_and_burst", "_test_coyote_and_buffer", "_test_swipe_direction_and_stages", "_test_hard_landing", "_test_food", "_test_food_reach", "_test_darter_and_burrower", "_test_food_repopulates", "_test_motes", "_test_checkpoint_and_regen", "_test_crumble", "_test_restoration_gates", "_test_bubble_columns", "_test_restoration_continuity", "_test_health_map", "_test_vortex", "_test_current", "_test_canopy", "_test_canopy_plain_jumps", "_test_climbs_physical", "_test_jungle_ladders_physical", "_test_leaf_geometry", "_test_leaf_footing", "_test_caves", "_test_mounds", "_test_vegetation", "_test_vortex_mouths_clear", "_test_route_audit", "_test_new_areas", "_test_ecosystem", "_test_music", "_test_run_clock", "_test_completion_catalog", "_test_completion_frozen", "_test_run_save_file", "_test_run_timer_live", "_test_run_continue", "_test_timer_integrity", "_test_resume_points_safe", "_phase_continue_write", "_phase_continue_read", "_test_upgrades", "_test_ui", "_test_menu_scrollbar", "_test_all_clear"]:
+	for name_ in ["_test_startup", "_test_ota_and_version", "_test_mesh_winding", "_test_terrain", "_test_ravines", "_test_terrain_grounded", "_test_no_floating_platforms", "_test_parasite_locomotion", "_test_parasite_body_and_death", "_test_parasite_combat", "_test_gill_look", "_test_gill_idles", "_test_gill_colours", "_test_gill_patterns", "_test_tail_whip", "_test_ambient_sway", "_test_placements", "_test_tutorial_route", "_test_sphere_walk", "_test_jump_and_burst", "_test_coyote_and_buffer", "_test_swipe_direction_and_stages", "_test_hard_landing", "_test_food", "_test_food_reach", "_test_darter_and_burrower", "_test_food_repopulates", "_test_motes", "_test_checkpoint_and_regen", "_test_crumble", "_test_restoration_gates", "_test_bubble_columns", "_test_restoration_continuity", "_test_health_map", "_test_vortex", "_test_current", "_test_canopy", "_test_canopy_plain_jumps", "_test_climbs_physical", "_test_jungle_ladders_physical", "_test_leaf_geometry", "_test_leaf_footing", "_test_caves", "_test_mounds", "_test_vegetation", "_test_vortex_mouths_clear", "_test_route_audit", "_test_new_areas", "_test_ecosystem", "_test_music", "_test_run_clock", "_test_completion_catalog", "_test_completion_frozen", "_test_run_save_file", "_test_run_timer_live", "_test_run_continue", "_test_timer_integrity", "_test_resume_points_safe", "_phase_continue_write", "_phase_continue_read", "_test_upgrades", "_test_ui", "_test_menu_scrollbar", "_test_tier2_rules", "_test_tier2_world", "_test_all_clear"]:
 		# "_phase_*" tests are halves of a relaunch test: they run only when asked for by name
 		# (in a child process started by _test_run_continue).
 		if name_.begins_with("_phase") and only != name_:
@@ -4507,6 +4507,263 @@ func _test_gill_patterns() -> void:
 ## dev-000025 phone test: the menus' scrollbar must be easy to grab with a thumb. Its touch area
 ## is at least 3x the 8 px the default theme gave it (UiStyle.SCROLL_TOUCH_W), inside the panel,
 ## covering no button, toggle or slider; grabbing it on its undrawn part and dragging scrolls.
+# --- Tier 2 (docs/TIER2.md) ---------------------------------------------------------------
+
+## The rules on their own: angles (wraparound), Water Cannon's pick, Bubble Blast's volume, Gill
+## Rush's chain, and the loadout model (unlock order, one equipped, shared cooldown, save).
+func _test_tier2_rules() -> void:
+	var up := Vector3.UP
+	var fwd := Vector3.FORWARD
+	var o := Vector3.ZERO
+	var at := func(deg: float, dist: float) -> Vector3: return o + fwd.rotated(up, deg_to_rad(deg)) * dist
+	var offs := [Tier2Combat.facing_offset(fwd, up, o, at.call(10.0, 5.0)), Tier2Combat.facing_offset(fwd, up, o, at.call(-10.0, 5.0)),
+			Tier2Combat.facing_offset(fwd, up, o, at.call(350.0, 5.0)), Tier2Combat.facing_offset(fwd, up, o, at.call(90.0, 5.0)),
+			Tier2Combat.facing_offset(fwd, up, o, at.call(-90.0, 5.0)), Tier2Combat.facing_offset(fwd, up, o, at.call(270.0, 5.0)),
+			Tier2Combat.facing_offset(fwd, up, o, at.call(360.0, 5.0))]
+	var degs: Array = offs.map(func(x): return snappedf(rad_to_deg(x), 0.01))
+	t.check("tier2_shortest_angle_wraps", degs == [10.0, 10.0, 10.0, 90.0, 90.0, 90.0, 0.0], str(degs))
+	var cand := func(deg: float, dist: float, id: int, seen := true) -> Dictionary: return {"node": null, "pos": at.call(deg, dist), "seen": seen, "id": id}
+	var a: Dictionary = Tier2Combat.pick_cannon(fwd, up, o, [cand.call(-90.0, 3.0, 1), cand.call(10.0, 6.0, 2)])
+	var b: Dictionary = Tier2Combat.pick_cannon(fwd, up, o, [cand.call(90.0, 3.0, 1), cand.call(350.0, 6.0, 2)])
+	var tie_near: Dictionary = Tier2Combat.pick_cannon(fwd, up, o, [cand.call(10.0, 6.0, 1), cand.call(-10.0, 4.0, 2)])
+	var tie_same: Dictionary = Tier2Combat.pick_cannon(fwd, up, o, [cand.call(-10.0, 5.0, 9), cand.call(10.0, 5.0, 3)])
+	t.check("cannon_prefers_what_he_faces", a.get("id") == 2 and b.get("id") == 2 and tie_near.get("id") == 2 and tie_same.get("id") == 3,
+			"+10 over -90: %s; 350 over +90: %s; tie, nearer: %s; exact tie, lower id: %s" % [a.get("id"), b.get("id"), tie_near.get("id"), tie_same.get("id")])
+	var none: Array = [Tier2Combat.pick_cannon(fwd, up, o, [cand.call(0.0, Tier2Combat.CANNON_RANGE + 0.5, 1)]),
+			Tier2Combat.pick_cannon(fwd, up, o, [cand.call(100.0, 3.0, 1)]),
+			Tier2Combat.pick_cannon(fwd, up, o, [cand.call(0.0, 3.0, 1, false)])]
+	t.check("cannon_respects_range_cone_sight", none.all(func(x): return x.is_empty()), "out of range, outside the cone, behind rock: none picked")
+	var inside := [Tier2Combat.in_bubble(o, up, Vector3(3, 0, 0)), Tier2Combat.in_bubble(o, up, Vector3(2, 2.5, 0)), Tier2Combat.in_bubble(o, up, Vector3(0, 4.0, 0)),
+			Tier2Combat.in_bubble(o, up, Vector3(1, -0.3, 0))]
+	var outside := [Tier2Combat.in_bubble(o, up, Vector3(3, -1.0, 0)), Tier2Combat.in_bubble(o, up, Vector3(4.5, 0, 0)), Tier2Combat.in_bubble(o, up, Vector3(0, -2.0, 0))]
+	t.check("bubble_upper_hemisphere", inside.all(func(x): return x) and outside.all(func(x): return not x), "beside, above, elevated, just below the plane: in; well below, beyond the radius: out")
+	var all_ok := func(_a, _b): return true
+	var counts := []
+	for n in [1, 2, 3, 4, 6]:
+		var cs := []
+		for i in n:
+			cs.append(cand.call(-40.0 + 20.0 * i, 2.5 + i * 0.8, i + 1))
+		var chain: Array = Tier2Combat.plan_rush(fwd, up, o, cs, all_ok)
+		var ids := {}
+		for c in chain:
+			ids[c["id"]] = true
+		counts.append([chain.size(), ids.size()])
+	t.check("rush_chains_up_to_three_distinct", counts == [[1, 1], [2, 2], [3, 3], [3, 3], [3, 3]], str(counts))
+	var blocked: Array = Tier2Combat.plan_rush(fwd, up, o, [cand.call(0.0, 3.0, 1), cand.call(20.0, 4.0, 2)], func(_a, bpos): return (bpos as Vector3).distance_to(at.call(0.0, 3.0)) > 0.1)
+	var behind: Array = Tier2Combat.plan_rush(fwd, up, o, [cand.call(170.0, 2.0, 1)], all_ok)
+	t.check("rush_skips_unreachable_and_behind", blocked.size() == 1 and blocked[0]["id"] == 2 and behind.is_empty(), "blocked one skipped: %s; one behind him: %d" % [blocked.map(func(c): return c["id"]), behind.size()])
+	# Loadout: fixed order, first unlock equipped, locked ones cannot be equipped, one at a time.
+	var m := Tier2.new()
+	var e0 := m.equip(Tier2.CANNON)
+	m.unlock(Tier2.RUSH)
+	m.unlock(Tier2.CANNON)
+	var e1 := m.equip(Tier2.BUBBLE)
+	var e2 := m.equip(Tier2.CANNON)
+	t.check("tier2_loadout_rules", not e0 and not e1 and e2 and m.equipped == Tier2.CANNON and m.unlocked == [Tier2.CANNON, Tier2.RUSH],
+			"unlocked %s, equipped %s" % [str(m.unlocked), m.equipped])
+	# Cooldown: shared, so swapping does not skip it.
+	m.equipped = Tier2.RUSH
+	m.start_cooldown(100.0)
+	var r0 := m.is_ready(101.0)
+	m.equip(Tier2.CANNON)
+	var r1 := m.is_ready(101.0)
+	var r2 := m.is_ready(100.0 + Tier2.COOLDOWN[Tier2.RUSH] + 0.01)
+	t.check("tier2_swap_keeps_cooldown", not r0 and not r1 and r2 and absf(m.charge(100.0 + Tier2.COOLDOWN[Tier2.RUSH] * 0.5) - 0.5) < 0.01, "")
+	var back := Tier2.from_dict(m.to_dict())
+	var junk := Tier2.from_dict({"unlocked": ["cannon", "laser", 3], "equipped": "laser"})
+	t.check("tier2_saves_and_drops_unknowns", back.unlocked == m.unlocked and back.equipped == m.equipped and junk.unlocked == [Tier2.CANNON] and junk.equipped == Tier2.CANNON, str(junk.to_dict()))
+
+
+## A flat spot on ball `bi` with nothing hostile (parasite or creature) within `clear` metres.
+func _quiet_spot(bi: int, clear := 13.0) -> Vector3:
+	var b := g.balls[bi]
+	for lat in range(-70, 80, 7):
+		for lon in range(-175, 180, 9):
+			var d := MossBall.dir_ll(lat, lon)
+			if b.ravine_carve(d) > 0.01 or absf(b.terrain_height(d)) > 0.01:
+				continue
+			var pos := b.surface_point(d)
+			var busy := false
+			for par in b.parasites:
+				if par.is_alive() and par.global_position.distance_to(pos) < clear:
+					busy = true
+			for c in b.critters:
+				if c.global_position.distance_to(pos) < clear:
+					busy = true
+			for m in b.motes:
+				if m.global_position.distance_to(pos) < 6.0:
+					busy = true
+			if not busy:
+				return pos
+	return Vector3.INF
+
+
+func _clear_practice() -> void:
+	for tg in g.practice_targets.duplicate():
+		if is_instance_valid(tg):
+			tg.remove()
+	g.practice_targets.clear()
+
+
+## A practice target has popped (it is freed once hit).
+func _popped(tg) -> bool:
+	return not is_instance_valid(tg) or tg.defeated
+
+
+func _practice_at(pos: Vector3) -> PracticeTarget:
+	var tg := PracticeTarget.new()
+	tg.place(p.ball, pos, 9000 + g.practice_targets.size())
+	g.practice_targets.append(tg)
+	return tg
+
+
+## Presses the Tier-2 button (as a player would) and waits until the ability has finished.
+func _fire_tier2(timeout := 3.0) -> float:
+	await _until(func(): return g.t2.active == "", 3.0)
+	var before: Dictionary = g.t2.last
+	await press("special")
+	# (It starts on his next physics frame: wait for that, then for it to finish.)
+	var started: float = await _until(func(): return g.t2.active != "" or g.t2.last != before, 0.3)
+	if started < 0.0:
+		return -1.0
+	return await _until(func(): return g.t2.active == "", timeout)
+
+
+## Shrines, unlocks and the three abilities in the world, driven by the Tier-2 button.
+func _test_tier2_world() -> void:
+	var where := {}
+	for b in g.balls:
+		for s in b.shrines:
+			where[s.ability] = b.index
+	t.check("tier2_shrines_in_worlds_3_5_7", where == {Tier2.CANNON: 2, Tier2.BUBBLE: 4, Tier2.RUSH: 6}, str(where))
+	var saved_t2 := g.tier2
+	g.tier2 = Tier2.new()
+	var b0 := g.balls[0]
+	var release := _hold_threats(b0)
+	p.restore_full()
+	p.invuln_t = 999.0
+	# Nothing before a shrine: no button, and pressing does nothing.
+	var spot := _quiet_spot(0)
+	var up := b0.up_at(spot)
+	var fr := MossBall.frame_at(up, 0.0)
+	place_at(0, spot + up * 0.2, -fr.z)
+	await t.seconds(0.5)
+	var fired0: float = await _fire_tier2(0.5)
+	await t.frames(4)
+	t.check("tier2_nothing_before_a_shrine", not g.hud.special_shown() and g.t2.last.is_empty() or g.t2.last.get("ability", "") == "", "button shown %s" % g.hud.special_shown())
+	# The World 3 shrine: touched in play, it gives Water Cannon, equips it, shows the button and
+	# sets out practice targets; the run save carries it.
+	var sh: Tier2Shrine = g.balls[2].shrines[0]
+	sh.set_taken(false)
+	g.take_shrine(sh)
+	var targets_out := g.practice_targets.size()
+	g.save_run()
+	var saved: Dictionary = g.run_save.run()["tier2"]
+	await t.frames(2)
+	t.check("tier2_shrine_unlocks_and_equips", g.tier2.equipped == Tier2.CANNON and g.hud.special_shown() and targets_out == 3 and saved.get("unlocked", []) == [Tier2.CANNON] and sh.taken,
+			"equipped %s, button %s, practice targets %d, saved %s" % [g.tier2.equipped, g.hud.special_shown(), targets_out, str(saved)])
+	_clear_practice()
+	# Water Cannon: two targets, one 10 degrees off his facing and one 90 degrees off, both in range:
+	# the button hits the one he faces (and only it).
+	var face := -fr.z
+	var c0 := p.body_center()
+	var ta := _practice_at(c0 + face.rotated(up, deg_to_rad(10.0)) * 5.0 + up * 0.2)
+	var tb := _practice_at(c0 + face.rotated(up, deg_to_rad(-90.0)) * 3.0 + up * 0.2)
+	await t.frames(2)
+	g.tier2.ready_at = 0.0
+	await _fire_tier2()
+	await t.seconds(0.5)
+	t.check("water_cannon_hits_the_one_he_faces", _popped(ta) and not _popped(tb) and g.t2.last.get("hits", 0) == 1, "10 degrees off: %s; 90 degrees off: %s; %s" % [_popped(ta), _popped(tb), str(g.t2.last)])
+	# Cooldown: pressing again at once does nothing; swapping cannot skip it.
+	var used0: Dictionary = g.t2.last
+	await press("special")
+	await t.frames(2)
+	t.check("tier2_cooldown_blocks_repeat", g.t2.last == used0 and g.t2.active == "" and not g.tier2.is_ready(g.clock.play_s), "charge %.2f" % g.tier2.charge(g.clock.play_s))
+	_clear_practice()
+	# Bubble Blast: every valid target inside the upper hemisphere is hit once (beside him, up on a
+	# ledge-height point), none outside; the plants round him are blown outward and settle.
+	g.tier2.unlock(Tier2.BUBBLE)
+	g.tier2.equip(Tier2.BUBBLE)
+	g.tier2.ready_at = 0.0
+	c0 = p.body_center()
+	var near := [_practice_at(c0 + fr.x * 2.5 + up * 0.3), _practice_at(c0 - fr.x * 1.5 - fr.z * 2.0 + up * 0.2), _practice_at(c0 + fr.z * 1.8 + up * 2.6)]
+	var far := _practice_at(c0 - fr.z * 6.0 + up * 0.3)
+	await t.frames(2)
+	var plant := b0.surface_point(b0.up_at(p.global_position + fr.x * 2.6))
+	await _fire_tier2()
+	await t.frames(6)
+	var bend_now := g.wake.bend_at(b0, plant, 1.0)
+	var out_dir := (plant - p.global_position)
+	out_dir -= up * out_dir.dot(up)
+	var outward := bend_now.normalized().dot(out_dir.normalized())
+	var hits: int = g.t2.last.get("hits", 0)
+	await t.seconds(1.5)
+	var bend_mid := g.wake.bend_at(b0, plant, 1.0).length()
+	await t.seconds(2.0)
+	var bend_late := g.wake.bend_at(b0, plant, 1.0).length()
+	t.check("bubble_blast_hits_each_once_in_volume", near.all(func(x): return _popped(x)) and not _popped(far) and hits == 3, "hits %d; far one %s; %s" % [hits, _popped(far), str(g.t2.last)])
+	t.check("bubble_blast_blows_plants_out_then_settles", bend_now.length() > 0.3 and outward > 0.6 and bend_mid > 0.02 and bend_late < bend_now.length() * 0.2,
+			"bend %.2f (outward %.2f), after 1.5 s %.2f, after 3.5 s %.2f" % [bend_now.length(), outward, bend_mid, bend_late])
+	_clear_practice()
+	# Gill Rush: 1, 2, 3 and 5 targets ahead: that many lunges up to three, never one twice; he
+	# really travels (not a teleport) and control comes back.
+	g.tier2.unlock(Tier2.RUSH)
+	g.tier2.equip(Tier2.RUSH)
+	var rush_res := []
+	for n in [1, 2, 3, 5]:
+		place_at(0, spot + up * 0.2, -fr.z)
+		await t.seconds(0.4)
+		c0 = p.body_center()
+		var ts := []
+		for i in n:
+			ts.append(_practice_at(c0 - fr.z * (2.2 + i * 1.3) + fr.x * (0.9 if i % 2 == 0 else -0.9) + up * 0.1))
+		await t.frames(2)
+		g.tier2.ready_at = 0.0
+		var p0 := p.global_position
+		var max_step := 0.0
+		var prev := p0
+		await press("special")
+		for f in 180:
+			await t.frames(1)
+			max_step = maxf(max_step, p.global_position.distance_to(prev))
+			prev = p.global_position
+			if g.t2.active == "":
+				break
+		var killed := ts.filter(func(x): return _popped(x)).size()
+		rush_res.append([n, g.t2.last.get("hits", 0), killed, snappedf(max_step, 0.01), g.t2.active == "" and p.controls_enabled])
+		_clear_practice()
+	var rush_ok := true
+	for r in rush_res:
+		rush_ok = rush_ok and r[1] == mini(r[0], 3) and r[2] == mini(r[0], 3) and r[3] < 0.4 and r[4]
+	t.check("gill_rush_one_two_three_max", rush_ok, "[targets, hits, beaten, largest step per frame, control back] %s" % str(rush_res))
+	# A later target across a ravine is never rushed at: the chain stops at the rim.
+	var lb: LevelBuilder = b0.get_meta("builder")
+	var cr: Dictionary = lb.crossings[0]
+	var rim_a: Vector3 = cr["a"]
+	var rim_b: Vector3 = cr["b"]
+	var ra_up := b0.up_at(rim_a)
+	var toward := (rim_b - rim_a)
+	toward -= ra_up * toward.dot(ra_up)
+	place_at(0, rim_a + ra_up * 0.2 - toward.normalized() * 1.2, toward)
+	await t.seconds(0.4)
+	var t_here := _practice_at(p.body_center() + toward.normalized() * 0.8 + ra_up * 0.2)
+	# (Out over the ravine at rim height: in range, but reaching it means leaving the rim.)
+	var over := rim_a.lerp(rim_b, 0.5)
+	var t_over := _practice_at(b0.surface_point(b0.up_at(over), b0.altitude(rim_a) + 0.4))
+	await t.frames(2)
+	g.tier2.ready_at = 0.0
+	var falls0 := int(g.stats.get("ravine_falls", 0))
+	await _fire_tier2()
+	await t.seconds(0.3)
+	t.check("gill_rush_never_crosses_a_ravine", _popped(t_here) and not _popped(t_over) and int(g.stats.get("ravine_falls", 0)) == falls0 and p.state == "normal",
+			"near %s, across %s, ravine falls +%d; %s" % [_popped(t_here), _popped(t_over), int(g.stats.get("ravine_falls", 0)) - falls0, str(g.t2.last)])
+	_clear_practice()
+	g.tier2 = saved_t2
+	release.call()
+	p.invuln_t = 0.0
+	p.restore_full()
+
+
 func _test_menu_scrollbar() -> void:
 	var pm := g.pause_menu
 	pm.open()

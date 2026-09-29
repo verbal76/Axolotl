@@ -6,6 +6,9 @@ extends CanvasLayer
 const BTN_JUMP := "jump"
 const BTN_SWIPE := "swipe"
 const BTN_LUNGE := "lunge"
+## The Tier-2 button (docs/TIER2.md): shown once the run has a Tier-2 ability; its glyph is the
+## equipped one and it refills radially while cooling down.
+const BTN_SPECIAL := "special"
 
 var root: Control
 var canvas: HudCanvas
@@ -32,6 +35,10 @@ var _cinematic := false
 var _controls_visible := true
 var prompts := {}               # name -> time shown
 var _pressed := {}              # action -> glow timer
+var _special_shown := false
+var _special_reveal := 0.0      # fades the button in when first revealed
+var _special_ready_flash := 0.0
+var _special_was_ready := true
 
 
 func _ready() -> void:
@@ -125,6 +132,7 @@ func _layout() -> void:
 		BTN_JUMP: {"c": jump_c, "r": 64.0 * s},
 		BTN_SWIPE: {"c": jump_c + Vector2(-150, 18) * s, "r": 48.0 * s},
 		BTN_LUNGE: {"c": jump_c + Vector2(-32, -145) * s, "r": 48.0 * s},
+		BTN_SPECIAL: {"c": jump_c + Vector2(-172, -122) * s, "r": 46.0 * s},
 	}
 	_stick_rest = Vector2(_safe.position.x + 165 * s, _safe.end.y - 150 * s)
 	if _stick_touch < 0:
@@ -177,6 +185,15 @@ func _process(dt: float) -> void:
 	_alpha = move_toward(_alpha, _target_alpha, dt * 3.0)
 	for k in _pressed.keys():
 		_pressed[k] = maxf(0.0, _pressed[k] - dt)
+	var g := Game.inst
+	_special_shown = g != null and g.tier2 != null and g.tier2.any()
+	_special_reveal = move_toward(_special_reveal, 1.0 if _special_shown else 0.0, dt * 1.5)
+	if _special_shown and g.clock != null:
+		var rdy: bool = g.tier2.is_ready(g.clock.play_s)
+		if rdy and not _special_was_ready:
+			_special_ready_flash = 1.0
+		_special_was_ready = rdy
+	_special_ready_flash = maxf(0.0, _special_ready_flash - dt * 2.0)
 	canvas.queue_redraw()
 
 
@@ -206,6 +223,8 @@ func _touch_down(idx: int, pos: Vector2) -> void:
 		return
 	for action in _buttons:
 		var b: Dictionary = _buttons[action]
+		if action == BTN_SPECIAL and not _special_shown:
+			continue
 		if pos.distance_to(b["c"]) <= b["r"] * 1.25:
 			_btn_touch[idx] = action
 			Input.action_press(action)
@@ -318,6 +337,21 @@ func button_info() -> Dictionary:
 	return _buttons
 
 
+## Whether the Tier-2 button is on screen (the run has an ability) and how far it has faded in.
+func special_shown() -> bool:
+	return _special_shown
+
+
+func special_alpha() -> float:
+	return _special_reveal
+
+
+## Called when the first Tier-2 ability is found: the button fades in.
+func reveal_special() -> void:
+	_special_shown = true
+	_special_ready_flash = 1.0
+
+
 func stick_info() -> Array:
 	return [_stick_origin, _stick_vec, _stick_touch >= 0]
 
@@ -351,6 +385,10 @@ class HudCanvas extends Control:
 		if a > 0.001:
 			_draw_stick(a)
 			for action in hud.button_info():
+				if action == Hud.BTN_SPECIAL:
+					if hud.special_shown():
+						_draw_special(a * hud.special_alpha())
+					continue
 				_draw_button(action, a)
 		if hud.prompts_shown():
 			_draw_prompts(pa)
@@ -390,6 +428,29 @@ class HudCanvas extends Control:
 					var o := Vector2(0, -s * 0.35 + k * s * 0.6)
 					draw_polyline(PackedVector2Array([c + o + Vector2(-s * 0.7, s * 0.3), c + o + Vector2(0, -s * 0.3), c + o + Vector2(s * 0.7, s * 0.3)]), ic, 3.5 * scale_k, true)
 
+	## The Tier-2 button: the equipped ability's glyph; dimmed with a radial refill while it cools.
+	func _draw_special(a: float) -> void:
+		var g := Game.inst
+		var b: Dictionary = hud.button_info()[Hud.BTN_SPECIAL]
+		var c: Vector2 = b["c"]
+		var r: float = b["r"]
+		var charge: float = g.tier2.charge(g.clock.play_s) if g.clock != null else 1.0
+		var ready := charge >= 1.0
+		var glow := clampf(hud.pressed_glow(Hud.BTN_SPECIAL), 0.0, 1.0)
+		var tint := Color(0.62, 0.9, 1.0)
+		draw_circle(c, r, Color(tint.r, tint.g, tint.b, ((0.2 if ready else 0.08) + glow * 0.25) * a))
+		if not ready:
+			# The refill: a bright arc growing clockwise from the top as it recharges.
+			draw_arc(c, r, -PI * 0.5, -PI * 0.5 + TAU * charge, 48, Color(0.85, 0.97, 1.0, 0.85 * a), 4.0 * scale_k, true)
+			draw_arc(c, r, -PI * 0.5 + TAU * charge, PI * 1.5, 48, Color(1, 1, 1, 0.18 * a), 2.0 * scale_k, true)
+		else:
+			draw_arc(c, r, 0, TAU, 48, Color(0.9, 1.0, 1.0, (0.55 + glow * 0.45) * a), 2.5 * scale_k, true)
+		var flash: float = hud._special_ready_flash
+		if flash > 0.0:
+			draw_arc(c, r * (1.0 + (1.0 - flash) * 0.5), 0, TAU, 48, Color(0.7, 1.0, 1.0, 0.7 * flash * a), 3.0 * scale_k, true)
+		var ic := Color(1, 1, 1, ((0.9 if ready else 0.35) + glow * 0.1) * a)
+		Tier2Glyphs.draw(self, g.tier2.equipped, c, r * 0.46, ic, scale_k)
+
 	func _draw_prompts(pa: float) -> void:
 		for p in hud.prompts:
 			var pulse := 0.5 + 0.5 * sin(_t * 4.0)
@@ -405,9 +466,11 @@ class HudCanvas extends Control:
 						draw_arc(o, r * (1.1 + pulse * 0.1), 0, TAU, 48, col, 3.0 * scale_k, true)
 					else:
 						_pad_glyph(o, "L", col)
-				"jump", "swipe", "lunge":
+				"jump", "swipe", "lunge", "special":
+					if p == "special" and not hud.special_shown():
+						continue
 					var b: Dictionary = hud.button_info()[p]
-					_ring(b["c"], b["r"], pulse, col, pa, {"jump": "A", "swipe": "X", "lunge": "B"}[p])
+					_ring(b["c"], b["r"], pulse, col, pa, {"jump": "A", "swipe": "X", "lunge": "B", "special": "Y"}[p])
 				"burst":
 					# Double pulse on the jump button: press again while airborne.
 					var b: Dictionary = hud.button_info()["jump"]

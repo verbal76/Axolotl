@@ -17,6 +17,8 @@ var sfx: Sfx
 var audio: AudioDirector
 ## The movers' disturbance in the vegetation (cosmetic only).
 var wake: Wake
+## Runs the equipped Tier-2 ability when its button is pressed.
+var t2: Tier2Combat
 ## Expansion 5's creatures: placement, activation near the axolotl, discovery (docs/ECOSYSTEM.md).
 var ecosystem: Ecosystem
 var balls: Array[MossBall] = []
@@ -65,6 +67,10 @@ var _autosave_t := 0.0
 ## Continuing a run: the ball to resume on, until its bloom has settled (see _resume_position).
 var _resume_ball := -1
 var _save_dirty := false
+## This run's Tier-2 abilities (unlocked, equipped, cooldown).
+var tier2 := Tier2.new()
+## Harmless practice targets a Tier-2 shrine sets out (PracticeTarget): struck like parasites.
+var practice_targets: Array = []
 var stats := {"kills": 0, "motes": 0, "eaten": [0, 0, 0], "upgrades": 0, "deaths": 0, "extreme_landings": 0, "hard_landings": 0,
 		"travels": [], "connects": []}
 
@@ -155,6 +161,8 @@ func _build_world() -> void:
 	add_child(sfx)
 	wake = Wake.new()
 	add_child(wake)
+	t2 = Tier2Combat.new()
+	add_child(t2)
 	audio = AudioDirector.new()
 	add_child(audio)
 
@@ -313,6 +321,7 @@ func _open_run() -> void:
 		RunSave.erase(path)
 	run_save = RunSave.open(path)
 	clock = RunClock.from_dict(run_save.run()["clock"])
+	tier2 = Tier2.from_dict(run_save.run().get("tier2", {}))
 	_apply_run()
 	StartupTrace.mark("run save opened (%s)" % run_save.origin.get_slice(" (", 0))
 
@@ -327,6 +336,9 @@ func has_run_in_progress() -> bool:
 func _apply_run() -> void:
 	var e := run_save.earned()
 	var world: Dictionary = run_save.run().get("world", {})
+	for b in balls:
+		for s in b.shrines:
+			s.set_taken(tier2.has(s.ability))
 	for b in balls:
 		for par in b.parasites:
 			if e.has(par.get_meta("completion_id", "")):
@@ -406,6 +418,7 @@ func save_run() -> bool:
 		return false
 	run_save.run()["clock"] = clock.to_dict()
 	run_save.run()["world"] = _capture_world()
+	run_save.run()["tier2"] = tier2.to_dict()
 	_save_dirty = false
 	_autosave_t = 0.0
 	return run_save.save()
@@ -542,6 +555,7 @@ func _process(dt: float) -> void:
 		_update_cinematic(dt)
 	else:
 		_check_blooms()
+		_check_shrines()
 		_check_vortex_entry()
 		_update_tutorial(dt)
 	_check_vortex_connections()
@@ -613,6 +627,9 @@ func _strikeable(p: Axolotl) -> Array:
 	for c in p.ball.critters:
 		if c.active and c.hittable():
 			out.append(c)
+	for tgt in practice_targets:
+		if is_instance_valid(tgt) and tgt.ball == p.ball and tgt.hittable():
+			out.append(tgt)
 	return out
 
 
@@ -862,6 +879,37 @@ func _check_blooms() -> void:
 				Settings.haptic("tap")
 
 
+## Tier-2 shrines (docs/TIER2.md): touching one in normal play gives Gill its ability for this run.
+func _check_shrines() -> void:
+	if player.state != "normal" or not player.controls_enabled or _resume_ball >= 0:
+		return
+	for s in player.ball.shrines:
+		if s.taken or not s.is_placed():
+			continue
+		if s.touch_point().distance_to(player.body_center()) < 1.4:
+			take_shrine(s)
+
+
+## Gives the shrine's ability (first unlock is equipped), shows it, and sets out practice targets.
+func take_shrine(s: Tier2Shrine) -> void:
+	s.set_taken(true)
+	if not tier2.unlock(s.ability):
+		return
+	WaterFX.inst.sparkle(s.touch_point(), Color(0.55, 0.95, 1.0, 0.95), 26, 2.0, 0.08, 1.4)
+	Sfx.play("discover", null, -2.0)
+	Settings.haptic("heavy")
+	hud.show_discovery("%s!  %s" % [Tier2.NAMES[s.ability], Tier2.BLURBS[s.ability]])
+	hud.reveal_special()
+	_show_prompt("special")
+	var k := 0
+	for pos in s.practice:
+		var tgt := PracticeTarget.new()
+		tgt.place(s.ball, pos, 7700 + s.ball.index * 10 + k)
+		practice_targets.append(tgt)
+		k += 1
+	save_run()
+
+
 func respawn_target() -> Array:
 	if checkpoint and checkpoint.ball == player.ball:
 		return [checkpoint.ball, checkpoint.respawn_point(), checkpoint]
@@ -947,6 +995,7 @@ func _check_vortex_entry() -> void:
 # --- Cinematics --------------------------------------------------------------------------
 
 func _start_cinematic(kind: String, data: Dictionary) -> void:
+	t2.cancel()
 	cinematic = kind
 	cine_t = 0.0
 	cine_data = data

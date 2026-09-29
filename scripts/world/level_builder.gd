@@ -890,6 +890,17 @@ func bloom_xf(xf: Transform3D) -> Bloom:
 	return b
 
 
+## A Tier-2 shrine at `pos` (world space, on the ground or a leaf) granting `ability`, with its
+## practice targets floating at `practice` (world space).
+func shrine(ability: String, pos: Vector3, practice: Array) -> Tier2Shrine:
+	var s := Tier2Shrine.new()
+	s.setup(ball, ability, ball.up_at(pos), ball.altitude(pos))
+	s.practice = practice
+	ball.add_child(s)
+	ball.shrines.append(s)
+	return s
+
+
 func food_region(lat: float, lon: float, radius_deg: float) -> void:
 	ball.food_regions.append({"dir": d(lat, lon), "radius": radius_deg})
 

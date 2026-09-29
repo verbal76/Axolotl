@@ -46,6 +46,8 @@ var blooms: Array = []
 var crumbles: Array = []
 ## Restoration gates (RestorationGate): geography that changes when its zone heals.
 var gates: Array = []
+## Tier-2 shrines on this ball (Tier2Shrine; docs/TIER2.md).
+var shrines: Array = []
 ## Bubble columns (world expansion traversal toy): [base (world), up, radius, height, speed,
 ## gate (RestorationGate of kind "column", or null: always flowing)].
 ## Inside one he is carried up to near its top, where he hangs until he swims off.

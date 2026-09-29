@@ -66,6 +66,7 @@ func _setup_input_map() -> void:
 		"jump": [_key(KEY_SPACE), _btn(JOY_BUTTON_A)],
 		"swipe": [_key(KEY_J), _btn(JOY_BUTTON_X)],
 		"lunge": [_key(KEY_K), _btn(JOY_BUTTON_B)],
+		"special": [_key(KEY_L), _btn(JOY_BUTTON_Y)],
 		"pause": [_key(KEY_ESCAPE), _key(KEY_P), _btn(JOY_BUTTON_START)],
 	}
 	for action in defs:

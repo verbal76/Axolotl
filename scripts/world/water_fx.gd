@@ -198,6 +198,32 @@ func landing_ring(pos: Vector3, up: Vector3, radius: float) -> void:
 		_spawn_puff(pos + up * 0.1, (up + Vector3(_fx_rng.randf() - 0.5, _fx_rng.randf() - 0.5, _fx_rng.randf() - 0.5)).normalized() * 2.0, 0.7, 0.08, Color(0.55, 0.5, 0.4, 0.5), 2.0)
 
 
+## Water Cannon: a tight jet of bright droplets from `from` to `to` over `time` seconds.
+func jet(from: Vector3, to: Vector3, time: float) -> void:
+	var v := (to - from) / time
+	for i in 44:
+		var k := float(i) / 44.0
+		var o := Vector3(_fx_rng.randf() - 0.5, _fx_rng.randf() - 0.5, _fx_rng.randf() - 0.5) * 0.12
+		_spawn_puff(from + o - v * k * 0.08, v * _fx_rng.randf_range(0.95, 1.05), time * _fx_rng.randf_range(0.95, 1.1), _fx_rng.randf_range(0.05, 0.1), Color(0.85, 0.98, 1.0, 0.9), 0.0)
+
+
+## Water drawn in toward `pos` (the moment before a Tier-2 release).
+func gather(pos: Vector3, radius: float) -> void:
+	for i in 16:
+		var d := Vector3(_fx_rng.randf() - 0.5, _fx_rng.randf() - 0.5, _fx_rng.randf() - 0.5).normalized()
+		_spawn_puff(pos + d * radius, -d * radius / 0.22, 0.22, _fx_rng.randf_range(0.03, 0.06), Color(0.8, 0.95, 1.0, 0.7), 0.0)
+
+
+## Bubble Blast: a shell of bubbles thrown outward over the upper hemisphere round `pos`.
+func blast_shell(pos: Vector3, up: Vector3, radius: float) -> void:
+	for i in 40:
+		var d := Vector3(_fx_rng.randf() - 0.5, _fx_rng.randf() - 0.5, _fx_rng.randf() - 0.5).normalized()
+		if d.dot(up) < -0.1:
+			d -= up * d.dot(up) * 1.2
+			d = d.normalized()
+		_spawn_puff(pos, d * radius * _fx_rng.randf_range(2.0, 2.6), 0.5, _fx_rng.randf_range(0.06, 0.14), Color(0.85, 0.97, 1.0, 0.75), 3.0)
+
+
 func stream(pos: Vector3, up: Vector3, strength: float) -> void:
 	for i in int(2 + strength * 3):
 		var o := Vector3(_fx_rng.randf() - 0.5, _fx_rng.randf() - 0.5, _fx_rng.randf() - 0.5) * 0.6

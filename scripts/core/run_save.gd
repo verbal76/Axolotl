@@ -103,6 +103,8 @@ static func new_run() -> Dictionary:
 		"game_versions": [],
 		"ota_ids": [],
 		"finish": {},
+		# Tier-2 abilities found this run (Tier2.to_dict); not completion entries.
+		"tier2": {},
 	}
 
 
