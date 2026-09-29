@@ -616,7 +616,7 @@ func leaf_bridge(zone_id: String, p0: Vector3, p1: Vector3, width := 2.4) -> Res
 
 ## A curtain of hanging roots across a doorway at `xf` (its -Z faces out), `width` by `height`;
 ## it draws up out of the way when `zone` heals (RestorationGate "retract"). Solid while closed.
-func root_curtain(zone_id: String, xf: Transform3D, width: float, height: float, seed_v: int) -> RestorationGate:
+func root_curtain(zone_id: String, xf: Transform3D, width: float, height: float, seed_v: int, mat: Material = null) -> RestorationGate:
 	var gt := RestorationGate.new()
 	var cs := CollisionShape3D.new()
 	var bx := BoxShape3D.new()
@@ -638,7 +638,7 @@ func root_curtain(zone_id: String, xf: Transform3D, width: float, height: float,
 		st.append_from(m, 0, Transform3D(Basis(Vector3.RIGHT, PI), Vector3(rx, height + 0.2, rz)))
 	var mi := MeshInstance3D.new()
 	mi.mesh = st.commit()
-	mi.material_override = stem_mat
+	mi.material_override = mat if mat != null else stem_mat
 	gt.add_child(mi)
 	var open_xf := xf.translated_local(Vector3(0, height * 0.9, 0))
 	gt.setup(ball, zone_id, "retract", xf, open_xf, 2.5)

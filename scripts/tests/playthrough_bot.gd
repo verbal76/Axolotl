@@ -689,7 +689,11 @@ func _clear_path(a: Vector3, c: Vector3) -> bool:
 	var da := b.up_at(a)
 	var dc := b.up_at(c)
 	var n := int(ceil(da.angle_to(dc) * b.radius / 0.7)) + 1
+	# (The last 2.5 m don't count: a Mote drifting out over a ravine is caught from its edge.)
+	var len_m := da.angle_to(dc) * b.radius
 	for i in n + 1:
+		if len_m * (1.0 - float(i) / n) < 2.5 and len_m > 2.5:
+			break
 		if b.ravine_carve(da.slerp(dc, float(i) / n)) > 0.3:
 			return false
 	return true
@@ -771,7 +775,8 @@ func _plan_ravines(a: Vector3, c: Vector3) -> Array:
 					best_cost = cost3
 					best = [[pair[0], false], [pair[1], true]]
 	if best.is_empty():
-		t.log_line("plan: no way round the ravines from %s to %s" % [str(Levels._latlon(b.up_at(a)).round()), str(Levels._latlon(b.up_at(c)).round())])
+		t.log_line("plan: no way round the ravines from %s to %s (cut %.2f / %.2f m there)" % [str(Levels._latlon(b.up_at(a)).round()), str(Levels._latlon(b.up_at(c)).round()),
+				b.ravine_carve(b.up_at(a)), b.ravine_carve(b.up_at(c))])
 	return best
 
 

@@ -228,8 +228,17 @@ static func reed_canyon(lb: LevelBuilder) -> void:
 	var b := lb.ball
 	var R := func(dlat: float, dlon: float) -> Vector2: return _rel(4, 1, dlat, dlon)
 	b.food_weights = [0.45, 0.3, 0.25]
-	b.food_target = 7
+	b.food_target = 15
 	var land: Vector2 = R.call(0, 0)
+	# World expansion (radius 26 -> 52): the Reed Maze, an upland on the far side threaded by two
+	# narrow ravines (registered before anything stands on the ground).
+	var mz: Vector2 = R.call(12, -128)
+	var mz_dir := _dir(mz)
+	b.add_plateau(mz_dir, lb.m2deg(21.0) * PI / 180.0, 3.0, 7.0)
+	var mzp := func(x: float, z: float) -> Vector3: return lb.at(mz.x, mz.y, 0.0, x, 0, z).origin
+	var mll := func(x: float, z: float) -> Vector2: return Levels._latlon(b.up_at(mzp.call(x, z)))
+	lb.ravine([mll.call(-9, -6), mll.call(-3, -3), mll.call(3, -5), mll.call(9, -2)], 2.2, 3.0, 1.0, "b5.maze_west")
+	lb.ravine([mll.call(-8, 5), mll.call(-2, 7), mll.call(4, 4), mll.call(8, 7)], 2.2, 3.0, 1.0, "b5.maze_east")
 	lb.zone("landing", land.x, land.y, 24)
 	var cz: Vector2 = R.call(0, 58)
 	lb.zone("canyon", cz.x, cz.y, 30)
@@ -248,10 +257,12 @@ static func reed_canyon(lb: LevelBuilder) -> void:
 	lb.parasite(Parasite.Kind.SMALL, "landing", p.x, p.y, 8.0)
 
 	# The canyon: two ridges, reeds between them.
-	var n0: Vector2 = R.call(14, 22)
-	var n1: Vector2 = R.call(14, 96)
-	var s0: Vector2 = R.call(-14, 22)
-	var s1: Vector2 = R.call(-14, 96)
+	# (At the new size the ridges stand 7 degrees either side: the canyon keeps its width in
+	# metres and doubles in length.)
+	var n0: Vector2 = R.call(7, 22)
+	var n1: Vector2 = R.call(7, 96)
+	var s0: Vector2 = R.call(-7, 22)
+	var s1: Vector2 = R.call(-7, 96)
 	var north := lb.ridge(n0.x, n0.y, n1.x, n1.y, 3.0, 6.5, 1.9, 51, 0.22)
 	var south := lb.ridge(s0.x, s0.y, s1.x, s1.y, 2.6, 6.0, 1.8, 52, 0.22)
 	var nc: Array = north.get_meta("crest")
@@ -293,26 +304,79 @@ static func reed_canyon(lb: LevelBuilder) -> void:
 	lb.mote("end", p.x, p.y)
 
 	# The far side: open slopes.
-	lb.hill(fz.x + 10, fz.y, 9.0, 1.8)
-	lb.hill(fz.x - 25, fz.y + 30, 8.0, 1.5)
-	p = R.call(20, -140)
+	lb.hill(fz.x - 20, fz.y - 10, 16.0, 2.4)
+	lb.hill(fz.x - 25, fz.y + 30, 16.0, 2.1)
+	# (Moved clear of the Reed Maze's ravines; its id is frozen, so moving it is safe.)
+	p = R.call(-6, -152)
 	lb.mote("far", p.x, p.y)
 	p = R.call(-4, -120)
 	lb.parasite(Parasite.Kind.MEDIUM, "far", p.x, p.y, 10.0).make_spitter()
 	p = R.call(-20, -150)
 	lb.bloom(p.x, p.y)
 
-	for r in [[land.x, land.y, 25], [fz.x, fz.y, 40], [ez.x + 30, ez.y, 30]]:
+	lb.freeze_ids()
+
+	# ---- World expansion: Reed Canyon at radius 52 ---------------------------------------------
+	lb.zone("maze", mz.x, mz.y, 18)
+	lb.zone("secret", mz.x + 14, mz.y - 4, 8)
+	# The Reed Maze: two narrow ravines hidden in dense reeds (the reeds stop at their edges, so
+	# the gaps show). Over the western one on a fallen log; a running jump + burst crosses either;
+	# or walk round their ends. A reed stalker hunts here.
+	var log_a := b.surface_point(b.up_at(mzp.call(-3, -5.6)))
+	var log_b := b.surface_point(b.up_at(mzp.call(-3, -0.4)))
+	var logb := lb.stem_xf(Transform3D(Basis((log_b - log_a).normalized().cross(b.up_at(log_a)).normalized(), (log_b - log_a).normalized(),
+			(log_b - log_a).normalized().cross(b.up_at(log_a)).normalized().cross((log_b - log_a).normalized())), log_a + b.up_at(log_a) * 0.35 - (log_b - log_a).normalized() * 0.8),
+			log_a.distance_to(log_b) + 1.1, 0.42, 0.36, true, 0.0)
+	logb.set_meta("floats_by_design", "a fallen log across a ravine")
+	logb.set_meta("grounded", "log")
+	lb.crossings.append({"a": log_a, "b": log_b, "gate": null})
+	# (Placed in the maze's own metres, clear of both cuts: north of the western one, on the strip
+	# between them, south of the eastern one, and past their ends.)
+	var mzxf := func(x: float, z: float) -> Transform3D: return lb.at(mz.x, mz.y, 0.0, x, 0, z)
+	lb.parasite_xf(Parasite.Kind.SMALL, "maze", mzxf.call(6, -11), 3.0)
+	lb.parasite_xf(Parasite.Kind.MEDIUM, "maze", mzxf.call(-6, 11.5), 3.0)
+	lb.parasite_xf(Parasite.Kind.SMALL, "maze", mzxf.call(0, 0.6), 1.2)
+	lb.mote_xf("maze", mzxf.call(-13, 0.5), 1.0)
+	lb.mote_xf("maze", mzxf.call(13, 1.5), 1.0)
+	lb.mote_xf("maze", mzxf.call(0, 13), 1.0)
+	lb.bloom_xf(mzxf.call(-10, -12))
+	# The Secret Clearing: a quiet pocket through a tunnel in the reeds (no parasites).
+	var sc_c: Vector2 = Vector2(mz.x + 14, mz.y - 4)
+	lb.mote("secret", sc_c.x, sc_c.y + 2)
+	lb.mote("secret", sc_c.x - 2, sc_c.y - 2)
+	lb.bloom(sc_c.x + 1, sc_c.y - 1)
+	# The Reed Wall at the canyon's end: dense reeds across the way out towards the maze that
+	# part (draw up and away) once the canyon heals, a shortcut; until then go round.
+	var rw := b.xform_on_dir(_dir(R.call(0, 104)), 0.0, 90.0)
+	lb.root_curtain("canyon", rw.translated_local(Vector3(0, -0.2, 0)), 7.0, 3.2, 5201, lb.leaf_mat)
+	# More in the canyon and at its end.
+	p = R.call(3, 60)
+	lb.parasite(Parasite.Kind.SMALL, "canyon", p.x, p.y, 3.0)
+	p = R.call(-3, 30)
+	lb.mote("canyon", p.x, p.y)
+	p = R.call(2, 88)
+	lb.mote("canyon", p.x, p.y)
+	p = R.call(-22, 130)
+	lb.mote("end", p.x, p.y)
+
+	for r in [[land.x, land.y, 20], [fz.x, fz.y, 26], [ez.x + 30, ez.y, 22], [mz.x, mz.y, 14]]:
 		lb.food_region(r[0], r[1], r[2])
-	Levels._holes(lb, 8, 401, [[_dir(cz), 34], [_dir(cv), 14]])
+	Levels._holes(lb, 22, 401, [[_dir(cz), 34], [_dir(cv), 14], [mz_dir, 16]])
 	var clear := Levels._veg_keep_clear(lb)
 	# The canyon floor is a cornfield of tall reeds; crests and the far side stay open.
 	var c0 := _dir(R.call(0, 22))
 	var c1 := _dir(R.call(0, 96))
-	var floor_ := func(dd: Vector3) -> bool: return _deg_to_arc(dd, c0, c1) < 6.0
-	Vegetation.field(b, "tall", _dir(cz), 40.0, 1500, 402, {"avoid": func(dd: Vector3) -> bool: return clear.call(dd) or not floor_.call(dd),
-			"clumps": 10, "fill": 0.6, "edge": 0.9})
-	_short_cover(lb, 2200, 403, clear, func(dd: Vector3) -> bool: return _deg_to_arc(dd, c0, c1) > 20.0)
+	var floor_ := func(dd: Vector3) -> bool: return _deg_to_arc(dd, c0, c1) < 4.0
+	Vegetation.field(b, "tall", _dir(cz), 40.0, 3000, 402, {"avoid": func(dd: Vector3) -> bool: return clear.call(dd) or not floor_.call(dd),
+			"clumps": 14, "fill": 0.6, "edge": 0.9})
+	# The maze's reeds: dense, but a tunnel through them to the Secret Clearing stays open.
+	# (The tunnel starts at the fallen log's northern end: over the log, then into the reeds.)
+	var tun_a := b.up_at(log_a)
+	var tun_b := _dir(sc_c)
+	var in_tunnel := func(dd: Vector3) -> bool: return _deg_to_arc(dd, tun_a, tun_b) < lb.m2deg(0.9) or dd.angle_to(tun_b) < deg_to_rad(lb.m2deg(4.0))
+	Vegetation.field(b, "tall", mz_dir, 26.0, 2600, 404, {"avoid": func(dd: Vector3) -> bool: return clear.call(dd) or in_tunnel.call(dd),
+			"clumps": 12, "fill": 0.7, "edge": 0.8})
+	_short_cover(lb, 7000, 403, clear, func(dd: Vector3) -> bool: return _deg_to_arc(dd, c0, c1) > 12.0)
 
 
 ## Angle (degrees) from `dd` to the great-circle arc from `a` to `b`.

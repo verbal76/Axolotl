@@ -2410,6 +2410,21 @@ func _test_placements() -> void:
 				if (hole["dir"] as Vector3).angle_to(c) < deg_to_rad(12):
 					bad.append("ball%d burrow hole inside cave" % (b.index + 1))
 	t.check("actors_placed_on_intended_surfaces", bad.is_empty(), "%d checked; %s" % [n, "; ".join(bad)])
+	# World expansion: nothing a player must reach starts down in a ravine (or on its walls).
+	var in_cut: Array[String] = []
+	for b in g.balls:
+		if b.carves.is_empty():
+			continue
+		for par in b.parasites:
+			if b.ravine_carve(par.spawn_dir) > 0.3:
+				in_cut.append("ball%d parasite %s" % [b.index + 1, par.zone_id])
+		for m in b.motes:
+			if b.ravine_carve(m._dir) > 0.3 and m.h_hint < 1.0:
+				in_cut.append("ball%d mote %s" % [b.index + 1, m.zone_id])
+		for bl in b.blooms:
+			if b.ravine_carve(bl.dir) > 0.3 and bl.h_hint < 1.0:
+				in_cut.append("ball%d bloom" % (b.index + 1))
+	t.check("nothing_starts_in_a_ravine", in_cut.is_empty(), str(in_cut))
 
 
 func _test_tutorial_route() -> void:
