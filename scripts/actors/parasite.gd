@@ -864,13 +864,18 @@ func _snap_ground() -> void:
 		return
 	global_position = hit.position + up * _ground_offset
 	standing_on = hit.collider
-	# Never down on a ravine's floor, however it got there (walking, knocked, flung): back to
-	# where it last stood clear of it (world expansion).
-	if not ball.carves.is_empty():
-		if ball.ravine_carve(ball.up_at(global_position)) > 0.3 and ball.altitude(global_position) < 1.0 and _clear_pos != Vector3.ZERO:
+	# Never down on a ravine's floor, and never buried inside the terrain, however it got there
+	# (walking, knocked or flung, e.g. through an upland's steep wall, where this snap from just
+	# above its feet then held it under the ground out of reach): back to where it last stood on
+	# open ground (world expansion; AQ qualification). Every parasite lives above the surface.
+	var alt := ball.altitude(global_position)
+	var in_ravine := not ball.carves.is_empty() and ball.ravine_carve(ball.up_at(global_position)) > 0.3 and alt < 1.0
+	var buried := alt < -0.8
+	if in_ravine or buried:
+		if _clear_pos != Vector3.ZERO:
 			global_position = _clear_pos
-		else:
-			_clear_pos = global_position
+	else:
+		_clear_pos = global_position
 
 
 var _clear_pos := Vector3.ZERO

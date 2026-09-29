@@ -14,7 +14,7 @@ func run(runner) -> void:
 	p.use_bot_input = true
 	await t.seconds(0.5)
 	var only: String = Settings.test_args.get("only", "")
-	for name_ in ["_test_startup", "_test_ota_and_version", "_test_mesh_winding", "_test_terrain", "_test_ravines", "_test_terrain_grounded", "_test_no_floating_platforms", "_test_parasite_locomotion", "_test_parasite_body_and_death", "_test_parasite_combat", "_test_gill_look", "_test_gill_idles", "_test_gill_colours", "_test_gill_patterns", "_test_tail_whip", "_test_ambient_sway", "_test_placements", "_test_tutorial_route", "_test_sphere_walk", "_test_jump_and_burst", "_test_coyote_and_buffer", "_test_swipe_direction_and_stages", "_test_hard_landing", "_test_food", "_test_food_reach", "_test_darter_and_burrower", "_test_food_repopulates", "_test_motes", "_test_checkpoint_and_regen", "_test_crumble", "_test_restoration_gates", "_test_bubble_columns", "_test_restoration_continuity", "_test_health_map", "_test_vortex", "_test_current", "_test_canopy", "_test_canopy_plain_jumps", "_test_climbs_physical", "_test_jungle_ladders_physical", "_test_leaf_geometry", "_test_leaf_footing", "_test_caves", "_test_mounds", "_test_vegetation", "_test_vortex_mouths_clear", "_test_route_audit", "_test_new_areas", "_test_ecosystem", "_test_music", "_test_run_clock", "_test_completion_catalog", "_test_completion_frozen", "_test_run_save_file", "_test_run_timer_live", "_test_run_continue", "_test_timer_integrity", "_test_resume_points_safe", "_phase_continue_write", "_phase_continue_read", "_test_upgrades", "_test_ui", "_test_menu_scrollbar", "_test_tier2_rules", "_test_tier2_world", "_test_ambient_fish", "_test_tier2_loadout", "_test_aquarium_experiences", "_test_all_clear"]:
+	for name_ in ["_test_startup", "_test_ota_and_version", "_test_mesh_winding", "_test_terrain", "_test_ravines", "_test_terrain_grounded", "_test_no_floating_platforms", "_test_parasite_locomotion", "_test_parasite_body_and_death", "_test_parasite_combat", "_test_gill_look", "_test_gill_idles", "_test_gill_colours", "_test_gill_patterns", "_test_tail_whip", "_test_ambient_sway", "_test_placements", "_test_tutorial_route", "_test_sphere_walk", "_test_jump_and_burst", "_test_coyote_and_buffer", "_test_swipe_direction_and_stages", "_test_hard_landing", "_test_food", "_test_food_reach", "_test_darter_and_burrower", "_test_food_repopulates", "_test_motes", "_test_checkpoint_and_regen", "_test_crumble", "_test_restoration_gates", "_test_bubble_columns", "_test_restoration_continuity", "_test_health_map", "_test_vortex", "_test_current", "_test_canopy", "_test_canopy_plain_jumps", "_test_climbs_physical", "_test_jungle_ladders_physical", "_test_leaf_geometry", "_test_leaf_footing", "_test_caves", "_test_mounds", "_test_vegetation", "_test_vortex_mouths_clear", "_test_route_audit", "_test_new_areas", "_test_ecosystem", "_test_music", "_test_run_clock", "_test_completion_catalog", "_test_completion_frozen", "_test_run_save_file", "_test_run_timer_live", "_test_run_continue", "_test_timer_integrity", "_test_resume_points_safe", "_phase_continue_write", "_phase_continue_read", "_test_upgrades", "_test_ui", "_test_menu_scrollbar", "_test_tier2_rules", "_test_tier2_world", "_test_ambient_fish", "_test_parasite_never_buried", "_test_tier2_loadout", "_test_aquarium_experiences", "_test_all_clear"]:
 		# "_phase_*" tests are halves of a relaunch test: they run only when asked for by name
 		# (in a child process started by _test_run_continue).
 		if name_.begins_with("_phase") and only != name_:
@@ -4774,6 +4774,34 @@ func _test_tier2_loadout() -> void:
 			"hidden %s shown %s equipped %s saved %s title-hidden %s" % [hidden0, shown, g.tier2.equipped, on_disk, title_hidden])
 	g.tier2 = saved_t2
 	g.get_tree().paused = false
+	await t.frames(2)
+
+
+## A parasite knocked or flung inside the terrain (seed 4242 offline: one ended 3.1 m under World
+## 7's upland, out of reach, so the world could not be finished) is put back on open ground.
+func _test_parasite_never_buried() -> void:
+	var b := g.balls[6]
+	var par: Parasite = null
+	for x in b.parasites:
+		if x.is_alive() and x.state == "graze":
+			par = x
+			break
+	var release := _hold_threats(b)
+	par.set_physics_process(true)
+	var up := b.up_at(par.global_position)
+	var fr := MossBall.frame_at(up, 0.0)
+	p.invuln_t = 999.0
+	place_at(6, b.surface_point((par.global_position + fr.z * 9.0 - b.global_position).normalized(), 0.2), -fr.z)
+	await t.frames(10)
+	var home := par.global_position
+	up = b.up_at(home)
+	par.global_position = home - up * 3.1
+	var buried0: float = b.altitude(par.global_position)
+	await t.frames(30)
+	var alt1: float = b.altitude(par.global_position)
+	t.check("parasite_never_left_buried", buried0 < -2.5 and alt1 > -0.3 and par.global_position.distance_to(home) < 3.0,
+			"put %.2f m under; after half a second %.2f m, %.2f m from where it stood" % [buried0, alt1, par.global_position.distance_to(home)])
+	release.call()
 	await t.frames(2)
 
 
