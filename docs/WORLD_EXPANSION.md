@@ -282,3 +282,14 @@ Bot: cleared in 288 s, no deaths.
   (`--start=clear --ball=N`) and both full playthroughs reach a legitimate 100%.
 - **Collision.** Terrain, ravines, stone columns, bridges, logs, gates and the sea fan collide with
   their drawn faces; nothing a player must reach starts in a ravine (`nothing_starts_in_a_ravine`).
+- **Found in the final gates, fixed before release.**
+  - A restoration gate opened instantly (when a saved run is continued) moved its drawn node but
+    left its collision where it stood shut: after Continue, the Meadow's raised stem bridge would
+    have had nothing under it, and a retracted wall would have stayed solid. The body now moves
+    with the node; `gate_open_on_resume` checks the collision as well (it failed before the fix).
+  - Leaf hoppers leap back down to the first steps of their climb; on the Great Trunk and the Sky
+    Spire those were under 1 m, on the moss. They now keep to steps at least 1.2 m up, and the
+    habitat check tests every perch rather than where each hopper happens to be.
+  - The bot, knocked off the stem bridge, was put back on the rim beside it and kept walking its
+    crossing line into the ravine. It now lines up at a bridge's end, ends the crossing when it
+    falls, plans again, and walks round a crossing it has fallen off twice.
