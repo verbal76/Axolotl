@@ -395,6 +395,30 @@ runtime, native code, collision, attack range, damage or timing changed; not Exp
 | PT-06 | Performance not undone | I+V (proxy) / needs phone | vertex-shader only; no shadows or casters changed; preview target drawn only while open | `docs/VEGETATION.md` Performance (15 views): within ±11% of dev-000024, median about 1% faster; video memory +4.5 MB; `ambient_motion_bounded_gpu_only` |
 | PT-07 | Ships by OTA, no APK | I+V | game layer only; runtime r5 | dev-000025 (OTA publish #25, run 36486884032, source `8c92e5b`, PCK `333d6cd6…25dc52af`, 9,285,292 bytes, 38 baked shader caches, save schema 1): signature (pinned key), hash, size, inspector (INSPECT OK) and the new sources in the pack verified from the public URLs; a b22 client (bundled `1046057`) discovers, downloads, verifies and stages it; 50 checks pass run from the pack; unit suite 390/390 (fresh user data); playthroughs on seeds 7 and 4242: 23/23 each, 0 deaths, 100% by play; OTA end-to-end 42/42; version drift and runtime gate r5 pass; Build & Verify #33 green, Android APK job skipped |
 
+## WX — Major world expansion: seven substantial worlds (owner brief, 2026-09-28)
+
+The owner's 41-section brief. Owner decisions: bigger balls in a bigger tank; a ravine fall costs one
+frond and puts Gill back at the edge; losing the last frond is a normal death (re-form at the last
+bloom, progress kept); the extreme canopy drop never takes the last frond. Design and results:
+`docs/WORLD_EXPANSION.md`. Status "I+V" = implemented and verified automatically; nothing here is
+phone-verified until the owner says so (MOTE_HANDOFF §16 item 17).
+
+| ID | Requirement | Status | Implementation | Evidence |
+|---|---|---|---|---|
+| WX-01 | About 4× playable extent per world | I+V | every ball about doubled in radius (Mossy Meadow 24 → 48 m; the others 28→56, 30→60, 18→36, 26→52, 16→32, 22→44), tank laid out 1.4× wider | `WORLD.md`; `docs/WORLD_EXPANSION.md` |
+| WX-02 | Much more meaningful density; creature ecology, not enemy spam | I+V | new regions in each world's identity; completion entries 172 → 348; creature groups added in every world | catalog v4 (`docs/COMPLETION.md`); `_test_ecosystem` (30) |
+| WX-03 | Ravines and hazards, forgiving failure | I+V | cube-sphere signed terrain, plateaus, ravines (`add_ravine`), `Game.ravine_fall`, `Axolotl.ravine_return_point`; only the floor counts (bridges, stones, logs above it do not) | `_test_ravines`; `nothing_starts_in_a_ravine` |
+| WX-04 | Multiple routes (easy / skilled / exploration), verticality, traversal toys | I+V | crossings (walk round, stones, burst, bridges, logs, streams), bubble columns, glide shaft, current streams, terraces, the Great Trunk, the Sky Spire | route audit (200 climbs), `_test_bubble_columns` (3), jungle ladders + Great Trunk climbed physically |
+| WX-05 | Restoration changes geography; interconnection | I+V | `RestorationGate` (rise, grow, retract, column): Meadow's stem bridge and root curtain, Current Hollows' kelp leaf and mesa column, Giant Stems' canopy column, Terrace Steps' rising stones, Reed Canyon's Reed Wall, Hollow Grotto's boulder | `_test_restoration_gates` (3), `bubble_column_flows_when_healed` |
+| WX-06 | Each world keeps its own identity (no Meadow clones) | I+V | see `docs/WORLD_EXPANSION.md` per world | before/after shots, camera audit shots |
+| WX-07 | Completion stable and migration-safe; finish separate from 100% | I+V | explicit ids (`fixed_id`, `freeze_ids`), `CatalogFrozen.V3`; catalog v4 348; finish still 58.5% without caves, blooms or wildlife | `shipped_completion_ids_kept`, `v3_save_migrates` (a v3 save keeps everything, 67%), `completion_ids_unique_and_pinned` |
+| WX-08 | Vortex pacing re-evaluated | I+V | 70% kept: with 3–5× the events it comes after most of a world (Meadow 45 of 64, about 380 s of bot play) | playthroughs |
+| WX-09 | Performance: culling, regional activation, LOD | I+V (proxy) / needs phone | horizon culling, 35 m vegetation cells with distance ranges, 55 m regional activation, adaptive quality | 15 perf views vs dev-000025 (`docs/WORLD_EXPANSION.md`) |
+| WX-10 | Collision matches visuals | I+V | every new piece collides with its drawn faces | terrain, mound, leaf, cave and placement tests |
+| WX-11 | Camera and touch practical | I+V (proxy) / needs phone | no camera change needed | camera-audit shots (43 views) |
+| WX-12 | Route proof and full playthroughs to a legitimate 100% (seeds 7 and 4242) | I+V | bot: ravine-aware paths, columns, hollows, gates; per-world clear scenario | see the release row |
+| WX-13 | Settings scrollbar about 3× easier to grab (owner, from dev-000025) | I+V / needs phone | `UiStyle` scrollbar: 28 px touch target, 8 px drawn | `_test_menu_scrollbar` |
+
 ## Precedence notes
 
 - The reconciliation prompt's floor list repeats two items that the owner changed earlier today: "diegetic

@@ -194,3 +194,91 @@ Radius 28 → 56. Water movement and terrain cuts.
 
 Inside a bubble column the current no longer pushes (its upflow shelters him), so columns work on
 current balls. Bot: the whole ball cleared in 428 s of play, no deaths.
+
+## Giant Stems (world 3)
+
+Radius 30 → 60. Vertical jungle.
+
+| Region | What is there |
+|---|---|
+| The giant spiral (canopy) | As before: sixteen leaves round the giant stem to the canopy leaves and the extreme drop; now a bubble column beside it (between its lines of leaves) flows once the lower jungle heals, a shortcut halfway up |
+| The Great Trunk and High Crown (crown) | A 30 m giant laddered all the way up, turning less where it is thick (75° a leaf at the base, 108° at the top) so every step is a plain jump; broad crown leaves with a Mote, a bloom and a snail; a hopper leads up the first leaves |
+| The jungle | 140 laddered stems (was 70), every one climbed physically by the tests |
+| The Root Tangle (tangle) | Old roots arching over one another into low tunnels on the underside, shrimp in the shade |
+
+Motes now perch on climbing leaves too (they fell through them to the ground before, so a Mote
+could not sit high on a ladder). Bot: cleared in 664 s of play, no deaths.
+
+## Terrace Steps (world 4)
+
+Radius 18 → 36. Layered traversal.
+
+| Region | What is there |
+|---|---|
+| The Grand Terraces (grand) | Four broad tiers (the safe way: walk each ring round to its next step), a Mote and a bloom on the crown; the Twin Terrace joined at the third tier by a natural stone bridge |
+| The Stone Field (field) | A basin sunk in an upland: across on stone columns (technical, a Mote on the far one), round the rim (safe), or over four broad stones that rise out of the floor once the landing heals |
+| The Coral Shelves (coralsh) | Three shelves stepping up out of a coral bed |
+| Terraces, arch, ridge, grotto | As before (the arch and terrace climbs start where their first step reads from the ground) |
+
+Bot: cleared in 317 s, no deaths.
+
+## Reed Canyon (world 5)
+
+Radius 26 → 52. Dense vegetation and concealed geography.
+
+| Region | What is there |
+|---|---|
+| The canyon (canyon, crests) | Keeps its width in metres and doubles in length; 3,000 reeds; the Reed Wall at its end parts when the canyon heals (a shortcut out towards the maze) |
+| The Reed Maze (maze) | An upland threaded by two narrow ravines hidden in dense reeds (the reeds stop at the edges, so the gaps read): a fallen log, a running jump + burst, or round their ends; a reed stalker |
+| The Secret Clearing (secret) | Over the log and down a tunnel through the reeds: a Mote, a bloom, shrimp, no parasites |
+| The Stalker Hollow (dell) | A reed dell ringed by five mounds (sightlines from their tops), Motes on them |
+
+Bot: cleared in 313 s, no deaths, no ravine falls (after moving a parasite off the maze's narrow
+strip, where a fight was a fall waiting to happen).
+
+## Canopy Spire (world 6)
+
+Radius 16 → 32. The vertical movement playground.
+
+| Region | What is there |
+|---|---|
+| The spire and shelves | As before; the shelves keep their spacing in metres |
+| The Sky Spire (sky) | A 31 m spiral climb (thirty leaves) to a crown with the whole aquarium below; Motes halfway and on the crown; a hopper and snails on its leaves |
+| The glide shaft | Beside the Sky Spire: a wide, gentle down-draft (a bubble column with a negative speed) he drifts down in from the crown, steering as he likes: gliding, the safe way down. Riding a column or drifting down a shaft is no fall; missing it is an extreme drop, which never takes the last frond |
+| The Low Garden (garden) | Mounds and coral in the shelter under the spires |
+
+Bot: cleared in 204 s (the smallest ball), no deaths.
+
+## Hollow Grotto (world 7)
+
+Radius 22 → 44. Caves and underground exploration.
+
+| Region | What is there |
+|---|---|
+| The Glow Chamber (chamber) | The biggest grotto: glow-worms, a cave eel, a pearl on its high ledge; a boulder seals its door until the grotto heals (a restored opening) |
+| The Undercut Ravine (undercut) | Through a basalt upland, crossed on two arched stone bridges or round its ends |
+| The Shaft (shaft) | A 6 m basalt chimney with a bubble column up its side to its ledge |
+| The Basalt Columns (columns) | Stone columns stepping up in a spiral |
+| Grotto, cavelet, corridors, far side | As before (the high shelf keeps its step from the ridge in metres) |
+
+Bot: cleared in 288 s, no deaths.
+
+## Across the program
+
+- **Vortex pacing.** The threshold stays 70% of a ball's events. With three to five times as many
+  events the vortex now comes after most of a world has been played (Mossy Meadow: 45 of 64 events,
+  about 380 s of bot play, 15–20 minutes for a first-time player); it never needs exhaustive cleanup
+  (the Root Hollows, the Split Crack or the Heights can be left for later), and two minutes is
+  nowhere near enough to reach it.
+- **Performance** (software renderer, relative only; dev-000025 source against the final build):
+  frame time −37% to +34% across the fifteen standard views, most within ±20%; triangles 1–2.9× on
+  the heaviest views; draw calls 0.9–1.7×; video memory 98 → 137 MB. What keeps it there: horizon
+  culling of ground and vegetation chunks, vegetation in 35 m cells drawn from their own centres
+  with distance ranges, regional activation of parasites, Motes and food (55 m), the existing
+  creature activation (38 m), selective shadows, and the phone's adaptive quality scaler.
+- **Route proof.** The geometric audit covers every registered climb on every ball (200 climbs),
+  including bubble-column lifts and paths that rise on healing; every jungle ladder and the Great
+  Trunk are climbed physically; the bot clears every world from its arrival point
+  (`--start=clear --ball=N`) and both full playthroughs reach a legitimate 100%.
+- **Collision.** Terrain, ravines, stone columns, bridges, logs, gates and the sea fan collide with
+  their drawn faces; nothing a player must reach starts in a ravine (`nothing_starts_in_a_ravine`).

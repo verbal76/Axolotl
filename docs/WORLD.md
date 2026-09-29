@@ -14,15 +14,19 @@ fully restored** (owner decision).
            Hollow Grotto (7)
 ```
 
-| # | Ball | Radius | Reached from | Character |
+| # | Ball | Radius (before → world expansion) | Reached from | Character |
 |---|---|---|---|---|
-| 1 | Mossy Meadow | 24 m | start | unchanged |
-| 2 | Current Hollows | 28 m | 1 | unchanged (its vortex to 5 is new) |
-| 3 | Giant Stems | 30 m | 2 | unchanged (its vortex to 6 is new) |
-| 4 | Terrace Steps | 18 m | 1 | open low growth; stepped terraces, a stone arch, a ridge walk, a grotto |
-| 5 | Reed Canyon | 26 m | 2 | a canyon of tall reeds between two ridges, a natural bridge between the crests, a grotto at the canyon's end |
-| 6 | Canopy Spire | 16 m | 3 | one great stem with a spiral of leaves to a canopy crown; stacked overhanging shelves; no cave |
-| 7 | Hollow Grotto | 22 m | 4 | dim basalt; two grottoes, overhanging shelves, low ridges with plant corridors between bare rock |
+| 1 | Mossy Meadow | 24 → 48 m | start | the welcoming playground: the Glade Upland and the Great Ravine, meadow lowlands, the Coral Garden, Root Hollows |
+| 2 | Current Hollows | 28 → 56 m | 1 | water movement and cuts: the Cut on the Current Shelf, current streams, bubble columns, Undercut Hollows |
+| 3 | Giant Stems | 30 → 60 m | 2 | vertical jungle: the giant spiral, 140 laddered stems, the Great Trunk to the High Crown, the Root Tangle |
+| 4 | Terrace Steps | 18 → 36 m | 1 | layered traversal: the Grand and Twin Terraces and their bridge, the Stone Field, Coral Shelves |
+| 5 | Reed Canyon | 26 → 52 m | 2 | concealed geography: the long reed canyon, the Reed Maze's hidden ravines, the Secret Clearing, the Stalker Hollow |
+| 6 | Canopy Spire | 16 → 32 m | 3 | vertical playground: the spire, the 31 m Sky Spire and its glide shaft, the Low Garden |
+| 7 | Hollow Grotto | 22 → 44 m | 4 | caves: three grottoes (the Glow Chamber behind its boulder), the Undercut Ravine, the Shaft, Basalt Columns |
+
+World expansion (docs/WORLD_EXPANSION.md): every ball about doubled in radius (about 4× the
+surface) in a tank laid out 1.4× wider. Original content keeps its place on each ball (so it is
+twice as far apart) and its completion id; each world gained regions in its own identity.
 
 - Topology is `Levels.LINKS` (`[a, b]` pairs, one vortex each). `Levels.CENTERS`, `RADII`, `NAMES` and
   `PALETTES` hold one entry per ball.

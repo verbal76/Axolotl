@@ -288,9 +288,12 @@ darters included.
 
 ## 7. World
 
-- **Moss balls:** three, with sphere-centred gravity. Moss Ball #2 has current-swept areas (`current_at`)
-  and a mesa reached by sway leaves. Moss Ball #3 has the canopy spiral, and flex leaves cushion
-  falls and rebound.
+- **Moss balls:** seven, with sphere-centred gravity; since the world expansion each is about twice
+  its old radius (Mossy Meadow 48 m) with new regions in its own identity: see
+  `docs/WORLD_EXPANSION.md` (ravines and how Gill recovers from them, bubble columns and the glide
+  shaft, current streams, restoration gates) and `docs/WORLD.md`. Moss Ball #2 has current-swept
+  areas (`current_at`) and a mesa reached by sway leaves (or, once healed, a bubble column). Moss
+  Ball #3 has the canopy spiral, and flex leaves cushion falls and rebound.
 - **Caves and upgrades:** caves with health upgrades raise health to 6.
 - **Platforms:** solid from every side (mesh winding fix). Covered by the tests `cushion_faces_outward`,
   `stem_faces_outward` and `cave_dome_faces_correct_side`.
@@ -673,6 +676,27 @@ These are implemented but lack automated evidence. They are **not** unimplemente
       - close and reopen Mote: his colours and pattern are kept;
       - check the page shows his face in the little preview.
     - **Frame rate:** jungle, terraces and a healed ball, with the plants moving.
+
+17. **After the world-expansion OTA (ledger WX) is active:**
+    - **Settings scrollbar:** in Settings, drag the scrollbar on the right with a thumb, from its
+      middle and from its edge: easy to grab; swiping the list still scrolls it; the sliders and
+      switches beside it still work.
+    - **Old save:** Continue the run that was in progress before the update. Nothing earned is lost
+      (the percentage drops, because there is much more to find); Gill resumes at his last bloom or
+      the arrival point, standing on solid ground; the timer and any finish are unchanged.
+    - **Mossy Meadow:** the tutorial feels exactly as before; after it, the Great Ravine lies across
+      the upland (the fallen stem rises into a bridge when the tutorial parasite is cleared). Walk
+      off a rim into it once: one frond, and he is back on the rim. Try the stepping stones and a
+      burst straight across. The bubble pocket by the glade lifts him up.
+    - **Each world:** play a while in each and say whether it feels bigger and fuller, not emptier:
+      Current Hollows (the current bridge over the Cut, a bubble column in the current), Giant Stems
+      (the Great Trunk to the High Crown), Terrace Steps (the Stone Field's rising stones after the
+      landing heals), Reed Canyon (the hidden ravines in the Reed Maze, the Secret Clearing), Canopy
+      Spire (the Sky Spire, then drift down the glide shaft), Hollow Grotto (the Glow Chamber once
+      its boulder rolls away).
+    - **Time:** roughly how long a world takes you (the aim is 15–25 minutes for a first visit).
+    - **Frame rate:** anywhere busy, especially Mossy Meadow's glade looking over the ravine and a
+      healed Current Hollows.
 
 Record results in the ledger (O-19, A-05, R-01, R-14, R-19, S-03, S-06, S-14, F-07, F-09, P-01, P-03, P-06, M-01, M-03, E1-01, E1-07, E1-09, E2-01, E2-02, E2-04, E2-05, E3-01, E3-02, E3-04, E4-01..E4-05, E5-02..E5-06, E6) only with the owner's evidence.
 

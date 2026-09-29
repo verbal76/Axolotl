@@ -1168,8 +1168,8 @@ func _test_new_areas() -> void:
 
 ## Pinned: the current game's completion ids (sha256 of the ids in catalog order). A change means
 ## completion content changed: bump Completion.CATALOG_VERSION, update docs/COMPLETION.md, re-pin.
-const CATALOG_IDS_SHA := "b46b9692b9b344db328033aaad49dec984195f3b7d3697b06ff9ee494f493075"
-const CATALOG_SIZE := 223
+const CATALOG_IDS_SHA := "1cfa75341286c8804e19109c0aac54ad8dbc28c36e6066a4a885806df66176bf"
+const CATALOG_SIZE := 348
 
 
 ## The timer's rules on a bare clock: start, what counts, background, finish, frame rates.
@@ -1227,6 +1227,8 @@ func _test_completion_catalog() -> void:
 	var cat: Completion = g.completion
 	var ids := "\n".join(cat.order)
 	var sha := ids.sha256_text()
+	var cat_counts := cat.categories({})
+	t.log_line("catalog v%d: %d entries; %s" % [Completion.CATALOG_VERSION, cat.size(), str(cat_counts.keys().map(func(k): return "%s %d" % [k, int(cat_counts[k]["total"])]))])
 	t.check("completion_ids_unique_and_pinned", cat.size() == CATALOG_SIZE and cat.entries.size() == cat.order.size() and sha == CATALOG_IDS_SHA,
 			"%d ids, sha %s" % [cat.size(), sha])
 	var share := 0.0
@@ -3830,15 +3832,27 @@ func _test_parasite_combat() -> void:
 	sp.hp = sp.max_hp
 	var gl2 := ParasiteGlob.new()
 	gl2.launch(sp, b, sp.global_position + sp.up * 0.4 + (p.global_position - sp.global_position).normalized() * 0.4, p.body_center())
+	var swiped := false
+	var last_pos := gl2.global_position
+	var was_reflected := false
 	for i in 120:
 		await t.frames(1)
 		if gl2 == null or not is_instance_valid(gl2) or gl2._done:
 			break
-		if gl2.global_position.distance_to(p.body_center()) < 1.2 and not gl2.reflected:
+		last_pos = gl2.global_position
+		was_reflected = was_reflected or gl2.reflected
+		# (Swung as it comes within the tail's reach: the hit frame lands a moment later, before
+		# the glob reaches his body.)
+		if gl2.global_position.distance_to(p.body_center()) < 2.0 and not gl2.reflected and not swiped:
+			swiped = true
 			await press("swipe")
 	for i in 120:
 		await t.frames(1)
-	t.check("glob_batted_back_hurts_spitter", sp.hp < sp.max_hp, "spitter hp %d of %d" % [sp.hp, sp.max_hp])
+		if is_instance_valid(gl2) and not gl2._done:
+			last_pos = gl2.global_position
+			was_reflected = was_reflected or gl2.reflected
+	t.check("glob_batted_back_hurts_spitter", sp.hp < sp.max_hp, "spitter hp %d of %d (swiped %s, reflected %s, glob last %.1f m from the spitter, %.2f m up)" % [sp.hp, sp.max_hp,
+			swiped, was_reflected, last_pos.distance_to(sp.global_position), b.altitude(last_pos)])
 	# Rock stops a glob: fired straight down at the moss, it splats there and never passes through.
 	var gl3 := ParasiteGlob.new()
 	var gp: Vector3 = at.call(3.0, 3.0) + b.up_at(at.call(3.0, 3.0)) * 1.5

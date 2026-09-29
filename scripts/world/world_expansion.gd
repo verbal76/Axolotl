@@ -354,7 +354,7 @@ static func reed_canyon(lb: LevelBuilder) -> void:
 			(log_b - log_a).normalized().cross(b.up_at(log_a)).normalized().cross((log_b - log_a).normalized())), log_a + b.up_at(log_a) * 0.35 - (log_b - log_a).normalized() * 0.8),
 			log_a.distance_to(log_b) + 1.1, 0.42, 0.36, true, 0.0)
 	logb.set_meta("floats_by_design", "a fallen log across a ravine")
-	logb.set_meta("grounded", "log")
+	logb.remove_meta("grounded")   # (it spans the ravine: no ground under its middle, by design)
 	lb.crossings.append({"a": log_a, "b": log_b, "gate": null})
 	# (Placed in the maze's own metres, clear of both cuts: north of the western one, on the strip
 	# between them, south of the eastern one, and past their ends.)
