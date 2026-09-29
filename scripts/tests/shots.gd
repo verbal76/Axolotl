@@ -149,6 +149,42 @@ func run(runner) -> void:
 				await t.seconds(1.2)
 				await t.shot("world_b%d_%d_%s" % [bi + 1, k, str(h["route"]).replace(" ", "_")])
 				k += 1
+	if only == "perfaq":
+		# Where this package's frame time goes: three slowed views, with each new piece switched
+		# off in turn (cumulatively).
+		var b1 := g.balls[0]
+		var b7 := g.balls[6]
+		var sets := [[b1, b1.surface_point(MossBall.dir_ll(10.0, 30.0), 0.2), Vector3.FORWARD, "ball1_10_30"],
+				[g.balls[4], Vector3.ZERO, Vector3.ZERO, "ball5_bridge"]]
+		for h in (g.balls[4].get_meta("builder") as LevelBuilder).bot_hints:
+			if h.has("route"):
+				sets[1][1] = (h["start"] as Vector3) + g.balls[4].up_at(h["start"]) * 0.2
+				sets[1][2] = (h["tops"][0] as Vector3) - (h["start"] as Vector3)
+				break
+		for h in (b7.get_meta("builder") as LevelBuilder).bot_hints:
+			if h.has("cave"):
+				sets.append([b7, b7.surface_point(b7.up_at(h["door"]), 0.2), (h["door"] as Vector3) - (h["entry"] as Vector3), "cave_b7"])
+				break
+		for step in ["all", "no_fish", "no_pebbles_stones", "no_gravel_floor", "no_bedroom", "no_shrines"]:
+			match step:
+				"no_fish":
+					g.fish.visible = false
+				"no_pebbles_stones":
+					for n in g.aquarium.pebble_tiles:
+						n.visible = false
+					g.aquarium.get_node("GravelStones").visible = false
+				"no_gravel_floor":
+					g.aquarium.get_node("GravelFloor").visible = false
+				"no_bedroom":
+					g.aquarium.bedroom.visible = false
+				"no_shrines":
+					for b in g.balls:
+						for sh in b.shrines:
+							sh.visible = false
+			for st in sets:
+				g.player.place(st[0], st[1], st[2])
+				g.cam.snap_behind()
+				await _perf_view("%s %s" % [st[3], step])
 	if only == "perfsplit":
 		# Where the frame time goes (Expansion 6 performance pass): two heavy views, measured with
 		# everything, then with each Expansion 6 feature switched off in turn (cumulatively).

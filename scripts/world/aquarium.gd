@@ -749,6 +749,30 @@ func outside_camera(cam_pos: Vector3) -> void:
 	env.fog_density = 0.92
 
 
+## From inside the water the room is seen only through the glass, which lets through less than 8%
+## of it beyond ln(0.45 / 0.08) / density (docs/AQUARIUM.md): past that the bedroom is hidden
+## (a measured ~8% of the frame in the worlds' views), and shown again nearer the glass, from
+## outside the tank, and in the aquarium experiences' views from the room.
+var _room_t := 0.0
+func _cull_room(dt: float) -> void:
+	_room_t -= dt
+	if _room_t > 0.0 or bedroom == null:
+		return
+	_room_t = 0.2
+	var cam := get_viewport().get_camera_3d()
+	if cam == null:
+		return
+	var p := cam.global_position
+	var inside := p.x > TANK_MIN.x and p.x < TANK_MAX.x and p.z > TANK_MIN.z and p.z < TANK_MAX.z and p.y < TANK_MAX.y and p.y > TANK_MIN.y
+	var show := true
+	if inside and not outside:
+		var d_glass := minf(minf(p.x - TANK_MIN.x, TANK_MAX.x - p.x), minf(minf(p.z - TANK_MIN.z, TANK_MAX.z - p.z), TANK_MAX.y - p.y))
+		var water := lerpf(0.017, 0.007, ease(clean, 0.8))
+		show = d_glass < 1.73 / water
+	if bedroom.visible != show:
+		bedroom.visible = show
+
+
 # --- Continuous restoration ---------------------------------------------------------------
 
 func apply(g: float) -> void:
@@ -798,6 +822,7 @@ func apply(g: float) -> void:
 
 
 func _process(dt: float) -> void:
+	_cull_room(dt)
 	# Snail grazing slowly around the gravel.
 	_snail_t += dt * 0.006
 	var p := floor_point(cos(_snail_t) * 150.0, sin(_snail_t) * 105.0 - 20.0)
