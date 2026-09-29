@@ -791,8 +791,12 @@ func _test_ecosystem() -> void:
 							why.append("ball %d hopper perch %d at %.2f m" % [b.index + 1, si, b.altitude(perch)])
 							break
 			"puffer":
-				if b.altitude(c.global_position) < 1.2:
-					why.append("ball %d puffer low" % (b.index + 1))
+				# Its patch hovers well up; puffed with him close it may sink to face him, but never
+				# below 0.9 m over the ground (AQ1: so a tail swipe can reach it).
+				var pu := c as Pufferfish
+				var home_alt: float = pu._ground_alt + pu.hover
+				if home_alt < 1.2 or (not pu.defeated and b.altitude(c.global_position) < pu._ground_alt + 0.85):
+					why.append("ball %d puffer low (home %.2f, now %.2f)" % [b.index + 1, home_alt, b.altitude(c.global_position)])
 			"eel":
 				var e := c as CaveEel
 				if b.altitude(e.mouth) < 0.5 or b.altitude(e.mouth) > 2.5:
@@ -4918,7 +4922,7 @@ func _test_tier2_world() -> void:
 	await t.seconds(0.5)
 	var fired0: float = await _fire_tier2(0.5)
 	await t.frames(4)
-	t.check("tier2_nothing_before_a_shrine", not g.hud.special_shown() and g.t2.last.is_empty() or g.t2.last.get("ability", "") == "", "button shown %s" % g.hud.special_shown())
+	t.check("tier2_nothing_before_a_shrine", not g.hud.special_shown() and g.t2.last.is_empty() or g.t2.last.get("ability", "") == "", "button shown %s; last %s; game %s cine '%s' player %s controls %s ball %d paused %s" % [g.hud.special_shown(), g.t2.last, g.state, g.cinematic, p.state, p.controls_enabled, p.ball.index, g.get_tree().paused])
 	# The World 3 shrine: touched in play, it gives Water Cannon, equips it, shows the button and
 	# sets out practice targets; the run save carries it.
 	var sh: Tier2Shrine = g.balls[2].shrines[0]
