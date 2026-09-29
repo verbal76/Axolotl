@@ -52,6 +52,13 @@ var burst_t := -1.0
 var hurt_t := -1.0
 var brace := 0.0            # dangerous fall telegraph 0..1
 var surf := 0.0             # vortex surfing 0..1
+## Free swimming (Swim Mode, docs/AQUARIUM.md): 0 off; above 0 the swimming gait, 1 relaxed, 2 fast.
+## The body and tail undulate side to side (bigger and quicker with effort), the limbs paddle when
+## slow and tuck back when fast, the gills sweep back with speed. `swim_turn` (rad/s of heading
+## change) curves the body into a turn; `swim_pitch` tips it up or down as he climbs or dives.
+var swim := 0.0
+var swim_turn := 0.0
+var swim_pitch := 0.0
 var surf_bank := 0.0
 var happy_t := -1.0
 var perk_t := -1.0
@@ -810,7 +817,9 @@ func _process(dt: float) -> void:
 	_t += dt
 	# The body wave advances with movement (and idles slowly), so it matches the ground speed.
 	var s := clampf(speed, 0.0, 1.4)
-	if grounded:
+	if swim > 0.0:
+		_wave += dt * (2.2 + swim * 6.5)
+	elif grounded:
 		_wave += dt * (1.2 + maxf(s, _idle_stride) * 10.5)
 	else:
 		_wave += dt * 7.0
@@ -881,6 +890,18 @@ func _animate(dt: float) -> void:
 		arch = clampf(-vup * 0.02, -0.12, 0.12)
 		wave_amp = 0.2
 		gill_back = maxf(gill_back, 0.6)
+	if swim > 0.0:
+		var e := clampf(swim / 2.0, 0.0, 1.0)
+		# Lateral undulation drives him: gentle when hovering, strong and quick when fast.
+		wave_amp = 0.1 + 0.28 * e
+		leg_mode = 1 if swim > 1.1 else 0
+		gill_back = 0.25 + 0.75 * e
+		gill_flap = 0.15 + 0.2 * (1.0 - e)
+		# Into the turn (the body curves, the tail swings out), nose up or down with the climb.
+		rig_rot.z = clampf(-swim_turn * 0.18, -0.35, 0.35)
+		rig_rot.x = clampf(swim_pitch, -0.6, 0.6)
+		tail_base = clampf(-swim_turn * 0.5, -0.8, 0.8)
+		arch = clampf(-swim_pitch * 0.15, -0.12, 0.12)
 	if burst_t >= 0.0:
 		var k := sin(burst_t * PI)
 		wave_amp = 0.18 + 0.3 * k

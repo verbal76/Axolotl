@@ -313,7 +313,7 @@ func body_extent() -> float:
 # --- Update ------------------------------------------------------------------------------
 
 func _physics_process(dt: float) -> void:
-	if state == "gone":
+	if state == "gone" or Game.paused_for_aquarium():
 		return
 	var g := Game.inst
 	if state == "init":

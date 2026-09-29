@@ -8,6 +8,9 @@ const TANK_MIN := Vector3(-290, -110, -260)
 const TANK_MAX := Vector3(290, 150, 220)
 const FLOOR_Y := -825.0
 const ROOM_LAYER := 2
+## Collision layer 12: the tank's glass, gravel floor and water surface, which only the Swim Mode
+## swimmer (and its camera) collides with (docs/AQUARIUM.md); gameplay never sees it.
+const TANK_LAYER_BIT := 1 << 11
 
 const GRIME_TEX := preload("res://assets/textures/grime.png")
 const ALGAE_TEX := preload("res://assets/textures/algae_mask.png")
@@ -35,6 +38,13 @@ var _hand_t := -1.0
 var _room_light: OmniLight3D
 ## Daylight from the bedroom window, through the side glass: only reaches in once the glass is clean.
 var window_light: DirectionalLight3D
+## The aquarium experiences' outside views (the room, inspection, Live Tank): the camera is in the
+## room, not the water, so the water's haze starts at the glass (depth fog) and the glass lets the
+## tank be seen instead of compositing a water column that the camera is not in.
+var outside := false
+var tank_body: StaticBody3D
+var floor_mesh: Mesh
+var _fog_saved := {}
 ## The aquarium light shared by every moss ball's materials (shaders/aquarium_light.gdshaderinc):
 ## clarity (0 murky .. 1 clear) and the direction toward the ceiling light. Materials made later
 ## pick these up when their ball registers them.
@@ -185,7 +195,8 @@ func _build_gravel() -> void:
 				st.add_index(q)
 	var floor_mi := MeshInstance3D.new()
 	floor_mi.name = "GravelFloor"
-	floor_mi.mesh = st.commit()
+	floor_mesh = st.commit()
+	floor_mi.mesh = floor_mesh
 	floor_mi.material_override = gravel_mat
 	add_child(floor_mi)
 	var rng := RandomNumberGenerator.new()
@@ -672,13 +683,80 @@ func play_hand() -> void:
 		hand.visible = true
 
 
+# --- The aquarium experiences (docs/AQUARIUM.md) -------------------------------------------
+
+## The tank's own collision (the glass, the gravel and the water surface), on TANK_LAYER_BIT only,
+## built the first time Swim Mode needs it (never in gameplay, so it costs gameplay nothing).
+func ensure_tank_body() -> StaticBody3D:
+	if tank_body != null:
+		return tank_body
+	tank_body = StaticBody3D.new()
+	tank_body.name = "TankBody"
+	tank_body.collision_layer = TANK_LAYER_BIT
+	tank_body.collision_mask = 0
+	add_child(tank_body)
+	var size := TANK_MAX - TANK_MIN
+	var c := (TANK_MIN + TANK_MAX) * 0.5
+	var t := 20.0
+	# Four panes of glass, and the water's surface as a lid (he swims under it, never out).
+	for b in [[Vector3(TANK_MIN.x - t * 0.5, c.y, c.z), Vector3(t, size.y + 60, size.z + 2 * t)],
+			[Vector3(TANK_MAX.x + t * 0.5, c.y, c.z), Vector3(t, size.y + 60, size.z + 2 * t)],
+			[Vector3(c.x, c.y, TANK_MIN.z - t * 0.5), Vector3(size.x + 2 * t, size.y + 60, t)],
+			[Vector3(c.x, c.y, TANK_MAX.z + t * 0.5), Vector3(size.x + 2 * t, size.y + 60, t)],
+			[Vector3(c.x, TANK_MAX.y - 1.0 + t * 0.5, c.z), Vector3(size.x + 2 * t, t, size.z + 2 * t)]]:
+		var cs := CollisionShape3D.new()
+		var bs := BoxShape3D.new()
+		bs.size = b[1]
+		cs.shape = bs
+		cs.position = b[0]
+		tank_body.add_child(cs)
+	# The gravel, as drawn (lifted a little: the pebbles and stones on it are not collided with).
+	var fs := CollisionShape3D.new()
+	fs.shape = floor_mesh.create_trimesh_shape()
+	fs.position = Vector3.UP * 1.2
+	tank_body.add_child(fs)
+	return tank_body
+
+
+## Switches between the view from the room (true) and the view from inside the water (false).
+func set_outside_view(on: bool) -> void:
+	if on == outside:
+		return
+	outside = on
+	if on:
+		_fog_saved = {"mode": env.fog_mode, "density": env.fog_density}
+		env.fog_mode = Environment.FOG_MODE_DEPTH
+		env.fog_depth_curve = 1.0
+		outside_camera(Vector3(0, 0, TANK_MAX.z + 600.0))
+	else:
+		env.fog_mode = _fog_saved.get("mode", Environment.FOG_MODE_EXPONENTIAL)
+		apply(clean)
+	for m in glass_mats:
+		m.set_shader_parameter("outside", on)
+
+
+## Outside views: the water's haze begins at the glass nearest the camera and deepens across the
+## tank (murkier water hazes sooner). Called every frame the outside camera moves.
+func outside_camera(cam_pos: Vector3) -> void:
+	if not outside:
+		return
+	var near := AABB(TANK_MIN, TANK_MAX - TANK_MIN)
+	var q := cam_pos.clamp(near.position, near.end)
+	var d := cam_pos.distance_to(q)
+	var water := lerpf(0.017, 0.007, ease(clean, 0.8))
+	env.fog_depth_begin = d
+	env.fog_depth_end = d + 9.0 / water
+	env.fog_density = 0.92
+
+
 # --- Continuous restoration ---------------------------------------------------------------
 
 func apply(g: float) -> void:
 	clean = g
 	var e := ease(g, 0.8)
 	# Even clear water keeps some haze, so the far glass and the room recede (Expansion 6).
-	env.fog_density = lerpf(0.017, 0.007, e)
+	if not outside:
+		env.fog_density = lerpf(0.017, 0.007, e)
 	# Healed, the water turns a rich aqua-blue (Expansion 6, owner's art-direction references):
 	# cool water and shade against warm light and the vivid life on the moss.
 	env.fog_light_color = Color(0.2, 0.26, 0.17).lerp(Color(0.1, 0.4, 0.55), e)
@@ -706,7 +784,7 @@ func apply(g: float) -> void:
 	pebble_mat.set_shader_parameter("clarity", e)
 	for m in glass_mats:
 		m.set_shader_parameter("clean", g)
-		m.set_shader_parameter("water_density", env.fog_density)
+		m.set_shader_parameter("water_density", lerpf(0.017, 0.007, e))
 		m.set_shader_parameter("water_color", env.fog_light_color)
 	surface_mat.set_shader_parameter("clean", e)
 	for m in shaft_mats:

@@ -97,6 +97,9 @@ func _gill_point() -> Vector3:
 	var g := Game.inst
 	if g == null or g.player == null or not g.player.is_inside_tree():
 		return Vector3.INF
+	# In the aquarium experiences only the Swim Mode swimmer is in the water (docs/AQUARIUM.md).
+	if g.presentation != null and g.presentation.active():
+		return g.presentation.gill_point()
 	return g.player.body_center()
 
 
@@ -211,6 +214,18 @@ func nearest(p: Vector3) -> float:
 	for f in fish:
 		best = minf(best, p.distance_to(f["pos"]))
 	return best
+
+
+## The nearest fish's position to `p`, or INF (Swim Mode: Gill notices fish that come close).
+func nearest_point(p: Vector3) -> Vector3:
+	var best := INF
+	var at := Vector3.INF
+	for f in fish:
+		var d := p.distance_squared_to(f["pos"])
+		if d < best:
+			best = d
+			at = f["pos"]
+	return at
 
 
 # --- Meshes --------------------------------------------------------------------------------

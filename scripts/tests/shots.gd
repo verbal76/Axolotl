@@ -417,6 +417,13 @@ func run(runner) -> void:
 		g.g_disp = 1.0
 		g.aquarium.apply(1.0)
 		await _room_shots(g, "room_clean")
+	if only == "aquarium":
+		await _aquarium_shots(g, "aq_murky")
+		for b in g.balls:
+			b.add_heal(Vector3.UP, 340.0, 0.0)
+		g.g_disp = 1.0
+		g.aquarium.apply(1.0)
+		await _aquarium_shots(g, "aq_clean")
 	if only == "gravel":
 		await _gravel_shots(g, "gravel_murky")
 		for b in g.balls:
@@ -471,6 +478,54 @@ func _room_shots(g: Game, tag: String) -> void:
 		await t.shot("%s_%s" % [tag, v[0]])
 	g.cam.cinematic = false
 	env.fog_enabled = fog
+
+
+## The aquarium experiences (docs/AQUARIUM.md), through the real controller: the room, inspection
+## (centre and both ends of its drag), each Live Tank view and Swim Mode (still, swimming, near fish).
+func _aquarium_shots(g: Game, tag: String) -> void:
+	g.player.invuln_t = 9999
+	var pr := g.presentation
+	pr.enter("play")
+	await t.seconds(2.5)
+	await t.shot("%s_1room" % tag)
+	pr.go("inspect")
+	await t.seconds(2.5)
+	await t.shot("%s_2inspect" % tag)
+	pr.inspect_drag(Vector2(-400, 0))
+	await t.seconds(2.0)
+	await t.shot("%s_3inspect_left" % tag)
+	pr.inspect_drag(Vector2(800, 60))
+	await t.seconds(2.0)
+	await t.shot("%s_4inspect_right" % tag)
+	pr.go("live")
+	for i in Presentation.LIVE_VIEWS.size():
+		await t.seconds(3.0)
+		await t.shot("%s_5live_%s" % [tag, Presentation.LIVE_VIEWS[pr.live_view][0]])
+		pr.next_live_view()
+	pr.go("swim")
+	await t.seconds(1.5)
+	await t.shot("%s_6swim_start" % tag)
+	pr.ui.swim_stick = Vector2(0, 1)
+	pr.ui.swim_up = 1.0
+	await t.seconds(2.5)
+	pr.ui.swim_up = 0.0
+	pr.ui.swim_fast = true
+	await t.seconds(3.0)
+	await t.shot("%s_7swim_fast" % tag)
+	pr.ui.swim_fast = false
+	pr.ui.swim_stick = Vector2.ZERO
+	# Out in open water among the fish.
+	var f: Vector3 = g.fish.nearest_point(Vector3(0, 20, 0))
+	pr.swimmer.global_position = f + Vector3(0, 2, 14)
+	pr.swimmer.velocity = Vector3.ZERO
+	pr.swimmer.cam_yaw = 0.0
+	pr.swimmer.cam_pitch = 0.05
+	await t.seconds(1.2)
+	await t.shot("%s_8swim_fish" % tag)
+	pr.back()
+	await t.seconds(1.0)
+	pr.back()
+	await t.seconds(1.0)
 
 
 ## The gravel (docs/AQUARIUM.md): close, normal and grazing views inside the tank, and one through

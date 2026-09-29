@@ -14,6 +14,11 @@ uniform vec3 film_color : source_color = vec3(0.3, 0.36, 0.26);
 // water column is composited here).
 uniform float water_density = 0.017;
 uniform vec3 water_color : source_color = vec3(0.2, 0.26, 0.17);
+// Seen from the room (the aquarium experiences, docs/AQUARIUM.md): the camera is in the air, so
+// the glass is clear but for its film and algae, with a faint sheen at grazing angles, the
+// waterline's meniscus and the water's tint below it (the haze itself is depth fog).
+uniform bool outside = false;
+uniform float waterline = 150.0;
 
 varying vec3 v_wpos;
 
@@ -41,6 +46,15 @@ void fragment() {
 	float hy = clamp((v_wpos.y + 110.0) / 260.0, 0.0, 1.0);
 	vec3 wc = mix(water_color * vec3(0.6, 0.72, 0.9), water_color * vec3(1.22, 1.2, 1.08), smoothstep(0.0, 1.0, hy));
 	vec3 C = (wc * (1.0 - T) + T * ga * col) / max(A, 0.001);
+	if (outside) {
+		float fres = pow(1.0 - clamp(abs(dot(normalize(NORMAL), normalize(VIEW))), 0.0, 1.0), 4.0);
+		float below = step(v_wpos.y, waterline);
+		float men = exp(-abs(v_wpos.y - waterline + 1.0) * 0.9);
+		vec3 tint = water_color * 1.3;
+		C = mix(tint, col, clamp(ga * 1.2, 0.0, 1.0));
+		C = mix(C, vec3(0.85, 0.95, 1.0), clamp(men * 0.8 + fres * 0.5, 0.0, 1.0));
+		A = clamp(ga * 0.85 + below * 0.07 + men * 0.55 + fres * 0.35, 0.0, 0.95);
+	}
 	ALBEDO = vec3(0.0);
 	EMISSION = C;
 	ROUGHNESS = 1.0;

@@ -155,7 +155,7 @@ func light_intensity() -> float:
 
 
 func _physics_process(dt: float) -> void:
-	if state == "done":
+	if state == "done" or Game.paused_for_aquarium():
 		return
 	if state == "init":
 		var top := ball.surface_point(_dir, h_hint + 3.0)

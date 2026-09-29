@@ -4,6 +4,7 @@ extends CanvasLayer
 ## Reduced HUD, the colours page (GillPage), audio levels, haptics, controller/touch status, New Run, Return to Title.
 
 var _loadout: Tier2Loadout
+var _aquarium: Button
 var _root: Control
 var _panel: PanelContainer
 var _status: Label
@@ -81,6 +82,10 @@ func _ready() -> void:
 	_status.add_theme_font_size_override("font_size", 22)
 	_status.autowrap_mode = TextServer.AUTOWRAP_WORD_SMART
 	v.add_child(_status)
+	# The aquarium experiences (the run is saved and stands still meanwhile).
+	_aquarium = UiStyle.button("Aquarium", _open_aquarium)
+	_aquarium.name = "Aquarium"
+	v.add_child(_aquarium)
 	var restart := UiStyle.confirm_button("New Run", "Start a new run? This run's progress and time are replaced (your best finish is kept).",
 			"Start over", func(): Game.inst.restart_experience())
 	v.add_child(restart)
@@ -94,7 +99,7 @@ func _ready() -> void:
 	_startup.add_theme_color_override("font_color", Color(0.85, 0.95, 0.92, 0.6))
 	_startup.autowrap_mode = TextServer.AUTOWRAP_WORD_SMART
 	v.add_child(_startup)
-	_session_rows = [restart, title, _run_time, _run_detail, _loadout]
+	_session_rows = [restart, title, _run_time, _run_detail, _loadout, _aquarium]
 	# His colours: a page of its own in place of the menu.
 	gill_page = GillPage.new()
 	gill_page.visible = false
@@ -169,6 +174,15 @@ func _slider(parent: Control, text: String) -> HSlider:
 	return s
 
 
+func _open_aquarium() -> void:
+	if gill_page.visible:
+		_close_gill()
+	visible = false
+	get_tree().paused = false
+	Sfx.play("ui_tap", null, -8.0)
+	Game.inst.presentation.enter("play")
+
+
 func open(from_title := false) -> void:
 	_from_title = from_title
 	if not from_title and Game.inst != null:
@@ -197,6 +211,8 @@ func _refresh() -> void:
 	if g != null and g.run_save != null:
 		_loadout.refresh()
 		_loadout.visible = _loadout.visible and not _from_title
+		# (Not mid-cinematic, mid-fall or while dead: only from ordinary play.)
+		_aquarium.disabled = g.cinematic != "" or g.player.state != "normal"
 		_run_time.text = g.run_line()
 		var lines: Array[String] = []
 		lines.append("Game finished: " + ("yes" if g.clock.is_finished() else "not yet"))

@@ -31,8 +31,10 @@ var hud: Hud
 var title: TitleScreen
 var pause_menu: PauseMenu
 var quality: QualityScaler
+## The aquarium experiences (docs/AQUARIUM.md): the room, inspection, Live Tank and Swim Mode.
+var presentation: Presentation
 
-var state := "title"          # title | play
+var state := "title"          # title | play | aquarium (the experiences; the clock never counts)
 var cinematic := ""
 var cine_t := 0.0
 var cine_data := {}
@@ -239,6 +241,14 @@ func _build_world() -> void:
 	add_child(title)
 	quality = QualityScaler.new()
 	add_child(quality)
+	presentation = Presentation.new()
+	presentation.g = self
+	add_child(presentation)
+	presentation.ui = PresentationUi.new()
+	presentation.ui.p = presentation
+	add_child(presentation.ui)
+	# Android's back gesture is handled (the aquarium steps back out, play opens the menu).
+	get_tree().quit_on_go_back = false
 
 	audio.set_ball(0, false)
 	aquarium.apply(0.0)
@@ -492,6 +502,21 @@ func _notification(what: int) -> void:
 			clock.resume()
 		NOTIFICATION_WM_CLOSE_REQUEST:
 			save_run()
+		NOTIFICATION_WM_GO_BACK_REQUEST:
+			_go_back()
+
+
+## Android back: one step out of wherever the player is (never straight out of the game in play).
+func _go_back() -> void:
+	if presentation != null and presentation.active():
+		presentation.back()
+	elif pause_menu.visible:
+		pause_menu.close()
+	elif state == "play":
+		pause_menu.open()
+	elif state == "title":
+		save_run()
+		get_tree().quit()
 
 
 ## Diagnostics section (shown through StartupTrace.timeline_text, the r5 bootstrap's hook).
@@ -531,6 +556,11 @@ const ACTIVE_RADIUS := 55.0
 var _region_t := 0.0
 
 
+## Whether the run stands still for the aquarium experiences (parasites, Motes, food pause).
+static func paused_for_aquarium() -> bool:
+	return inst != null and inst.state == "aquarium"
+
+
 func near_player(pos: Vector3) -> bool:
 	return pos.distance_squared_to(player.global_position) < ACTIVE_RADIUS * ACTIVE_RADIUS
 
@@ -546,6 +576,9 @@ func _process(dt: float) -> void:
 	clock.tick(dt, state == "play")
 	if state == "play":
 		_autosave(dt)
+	if state == "aquarium":
+		# The aquarium experiences: the run stands still (Presentation drives the camera).
+		return
 	if state == "title":
 		_title_t += dt
 		var up := player.up

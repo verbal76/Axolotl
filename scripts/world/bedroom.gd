@@ -22,8 +22,8 @@ var _sts := {}
 var _layer := 2
 var _r := RandomNumberGenerator.new()
 ## Where the room view looks from and at (Aquarium experiences).
-var view_pos := Vector3(420, 360, 2150)
-var view_look := Vector3(0, -60, 0)
+var view_pos := Vector3(330, 200, 1250)
+var view_look := Vector3(-10, -40, 0)
 
 
 func build(p_floor_y: float, layer: int, tank_min: Vector3, tank_max: Vector3) -> void:

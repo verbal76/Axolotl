@@ -59,7 +59,7 @@ func place(p_ball: MossBall, pos: Vector3, seed_v: int) -> void:
 
 
 func _process(dt: float) -> void:
-	if defeated:
+	if defeated or Game.paused_for_aquarium():
 		return
 	_age += dt
 	var up := ball.up_at(_home)

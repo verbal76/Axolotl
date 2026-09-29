@@ -68,7 +68,7 @@ func _ready() -> void:
 
 
 func _physics_process(dt: float) -> void:
-	if _done:
+	if _done or Game.paused_for_aquarium():
 		return
 	_t += dt
 	var from := global_position

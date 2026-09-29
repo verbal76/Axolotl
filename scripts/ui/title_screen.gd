@@ -46,6 +46,9 @@ func _ready() -> void:
 	var colours := UiStyle.button("%s's colours" % GameVersion.CHARACTER_NAME, _on_colours)
 	colours.name = "GillColours"
 	box.add_child(colours)
+	var aq := UiStyle.button("Aquarium", _on_aquarium)
+	aq.name = "Aquarium"
+	box.add_child(aq)
 	box.add_child(UiStyle.button("Settings", _on_settings))
 	_run_info = UiStyle.note()
 	_run_info.name = "RunInfo"
@@ -101,6 +104,12 @@ func _on_colours() -> void:
 	Sfx.play("ui_tap", null, -6.0)
 	Game.inst.pause_menu.open(true)
 	Game.inst.pause_menu._open_gill(true)
+
+
+## The aquarium experiences (docs/AQUARIUM.md): the bedroom, the tank, Live Tank and Swim Mode.
+func _on_aquarium() -> void:
+	Sfx.play("ui_tap", null, -6.0)
+	Game.inst.presentation.enter("title")
 
 
 func _on_settings() -> void:

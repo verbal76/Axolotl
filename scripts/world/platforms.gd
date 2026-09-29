@@ -97,6 +97,8 @@ class Crumble extends StaticBody3D:
 			_t = 0.0
 
 	func _physics_process(dt: float) -> void:
+		if Game.paused_for_aquarium():
+			return
 		_t += dt
 		match _state:
 			"shaking":
@@ -236,6 +238,8 @@ class SwayLeaf extends AnimatableBody3D:
 		add_child(leaf)
 
 	func _physics_process(dt: float) -> void:
+		if Game.paused_for_aquarium():
+			return
 		_t += dt
 		var a := sin(_t * TAU * _freq + _phase) * _amp
 		global_transform = Transform3D(_base.basis * Basis(Vector3.RIGHT, a), _base.origin)
