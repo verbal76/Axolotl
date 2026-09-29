@@ -268,6 +268,20 @@ func run(runner) -> void:
 		g.cam.snap_behind()
 		g.cam.pitch = -0.05
 		await _perf_view("restored_open_water")
+		# The aquarium experiences (this package): each mode, from the restored tank.
+		var pr: Presentation = g.presentation
+		pr.enter("play")
+		await _perf_view("aq_room")
+		pr.go("inspect")
+		await _perf_view("aq_inspect")
+		pr.go("live")
+		await _perf_view("aq_live_tank")
+		pr.go("swim")
+		pr.ui.swim_stick = Vector2(0, 1)
+		await _perf_view("aq_swim")
+		pr.ui.swim_stick = Vector2.ZERO
+		pr.exit()
+		await _perf_view("aq_back_in_play")
 	if only == "b2out":
 		var b := g.balls[1]
 		var v: Vortex = b.vortex_out
@@ -1409,10 +1423,12 @@ func _perf_view(label: String) -> void:
 	for i in 60:
 		await RenderingServer.frame_post_draw
 	var ms := (Time.get_ticks_usec() - t0) / 1000.0 / 60.0
-	t.log_line("PERF %s  %.1f ms/frame  draw calls %d  triangles %d  video mem %.1f MB" % [label, ms,
+	t.log_line("PERF %s  %.1f ms/frame  draw calls %d  triangles %d  video mem %.1f MB  ram %.1f MB (peak %.1f)  nodes %d" % [label, ms,
 			Performance.get_monitor(Performance.RENDER_TOTAL_DRAW_CALLS_IN_FRAME),
 			Performance.get_monitor(Performance.RENDER_TOTAL_PRIMITIVES_IN_FRAME),
-			Performance.get_monitor(Performance.RENDER_VIDEO_MEM_USED) / 1048576.0])
+			Performance.get_monitor(Performance.RENDER_VIDEO_MEM_USED) / 1048576.0,
+			Performance.get_monitor(Performance.MEMORY_STATIC) / 1048576.0, Performance.get_monitor(Performance.MEMORY_STATIC_MAX) / 1048576.0,
+			Performance.get_monitor(Performance.OBJECT_NODE_COUNT)])
 	t.g.player.bot_input = Vector2.ZERO
 
 

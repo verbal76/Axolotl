@@ -420,6 +420,43 @@ phone-verified until the owner says so (MOTE_HANDOFF §16 item 17).
 | WX-13 | Settings scrollbar about 3× easier to grab (owner, from dev-000025) | I+V / needs phone | `UiStyle` scrollbar: 28 px touch target, 8 px drawn | `_test_menu_scrollbar` |
 | WX-14 | Ships as ONE dev OTA, no APK | I+V (published dev-000028) / needs phone | game layer only; runtime r5 unchanged (`ota_runtime.py --check`); save schema 1; catalog v4 (348) | local gates on `3526b3e`: unit suite 407/407 (fresh user data); playthroughs seed 7 and 4242: 23/23 each (deaths 1 / 2; all clear at 3,351 s / 3,832 s sim, normal finish 87.9% / 88.2%; 100% by play at 6,018 s / 5,442 s, finish time kept); version drift passes; runtime gate r5 unchanged; OTA end-to-end 42/42. Published **dev-000028** (OTA publish #28, source `bf46566`: the validated content plus two unit-test measurement fixes; PCK `a4c5f8dc…c1075a162b`, 9,384,212 bytes, 38 baked caches): signature (pinned key), hash, size, inspector and the new sources verified from the public URLs; a b22 client stages it; 71 checks pass run from the pack; Build & Verify #38 green, no APK |
 
+## AQ — Master held next-OTA package: Tier 2, the aquarium experiences, the tank (owner brief, 2026-09-29)
+
+One coherent package in one dev OTA, no APK. Owner decisions (asked before implementation):
+
+- pufferfish killable with no new ids;
+- aquarium entry from the title and the pause menu;
+- Tier-2 unlocks per run (not completion);
+- loadout on the pause-menu page;
+- landmark shrines in W3, W5 and W7;
+- the run timer never counts in the aquarium;
+- camera-directed Swim controls;
+- fish at mid scale;
+- **three bala sharks, the largest fish, a skittish trio** (added during qualification).
+
+Design: `docs/TIER2.md`, `docs/AQUARIUM.md`, `docs/ECOSYSTEM.md` (pufferfish). Nothing here is
+phone-verified.
+
+| ID | Requirement | Status | Implementation | Evidence |
+|---|---|---|---|---|
+| AQ-01 | Gravel rebuild | I+V | height-mesh floor (`Aquarium.floor_h`), `gravel2` albedo/height + normal maps (`tools/gen_gravel.py`), dual-sample height blend, instanced pebble tiles near the camera, 260 stones | `--only=gravel` shots |
+| AQ-02 | Late-80s / early-90s bedroom Room view | I+V | `Bedroom` (`tools/gen_room.py` textures): tank corner, desk, bed, TV, shelf, posters, corkboard | `--only=room`, `--only=aquarium` shots |
+| AQ-03 | Interactive tank in the Room | I+V | tap the tank → Inspection; Live Tank and Swim buttons | `aquarium_modes_and_back` |
+| AQ-04 | Aquarium Inspection | I+V | bounded drag round the front glass, never inside it | `aquarium_inspection_outside_glass` |
+| AQ-05 | Full-screen landscape Live Tank | I+V | four views (whole tank, left, right, Gill close-up); controls appear on touch then fade | shots `5live_*` |
+| AQ-06 | About 10 ambient fish (+3 bala sharks, owner) | I+V | `AmbientFish`: 13 fish of 5 kinds, own RNG, never targets or completion ids | `_test_ambient_fish` (6) incl. `bala_trio_bolts_and_regroups`; `--only=bala` |
+| AQ-07 | Free Swim Mode | I+V | `Swimmer` (separate body), tank collision layer 12, swim gait; earns nothing, cannot be hurt | `swim_stays_in_the_water` (289 m swum), `swim_earns_nothing_and_gill_safe` |
+| AQ-08 | Pufferfish repair | I+V | hittable, 3 hits, sinks to face him (≥0.9 m), beaten → gone, returns later; no new ids | `puffer_beaten_by_tail_swipes`, `puffer_beaten_is_gone`, `puffer_returns_later`; habitat check reads its home hover |
+| AQ-09 | Water Cannon, Bubble Blast, Gill Rush | I+V | `Tier2Combat` | `_test_tier2_rules` (9), `_test_tier2_world` (9); `--only=tier2` shots |
+| AQ-10 | Fixed unlock order W3 → Cannon, W5 → Bubble, W7 → Rush | I+V | shrines at High Crown, Secret Clearing, Glow Chamber | `tier2_shrines_in_worlds_3_5_7` |
+| AQ-11 | All unlockable, one equipped | I+V | `Tier2.unlock/equip`, `Tier2Loadout` | `tier2_loadout_rules`, `tier2_loadout_equips` |
+| AQ-12 | One Tier-2 button; Tail Swipe kept | I+V | `Hud.BTN_SPECIAL` (L / Y) | `tier2_shrine_unlocks_and_equips` |
+| AQ-13 | Three distinct glyphs | I+V | `Tier2Glyphs` | `--only=tier2` shots (ready / action / cooling, loadout) |
+| AQ-14 | Readable cooldown | I+V | radial refill and ready flash; 5 / 8 / 9 s, shared | `tier2_cooldown_blocks_repeat`, `tier2_swap_keeps_cooldown` |
+| AQ-15 | Settings scrollbar about 3× wider (from dev-000028) | I+V | unchanged | `menu_scrollbar_thumb_sized` |
+| AQ-16 | Presentation never mutates run, completion, RNG or saves | I+V | `Game.state = "aquarium"`, snapshot/restore, gameplay actors pause | `aquarium_run_untouched`, `aquarium_clock_never_counts`, `aquarium_world_stands_still`, `aquarium_no_leaks` |
+| AQ-17 | One dev OTA, no APK | see the release row | | |
+
 ## Precedence notes
 
 - The reconciliation prompt's floor list repeats two items that the owner changed earlier today: "diegetic
