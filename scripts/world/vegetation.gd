@@ -127,22 +127,15 @@ static func _plant(ball: MossBall, family: String, dirs: Array[Vector3], rng: Ra
 		var list: Array = lists[v]
 		if list.is_empty():
 			continue
-		var mm := MultiMesh.new()
-		mm.transform_format = MultiMesh.TRANSFORM_3D
-		mm.mesh = variants[v]
-		mm.instance_count = list.size()
-		for j in list.size():
-			mm.set_instance_transform(j, list[j])
 		var mmi := MultiMeshInstance3D.new()
 		mmi.name = "Veg_%s" % family
-		mmi.multimesh = mm
+		ball.fill_chunk(mmi, variants[v], list)
 		mmi.material_override = mat
 		mmi.cast_shadow = GeometryInstance3D.SHADOW_CASTING_SETTING_OFF
 		mmi.visibility_range_end = f["vis"]
 		mmi.visibility_range_end_margin = 10.0
 		mmi.visibility_range_fade_mode = GeometryInstance3D.VISIBILITY_RANGE_FADE_SELF
 		mmi.set_meta("veg_family", family)
-		MossBall.tag_chunk(mmi, list)
 		# The placements, readable without a renderer (tests; headless runs keep no instance data).
 		var xfs: Array[Transform3D] = []
 		xfs.assign(list)

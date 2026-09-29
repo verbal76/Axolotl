@@ -918,12 +918,14 @@ const CHUNK_DIRS := [Vector3(1, 0, 0), Vector3(-1, 0, 0), Vector3(0, 1, 0), Vect
 ## Scatter instanced vegetation over the sphere. `accept` (optional) filters directions.
 ## Instances are chunked by direction so the far side of the ball is frustum culled.
 func scatter(mesh: Mesh, mat: Material, count: int, seed_v: int, scale_min: float, scale_max: float,
-		accept: Callable = Callable(), vis_end := 95.0, sink := 0.05) -> Array:
+		accept: Callable = Callable(), vis_end := 70.0, sink := 0.05) -> Array:
 	var rng := RandomNumberGenerator.new()
 	rng.seed = seed_v
-	var buckets := []
-	for i in CHUNK_DIRS.size():
-		buckets.append([])
+	# World expansion: instances go into cells about 35 m across (a grid on each face of a cube
+	# round the ball), each drawn from its own centre, so distance and horizon culling drop the
+	# cells he cannot see instead of whole sides of a big ball.
+	var k := clampi(int(ceil(sqrt(4.0 * PI * radius * radius / 6.0) / 35.0)), 1, 6)
+	var buckets := {}
 	var tries := 0
 	var placed := 0
 	while placed < count and tries < count * 6:
@@ -931,40 +933,71 @@ func scatter(mesh: Mesh, mat: Material, count: int, seed_v: int, scale_min: floa
 		var d := Vector3(rng.randfn(), rng.randfn(), rng.randfn()).normalized()
 		if accept.is_valid() and not accept.call(d):
 			continue
-		var best := 0
-		var best_dot := -2.0
-		for i in CHUNK_DIRS.size():
-			var dd: float = d.dot((CHUNK_DIRS[i] as Vector3).normalized())
-			if dd > best_dot:
-				best_dot = dd
-				best = i
+		var key := _cube_cell(d, k)
 		var b := frame_at(d, rng.randf() * 360.0)
 		var s := rng.randf_range(scale_min, scale_max)
 		b = b.scaled(Vector3(s, s, s))
-		buckets[best].append(Transform3D(b, d * (radius + terrain_height(d) - sink)))
+		if not buckets.has(key):
+			buckets[key] = []
+		buckets[key].append(Transform3D(b, d * (radius + terrain_height(d) - sink)))
 		placed += 1
 	var out := []
-	for i in buckets.size():
-		var list: Array = buckets[i]
-		if list.is_empty():
-			continue
-		var mm := MultiMesh.new()
-		mm.transform_format = MultiMesh.TRANSFORM_3D
-		mm.mesh = mesh
-		mm.instance_count = list.size()
-		for j in list.size():
-			mm.set_instance_transform(j, list[j])
+	for key in buckets:
+		var list: Array = buckets[key]
 		var mmi := MultiMeshInstance3D.new()
-		mmi.multimesh = mm
+		mmi.multimesh = MultiMesh.new()
 		mmi.material_override = mat
 		mmi.cast_shadow = GeometryInstance3D.SHADOW_CASTING_SETTING_OFF
 		mmi.visibility_range_end = vis_end
 		mmi.visibility_range_end_margin = 10.0
 		mmi.visibility_range_fade_mode = GeometryInstance3D.VISIBILITY_RANGE_FADE_SELF
-		tag_chunk(mmi, list)
+		fill_chunk(mmi, mesh, list)
 		_veg_parent.add_child(mmi)
 		out.append(mmi)
 	return out
+
+
+## The cube-face grid cell (k x k per face) a direction falls in.
+static func _cube_cell(d: Vector3, k: int) -> int:
+	var a := d.abs()
+	var face: int
+	var u: float
+	var v: float
+	if a.x >= a.y and a.x >= a.z:
+		face = 0 if d.x > 0.0 else 1
+		u = d.y / a.x
+		v = d.z / a.x
+	elif a.y >= a.z:
+		face = 2 if d.y > 0.0 else 3
+		u = d.x / a.y
+		v = d.z / a.y
+	else:
+		face = 4 if d.z > 0.0 else 5
+		u = d.x / a.z
+		v = d.y / a.z
+	var cu := clampi(int((u + 1.0) * 0.5 * k), 0, k - 1)
+	var cv := clampi(int((v + 1.0) * 0.5 * k), 0, k - 1)
+	return (face * k + cu) * k + cv
+
+
+## Fills an instanced node with `list` (ball-local transforms), the node standing at the middle
+## of its instances (so its visibility range is measured from where they are), and tags it for
+## horizon culling.
+func fill_chunk(mmi: MultiMeshInstance3D, mesh: Mesh, list: Array) -> void:
+	var c := Vector3.ZERO
+	for x in list:
+		c += (x as Transform3D).origin
+	c /= maxf(1.0, float(list.size()))
+	var mm := MultiMesh.new()
+	mm.transform_format = MultiMesh.TRANSFORM_3D
+	mm.mesh = mesh
+	mm.instance_count = list.size()
+	for j in list.size():
+		var x: Transform3D = list[j]
+		mm.set_instance_transform(j, Transform3D(x.basis, x.origin - c))
+	mmi.multimesh = mm
+	mmi.position = c
+	tag_chunk(mmi, list)
 
 
 ## Marks an instanced node with the direction and angular spread of its instances (ball-local

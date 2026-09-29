@@ -822,7 +822,8 @@ static func _ball2(lb: LevelBuilder) -> void:
 	b.scatter(MeshLib.broadleaf_mesh(4, 0.9, 7), ice, 700, 23, 1.0, 1.6, ok)
 	var rng := RandomNumberGenerator.new()
 	rng.seed = 24
-	for k in 90:
+	# (Fifty: each is two draw calls, and a view across the ball sees most of them.)
+	for k in 50:
 		var lat := rng.randf_range(-70, 70)
 		var lon := rng.randf_range(-180, 180)
 		var dd := MossBall.dir_ll(lat, lon)

@@ -408,6 +408,8 @@ func run(runner) -> void:
 		await _spot_shots(g)
 	if only == "report":
 		await _report_shots(g)
+	if only == "camaudit":
+		await _camera_audit(g)
 	if only == "leafclose":
 		await _leaf_close(g, g.balls[2], "leaf_close")
 		for b in g.balls:
@@ -1266,3 +1268,39 @@ func _report_shots(g: Game) -> void:
 				g.cam.pitch = 0.42
 				await t.seconds(1.2)
 				await t.shot("rep_%s_b%d_%dground" % [pass_, bi + 1, k + 3])
+
+
+## Camera audit (world expansion): the ordinary follow camera where the bigger worlds test it:
+## part way up and at the top of each long climb, at a ravine's rim looking across, and in the
+## middle of each cave, looking at the door.
+func _camera_audit(g: Game) -> void:
+	g.player.invuln_t = 9999
+	for bi in g.balls.size():
+		var b := g.balls[bi]
+		var lb: LevelBuilder = b.get_meta("builder")
+		for h in lb.bot_hints:
+			if h.has("route") and not h.get("branch", false) and (h["tops"] as Array).size() >= 8 and not str(h["route"]).begins_with("jungle"):
+				var tops: Array = h["tops"]
+				for k in [tops.size() / 2, tops.size() - 1]:
+					var at: Vector3 = tops[k]
+					var nxt: Vector3 = tops[mini(k + 1, tops.size() - 1)] if k < tops.size() - 1 else tops[k - 1]
+					var face := nxt - at
+					face -= b.up_at(at) * face.dot(b.up_at(at))
+					if face.length() < 0.1:
+						face = MossBall.frame_at(b.up_at(at), 0.0).z
+					_look(g, bi, at + b.up_at(at) * 0.2, face.normalized())
+					await t.seconds(1.2)
+					await t.shot("cam_b%d_%s_%s" % [bi + 1, str(h["route"]).replace(" ", "_"), "top" if k == tops.size() - 1 else "mid"])
+			if h.has("cave"):
+				var c: Vector3 = h["centre"]
+				_look(g, bi, b.surface_point(b.up_at(c), 0.2), (h["door"] as Vector3) - c)
+				await t.seconds(1.2)
+				await t.shot("cam_b%d_cave_%s" % [bi + 1, str(b.upgrades.find(h["reward"]))])
+		for rv in lb.ravines:
+			var pts: Array = rv["points"]
+			var mid: Vector3 = (pts[pts.size() / 2] as Vector3)
+			var side := mid.cross(pts[pts.size() - 1] - pts[0]).normalized()
+			var rim := mid.rotated(side.cross(mid).normalized(), (float(rv["half"]) + 1.2) / b.radius)
+			_look(g, bi, b.surface_point(rim, 0.2), b.surface_point(mid) - b.surface_point(rim))
+			await t.seconds(1.2)
+			await t.shot("cam_b%d_%s" % [bi + 1, str(rv["id"]).replace(".", "_")])
