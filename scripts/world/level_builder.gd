@@ -10,6 +10,10 @@ var leaf_mat: ShaderMaterial
 var shell_mat: ShaderMaterial
 var strand_mat: ShaderMaterial
 var bot_hints: Array = []     # authored waypoints for the automated playtest bot
+## Ravines on this ball ({id, points (dirs), half (floor half-width + wall, m)}) and the ways
+## across them ({a, b (rim points), gate (RestorationGate or null)}), for the bot's paths.
+var ravines: Array = []
+var crossings: Array = []
 ## Physics layer of climbing leaves on stem ladders: the axolotl stands on them, but the ground
 ## rays of creatures walking under them (parasites, food, motes) ignore them.
 const CLIMB_LAYER := 8
@@ -432,6 +436,251 @@ func at(lat: float, lon: float, heading: float, x: float, y: float, z: float, ya
 	if yaw_deg != 0.0:
 		xf.basis = xf.basis * Basis(Vector3.UP, deg_to_rad(yaw_deg))
 	return xf
+
+
+# --- World expansion vocabulary (docs/WORLD_EXPANSION.md) --------------------------------------
+
+## Gives `node` its completion id explicitly, so ids never depend on authoring order.
+func fixed(node: Object, id: String) -> Object:
+	node.set_meta("fixed_id", id)
+	return node
+
+
+## Metres to degrees of arc on this ball.
+func m2deg(m: float) -> float:
+	return rad_to_deg(m / ball.radius)
+
+
+## A ravine along the (lat, lon) points (Vector2): `width_m` across its floor, `depth_m` deep,
+## walls `wall_m` wide. It must lie inside raised ground (a plateau) with its ends closed: its
+## floor is the base sphere and standing on it costs a frond (Game.ravine_fall).
+func ravine(points_ll: Array, width_m: float, depth_m: float, wall_m: float, id: String) -> void:
+	var dirs := []
+	for q in points_ll:
+		dirs.append(d(q.x, q.y))
+	ball.add_ravine(dirs, width_m, depth_m, wall_m, id)
+	ravines.append({"id": id, "points": dirs, "half": width_m * 0.5 + wall_m})
+
+
+## A stone column standing straight up from the ground at `dir` to `height` (a stepping stone in a
+## ravine): no skirt, a flat mossy top. Collision is its drawn faces.
+func stone_column(dir: Vector3, radius: float, height: float) -> StaticBody3D:
+	var xf := ball.xform_on_dir(dir)
+	var cm := CylinderMesh.new()
+	cm.top_radius = radius
+	cm.bottom_radius = radius * 1.12
+	cm.height = height + 0.6
+	cm.radial_segments = 14
+	cm.rings = 6
+	var body := StaticBody3D.new()
+	body.collision_layer = 1
+	root.add_child(body)
+	body.global_transform = xf
+	var cs := CollisionShape3D.new()
+	var shape := ConcavePolygonShape3D.new()
+	var faces := cm.get_faces()
+	# (Drawn from 0.6 m under the ground to `height`.)
+	for i in faces.size():
+		faces[i] += Vector3(0, cm.height * 0.5 - 0.6, 0)
+	shape.set_faces(faces)
+	cs.shape = shape
+	body.add_child(cs)
+	var mi := MeshInstance3D.new()
+	mi.mesh = cm
+	mi.position = Vector3(0, cm.height * 0.5 - 0.6, 0)
+	mi.material_override = ball.moss_material
+	body.add_child(mi)
+	body.set_meta("top", height)
+	body.set_meta("radius", radius)
+	body.set_meta("grounded", "stone column")
+	body.set_meta("terrain_kind", "stone column")
+	return body
+
+
+## A fallen stem lying in a ravine that rises into a bridge from `p0` to `p1` (rim points) when
+## `zone` heals (RestorationGate "rise"). Its top is walkable; the crossing is registered for the
+## bot once it stands.
+func fallen_stem_bridge(zone_id: String, p0: Vector3, p1: Vector3, r: float) -> RestorationGate:
+	var mid := (p0 + p1) * 0.5
+	var up := ball.up_at(mid)
+	var along := (p1 - p0)
+	var len := along.length() + 2.4
+	var y := along.normalized()
+	var x := y.cross(up).normalized()
+	var z := x.cross(y).normalized()
+	# The stem's own axis is local +Y (MeshLib.stem_mesh), centred on its middle.
+	var open_xf := Transform3D(Basis(x, y, z), mid - up * (r - 0.12))
+	var floor_mid := ball.surface_point(up, 0.0)
+	var closed_xf := Transform3D(Basis(x, y, z).rotated(up, 0.35), floor_mid + up * r)
+	var gt := RestorationGate.new()
+	var cs := CollisionShape3D.new()
+	var cyl := CylinderShape3D.new()
+	cyl.radius = r
+	cyl.height = len
+	cs.shape = cyl
+	gt.add_child(cs)
+	var mi := MeshInstance3D.new()
+	mi.mesh = MeshLib.stem_mesh(r * 1.02, r * 0.85, len, 11, 0.0)
+	mi.position = Vector3(0, -len * 0.5, 0)
+	mi.material_override = stem_mat
+	gt.add_child(mi)
+	gt.setup(ball, zone_id, "rise", closed_xf, open_xf, 3.0)
+	gt.set_meta("floats_by_design", "a fallen stem raised into a bridge across a ravine")
+	gt.set_meta("terrain_kind", "stem bridge")
+	root.add_child(gt)
+	crossings.append({"a": p0, "b": p1, "gate": gt})
+	return gt
+
+
+## A curtain of hanging roots across a doorway at `xf` (its -Z faces out), `width` by `height`;
+## it draws up out of the way when `zone` heals (RestorationGate "retract"). Solid while closed.
+func root_curtain(zone_id: String, xf: Transform3D, width: float, height: float, seed_v: int) -> RestorationGate:
+	var gt := RestorationGate.new()
+	var cs := CollisionShape3D.new()
+	var bx := BoxShape3D.new()
+	bx.size = Vector3(width, height, 0.8)
+	cs.shape = bx
+	cs.position = Vector3(0, height * 0.5, 0)
+	gt.add_child(cs)
+	var rng := RandomNumberGenerator.new()
+	rng.seed = seed_v
+	var st := SurfaceTool.new()
+	st.begin(Mesh.PRIMITIVE_TRIANGLES)
+	var n := int(width / 0.22)
+	for i in n:
+		var rx := -width * 0.5 + (i + rng.randf()) * width / n
+		var rz := rng.randf_range(-0.3, 0.3)
+		var rr := rng.randf_range(0.05, 0.11)
+		var hang := height * rng.randf_range(0.8, 1.02)
+		var m := MeshLib.stem_mesh(rr * 0.6, rr, hang, 5, rng.randf_range(-0.08, 0.08))
+		st.append_from(m, 0, Transform3D(Basis(Vector3.RIGHT, PI), Vector3(rx, height + 0.2, rz)))
+	var mi := MeshInstance3D.new()
+	mi.mesh = st.commit()
+	mi.material_override = stem_mat
+	gt.add_child(mi)
+	var open_xf := xf.translated_local(Vector3(0, height * 0.9, 0))
+	gt.setup(ball, zone_id, "retract", xf, open_xf, 2.5)
+	gt.set_meta("floats_by_design", "a root curtain hanging in a doorway")
+	root.add_child(gt)
+	return gt
+
+
+## A bubble column rising `height` m from the ground at `dir`, `radius` m across: he is carried up
+## it and hangs near the top (MossBall.lift_at). A ring of stones marks its vent.
+func bubble_column(dir: Vector3, radius: float, height: float, speed := 5.0) -> void:
+	var base := ball.surface_point(dir, 0.0)
+	var up := ball.up_at(base)
+	ball.columns.append([base, up, radius, height, speed])
+	var mm := MultiMesh.new()
+	mm.transform_format = MultiMesh.TRANSFORM_3D
+	mm.mesh = QuadMesh.new()
+	mm.instance_count = 70
+	var rng := RandomNumberGenerator.new()
+	rng.seed = hash(base.snapped(Vector3.ONE * 0.1))
+	for i in mm.instance_count:
+		mm.set_instance_transform(i, Transform3D(Basis(), Vector3(rng.randf(), rng.randf(), rng.randf())))
+	mm.custom_aabb = AABB(base - Vector3.ONE * (height + radius), Vector3.ONE * 2.0 * (height + radius))
+	var mmi := MultiMeshInstance3D.new()
+	mmi.multimesh = mm
+	var bm := ShaderMaterial.new()
+	bm.shader = preload("res://shaders/bubble_column.gdshader")
+	bm.set_shader_parameter("base_pos", base)
+	bm.set_shader_parameter("up_dir", up)
+	bm.set_shader_parameter("radius", radius * 0.8)
+	bm.set_shader_parameter("height", height + 1.0)
+	bm.set_shader_parameter("speed", speed * 0.6)
+	mmi.material_override = bm
+	mmi.cast_shadow = GeometryInstance3D.SHADOW_CASTING_SETTING_OFF
+	mmi.top_level = true
+	mmi.visibility_range_end = 90.0
+	root.add_child(mmi)
+	# The vent: a low ring of pebbles (decoration; no collision to trip on).
+	var ring := MeshInstance3D.new()
+	var st := SurfaceTool.new()
+	st.begin(Mesh.PRIMITIVE_TRIANGLES)
+	var sm := SphereMesh.new()
+	sm.radial_segments = 8
+	sm.rings = 4
+	for k in 9:
+		var a := TAU * k / 9.0 + rng.randf() * 0.3
+		var s := rng.randf_range(0.18, 0.3)
+		st.append_from(sm, 0, Transform3D(Basis().scaled(Vector3(s, s * 0.6, s)), Vector3(cos(a), 0.05, sin(a)) * radius))
+	ring.mesh = st.commit()
+	ring.material_override = shell_mat
+	root.add_child(ring)
+	ring.global_transform = Transform3D(MossBall.frame_at(up, 0.0), base)
+	bot_hints.append({"column": true, "base": base, "up": up, "radius": radius, "height": height})
+
+
+## A giant sea fan (landmark): a lattice of branching ribs in one gently rippled sheet, `height`
+## tall and `width` across, standing at `xf` (sheet in its local XY plane). Collision is the
+## drawn ribs (two-sided).
+func sea_fan(xf: Transform3D, height: float, width: float, color: Color, seed_v: int) -> StaticBody3D:
+	var rng := RandomNumberGenerator.new()
+	rng.seed = seed_v
+	var st := SurfaceTool.new()
+	st.begin(Mesh.PRIMITIVE_TRIANGLES)
+	var faces := PackedVector3Array()
+	var ripple := func(p: Vector3) -> Vector3:
+		return p + Vector3(0, 0, sin(p.x * 0.9 + p.y * 0.4) * 0.35)
+	var rib := func(a: Vector3, b: Vector3, w: float) -> void:
+		var dir := (b - a).normalized()
+		var side := Vector3(-dir.y, dir.x, 0) * w * 0.5
+		var q := [ripple.call(a - side), ripple.call(a + side), ripple.call(b + side), ripple.call(b - side)]
+		for tri in [[0, 1, 2], [0, 2, 3]]:
+			for k in tri:
+				st.set_normal(Vector3(0, 0, 1))
+				st.set_color(color.lerp(Color(1, 1, 1), clampf(a.y / height, 0.0, 1.0) * 0.25))
+				st.add_vertex(q[k])
+				faces.append(q[k])
+	# A short trunk, then spokes fanning out from its top, joined by irregular cross-ribs: a
+	# lattice that reads as one broad fan from across the ball.
+	var hub := Vector3(0, height * 0.14, 0)
+	rib.call(Vector3.ZERO, hub, 0.45)
+	var reach := height - hub.y
+	var spokes := 17
+	var tips: Array[Vector3] = []
+	for k in spokes:
+		var ang := deg_to_rad(lerpf(12.0, 168.0, (k + rng.randf_range(-0.25, 0.25)) / (spokes - 1)))
+		var dir := Vector3(cos(ang) * width * 0.5 / reach, sin(ang), 0).normalized()
+		var tip := hub + dir * reach * rng.randf_range(0.82, 1.0)
+		# Each spoke bends a little on the way out.
+		var mid := hub.lerp(tip, 0.5) + Vector3(rng.randf_range(-0.3, 0.3), rng.randf_range(-0.2, 0.2), 0)
+		rib.call(hub, mid, 0.2)
+		rib.call(mid, tip, 0.14)
+		tips.append(tip)
+	# Cross-ribs between neighbouring spokes at several distances out.
+	for ring in 7:
+		var f := (ring + 1.0) / 8.0
+		for k in spokes - 1:
+			if rng.randf() < 0.18:
+				continue
+			var p0 := hub.lerp(tips[k], f + rng.randf_range(-0.03, 0.03))
+			var p1 := hub.lerp(tips[k + 1], f + rng.randf_range(-0.03, 0.03))
+			rib.call(p0, p1, 0.09)
+	var mat := StandardMaterial3D.new()
+	mat.vertex_color_use_as_albedo = true
+	mat.cull_mode = BaseMaterial3D.CULL_DISABLED
+	mat.roughness = 0.8
+	mat.emission_enabled = true
+	mat.emission = color * 0.25
+	var body := StaticBody3D.new()
+	body.collision_layer = 1
+	root.add_child(body)
+	body.global_transform = xf
+	var cs := CollisionShape3D.new()
+	var shape := ConcavePolygonShape3D.new()
+	shape.set_faces(faces)
+	shape.backface_collision = true
+	cs.shape = shape
+	body.add_child(cs)
+	var mi := MeshInstance3D.new()
+	mi.mesh = st.commit()
+	mi.material_override = mat
+	body.add_child(mi)
+	body.set_meta("grounded", "sea fan")
+	body.set_meta("terrain_kind", "sea fan")
+	return body
 
 
 # --- Actors ------------------------------------------------------------------------------

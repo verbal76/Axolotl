@@ -242,10 +242,11 @@ func _build_surface() -> void:
 	rng.seed = 21
 	var lamp: Vector3 = light_params["lamp_dir"]
 	var through := []
-	for c in Levels.CENTERS:
+	for i in Levels.CENTERS.size():
 		for k in 2:
 			var side := lamp.cross(Vector3(rng.randf_range(-1, 1), 0, rng.randf_range(-1, 1)).normalized()).normalized()
-			through.append((c as Vector3) + side * rng.randf_range(22.0, 44.0))
+			# (Clear of the ball itself: a shaft's cone is up to 22 m across where it passes.)
+			through.append((Levels.CENTERS[i] as Vector3) + side * (float(Levels.RADII[i]) + rng.randf_range(10.0, 26.0)))
 	for k in 5:
 		through.append(Vector3(rng.randf_range(-190, 190), 0, rng.randf_range(-160, 110)))
 	for p in through:

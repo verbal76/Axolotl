@@ -569,7 +569,7 @@ func _move(dir: Vector3, spd: float, dt: float) -> void:
 	_pushed = _pushed.move_toward(Vector3.ZERO, dt * 6.0)
 	# Parasites grip the moss: they never crawl off a ledge on their own, and never into a wall
 	# (a stem, rock, a cave's side).
-	if step.length() > 0.0001 and (not _ground_ahead(global_position + step * 4.0) or _wall_ahead(step)):
+	if step.length() > 0.0001 and (not _ground_ahead(global_position + step * 4.0) or _wall_ahead(step) or _ravine_ahead(step)):
 		_graze_target = global_position - heading * 1.0
 		_graze_t = 1.0
 		heading = -heading
@@ -818,6 +818,14 @@ func _face(dir: Vector3, t: float) -> void:
 	heading = (heading - up * heading.dot(up)).normalized()
 
 
+## A ravine's edge just ahead along `step` (they never go down into one on their own).
+func _ravine_ahead(step: Vector3) -> bool:
+	if ball.carves.is_empty():
+		return false
+	var ahead := ball.ravine_carve(ball.up_at(global_position + step.normalized() * (seg_radius * 2.0 + 0.6)))
+	return ahead > 0.15 and ahead > ball.ravine_carve(up) + 0.01
+
+
 ## Rock or a stem just ahead along `step`, at body height.
 func _wall_ahead(step: Vector3) -> bool:
 	var dir := step.normalized()
@@ -856,6 +864,16 @@ func _snap_ground() -> void:
 		return
 	global_position = hit.position + up * _ground_offset
 	standing_on = hit.collider
+	# Never down on a ravine's floor, however it got there (walking, knocked, flung): back to
+	# where it last stood clear of it (world expansion).
+	if not ball.carves.is_empty():
+		if ball.ravine_carve(ball.up_at(global_position)) > 0.3 and ball.altitude(global_position) < 1.0 and _clear_pos != Vector3.ZERO:
+			global_position = _clear_pos
+		else:
+			_clear_pos = global_position
+
+
+var _clear_pos := Vector3.ZERO
 
 
 func _update_segments(dt: float) -> void:

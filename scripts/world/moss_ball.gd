@@ -46,6 +46,9 @@ var blooms: Array = []
 var crumbles: Array = []
 ## Restoration gates (RestorationGate): geography that changes when its zone heals.
 var gates: Array = []
+## Bubble columns (world expansion traversal toy): [base (world), up, radius, height, speed].
+## Inside one he is carried up to near its top, where he hangs until he swims off.
+var columns: Array = []
 var flex_leaves: Array = []
 var upgrades: Array = []
 ## Expansion 5's creatures (Critter): ambient life and threats.
@@ -835,6 +838,22 @@ func restore_event(zone_id: String, pos: Vector3, splat_deg := 11.0) -> void:
 func zone_health(zone_id: String) -> float:
 	var z: Dictionary = zones[zone_id]
 	return float(z["done"]) / maxf(1.0, float(z["total"]))
+
+
+# --- Bubble columns -----------------------------------------------------------------------
+
+## The upward speed a bubble column carries him at `world_pos` (0 outside every column): full
+## speed low down, easing to nothing over its top 1.5 m, so he rises to the top and hangs there.
+func lift_at(world_pos: Vector3) -> float:
+	for c in columns:
+		var off: Vector3 = world_pos - (c[0] as Vector3)
+		var along: float = off.dot(c[1])
+		if along < -0.5 or along > float(c[3]):
+			continue
+		if (off - (c[1] as Vector3) * along).length() > float(c[2]):
+			continue
+		return float(c[4]) * (1.0 - smoothstep(float(c[3]) - 1.5, float(c[3]), along))
+	return 0.0
 
 
 # --- Current -----------------------------------------------------------------------------

@@ -1203,8 +1203,9 @@ func _update_food(dt: float) -> void:
 	_food_timer -= dt
 	if _food_timer > 0.0:
 		return
-	_food_timer = 2.5
 	var b := player.ball
+	# (One every 2.5 s on a ball that keeps 7; bigger balls keep more and refill as quickly.)
+	_food_timer = 2.5 * 7.0 / maxf(1.0, float(b.food_target))
 	b.foods = b.foods.filter(func(f): return is_instance_valid(f))
 	if b.foods.size() < b.food_target:
 		_spawn_food(b, false)
@@ -1278,11 +1279,11 @@ func _update_tutorial(_dt: float) -> void:
 		_hide_prompt("move", true)
 	var b := player.ball
 	if b.index == 0 and not prompts_done.has("jump"):
-		var m1 := b.surface_point(MossBall.dir_ll(79, 0))
+		var m1 := b.surface_point(Levels.tut_dir(Levels.TUT_M1_M))
 		if player.global_position.distance_to(m1) < 4.8 and player.grounded:
 			_show_prompt("jump")
 	if not prompts_done.has("burst") and prompts_done.has("jump"):
-		var m1 := balls[0].surface_point(MossBall.dir_ll(79, 0), 1.3)
+		var m1 := balls[0].surface_point(Levels.tut_dir(Levels.TUT_M1_M), Levels.TUT_M1_TOP)
 		if b.index == 0 and player.global_position.distance_to(m1) < 2.6:
 			_show_prompt("burst")
 	if not prompts_done.has("swipe"):

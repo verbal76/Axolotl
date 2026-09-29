@@ -90,8 +90,11 @@ vec4 tri4(vec3 p, Biplanar b, float sc) {
 void fragment() {
 	vec3 wn = normalize(v_wnorm);
 	Biplanar bl = biplanar(wn);
-	vec4 macro = tri4(v_wpos, bl, tex_scale * 0.18);
-	vec4 mid = tri4(v_wpos, bl, tex_scale * 0.6);
+	// (The macro layer on a rotated grid, and the mid layer warped by it: on the big balls these
+	// repeat dozens of times round the circumference, and without this the repeats line up into
+	// stripes seen from afar.)
+	vec4 macro = tri4(vec3(v_wpos.x * 0.6 - v_wpos.z * 0.8, v_wpos.y, v_wpos.x * 0.8 + v_wpos.z * 0.6) + 41.0, bl, tex_scale * 0.18);
+	vec4 mid = tri4(v_wpos + (macro.rgb - 0.5) * 14.0, bl, tex_scale * 0.6);
 	vec4 det = tri4(v_wpos, bl, tex_scale * 2.2);
 	// Tufts on a rotated, non-aligned grid, so the fine pattern does not visibly repeat.
 	vec4 tuft = tri4(vec3(v_wpos.x * 0.8 + v_wpos.z * 0.6, v_wpos.y, v_wpos.z * 0.8 - v_wpos.x * 0.6) + 17.0, bl, tex_scale * 13.1);

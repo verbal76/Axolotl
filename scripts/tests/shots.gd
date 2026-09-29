@@ -404,6 +404,10 @@ func run(runner) -> void:
 		await _sway_shots(g)
 	if only == "gillanim":
 		await _gill_anim(g)
+	if only == "spots":
+		await _spot_shots(g)
+	if only == "report":
+		await _report_shots(g)
 	if only == "leafclose":
 		await _leaf_close(g, g.balls[2], "leaf_close")
 		for b in g.balls:
@@ -1199,3 +1203,66 @@ func _perf_view(label: String) -> void:
 			Performance.get_monitor(Performance.RENDER_TOTAL_PRIMITIVES_IN_FRAME),
 			Performance.get_monitor(Performance.RENDER_VIDEO_MEM_USED) / 1048576.0])
 	t.g.player.bot_input = Vector2.ZERO
+
+
+## Arbitrary views for reviewing worlds: --views="name:ball,lat,lon,face_lat,face_lon[,pitch[,dist[,h]]];..."
+## (ball numbered from 1); --heal=1 shows them restored; --orbit=1 adds views from high above.
+func _spot_shots(g: Game) -> void:
+	g.player.invuln_t = 9999
+	if Settings.test_args.get("heal", "0") == "1":
+		for b in g.balls:
+			b.add_heal(Vector3.UP, 340.0, 0.0)
+		g.g_disp = 1.0
+		g.aquarium.apply(1.0)
+	for spec: String in str(Settings.test_args.get("views", "")).split(";", false):
+		var nm_rest: PackedStringArray = spec.split(":")
+		var v: PackedStringArray = nm_rest[1].split(",")
+		var bi := int(v[0]) - 1
+		var b := g.balls[bi]
+		var at := MossBall.dir_ll(float(v[1]), float(v[2]))
+		var to := MossBall.dir_ll(float(v[3]), float(v[4]))
+		var h := float(v[7]) if v.size() > 7 else 0.2
+		var pos := b.surface_point(at, h)
+		var face := b.surface_point(to) - pos
+		face -= b.up_at(pos) * face.dot(b.up_at(pos))
+		_look(g, bi, pos, face.normalized(), float(v[5]) if v.size() > 5 else 0.32)
+		if v.size() > 6:
+			g.cam.distance = float(v[6])
+		await t.seconds(1.2)
+		await t.shot(nm_rest[0])
+
+
+## Before/after views of every world for the expansion report (identical in old and new builds):
+## the whole ball from the side and from above, and two views on the ground (its arrival point and
+## the far side), murky and then healed.
+func _report_shots(g: Game) -> void:
+	for pass_ in ["murky", "healed"]:
+		if pass_ == "healed":
+			for b in g.balls:
+				b.add_heal(Vector3.UP, 340.0, 0.0)
+			g.g_disp = 1.0
+			g.aquarium.apply(1.0)
+		g.player.invuln_t = 9999
+		for bi in g.balls.size():
+			var b := g.balls[bi]
+			var arrive: Vector3 = b.start_dir if bi == 0 else b.arrival_dir
+			_look(g, bi, b.surface_point(arrive, 0.2), MossBall.frame_at(arrive, 0.0).z)
+			g.cam.cinematic = true
+			g.cam.cine_pos = b.global_position + Vector3(0.8, 0.12, 0.6).normalized() * b.radius * 2.7
+			g.cam.cine_look = b.global_position + Vector3.UP * b.radius * 0.1
+			g.cam.cine_up = Vector3.UP
+			await t.seconds(1.5)
+			await t.shot("rep_%s_b%d_1side" % [pass_, bi + 1])
+			g.cam.cine_pos = b.global_position + Vector3(0.5, 0.75, 0.45).normalized() * b.radius * 1.6
+			g.cam.cine_look = b.surface_point(Vector3(0.3, 0.9, 0.3).normalized())
+			await t.seconds(1.0)
+			await t.shot("rep_%s_b%d_2top" % [pass_, bi + 1])
+			g.cam.cinematic = false
+			for k in 2:
+				var at := arrive if k == 0 else -arrive.rotated(MossBall.frame_at(arrive, 0.0).x, 0.5)
+				var fr := MossBall.frame_at(at, 45.0)
+				_look(g, bi, b.surface_point(at, 0.2), fr.z)
+				g.cam.distance = 7.0
+				g.cam.pitch = 0.42
+				await t.seconds(1.2)
+				await t.shot("rep_%s_b%d_%dground" % [pass_, bi + 1, k + 3])

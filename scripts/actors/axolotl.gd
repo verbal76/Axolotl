@@ -30,6 +30,7 @@ const SWIPE_TIME := 0.3
 const HARD_FALL := 3.4
 const EXTREME_FALL := 13.0
 const BODY_RADIUS := 0.3
+const LIFT_ACCEL := 34.0          # how hard a bubble column pushes toward its lift speed
 ## The head: the axolotl's body collides as one sphere, but his head reaches HEAD_REACH ahead of it.
 ## After each move the head guard keeps this sphere out of walls and ceilings (see _guard_head).
 const HEAD_REACH := 0.4
@@ -75,6 +76,7 @@ var _jumped_this_frame := false
 var _stream_t := 0.0
 var _acted := false               # a jump, swipe or lunge was pressed this frame
 var _fell_at := Vector3.ZERO      # where he last came down in a ravine
+var _in_column := false            # being carried by a bubble column
 
 var model: AxolotlModel
 var blob_shadow: MeshInstance3D
@@ -277,6 +279,14 @@ func _physics_process(dt: float) -> void:
 	else:
 		air_time = 0.0
 		vup = minf(vup, 0.0) - 1.5
+	# A bubble column carries him up (off the ground too) to hang bobbing near its top; he can
+	# burst again from there.
+	var lift := ball.lift_at(global_position) if ball != null and not ball.columns.is_empty() else 0.0
+	_in_column = lift > 0.0
+	if _in_column:
+		vup = maxf(lift, 2.5) if grounded else move_toward(vup, lift, LIFT_ACCEL * dt)
+		grounded = false
+		burst_available = true
 	# The lunge rises or dips so the mouth meets food floating above or below it.
 	if lunge_t >= 0.0 and not lunge_hit and _lunge_target_valid():
 		var dh := (_lunge_food.catch_point() - head_position()).dot(up)
@@ -347,7 +357,7 @@ func _physics_process(dt: float) -> void:
 		if not was_grounded:
 			_on_land(-pre_vup, r)
 		# Down on a ravine's floor: one frond, and he is put back at its edge (world expansion).
-		if ball.ravine_at(up) != "":
+		if on_ravine_floor():
 			_fell_at = global_position
 			Game.inst.ravine_fall(self)
 			return
@@ -386,6 +396,11 @@ func _physics_process(dt: float) -> void:
 	_apply_orientation(minf(1.0, dt * 20.0))
 	_update_model(dt)
 	_update_shadow()
+
+
+## Down on a ravine's floor (not up on a bridge or a stepping stone above it).
+func on_ravine_floor() -> bool:
+	return ball.ravine_at(up) != "" and ball.altitude(global_position) < 1.0
 
 
 func _floor_is_stable() -> bool:
@@ -446,7 +461,7 @@ func _do_burst(wish: Vector3) -> Array:
 func _on_land(impact: float, r: float) -> void:
 	burst_available = true
 	# (A ravine floor is its own penalty, one frond, handled by Game.ravine_fall.)
-	if ball.ravine_at(up) != "":
+	if on_ravine_floor():
 		return
 	var fall := apex_r - r
 	var col := _floor_collider()

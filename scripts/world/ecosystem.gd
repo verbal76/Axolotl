@@ -67,6 +67,19 @@ func _populate_ball(b: MossBall) -> void:
 			_shoal(b, MossBall.dir_ll(24, 4), 5.0, 0)
 			_shoal(b, MossBall.dir_ll(34, -8), 5.0, 1)
 			_stalker(b, MossBall.dir_ll(-58, 32), 11.0, 0)
+			# World expansion: life in the new Meadow places (shoals over the Coral Garden and the
+			# Heights, snails on the Meadow Stone and the terrace top, a hopper on the terraces, a
+			# stalker in the tall ferns away from the grove's bloom).
+			_shoal(b, MossBall.dir_ll(-20, 58), 4.0, 2)
+			_shoal(b, MossBall.dir_ll(62, 118), 4.0, 3)
+			for rn in ["meadow stone", "heights terraces"]:
+				if routes.has(rn):
+					var tops: Array = routes[rn]["tops"]
+					var top: Vector3 = tops[tops.size() - 1]
+					_snail(b, top, top + MossBall.frame_at(b.up_at(top), 40.0).z * 0.5, 0 if rn == "meadow stone" else 1)
+			if routes.has("heights terraces"):
+				_hopper(b, routes["heights terraces"]["tops"], 0, 0)
+			_stalker(b, MossBall.dir_ll(-44, -66), 6.0, 1)
 		1:
 			_shoal(b, MossBall.dir_ll(0, -80), 5.0, 0)
 			_puffer(b, MossBall.dir_ll(4, 60), 6.0, 1.5, 0)

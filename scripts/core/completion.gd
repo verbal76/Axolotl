@@ -15,7 +15,7 @@ extends RefCounted
 ## - Finishing the game (every moss ball restored) is separate from 100%.
 
 ## Bump whenever the set of entries changes.
-const CATALOG_VERSION := 3
+const CATALOG_VERSION := 4
 
 ## id: [label, share of 100%]. Shares must sum to 100.
 const CATEGORIES := {

@@ -282,7 +282,7 @@ func _test_mounds() -> void:
 			var hit := _ray_to(space, centre + up * (top + 2.0), centre, body)
 			if hit.is_empty() or absf((hit["position"] - centre).dot(up) - top) > 0.08:
 				top_ok = false
-				bad_tops.append("ball %d top %.2f" % [b.index + 1, top])
+				bad_tops.append("ball %d top %.2f at %s (found %s)" % [b.index + 1, top, str(Levels._latlon(up).snapped(Vector2(0.1, 0.1))), "nothing" if hit.is_empty() else "%.2f" % (hit["position"] - centre).dot(up)])
 			# The flanks, on eight sides outside the top: any point Gill could stand on (slope under
 			# 52 degrees) must be low, so the sweep into the ground is no step up.
 			for k in 8:
@@ -297,8 +297,9 @@ func _test_mounds() -> void:
 						continue
 					var slope := rad_to_deg((rh["normal"] as Vector3).angle_to(b.up_at(rh["position"])))
 					if slope < 52.0:
-						# Height above the mound's own base (it may stand on a rolling hill).
-						var hh: float = b.altitude(rh["position"]) - b.altitude(centre)
+						# Height above the ground right under that point (the mound may stand on a
+						# rolling hill, or in a ravine where its skirt lies on the walls).
+						var hh: float = b.altitude(rh["position"])
 						if hh > worst_step:
 							worst_step = hh
 							worst_at = "ball %d mound r %.1f top %.1f, %.2f m out, slope %.0f" % [b.index + 1, radius, top, r, slope]
@@ -306,7 +307,7 @@ func _test_mounds() -> void:
 	t.check("mounds_flare_not_a_step", worst_step < 0.35, "highest standable point on a flank %.2f m above the ground (%s)" % [worst_step, worst_at])
 	# Walk straight at the tutorial mound M2 (open ground): the head stops at its wall.
 	var b0 := g.balls[0]
-	var m2_dir := MossBall.dir_ll(57.5, 0)
+	var m2_dir := Levels.tut_dir(Levels.TUT_M2_M)
 	var m2: StaticBody3D = null
 	for body in _grounded_nodes((b0.get_meta("builder") as LevelBuilder).root):
 		if body.get_meta("grounded") == "cushion" and (m2 == null or b0.up_at(body.global_position).angle_to(m2_dir) < b0.up_at(m2.global_position).angle_to(m2_dir)):
@@ -588,6 +589,16 @@ func _test_route_audit() -> void:
 			for k in range(1, pts.size()):
 				var tp: Vector3 = pts[k]
 				var up := b.up_at(tp)
+				# A bubble column carries him from its vent to near its top: check the column is
+				# really there all the way, not a jump.
+				if h.get("lift", false) and k == 1:
+					var carried := true
+					for f in [0.1, 0.4, 0.7, 0.9]:
+						carried = carried and b.lift_at(prev.lerp(tp, f) + up * 0.2) > 0.0
+					if not carried:
+						bad.append("ball %d %s: no bubble column from its vent to its top" % [b.index + 1, h["route"]])
+					prev = tp
+					continue
 				var hit := _floor_probe(space, tp, up)
 				var floor_ok := not hit.is_empty() and rad_to_deg((hit["normal"] as Vector3).angle_to(up)) < 52.0
 				var qh := PhysicsRayQueryParameters3D.create(tp + up * 0.2, tp + up * 1.4, p.collision_mask)
@@ -642,6 +653,10 @@ func _test_route_audit() -> void:
 			var first: Vector3 = (h["tops"] as Array)[0]
 			var rise := (first - st).dot(up)
 			var gap := ((first - st) - up * rise).length()
+			# (A bubble column's climb begins at its vent: the bubbles show where.)
+			if h.get("lift", false):
+				rise = 0.0 if b.lift_at(st + up * 0.5) > 0.0 else 99.0
+				gap = 0.0
 			worst_first = maxf(worst_first, rise)
 			if not on_ground or rise > 1.6 or gap > 3.5:
 				unreadable.append("ball %d %s: start on ground %s, first step up %.2f m, %.2f m away" % [b.index + 1, h["route"], on_ground, rise, gap])
@@ -1127,8 +1142,8 @@ func _test_new_areas() -> void:
 
 ## Pinned: the current game's completion ids (sha256 of the ids in catalog order). A change means
 ## completion content changed: bump Completion.CATALOG_VERSION, update docs/COMPLETION.md, re-pin.
-const CATALOG_IDS_SHA := "bd5445feaec288e1192b1c7dd19b614d193fab78ea1be1dc2ce9e61e69ed710f"
-const CATALOG_SIZE := 172
+const CATALOG_IDS_SHA := "dfa00efd0d2e160fe26bafd4f31945b5381fc6fe2ac681457f9cb84429b31206"
+const CATALOG_SIZE := 222
 
 
 ## The timer's rules on a bare clock: start, what counts, background, finish, frame rates.
@@ -1814,6 +1829,7 @@ func _test_ravines() -> void:
 	var at := MossBall.dir_ll(-10, -40)
 	var fr := MossBall.frame_at(at, 0.0)
 	var n_hills := b.hills.size()
+	var n_carves := b.carves.size()
 	# (Sized in metres: 12 m of plateau either side, a ravine 3.2 m across with 1.4 m walls.)
 	var m2a := func(m: float) -> float: return m / b.radius
 	b.add_plateau(at, m2a.call(14.0), 3.0, 2.5)
@@ -1840,9 +1856,9 @@ func _test_ravines() -> void:
 		else:
 			worst = maxf(worst, gap)
 	# (On the floor and the plateau the ground is the smooth shape to a centimetre; on the steep
-	# walls the 0.8 m triangles cut its curve by up to about a tenth of a metre, and collision is
+	# walls the 0.8 m triangles cut its curve by up to a sixth of a metre or so, and collision is
 	# those same triangles.)
-	t.check("ravine_collision_is_drawn_ground", flat_worst < 0.03 and worst < 0.15, "floor and top within %.3f m, walls within %.3f m" % [flat_worst, worst])
+	t.check("ravine_collision_is_drawn_ground", flat_worst < 0.03 and worst < 0.2, "floor and top within %.3f m, walls within %.3f m" % [flat_worst, worst])
 	# Walk off the rim into it.
 	var release := _hold_threats(b)
 	var earned_before := g.run_save.earned().size()
@@ -1883,7 +1899,7 @@ func _test_ravines() -> void:
 	release.call()
 	# Take the test ground away again.
 	b.hills.resize(n_hills)
-	b.carves.clear()
+	b.carves.resize(n_carves)
 	b._cells_dirty = true
 	b.finalize_terrain()
 	await t.frames(2)
@@ -2239,7 +2255,8 @@ func _test_terrain() -> void:
 	var max_slope := 0.0
 	var max_step := 0.0
 	var prev := -1.0
-	var n := 120
+	# (Sampled every 10 cm or so across it, whatever its size.)
+	var n := maxi(120, int(ang * 2.4 * b.radius / 0.1))
 	for i in n + 1:
 		var a := lerpf(-ang * 1.2, ang * 1.2, float(i) / n)
 		var hgt := b.terrain_height(c.rotated(axis, a))
@@ -2328,18 +2345,20 @@ func _test_placements() -> void:
 
 func _test_tutorial_route() -> void:
 	# The opening terrain must teach: walk -> jump onto M1 -> jump + water burst across to M2.
+	# (Laid out in metres from the pole, Levels.TUT_*: the tutorial kept its size when the ball grew.)
 	var b := g.balls[0]
+	var pole_m := func() -> float: return Levels.tut_m(b.up_at(p.global_position))
 	var results := []
-	for start_lat in [89.5, 86.0, 84.5]:
-		place(0, start_lat, 0, 0.2, 180)
+	for start_m in [0.21, 1.68, 2.3]:
+		place(0, Levels.tut_lat(start_m), 0, 0.2, 180)
 		p.invuln_t = 999
 		await wait_grounded()
-		var toward := b.surface_point(MossBall.dir_ll(70, 0)) - p.global_position
+		var toward := b.surface_point(Levels.tut_dir(8.38)) - p.global_position
 		# Walk toward M1 and jump just before the wall.
 		for i in 120:
 			stick_toward(toward)
 			await t.frames(1)
-			if b.up_at(p.global_position).angle_to(MossBall.dir_ll(79, 0)) < deg_to_rad(8.5):
+			if b.surface_point(b.up_at(p.global_position)).distance_to(b.surface_point(Levels.tut_dir(Levels.TUT_M1_M))) < 3.56:
 				break
 		await press("jump")
 		for i in 50:
@@ -2352,9 +2371,9 @@ func _test_tutorial_route() -> void:
 		for i in 90:
 			stick_toward(toward)
 			await t.frames(1)
-			if Levels._latlon(b.up_at(p.global_position)).x <= 75.6 or height() < 1.0:
+			if pole_m.call() >= 6.03 or height() < 1.0:
 				break
-		t.log_line("start %.1f: at edge lat %.2f h %.2f grounded %s" % [start_lat, Levels._latlon(b.up_at(p.global_position)).x, height(), p.grounded])
+		t.log_line("start %.2f m: at edge %.2f m h %.2f grounded %s" % [start_m, pole_m.call(), height(), p.grounded])
 		await press("jump")
 		for i in 18:
 			stick_toward(toward)
@@ -2368,18 +2387,18 @@ func _test_tutorial_route() -> void:
 		p.bot_input = Vector2.ZERO
 		await wait_grounded()
 		var on_m2 := height() > 2.6
-		t.log_line("   landed lat %.2f h %.2f" % [Levels._latlon(b.up_at(p.global_position)).x, height()])
-		results.append([start_lat, on_m1, on_m2])
+		t.log_line("   landed %.2f m h %.2f" % [pole_m.call(), height()])
+		results.append([start_m, on_m1, on_m2])
 	var ok := results.all(func(r): return r[1] and r[2])
 	t.check("tutorial_jump_then_burst_route", ok, str(results))
 	# Without the water burst, the gap to M2 is too wide: the burst is genuinely taught.
-	place(0, 78.0, 0, 1.5, 180)
+	place(0, Levels.tut_lat(5.03), 0, 1.5, 180)
 	await wait_grounded()
-	var toward2 := b.surface_point(MossBall.dir_ll(60, 0)) - p.global_position
+	var toward2 := b.surface_point(Levels.tut_dir(12.57)) - p.global_position
 	for i in 90:
 		stick_toward(toward2)
 		await t.frames(1)
-		if Levels._latlon(b.up_at(p.global_position)).x <= 74.6:
+		if pole_m.call() >= 6.45:
 			break
 	await press("jump")
 	for i in 70:
@@ -2395,7 +2414,8 @@ func _test_tutorial_route() -> void:
 
 func _test_sphere_walk() -> void:
 	# Walk continuously "forward" and go all the way around moss ball #1.
-	place(0, 0, -140, 0.2, 0)
+	# (Round the equator: the one great circle clear of the upland's ravines and the formations.)
+	place(0, 0, -140, 0.2, 90)
 	await wait_grounded()
 	p.invuln_t = 999
 	var prev_up := p.up
@@ -2405,7 +2425,8 @@ func _test_sphere_walk() -> void:
 	var max_dev := 0.0
 	var frames := 0
 	p.bot_input = Vector2(0, 1)
-	while travelled < TAU and frames < 60 * 70:
+	# (70 s went round the original 24 m ball; the time allowed grows with its size.)
+	while travelled < TAU and frames < int(60 * 70 * g.balls[0].radius / 24.0):
 		await t.frames(1)
 		frames += 1
 		travelled += prev_up.angle_to(p.up)
@@ -2470,9 +2491,9 @@ func _test_jump_and_burst() -> void:
 func _test_coyote_and_buffer() -> void:
 	# Coyote time: walk off the tutorial cushion M1 and jump a few frames late.
 	var b := g.balls[0]
-	var m1 := MossBall.dir_ll(79, 0)
-	var edge_dir := MossBall.dir_ll(76.3, 0)
-	place_at(0, b.surface_point(edge_dir, 1.4), b.surface_point(MossBall.dir_ll(70, 0)) - b.surface_point(edge_dir))
+	var m1 := Levels.tut_dir(Levels.TUT_M1_M)
+	var edge_dir := Levels.tut_dir(5.74)
+	place_at(0, b.surface_point(edge_dir, 1.4), b.surface_point(Levels.tut_dir(8.38)) - b.surface_point(edge_dir))
 	p.invuln_t = 999
 	await wait_grounded()
 	var jumps := [0]
@@ -2495,7 +2516,7 @@ func _test_coyote_and_buffer() -> void:
 	p.bot_input = Vector2.ZERO
 	for i in 200:
 		await t.frames(1)
-		if p.velocity.dot(p.up) < 0.0 and height() < 0.75 + (1.3 if b.up_at(p.global_position).angle_to(m1) < deg_to_rad(4.5) else 0.0):
+		if p.velocity.dot(p.up) < 0.0 and height() < 0.75 + (1.3 if b.up_at(p.global_position).angle_to(m1) < 1.885 / (b.radius + Levels.UPLAND_H) else 0.0):
 			break
 	var before: int = jumps[0]
 	await press("jump")

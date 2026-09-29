@@ -10,7 +10,7 @@ class_name Levels
 ## radius as they are rebuilt and still keep 35 m or more of water between any two.)
 const CENTERS := [Vector3(0, 0, 0), Vector3(182, 21, -49), Vector3(-70, 28, -168),
 		Vector3(-14, 35, 154), Vector3(210, -28, 84), Vector3(-224, 42, -84), Vector3(-182, 0, 98)]
-const RADII := [24.0, 28.0, 30.0, 18.0, 26.0, 16.0, 22.0]
+const RADII := [48.0, 28.0, 30.0, 18.0, 26.0, 16.0, 22.0]
 const NAMES := ["Mossy Meadow", "Current Hollows", "Giant Stems", "Terrace Steps", "Reed Canyon", "Canopy Spire", "Hollow Grotto"]
 ## Vortex links [from, to]: the original chain first, then the branches. A link opens when its
 ## "from" ball is 70% restored and then works both ways.
@@ -300,92 +300,331 @@ static func _holes(lb: LevelBuilder, n: int, seed_v: int, avoid: Array) -> void:
 
 
 # =========================================================================================
-# MOSS BALL #1 — classic lush marimo (tutorial / baseline)
+# MOSS BALL #1 — Mossy Meadow (world expansion: radius 48, the template world)
 # =========================================================================================
+# The original content keeps its places on the ball (same latitude and longitude, so twice as
+# far apart) and its completion ids; the tutorial keeps its size in metres at the north pole. The
+# new content fills the larger ball (docs/WORLD_EXPANSION.md, "Mossy Meadow"):
+#   the Glade Upland   a raised meadow over the north (the tutorial is on it), rimmed by a gentle
+#                      escarpment down to the lowlands;
+#   the Great Ravine   across the upland south of the tutorial: walk round either end (easy), hop
+#                      the stepping stones (skilled), burst straight over (skilled), or cross on
+#                      the fallen stem that rises into a bridge when the glade heals;
+#   the Split Crack    a narrower cut in the western upland, crossed by a natural stone bridge;
+#   the Heights        stepped terraces on the eastern upland;
+#   Moss Meadow        the rolling lowland fields and the Meadow Stone;
+#   East Tower lands   the brittle tower and the vortex to Current Hollows;
+#   the Coral Garden   tube corals round a giant sea fan;
+#   Southern Reed Hills, West Stone Ridge (a crest walk, a natural arch, the moss cave);
+#   the Fern Grove     tall ferns and bubble columns up to high shelves;
+#   Root Hollows       on the underside, walled by ridges, behind a root curtain that draws up
+#                      when the southern hills heal (or climb in over the walls).
+
+## The tutorial, in metres from the north pole along longitude 0 (the size it always had).
+const TUT_M1_M := 4.61      # M1, the first mound: a plain jump (radius 2.0, top 1.3)
+const TUT_M1_TOP := 1.3
+const TUT_M2_M := 13.6      # M2: higher, across a gap that needs jump + water burst (radius 2.4)
+const TUT_M2_TOP := 2.9
+const TUT_PARASITE_M := 12.99
+const TUT_BLOOM_M := 14.4
+## Mossy Meadow's upland: a plateau over the north, flat above this latitude, its escarpment
+## falling to the lowlands by UPLAND_FOOT_LAT.
+const UPLAND_TOP_LAT := 54.0
+const UPLAND_FOOT_LAT := 40.0
+const UPLAND_H := 3.5
+const GREAT_RAVINE_LAT := 62.0
+
+
+## Latitude on Mossy Meadow `m` metres from the north pole (the tutorial's line, longitude 0),
+## measured along the upland's surface where the tutorial lies.
+static func tut_lat(m: float) -> float:
+	return 90.0 - rad_to_deg(m / (RADII[0] + UPLAND_H))
+
+
+## How far `dir` is from Mossy Meadow's north pole, in metres along the upland's surface.
+static func tut_m(dir: Vector3) -> float:
+	return dir.angle_to(Vector3.UP) * (RADII[0] + UPLAND_H)
+
+
+## A direction on Mossy Meadow `m` metres from the north pole down longitude 0.
+static func tut_dir(m: float) -> Vector3:
+	return MossBall.dir_ll(tut_lat(m), 0.0)
+
 
 static func _ball1(lb: LevelBuilder) -> void:
 	var b := lb.ball
 	b.food_weights = [0.6, 0.25, 0.15]
-	b.food_target = 7
+	b.food_target = 14
 	b.start_dir = MossBall.dir_ll(89.5, 0)
-	# Rolling hills (registered before anything is placed on the ground).
-	lb.hill(36, -9, 9.0, 1.6)
-	lb.hill(21, 11, 7.0, 1.3)
-	lb.hill(31, 22, 8.0, 1.8)
-	lb.hill(-52, 22, 10.0, 2.0)
-	lb.hill(-72, -12, 8.0, 1.5)
-	lb.hill(-28, 150, 9.0, 1.8)
+	# Rolling hills first (their order is fixed: tests and views use them by index), broader and
+	# higher at the new size.
+	lb.hill(32, -9, 18.0, 2.4)
+	lb.hill(21, 11, 14.0, 2.0)
+	lb.hill(26, 22, 16.0, 2.7)
+	lb.hill(-52, 22, 20.0, 3.0)
+	lb.hill(-72, -12, 16.0, 2.2)
+	lb.hill(-28, 150, 18.0, 2.7)
+	# The Southern Reed Hills and the lowland folds.
+	lb.hill(-44, 58, 14.0, 2.2)
+	lb.hill(-64, 60, 12.0, 1.8)
+	lb.hill(-58, -40, 14.0, 2.4)
+	lb.hill(10, 160, 16.0, 2.2)
+	lb.hill(-8, -160, 12.0, 1.6)
+	# The Glade Upland.
+	b.add_plateau(Vector3.UP, deg_to_rad(90.0 - UPLAND_FOOT_LAT), UPLAND_H, 90.0 - UPLAND_FOOT_LAT - (90.0 - UPLAND_TOP_LAT))
+	# The Great Ravine: 47 m of it along the upland, closed at both ends.
+	var gr := []
+	for lon in range(-60, 61, 15):
+		gr.append(Vector2(GREAT_RAVINE_LAT, lon))
+	lb.ravine(gr, 3.6, UPLAND_H, 1.4, "b1.great_ravine")
+	# The Split Crack in the western upland.
+	lb.ravine([Vector2(72, -110), Vector2(64.5, -110), Vector2(57, -110)], 3.0, UPLAND_H, 1.3, "b1.split_crack")
 
-	lb.zone("tut", 72, 0, 22)
-	lb.zone("meadow", 28, 0, 30)
-	lb.zone("east", 12, 95, 44)
-	lb.zone("south", -60, 10, 42)
-	lb.zone("west", 15, -90, 44)
-	lb.zone("under", -30, 180, 52)
+	# Zones: the six that always were (their ids are the v3 catalog's), then the new ones.
+	lb.zone("tut", 76, 0, 14)
+	lb.zone("meadow", 28, 0, 22)
+	lb.zone("east", 12, 95, 30)
+	lb.zone("south", -60, 10, 30)
+	lb.zone("west", 15, -90, 30)
+	lb.zone("under", -30, 180, 34)
+	lb.zone("rim", 62, 0, 26)
+	lb.zone("crack", 64, -110, 16)
+	lb.zone("heights", 62, 125, 22)
+	lb.zone("coral", -22, 56, 16)
+	lb.zone("fern", -36, -76, 16)
+	lb.zone("roots", -62, -150, 14)
 
-	# --- Tutorial: move -> jump -> water burst -> tail swipe -> restore -> bloom.
-	lb.cushion(79, 0, 2.0, 1.3)                       # M1: needs a jump
-	lb.cushion(57.5, 0, 2.4, 2.9)                     # M2: higher + a gap that needs jump + water burst
+	# ---- The original content, in its original order (ids fixed as in catalog v3) -------------
+	# Tutorial: move -> jump -> water burst -> tail swipe -> restore -> bloom.
+	lb.cushion(tut_lat(TUT_M1_M), 0, 2.0, TUT_M1_TOP)          # M1: needs a jump
+	lb.cushion(tut_lat(TUT_M2_M), 0, 2.4, TUT_M2_TOP)          # M2: higher + a gap that needs jump + water burst
 	# (For the elevated-route audit: the tutorial's taught climb, onto M1 then jump + burst to M2.)
-	var dm := 180.0 / (PI * lb.ball.radius)
-	lb.bot_hints.append({"route": "tutorial", "audit": true, "burst": true, "start": lb.ball.surface_point(MossBall.dir_ll(79.0 + 3.2 * dm, 0)),
-			"tops": [lb.ball.surface_point(MossBall.dir_ll(79.0 + 0.5 * dm, 0), 1.3), lb.ball.surface_point(MossBall.dir_ll(79.0 - 1.8 * dm, 0), 1.3),
-			lb.ball.surface_point(MossBall.dir_ll(57.5 + 2.0 * dm, 0), 2.9), lb.ball.surface_point(MossBall.dir_ll(57.5, 0), 2.9)], "zones": ["tut"], "goal": "tutorial mound M2"})
-	lb.parasite(Parasite.Kind.SMALL, "tut", 59.0, 0, 2.4, 2.9)
-	lb.bloom(55.6, 0, 2.9)
-
-	# --- Meadow: rolling hills.
-	lb.mote("meadow", 35, -10)
-	lb.mote("meadow", 19, 14)
-	lb.parasite(Parasite.Kind.SMALL, "meadow", 27, -3, 8.0)
-	lb.parasite(Parasite.Kind.SMALL, "meadow", 16, 6, 8.0)
-
-	# --- East: brittle tower + vortex to Moss Ball #2.
+	lb.bot_hints.append({"route": "tutorial", "audit": true, "burst": true, "start": b.surface_point(tut_dir(TUT_M1_M - 3.2)),
+			"tops": [b.surface_point(tut_dir(TUT_M1_M - 0.5), TUT_M1_TOP), b.surface_point(tut_dir(TUT_M1_M + 1.8), TUT_M1_TOP),
+			b.surface_point(tut_dir(TUT_M2_M - 2.0), TUT_M2_TOP), b.surface_point(tut_dir(TUT_M2_M), TUT_M2_TOP)], "zones": ["tut"], "goal": "tutorial mound M2"})
+	lb.fixed(lb.parasite(Parasite.Kind.SMALL, "tut", tut_lat(TUT_PARASITE_M), 0, 1.2, TUT_M2_TOP), "b1.tut.parasite.0")
+	lb.fixed(lb.bloom(tut_lat(TUT_BLOOM_M), 0, TUT_M2_TOP), "b1.bloom.0")
+	# Meadow.
+	lb.fixed(lb.mote("meadow", 35, -10), "b1.meadow.mote.0")
+	lb.fixed(lb.mote("meadow", 19, 14), "b1.meadow.mote.1")
+	lb.fixed(lb.parasite(Parasite.Kind.SMALL, "meadow", 27, -3, 6.0), "b1.meadow.parasite.0")
+	lb.fixed(lb.parasite(Parasite.Kind.SMALL, "meadow", 16, 6, 6.0), "b1.meadow.parasite.1")
+	# East: the brittle tower + the vortex to Current Hollows.
 	_tower(lb, 27, 76, 90, "east")
-	lb.parasite(Parasite.Kind.MEDIUM, "east", -6, 90, 10.0)
-	lb.parasite(Parasite.Kind.SMALL, "east", 12, 120, 9.0)
-	lb.mote("east", -9, 112)
-	lb.bloom(-1, 88)
-
-	# --- South pole: a large parasite among hills.
-	lb.parasite(Parasite.Kind.LARGE, "south", -62, 8, 12.0)
-	lb.mote("south", -48, 34)
-	lb.mote("south", -74, -24)
-
-	# --- West: hidden interior moss cave.
+	lb.fixed(b.motes[b.motes.size() - 1], "b1.east.mote.0")
+	lb.fixed(lb.parasite(Parasite.Kind.MEDIUM, "east", -6, 90, 7.0), "b1.east.parasite.0")
+	lb.fixed(lb.parasite(Parasite.Kind.SMALL, "east", 12, 120, 6.0), "b1.east.parasite.1")
+	lb.fixed(lb.mote("east", -9, 112), "b1.east.mote.1")
+	lb.fixed(lb.bloom(-1, 88), "b1.bloom.1")
+	# South: a large parasite among the reed hills.
+	lb.fixed(lb.parasite(Parasite.Kind.LARGE, "south", -62, 8, 8.0), "b1.south.parasite.0")
+	lb.fixed(lb.mote("south", -48, 34), "b1.south.mote.0")
+	lb.fixed(lb.mote("south", -74, -24), "b1.south.mote.1")
+	# West: the hidden moss cave.
 	lb.cave(26, -104, 90)
-	lb.parasite(Parasite.Kind.MEDIUM, "west", 8, -78, 10.0)
-	lb.parasite(Parasite.Kind.SMALL, "west", -4, -96, 9.0)
-	lb.mote("west", 3, -66)
-	lb.mote("west", 14, -84)
-	lb.bloom(-2, -74)
+	lb.fixed(b.upgrades[0], "b1.cave.0")
+	lb.fixed(lb.parasite(Parasite.Kind.MEDIUM, "west", 8, -78, 7.0), "b1.west.parasite.0")
+	lb.fixed(lb.parasite(Parasite.Kind.SMALL, "west", -4, -96, 6.0), "b1.west.parasite.1")
+	lb.fixed(lb.mote("west", 3, -66), "b1.west.mote.0")
+	lb.fixed(lb.mote("west", 14, -84), "b1.west.mote.1")
+	lb.fixed(lb.bloom(-2, -74), "b1.bloom.2")
+	# Underside.
+	lb.fixed(lb.parasite(Parasite.Kind.SMALL, "under", -24, 172, 7.0), "b1.under.parasite.0")
+	lb.fixed(lb.mote("under", -18, 160), "b1.under.mote.0")
+	lb.fixed(lb.mote("under", -42, -162), "b1.under.mote.1")
+	lb.fixed(lb.bloom(-34, 176), "b1.bloom.3")
 
-	# --- Underside.
-	lb.parasite(Parasite.Kind.SMALL, "under", -24, 172, 10.0)
-	lb.mote("under", -18, 160)
-	lb.mote("under", -42, -162)
-	lb.bloom(-34, 176)
+	# ---- The Great Ravine and the upland rims ----------------------------------------------
+	var rim_m := 1.8 + 1.4 + 0.7     # floor half-width + wall + a step onto solid ground
+	var north_rim := func(lon: float) -> Vector3: return b.surface_point(MossBall.dir_ll(GREAT_RAVINE_LAT + lb.m2deg(rim_m), lon))
+	var south_rim := func(lon: float) -> Vector3: return b.surface_point(MossBall.dir_ll(GREAT_RAVINE_LAT - lb.m2deg(rim_m), lon))
+	# The fallen stem on the tutorial's line: it rises into a bridge when the glade heals.
+	lb.fallen_stem_bridge("tut", north_rim.call(0.0), south_rim.call(0.0), 0.6)
+	# Stepping stones (skilled): two stone columns up from the floor to rim height.
+	var stone_lat := [GREAT_RAVINE_LAT + lb.m2deg(0.75), GREAT_RAVINE_LAT - lb.m2deg(0.75)]
+	var stone_lon := [-24.0, -27.0]
+	var stones := []
+	for k in 2:
+		lb.stone_column(MossBall.dir_ll(stone_lat[k], stone_lon[k]), 0.8, UPLAND_H + 0.1)
+		stones.append(b.surface_point(MossBall.dir_ll(stone_lat[k], stone_lon[k]), UPLAND_H + 0.1))
+	lb.crossings.append({"a": north_rim.call(-24.0), "b": south_rim.call(-27.0), "stones": stones, "gate": null})
+	lb.route("stepping stones", north_rim.call(-24.0), stones, ["rim"], "the far stepping stone")
+	lb.bot_hints[lb.bot_hints.size() - 1]["exit"] = [south_rim.call(-27.0)]
+	lb.bot_hints.append({"route": "stones off", "audit": true, "branch": true, "start": stones[1], "tops": [south_rim.call(-27.0)], "zones": [], "goal": "the far rim"})
+	lb.mote_xf("rim", Transform3D(MossBall.frame_at(b.up_at(stones[1]), 0.0), stones[1] + b.up_at(stones[1]) * 0.5), 0.3)
+	lb.parasite(Parasite.Kind.SMALL, "rim", 57, -40, 4.0)
+	lb.parasite(Parasite.Kind.SMALL, "rim", 57, 35, 4.0)
+	lb.parasite(Parasite.Kind.MEDIUM, "rim", 68, 45, 4.0)
+	lb.mote("rim", 56, -15)
+	lb.mote("rim", 67, -50)
+	lb.bloom(56.5, 5)
 
-	for r in [[28, 0, 30], [12, 95, 35], [15, -90, 35], [-38, 170, 40], [-58, 10, 35]]:
+	# ---- The Split Crack and its stone bridge ------------------------------------------------
+	var crack_side := lb.m2deg(1.5 + 1.3 + 0.8) / cos(deg_to_rad(64.5))
+	var cb0 := b.surface_point(MossBall.dir_ll(64.5, -110 + crack_side))
+	var cb1 := b.surface_point(MossBall.dir_ll(64.5, -110 - crack_side))
+	var stone_bridge := lb.bridge(cb0, cb1, 0.5, 1.8, 0.8)
+	var sbl: Array = stone_bridge.get_meta("top_line")
+	lb.crossings.append({"a": cb0, "b": cb1, "gate": null})
+	var sbm: Vector3 = sbl[sbl.size() / 2]
+	lb.mote_xf("crack", Transform3D(MossBall.frame_at(b.up_at(sbm), 0.0), sbm + b.up_at(sbm) * 0.5), 0.4)
+	lb.route("stone bridge", cb0, [sbl[4], sbl[8], sbm], ["crack"], "the stone bridge's middle")
+	lb.bot_hints[lb.bot_hints.size() - 1]["exit"] = [sbl[14], cb1]
+	lb.bot_hints.append({"route": "bridge off", "audit": true, "branch": true, "start": sbm, "tops": [sbl[14], cb1], "zones": [], "goal": "the far rim"})
+	lb.parasite(Parasite.Kind.MEDIUM, "crack", 69, -95, 4.0)
+	lb.parasite(Parasite.Kind.SMALL, "crack", 59, -126, 4.0)
+	lb.mote("crack", 70, -128)
+
+	# ---- The Heights: terraces on the eastern upland -----------------------------------------
+	var tiers := lb.terrace(64, 125, [[4.2, 1.2], [2.8, 2.4], [1.6, 3.5]])
+	var tier_top := func(k: int) -> Vector3:
+		var base: Vector3 = (tiers[0] as Node3D).global_position
+		return base + b.up_at(base) * float(tiers[k].get_meta("top"))
+	var tstart := b.surface_point(MossBall.dir_ll(64 - lb.m2deg(6.0), 125))
+	lb.route("heights terraces", tstart, [b.surface_point(MossBall.dir_ll(64 - lb.m2deg(3.3), 125), 1.2), b.surface_point(MossBall.dir_ll(64 - lb.m2deg(2.1), 125), 2.4), tier_top.call(2)], ["heights"], "terrace top")
+	var tt: Vector3 = tier_top.call(2)
+	lb.mote_xf("heights", Transform3D(MossBall.frame_at(b.up_at(tt), 0.0), tt + b.up_at(tt) * 0.5), 0.4)
+	lb.parasite(Parasite.Kind.SMALL, "heights", 58, 100, 4.0)
+	lb.parasite(Parasite.Kind.SMALL, "heights", 67, 152, 4.0)
+	lb.parasite(Parasite.Kind.MEDIUM, "heights", 56, 145, 4.0)
+	lb.mote("heights", 60, 168)
+	lb.mote("heights", 70, 105)
+	lb.bloom(66, 98)
+
+	# ---- Moss Meadow lowland: more of it, and the Meadow Stone -------------------------------
+	lb.parasite(Parasite.Kind.SMALL, "meadow", 24, -28, 5.0)
+	lb.parasite(Parasite.Kind.SMALL, "meadow", 32, 30, 5.0)
+	lb.mote("meadow", 22, -32)
+	lb.mote("meadow", 35, 28)
+	var ms_step := -14.0 + lb.m2deg(3.7) / cos(deg_to_rad(20.0))
+	lb.cushion(20, ms_step, 1.2, 1.3)
+	var ms := lb.shelf(20, -14, 2.6, 2.0, 1.1)
+	var ms_top := ms.global_position + b.up_at(ms.global_position) * 2.6
+	lb.route("meadow stone", b.surface_point(MossBall.dir_ll(20, ms_step + lb.m2deg(3.0) / cos(deg_to_rad(20.0)))),
+			[b.surface_point(MossBall.dir_ll(20, ms_step), 1.3), ms_top], ["meadow"], "Meadow Stone")
+	lb.mote_xf("meadow", Transform3D(MossBall.frame_at(b.up_at(ms_top), 0.0), ms_top + b.up_at(ms_top) * 0.5), 0.5)
+
+	# ---- East Tower lands: more of them ------------------------------------------------------
+	lb.parasite(Parasite.Kind.SMALL, "east", 18, 136, 5.0)
+	lb.mote("east", 2, 140)
+
+	# ---- The Coral Garden ----------------------------------------------------------------------
+	lb.sea_fan(lb.at(-25, 60, 30, 0, -0.2, 0), 7.5, 9.0, Color(0.85, 0.35, 0.45), 4101)
+	lb.parasite(Parasite.Kind.MEDIUM, "coral", -18, 46, 5.0)
+	lb.parasite(Parasite.Kind.SMALL, "coral", -31, 68, 5.0)
+	lb.mote("coral", -14, 64)
+	lb.mote("coral", -30, 46)
+	var cs_step := 52.5 - lb.m2deg(3.7) / cos(deg_to_rad(26.0))
+	lb.cushion(-26, cs_step, 1.2, 1.3)
+	var cs := lb.shelf(-26, 52.5, 2.6, 1.9, 1.0)
+	var cs_top := cs.global_position + b.up_at(cs.global_position) * 2.6
+	lb.route("coral shelf", b.surface_point(MossBall.dir_ll(-26, cs_step - lb.m2deg(3.0) / cos(deg_to_rad(26.0)))),
+			[b.surface_point(MossBall.dir_ll(-26, cs_step), 1.3), cs_top], ["coral"], "coral shelf")
+	lb.mote_xf("coral", Transform3D(MossBall.frame_at(b.up_at(cs_top), 0.0), cs_top + b.up_at(cs_top) * 0.5), 0.5)
+	lb.bloom(-16, 52)
+
+	# ---- Southern Reed Hills: more of them -----------------------------------------------------
+	lb.parasite(Parasite.Kind.SMALL, "south", -50, -22, 5.0)
+	lb.parasite(Parasite.Kind.MEDIUM, "south", -70, 45, 6.0)
+	lb.mote("south", -42, 8)
+	lb.mote("south", -60, 70)
+	lb.bloom(-46, 18)
+
+	# ---- West Stone Ridge, its arch, the cave's neighbourhood ------------------------------------
+	var wr := lb.ridge(36, -136, 9, -130, 3.0, 7.0, 2.0, 11, 0.3)
+	var wc: Array = wr.get_meta("crest")
+	var wcm: Vector3 = wc[wc.size() / 2]
+	lb.route("west ridge", wc[0], wc.slice(1, wc.size() / 2, 3) + [wcm], ["west"], "West Stone Ridge crest")
+	lb.mote_xf("west", Transform3D(MossBall.frame_at(b.up_at(wcm), 0.0), wcm + b.up_at(wcm) * 0.5), 0.5)
+	lb.arch(-5, -119, -5, -105, 2.2, 2.6, 0.9)
+	lb.mote("west", -5, -112)
+	lb.parasite(Parasite.Kind.SMALL, "west", 18, -122, 5.0)
+
+	# ---- The Fern Grove and its bubble columns ---------------------------------------------------
+	# [vent lat, lon, shelf lat, lon, shelf top]: each shelf 4 m from its column (clear of him
+	# as he rises; he swims across from the top).
+	for c in [[-33.0, -70.0, -33.0, -70.0 + lb.m2deg(4.0) / cos(deg_to_rad(33.0)), 5.0],
+			[-42.0, -86.0, -42.0, -86.0 + lb.m2deg(4.0) / cos(deg_to_rad(42.0)), 4.2]]:
+		var cdir := MossBall.dir_ll(c[0], c[1])
+		lb.bubble_column(cdir, 0.9, float(c[4]) + 1.4)
+		var sh := lb.shelf(c[2], c[3], c[4], 1.7, 0.9)
+		var st_top := sh.global_position + b.up_at(sh.global_position) * float(c[4])
+		lb.bot_hints.append({"route": "fern column", "lift": true, "start": b.surface_point(cdir),
+				"tops": [b.surface_point(cdir, float(c[4]) + 1.0), st_top], "zones": ["fern"], "goal": "fern shelf"})
+		lb.mote_xf("fern", Transform3D(MossBall.frame_at(b.up_at(st_top), 0.0), st_top + b.up_at(st_top) * 0.5), 0.4)
+	lb.parasite(Parasite.Kind.SMALL, "fern", -40, -60, 5.0)
+	lb.parasite(Parasite.Kind.SMALL, "fern", -28, -90, 5.0)
+	lb.parasite(Parasite.Kind.MEDIUM, "fern", -48, -74, 5.0)
+	lb.mote("fern", -46, -94)
+	lb.bloom(-30, -80)
+
+	# ---- Root Hollows: walled by ridges, a root curtain in the doorway ---------------------------
+	var rc := MossBall.dir_ll(-62, -150)
+	# A hexagon of walls 10 m out, in the site's own metres; each wall runs 4 m past its corners so
+	# the corners are sealed and its ramps rise from outside (the skilled way in, over the top).
+	var site := func(x: float, z: float) -> Vector3: return lb.at(-62, -150, 0, x, 0, z).origin
+	var corner := func(k: int) -> Vector2:
+		var a := deg_to_rad(60.0 * k + 30.0)
+		return Vector2(cos(a), sin(a)) * 10.0
+	var ll := func(pt: Vector3) -> Vector2: return _latlon(b.up_at(pt))
+	# (Side 0, between corners 0 and 1, is the doorway.)
+	for k in range(1, 6):
+		var c0: Vector2 = corner.call(k)
+		var c1: Vector2 = corner.call(k + 1)
+		var dirv := (c1 - c0).normalized()
+		var e0: Vector2 = ll.call(site.call(c0.x - dirv.x * 4.0, c0.y - dirv.y * 4.0))
+		var e1: Vector2 = ll.call(site.call(c1.x + dirv.x * 4.0, c1.y + dirv.y * 4.0))
+		var wall := lb.ridge(e0.x, e0.y, e1.x, e1.y, 3.0, 5.0, 1.6, 60 + k, 0.3)
+		var wcr: Array = wall.get_meta("crest")
+		lb.bot_hints.append({"route": "hollow wall %d" % k, "audit": true, "start": wcr[0],
+				"tops": wcr.slice(2, wcr.size(), 3) + [wcr[wcr.size() - 1]], "zones": [], "goal": "Root Hollows wall"})
+	var dm2: Vector2 = (corner.call(0) + corner.call(1)) * 0.5
+	var dmid := b.up_at(site.call(dm2.x, dm2.y))
+	var dxf := b.xform_on_dir(dmid)
+	var face := (b.surface_point(rc) - dxf.origin)
+	face = (face - dxf.basis.y * face.dot(dxf.basis.y)).normalized()
+	dxf.basis = Basis(dxf.basis.y.cross(face).normalized(), dxf.basis.y, -face)
+	var curtain := lb.root_curtain("south", dxf.translated_local(Vector3(0, -0.3, 0)), 10.5, 3.4, 5101)
+	lb.bot_hints.append({"hollow": true, "door": dxf.origin, "inside": b.surface_point(rc), "zone": "roots", "gate": curtain})
+	lb.parasite(Parasite.Kind.MEDIUM, "roots", -62, -150, 2.5)
+	lb.parasite(Parasite.Kind.SMALL, "roots", -65, -140, 2.5)
+	lb.mote("roots", -60, -158)
+	lb.mote("roots", -66, -148)
+
+	# ---- Food, holes, growth -----------------------------------------------------------------
+	for r in [[28, 0, 24], [12, 95, 24], [15, -90, 24], [-38, 170, 26], [-58, 10, 24], [62, 60, 20], [62, -60, 20],
+			[-22, 56, 14], [-36, -76, 14], [64, 150, 16]]:
 		lb.food_region(r[0], r[1], r[2])
-	_holes(lb, 12, 101, [[MossBall.dir_ll(72, 0), 22], [MossBall.dir_ll(26, -104), 14]])
+	_holes(lb, 26, 101, [[MossBall.dir_ll(78, 0), 12], [MossBall.dir_ll(26, -104), 16], [MossBall.dir_ll(GREAT_RAVINE_LAT, 0), 8],
+			[MossBall.dir_ll(64, -110), 8], [rc, 13]])
 
 	# Vegetation: soft velvety marimo moss, short plants and broad leaves.
 	var veg := b.make_veg_material(Color(0.12, 0.4, 0.1), Color(0.5, 0.8, 0.28), Vegetation.family_params("short", 0.34))
-	b.scatter(MeshLib.tuft_mesh(5, 0.07, 0.34, 0.12, 1, 3, 0.3), veg, 5200, 11, 0.8, 1.35)
+	b.scatter(MeshLib.tuft_mesh(5, 0.07, 0.34, 0.12, 1, 3, 0.3), veg, 20000, 11, 0.8, 1.35)
 	var leaves := b.make_veg_material(Color(0.1, 0.36, 0.1), Color(0.35, 0.7, 0.22), Vegetation.family_params("short", 0.5).merged({"sway": 0.22, "wake_gain": 0.6,
 			# (Owner reference: variegated like an earth star, pink margins and cream stripes.)
 			"variegate": 1.0, "vari_style": 0.0, "vari_edge": Color(0.96, 0.58, 0.72), "vari_stripe": Color(0.94, 0.92, 0.82)}, true))
-	b.scatter(MeshLib.broadleaf_mesh(4, 0.7, 2), leaves, 380, 12, 0.7, 1.25)
+	b.scatter(MeshLib.broadleaf_mesh(4, 0.7, 2), leaves, 1400, 12, 0.7, 1.25)
 	var stalks := b.make_veg_material(Color(0.1, 0.36, 0.1), Color(0.35, 0.7, 0.22), Vegetation.family_params("medium", 1.7).merged({"sway": 0.14}, true))
-	b.scatter(MeshLib.tuft_mesh(3, 0.1, 1.7, 0.1, 3, 5, 0.25), stalks, 160, 13, 0.8, 1.3)
-	# Reactive vegetation (Expansion 3): medium growth through the meadow, and a tall reed bed in
-	# the southern hills where the large parasite roams (its movement shows in the reeds). The
-	# tutorial route, caves, blooms, motes, holes and platforms are kept clear.
-	var clear := _veg_keep_clear(lb, [[MossBall.dir_ll(66, 0), 16.0]])
-	Vegetation.field(b, "medium", MossBall.dir_ll(28, 10), 17.0, 900, 101, {"avoid": clear, "clumps": 8})
-	Vegetation.field(b, "tall", MossBall.dir_ll(-58, 34), 14.0, 950, 102, {"avoid": clear, "clumps": 6, "fill": 0.35, "edge": 0.7})
-	Vegetation.corridor(b, "medium", MossBall.dir_ll(4, 60), MossBall.dir_ll(-40, 30), 8.0, 260, 103, {"avoid": clear})
+	b.scatter(MeshLib.tuft_mesh(3, 0.1, 1.7, 0.1, 3, 5, 0.25), stalks, 600, 13, 0.8, 1.3)
+	# Reactive vegetation: medium growth through the meadow, a tall reed bed in the southern hills
+	# where the large parasite roams, tall ferns in the Fern Grove, medium growth in Root Hollows.
+	# The tutorial, the ravine crossings, caves, blooms, motes, holes and platforms are kept clear.
+	var clear := _veg_keep_clear(lb, [[MossBall.dir_ll(78, 0), 9.0], [MossBall.dir_ll(GREAT_RAVINE_LAT, 0), 6.0],
+			[MossBall.dir_ll(GREAT_RAVINE_LAT, -25.5), 5.0], [MossBall.dir_ll(64.5, -110), 6.0], [MossBall.dir_ll(-25, 60), 5.0]])
+	Vegetation.field(b, "medium", MossBall.dir_ll(28, 10), 14.0, 1500, 101, {"avoid": clear, "clumps": 12})
+	Vegetation.field(b, "tall", MossBall.dir_ll(-58, 34), 12.0, 1600, 102, {"avoid": clear, "clumps": 9, "fill": 0.35, "edge": 0.7})
+	Vegetation.corridor(b, "medium", MossBall.dir_ll(4, 60), MossBall.dir_ll(-40, 30), 6.0, 420, 103, {"avoid": clear})
+	Vegetation.field(b, "tall", MossBall.dir_ll(-36, -76), 11.0, 1100, 104, {"avoid": clear, "clumps": 8, "fill": 0.45, "edge": 0.6})
+	Vegetation.field(b, "medium", rc, 8.0, 380, 105, {"avoid": clear, "clumps": 5})
+	Vegetation.field(b, "medium", MossBall.dir_ll(66, -60), 9.0, 420, 106, {"avoid": clear, "clumps": 6})
+	# The Coral Garden: dense tube corals and anemones round the fan.
+	var coral_c := MossBall.dir_ll(-22, 56)
+	var in_garden := func(dd: Vector3) -> bool: return dd.angle_to(coral_c) < deg_to_rad(15.0) and not clear.call(dd)
+	for k in 2:
+		var col: Array = ACCENTS[0][k]
+		var mat := b.make_veg_material(col[0], col[1], Vegetation.family_params("short", 0.45).merged({"sway": 0.12, "wake_gain": 0.7, "cam_fade": 1.0}, true))
+		b.coral_nodes += b.scatter(MeshLib.coral_mesh(5 + k * 2, 0.75 + k * 0.15, 950 + k), mat, 240, 950 + k, 1.2, 2.6, in_garden, 70.0)
 
 
 # =========================================================================================

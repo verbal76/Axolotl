@@ -133,6 +133,19 @@ func run(runner) -> void:
 					t.check("debug_eel_%s" % (c as CaveEel).threat_id, (c as CaveEel).defeated, "")
 		_report()
 		return
+	if Settings.test_args.get("start", "") == "meadow":
+		# Debug scenario: the tutorial, then Mossy Meadow cleared completely, then its vortex.
+		g._enter_title()
+		await wait(1.0)
+		g.title._on_play()
+		await wait(0.5)
+		await tutorial()
+		await clear_ball(0, 1.01, [])
+		t.check("debug_meadow_cleared", g.balls[0].completed, "%.2f in %.0f s, deaths %d, ravine falls %d" % [g.balls[0].restoration, sim_time, int(g.stats["deaths"]), int(g.stats.get("ravine_falls", 0))])
+		await enter_vortex(g.balls[0].vortex_out, false)
+		t.check("debug_meadow_vortex", p.ball == g.balls[1], "")
+		_report()
+		return
 	g.all_clear.connect(func(): _all_clear_at = sim_time; mark("ALL CLEAR shown"))
 	# Start from the title screen like a player would.
 	g._enter_title()
@@ -298,8 +311,11 @@ func _reach(b: MossBall, pos: Vector3) -> void:
 		for i in tops.size():
 			if (tops[i] as Vector3).distance_to(pos) < (tops[k] as Vector3).distance_to(pos):
 				k = i
-		await goto(best["start"], 1.0, 40.0)
-		await hop_chain(tops.slice(0, k + 1))
+		if best.get("lift", false):
+			await ride_column(best)
+		else:
+			await goto(best["start"], 1.0, 40.0)
+			await hop_chain(tops.slice(0, k + 1))
 	await goto(pos, 0.6, 10.0)
 
 
@@ -528,6 +544,12 @@ func _cave_of(pos: Vector3) -> Dictionary:
 func goto(target: Variant, radius := 0.9, timeout := 45.0, allow_vortex: Vortex = null, fight := true) -> bool:
 	# Leave a cave through its door when the destination is outside it.
 	var tgt0: Vector3 = target.call() if target is Callable else target
+	# World expansion: round the ravines (or over a crossing), and into walled hollows by the door.
+	if not _planning:
+		if p.ball.ravine_carve(p.ball.up_at(tgt0)) > 0.3 and p.ball.altitude(tgt0) < 1.0:
+			t.log_line("goto: target at %s is down in a ravine; not following it" % str(Levels._latlon(p.ball.up_at(tgt0)).round()))
+			return false
+		await _follow_plan(tgt0, allow_vortex, fight)
 	var inside := _cave_of(p.global_position)
 	if not inside.is_empty() and _cave_of(tgt0).is_empty() and not _in_cave_escape:
 		_in_cave_escape = true
@@ -577,6 +599,16 @@ func goto(target: Variant, radius := 0.9, timeout := 45.0, allow_vortex: Vortex 
 		if not _in_cave_escape:
 			dir = _avoid_domes(dir, tgt)
 		dir = _wall_follow(dir)
+		# A ravine's edge just ahead (not on a crossing): plan a way round from here, or keep
+		# along the edge.
+		if not _crossing and not p.ball.carves.is_empty() and p.ball.ravine_carve(p.up) < 0.3 \
+				and p.ball.ravine_carve(p.ball.up_at(p.global_position + dir * 1.6)) > 0.3:
+			if not _planning and await _follow_plan(tgt, allow_vortex, fight):
+				continue
+			var side_v := dir.cross(p.up).normalized()
+			var l := p.ball.ravine_carve(p.ball.up_at(p.global_position + dir * 0.8 + side_v * 1.2))
+			var r := p.ball.ravine_carve(p.ball.up_at(p.global_position + dir * 0.8 - side_v * 1.2))
+			dir = (side_v if l < r else -side_v)
 		dir = _avoid_mouths(dir, allow_vortex)
 		var mag := 1.0 if flat.length() > 2.0 else clampf(flat.length() / 2.0, 0.35, 1.0)
 		set_stick(stick_for(dir, mag))
@@ -610,6 +642,143 @@ func goto(target: Variant, radius := 0.9, timeout := 45.0, allow_vortex: Vortex 
 	set_stick(Vector2.ZERO)
 	failures.append("goto timeout on ball %d" % p.ball.index)
 	return false
+
+
+# --- paths round ravines and into walled hollows (world expansion) --------------------------
+
+var _planning := false
+var _crossing := false
+
+
+## Walks the planned legs to `tgt` (if any are needed).
+func _follow_plan(tgt: Vector3, allow_vortex: Vortex, fight: bool) -> bool:
+	var legs := _plan(p.global_position, tgt)
+	if legs.is_empty():
+		return false
+	t.log_line("plan %s -> %s via %s" % [str(Levels._latlon(p.ball.up_at(p.global_position)).round()), str(Levels._latlon(p.ball.up_at(tgt)).round()),
+			str(legs.map(func(w): return Levels._latlon(p.ball.up_at(w[0])).round()))])
+	_planning = true
+	for leg in legs:
+		_crossing = leg[1]
+		await goto(leg[0], 1.0, 40.0, allow_vortex, fight)
+	_crossing = false
+	_planning = false
+	return true
+
+
+## Whether walking straight from `a` to `c` on the current ball keeps off every ravine.
+func _clear_path(a: Vector3, c: Vector3) -> bool:
+	var b := p.ball
+	if b.carves.is_empty():
+		return true
+	var da := b.up_at(a)
+	var dc := b.up_at(c)
+	var n := int(ceil(da.angle_to(dc) * b.radius / 0.7)) + 1
+	for i in n + 1:
+		if b.ravine_carve(da.slerp(dc, float(i) / n)) > 0.3:
+			return false
+	return true
+
+
+## Ground points just past each end of each ravine (straight on and to either side).
+func _ravine_ends() -> Array:
+	var b := p.ball
+	var out := []
+	for rv in (b.get_meta("builder") as LevelBuilder).ravines:
+		var pts: Array = rv["points"]
+		for e in [[0, 1], [pts.size() - 1, pts.size() - 2]]:
+			var end_d: Vector3 = pts[e[0]]
+			var inner: Vector3 = pts[e[1]]
+			var axis := inner.cross(end_d).normalized()
+			var beyond := end_d.rotated(axis, (float(rv["half"]) + 3.0) / b.radius)
+			var side_axis := beyond.cross(axis).normalized()
+			out.append(b.surface_point(beyond))
+			for sgn in [-1.0, 1.0]:
+				out.append(b.surface_point(beyond.rotated(side_axis, sgn * (float(rv["half"]) + 3.0) / b.radius)))
+	return out
+
+
+## Waypoints from `a` to `c` on the current ball: [] when the straight way is fine (or nothing
+## better is known). Walled hollows are entered and left by their door (while it is open); ravines
+## are walked round, or crossed on a raised bridge.
+func _plan(a: Vector3, c: Vector3) -> Array:
+	var b := p.ball
+	var lb: LevelBuilder = b.get_meta("builder")
+	for h in lb.bot_hints:
+		if not h.has("hollow") or not (h["gate"] as RestorationGate).is_open:
+			continue
+		var inside: Vector3 = h["inside"]
+		var door: Vector3 = h["door"]
+		var out_dir: Vector3 = door - inside
+		out_dir = (out_dir - b.up_at(door) * out_dir.dot(b.up_at(door))).normalized()
+		var d_out := b.surface_point(b.up_at(door + out_dir * 3.5))
+		var d_in := b.surface_point(b.up_at(door - out_dir * 3.0))
+		var a_in := a.distance_to(inside) < 9.0
+		var c_in := c.distance_to(inside) < 9.0
+		if c_in and not a_in:
+			return _plan_ravines(a, d_out) + [[d_out, false], [d_in, false]]
+		if a_in and not c_in:
+			return [[d_in, false], [d_out, false]] + _plan_ravines(d_out, c)
+	return _plan_ravines(a, c)
+
+
+func _plan_ravines(a: Vector3, c: Vector3) -> Array:
+	if _clear_path(a, c):
+		return []
+	var b := p.ball
+	var lb: LevelBuilder = b.get_meta("builder")
+	var best := []
+	var best_cost := INF
+	var ends := _ravine_ends()
+	for w in ends:
+		if _clear_path(a, w) and _clear_path(w, c):
+			var cost: float = a.distance_to(w) + w.distance_to(c)
+			if cost < best_cost:
+				best_cost = cost
+				best = [w]
+	for w1 in ends:
+		if not _clear_path(a, w1):
+			continue
+		for w2 in ends:
+			if w2 != w1 and _clear_path(w1, w2) and _clear_path(w2, c):
+				var cost2: float = a.distance_to(w1) + w1.distance_to(w2) + w2.distance_to(c)
+				if cost2 < best_cost:
+					best_cost = cost2
+					best = [[w1, false], [w2, false]]
+	# A bridge standing across (not stepping stones: those are a climb).
+	for cr in lb.crossings:
+		if cr.has("stones") or (cr["gate"] != null and not (cr["gate"] as RestorationGate).is_open):
+			continue
+		for pair in [[cr["a"], cr["b"]], [cr["b"], cr["a"]]]:
+			if _clear_path(a, pair[0]) and _clear_path(pair[1], c):
+				var cost3: float = a.distance_to(pair[0]) + (pair[0] as Vector3).distance_to(pair[1]) + (pair[1] as Vector3).distance_to(c) + 6.0
+				if cost3 < best_cost:
+					best_cost = cost3
+					best = [[pair[0], false], [pair[1], true]]
+	if best.is_empty():
+		t.log_line("plan: no way round the ravines from %s to %s" % [str(Levels._latlon(b.up_at(a)).round()), str(Levels._latlon(b.up_at(c)).round())])
+	return best
+
+
+## Up a bubble column from its vent to near its top, then across to the ledge beside it.
+func ride_column(h: Dictionary) -> bool:
+	var top: Vector3 = h["tops"][0]
+	var ledge: Vector3 = h["tops"][1]
+	await goto(h["start"], 0.45, 40.0)
+	for i in 60 * 8:
+		var f := tangent_to(top)
+		set_stick(stick_for(f, clampf(f.length(), 0.0, 0.4)))
+		await tick()
+		if height_of(top) < 0.6:
+			break
+	for i in 60 * 4:
+		set_stick(stick_for(tangent_to(ledge)))
+		await tick()
+		if p.grounded and i > 10:
+			break
+	set_stick(Vector2.ZERO)
+	await tick()
+	return absf(height_of(ledge)) < 0.7 and tangent_to(ledge).length() < 1.8
 
 
 func detour(dir: Vector3, side: float, angle_deg: float, time: float) -> void:
@@ -919,6 +1088,15 @@ func fight_parasite(par: Parasite, timeout := 25.0) -> bool:
 			continue
 		if Settings.test_args.has("trace_fight") and int(el * 10) % 10 == 0:
 			t.log_line("approach t=%.1f dist %.2f dh %.2f par %s" % [sim_time, dist, height_of(cp), par.state])
+		# (Across a ravine from him: go round, never straight over the edge.)
+		if dist > 1.5 and not _planning and not _clear_path(p.global_position, cp):
+			if p.ball.ravine_carve(p.ball.up_at(cp)) > 0.3:
+				t.log_line("fight: %s parasite is down in a ravine; leaving it" % par.zone_id)
+				break
+			var t0 := sim_time
+			await goto(func(): return par.global_position, 2.0, minf(30.0, timeout - el))
+			el += sim_time - t0
+			continue
 		if dist > 1.5 or absf(height_of(cp)) > 1.0:
 			if absf(height_of(cp)) > 1.0 and dist < 2.5:
 				await hop_toward(cp, true)
@@ -1032,13 +1210,13 @@ func tutorial() -> void:
 	var b := g.balls[0]
 	mark("tutorial start")
 	# 1-3: walk, jump onto M1, jump + water burst across to M2 — with a run-up, like a player.
-	var toward := b.surface_point(MossBall.dir_ll(60, 0))
+	var toward := b.surface_point(Levels.tut_dir(12.57))
 	for attempt in 5:
-		await goto(b.surface_point(MossBall.dir_ll(86.0, 0)), 0.7, 20.0, null, false)
+		await goto(b.surface_point(Levels.tut_dir(1.68)), 0.7, 20.0, null, false)
 		for i in 120:
 			set_stick(stick_for(tangent_to(toward)))
 			await tick()
-			if b.up_at(p.global_position).angle_to(MossBall.dir_ll(79, 0)) < deg_to_rad(8.5):
+			if b.surface_point(b.up_at(p.global_position)).distance_to(b.surface_point(Levels.tut_dir(Levels.TUT_M1_M))) < 3.56:
 				break
 		await press("jump")
 		for i in 50:
@@ -1050,7 +1228,7 @@ func tutorial() -> void:
 		for i in 90:
 			set_stick(stick_for(tangent_to(toward)))
 			await tick()
-			if Levels._latlon(b.up_at(p.global_position)).x <= 75.6:
+			if Levels.tut_m(b.up_at(p.global_position)) >= 6.03:
 				break
 		await press("jump")
 		for i in 18:
@@ -1058,7 +1236,7 @@ func tutorial() -> void:
 			await tick()
 		await press("jump")
 		for i in 60:
-			set_stick(stick_for(tangent_to(b.surface_point(MossBall.dir_ll(57.5, 0)))))
+			set_stick(stick_for(tangent_to(b.surface_point(Levels.tut_dir(Levels.TUT_M2_M)))))
 			await tick()
 			if p.grounded and i > 10:
 				break
@@ -1085,7 +1263,7 @@ func tutorial() -> void:
 		if g.checkpoint == bloom:
 			break
 		# Fell off the platform: climb back up.
-		await hop_toward(b.surface_point(MossBall.dir_ll(57.5, 0), 2.9), true, 0.1)
+		await hop_toward(b.surface_point(Levels.tut_dir(Levels.TUT_M2_M), Levels.TUT_M2_TOP), true, 0.1)
 	t.check("tutorial_bloom_checkpoint", g.checkpoint == bloom, "")
 	mark("tutorial complete")
 	t.check("tutorial_under_60s", sim_time < 60.0, "%.1fs" % sim_time)
@@ -1141,6 +1319,12 @@ func _collect_tasks(b: MossBall, lb: LevelBuilder, skip_zones: Array, done: Dict
 		# Expansion 4 climbs: needed while an elevated mote in their zones is still there.
 		if h.has("route") and not h.get("audit", false) and int(done.get("route:" + str(h["route"]), 0)) < 3 and _route_pending(b, h):
 			tasks.append({"kind": "route", "hint": h, "pos": func(): return h["start"]})
+	# (Walled hollows wait until their door opens.)
+	var shut := []
+	for h in lb.bot_hints:
+		if h.has("hollow") and not (h["gate"] as RestorationGate).is_open:
+			shut.append(h["zone"])
+	skip_zones = skip_zones + shut
 	for par in b.parasites:
 		if par.is_alive() and not par.zone_id in skip_zones and par.state != "init":
 			if not (done.has("canopy") == false and par.zone_id == "canopy") and not (par.zone_id == "mesa" and not done.has("mesa")):
@@ -1209,11 +1393,18 @@ func climb_route(b: MossBall, h: Dictionary) -> void:
 	var tops: Array = h["tops"]
 	var end: Vector3 = tops[tops.size() - 1]
 	for attempt in 3:
-		await goto(h["start"], 0.8, 45.0)
-		var ok := await hop_chain(tops, 3, h["start"])
+		var ok := false
+		if h.get("lift", false):
+			ok = await ride_column(h)
+		else:
+			await goto(h["start"], 0.8, 45.0)
+			ok = await hop_chain(tops, 3, h["start"])
 		for m in b.motes:
 			if m.is_available() and m.zone_id in h["zones"] and m.h_hint > 2.5 and m.global_position.distance_to(end) < 6.0:
 				await lunge_at(func(): return m.global_position, 12.0, true)
+		# (Off a climb that ends over a ravine: on to the far rim.)
+		if ok and h.has("exit"):
+			await hop_chain(h["exit"], 3)
 		if ok and not _route_pending(b, h):
 			mark("climbed %s" % h["route"])
 			return
