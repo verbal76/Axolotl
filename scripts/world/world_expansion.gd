@@ -539,8 +539,16 @@ static func hollow_grotto(lb: LevelBuilder) -> void:
 	var b := lb.ball
 	var R := func(dlat: float, dlon: float) -> Vector2: return _rel(6, 3, dlat, dlon)
 	b.food_weights = [0.5, 0.2, 0.3]
-	b.food_target = 6
+	b.food_target = 13
 	var land: Vector2 = R.call(0, 0)
+	# World expansion (radius 22 -> 44): the Undercut Ravine in a basalt upland (registered before
+	# anything stands on the ground).
+	var uz: Vector2 = R.call(-44, 30)
+	var uz_dir := _dir(uz)
+	b.add_plateau(uz_dir, lb.m2deg(20.0) * PI / 180.0, 3.2, 8.0)
+	var uzp := func(x: float, z: float) -> Vector3: return lb.at(uz.x, uz.y, 0.0, x, 0, z).origin
+	var ull := func(x: float, z: float) -> Vector2: return Levels._latlon(b.up_at(uzp.call(x, z)))
+	lb.ravine([ull.call(-9, 1), ull.call(-3, -1), ull.call(3, 1), ull.call(9, -1)], 3.4, 3.2, 1.2, "b7.undercut")
 	lb.zone("landing", land.x, land.y, 26)
 	var gz: Vector2 = R.call(-20, 92)
 	lb.zone("grotto", gz.x, gz.y, 28)
@@ -562,7 +570,8 @@ static func hollow_grotto(lb: LevelBuilder) -> void:
 	# crest).
 	var sh0p: Vector2 = R.call(16, 18)
 	lb.shelf(sh0p.x, sh0p.y, 1.6, 2.2, 1.1)
-	var sh1p: Vector2 = R.call(-8, 50)
+	# (Its step from the ridge's crest kept in metres on the bigger ball.)
+	var sh1p: Vector2 = R.call(-3, 50)
 	var sh1 := lb.shelf(sh1p.x, sh1p.y, 2.75, 2.2, 1.1)
 
 	# Two low ridges with a vegetation corridor between them (exposed rock on the crests).
@@ -607,7 +616,7 @@ static func hollow_grotto(lb: LevelBuilder) -> void:
 	lb.bloom(p.x, p.y)
 
 	# The far side: a large parasite in the open.
-	lb.hill(fz.x + 12, fz.y, 8.0, 1.6)
+	lb.hill(fz.x + 12, fz.y, 16.0, 2.2)
 	p = R.call(-14, -140)
 	lb.parasite(Parasite.Kind.LARGE, "far", p.x, p.y, 12.0)
 	p = R.call(6, -164)
@@ -615,11 +624,87 @@ static func hollow_grotto(lb: LevelBuilder) -> void:
 	p = R.call(-30, -120)
 	lb.bloom(p.x, p.y)
 
-	for r in [[land.x, land.y, 28], [fz.x, fz.y, 40], [vz.x, vz.y, 20]]:
+	lb.freeze_ids()
+
+	# ---- World expansion: Hollow Grotto at radius 44 -------------------------------------------
+	var cz: Vector2 = R.call(34, 150)
+	lb.zone("chamber", cz.x, cz.y, 14)
+	lb.zone("undercut", uz.x, uz.y, 18)
+	var shz: Vector2 = R.call(-10, -60)
+	lb.zone("shaft", shz.x, shz.y, 12)
+	# The Glow Chamber: the biggest grotto, glow-worms in the dark and a pearl on its high ledge.
+	# A boulder seals its door until the grotto heals (a restored opening).
+	var n_hints := lb.bot_hints.size()
+	lb.cave(cz.x, cz.y, 120.0, 10.0, "pearl")
+	var ch: Dictionary = {}
+	for i in range(n_hints, lb.bot_hints.size()):
+		if lb.bot_hints[i].has("cave"):
+			ch = lb.bot_hints[i]
+	var door: Vector3 = ch["door"]
+	var entry: Vector3 = ch["entry"]
+	var boulder := RestorationGate.new()
+	var bxf := Transform3D(MossBall.frame_at(b.up_at(door), 0.0), door.lerp(entry, 0.35) + b.up_at(door) * 0.9)
+	var bsh := CollisionShape3D.new()
+	var bsp := SphereShape3D.new()
+	bsp.radius = 1.6
+	bsh.shape = bsp
+	boulder.add_child(bsh)
+	var bmi := MeshInstance3D.new()
+	var bsm := SphereMesh.new()
+	bsm.radius = 1.6
+	bsm.height = 3.0
+	bmi.mesh = bsm
+	bmi.material_override = lb.shell_mat
+	boulder.add_child(bmi)
+	boulder.setup(b, "grotto", "retract", bxf, bxf.translated_local(Vector3(0, -2.6, 0)), 2.5)
+	boulder.set_meta("floats_by_design", "a boulder sealing a cave door")
+	lb.root.add_child(boulder)
+	lb.bot_hints.append({"hollow": true, "door": entry, "inside": ch["centre"], "zone": "chamber", "gate": boulder})
+	var chc: Vector3 = ch["centre"]
+	var chup := b.up_at(chc)
+	lb.mote_xf("chamber", Transform3D(MossBall.frame_at(chup, 0.0), chc + MossBall.frame_at(chup, 0.0).x * 5.0), 0.6)
+	lb.mote_xf("chamber", Transform3D(MossBall.frame_at(chup, 0.0), chc - MossBall.frame_at(chup, 0.0).x * 5.0), 0.6)
+	lb.parasite(Parasite.Kind.SMALL, "chamber", cz.x - 14, cz.y + 6, 4.0)
+	# The Undercut Ravine: through a basalt upland, crossed on arched stone bridges (or round).
+	for bx in [-5.5, 5.5]:
+		var ba := b.surface_point(b.up_at(uzp.call(bx, -5.4)))
+		var bb := b.surface_point(b.up_at(uzp.call(bx, 5.4)))
+		var ubr := lb.bridge(ba, bb, 1.0, 1.9, 0.8)
+		var ubl: Array = ubr.get_meta("top_line")
+		lb.crossings.append({"a": ba, "b": bb, "gate": null})
+		lb.bot_hints.append({"route": "undercut bridge %d" % int(bx), "audit": true, "start": ba, "tops": [ubl[5], ubl[10], ubl[15], bb], "zones": [], "goal": "across the Undercut"})
+	var uxf := func(x: float, z: float) -> Transform3D: return lb.at(uz.x, uz.y, 0.0, x, 0, z)
+	lb.parasite_xf(Parasite.Kind.SMALL, "undercut", uxf.call(-6, -9), 3.0)
+	lb.parasite_xf(Parasite.Kind.MEDIUM, "undercut", uxf.call(6, 9), 3.0)
+	lb.parasite_xf(Parasite.Kind.SMALL, "undercut", uxf.call(13, 0), 3.0)
+	lb.mote_xf("undercut", uxf.call(0, -8), 1.0)
+	lb.mote_xf("undercut", uxf.call(-2, 9), 1.0)
+	lb.mote_xf("undercut", uxf.call(-13, 0), 1.0)
+	lb.bloom_xf(uxf.call(8, -10))
+	# The Shaft: a tall basalt chimney; a bubble column rises beside it to its ledge.
+	var shaft := lb.shelf(shz.x, shz.y, 6.0, 2.4, 1.3)
+	var sfr := MossBall.frame_at(b.up_at(shaft.global_position), 0.0)
+	var scol := b.up_at(shaft.global_position + sfr.x * 5.2)
+	lb.bubble_column(scol, 0.9, 7.4, 5.5)
+	var stop := shaft.global_position + b.up_at(shaft.global_position) * 6.0
+	var sedge := shaft.global_position + sfr.x * 1.8 + b.up_at(shaft.global_position) * 6.0
+	lb.bot_hints.append({"route": "shaft column", "lift": true, "start": b.surface_point(scol), "tops": [b.surface_point(scol, 7.0), sedge, stop], "zones": ["shaft"], "goal": "the Shaft's ledge"})
+	lb.mote_xf("shaft", Transform3D(sfr, stop + b.up_at(stop) * 0.5), 0.4)
+	lb.parasite(Parasite.Kind.SMALL, "shaft", shz.x + 6, shz.y + 8, 4.0)
+	lb.mote("shaft", shz.x - 8, shz.y - 6)
+	# More of the landing and the far side.
+	p = R.call(-24, 12)
+	lb.mote("landing", p.x, p.y)
+	p = R.call(10, -150)
+	lb.parasite(Parasite.Kind.SMALL, "far", p.x, p.y, 5.0)
+	p = R.call(-30, -170)
+	lb.mote("far", p.x, p.y)
+
+	for r in [[land.x, land.y, 22], [fz.x, fz.y, 26], [vz.x, vz.y, 16], [uz.x, uz.y, 14], [shz.x, shz.y, 12]]:
 		lb.food_region(r[0], r[1], r[2])
-	Levels._holes(lb, 7, 601, [[_dir(gz), 16], [_dir(kz), 13], [_dir(vz), 22]])
-	var clear := Levels._veg_keep_clear(lb)
+	Levels._holes(lb, 18, 601, [[_dir(gz), 16], [_dir(kz), 13], [_dir(vz), 22], [_dir(cz), 18], [uz_dir, 14], [_dir(shz), 10]])
+	var clear := Levels._veg_keep_clear(lb, [[_dir(cz), 16.0], [_dir(shz), 8.0]])
 	# A medium corridor between the low ridges; sparse cover elsewhere (bare basalt shows).
-	Vegetation.corridor(b, "medium", _dir(R.call(8, 28)), _dir(R.call(12, 66)), 9.0, 420, 611, {"avoid": clear})
-	_short_cover(lb, 1300, 612, clear, Levels._stands(613, -0.1))
-	Vegetation.field(b, "tall", _dir(R.call(-40, 150)), 14.0, 360, 614, {"avoid": clear, "clumps": 4})
+	Vegetation.corridor(b, "medium", _dir(R.call(8, 28)), _dir(R.call(12, 66)), 6.0, 900, 611, {"avoid": clear})
+	_short_cover(lb, 4800, 612, clear, Levels._stands(613, -0.1))
+	Vegetation.field(b, "tall", _dir(R.call(-40, 150)), 14.0, 900, 614, {"avoid": clear, "clumps": 8})

@@ -106,6 +106,12 @@ func _head_in(body: Node, shrink := 0.03) -> bool:
 ## ceiling is high enough over the whole floor, and each cave is its own shape.
 func _test_caves() -> void:
 	var caves := _cave_list()
+	# (A cave whose door is sealed until its zone heals, like the Glow Chamber's boulder, is tested
+	# open: the seal has its own test.)
+	for b in g.balls:
+		for h in (b.get_meta("builder") as LevelBuilder).bot_hints:
+			if h.has("hollow") and h.has("gate") and not (h["gate"] as RestorationGate).is_open:
+				(h["gate"] as RestorationGate).open(false)
 	var arched := true
 	var clear := true
 	var dims: Array[String] = []
@@ -141,7 +147,7 @@ func _test_caves() -> void:
 		agree = agree and verts.size() == faces.size() and verts.size() > 0
 		for k in range(0, verts.size(), 97):
 			agree = agree and verts[k].is_equal_approx(faces[k])
-	t.check("cave_mouths_arched_not_rectangular", caves.size() == 7 and arched, ", ".join(dims))
+	t.check("cave_mouths_arched_not_rectangular", caves.size() == 8 and arched, ", ".join(dims))
 	# Expansion 6: each reward rests on its top ledge (a small grotto's pearl had been on the ceiling).
 	var off_ledge: Array[String] = []
 	for c in caves:
@@ -1124,7 +1130,8 @@ func _test_new_areas() -> void:
 	for bi in range(3, g.balls.size()):
 		for u in g.balls[bi].upgrades:
 			pearls += 1 if u.kind == "pearl" else 0
-	t.check("new_caves_hold_pearls", pearls == 4, "%d pearls" % pearls)
+	# (Four grottoes since Expansion 4; the world expansion added Hollow Grotto's Glow Chamber.)
+	t.check("new_caves_hold_pearls", pearls == 5, "%d pearls" % pearls)
 	# Blooms (where a continued run resumes) in the new areas have something to stand on right
 	# under their respawn point (ground or a formation's top, never a formation's flank), so the
 	# axolotl respawns standing where he is placed.
@@ -5127,7 +5134,7 @@ func _test_upgrades() -> void:
 				await t.seconds(0.4)
 				ok = ok and u.taken and p.health == p.max_health and p.max_health == 6
 				pearls += 1
-	t.check("pearls_refill_health_not_max", pearls == 4 and ok, "%d pearls, max %d" % [pearls, p.max_health])
+	t.check("pearls_refill_health_not_max", pearls == 5 and ok, "%d pearls, max %d" % [pearls, p.max_health])
 
 
 func _test_ui() -> void:

@@ -10,7 +10,7 @@ class_name Levels
 ## radius as they are rebuilt and still keep 35 m or more of water between any two.)
 const CENTERS := [Vector3(0, 0, 0), Vector3(182, 21, -49), Vector3(-70, 28, -168),
 		Vector3(-14, 35, 154), Vector3(210, -28, 84), Vector3(-224, 42, -84), Vector3(-182, 0, 98)]
-const RADII := [48.0, 56.0, 60.0, 36.0, 52.0, 32.0, 22.0]
+const RADII := [48.0, 56.0, 60.0, 36.0, 52.0, 32.0, 44.0]
 const NAMES := ["Mossy Meadow", "Current Hollows", "Giant Stems", "Terrace Steps", "Reed Canyon", "Canopy Spire", "Hollow Grotto"]
 ## Vortex links [from, to]: the original chain first, then the branches. A link opens when its
 ## "from" ball is 70% restored and then works both ways.
