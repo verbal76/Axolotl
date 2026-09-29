@@ -40,6 +40,37 @@ func run(runner) -> void:
 		t.check("debug_reached_ball1", p.ball == g.balls[0], "")
 		_report()
 		return
+	if Settings.test_args.get("start", "") == "vortexrace":
+		# Regression (backtrack_to_ball1, 2026-09-29): the ride through a vortex starts while the
+		# walk to its mouth is busy elsewhere (here: forced from 30 m off), so the walk never sees
+		# him at the mouth. He must still end up on the far ball and stay there.
+		g.start_play(true)
+		var rb := g.balls[1]
+		var rv: Vortex = g.balls[0].vortex_out
+		rv.connected = true
+		var rm: Vector3 = rv.mouth_pos(true)
+		var ru := rb.up_at(rm)
+		var off := MossBall.frame_at(ru, 0).x * 30.0
+		p.place(rb, rb.surface_point(rb.up_at(rm + off), 0.3), -off)
+		g.audio.set_ball(1, false)
+		await wait(1.0)
+		_test_busy = 12.0
+		var walk := {"done": false, "ok": false}
+		var go := func():
+			walk["ok"] = await goto(func(): return rv.mouth_pos(true), 0.3, 90.0, rv)
+			walk["done"] = true
+		go.call()
+		await wait(1.0)
+		g._start_cinematic("travel", {"v": rv, "reverse": true})
+		var waited := 0.0
+		while not walk["done"] and waited < 95.0:
+			await wait(0.5)
+			waited += 0.5
+		await wait(15.0)
+		t.check("vortexrace_walk_ends_with_the_ride", walk["done"] and walk["ok"] and waited < 25.0, "done %s ok %s after %.1f s" % [walk["done"], walk["ok"], waited])
+		t.check("vortexrace_stays_on_far_ball", p.ball == g.balls[0], "on ball %d" % (p.ball.index + 1))
+		_report()
+		return
 	if Settings.test_args.get("start", "") == "b2vortex":
 		# Debug scenario: from moss ball #2's cave entrance to the vortex toward #3.
 		g.start_play(true)
@@ -669,12 +700,19 @@ func goto(target: Variant, radius := 0.9, timeout := 45.0, allow_vortex: Vortex 
 		await goto(inside["entry"], 0.8, 10.0, null, false)
 		_in_cave_escape = false
 	var el := 0.0
+	var ball0 := p.ball
 	var check_t := 0.0
 	var last := p.global_position
 	var escalate := 0
 	var side := 1.0
 	var falls0 := int(g.stats.get("ravine_falls", 0))
 	while el < timeout:
+		# Walking into a vortex that is allowed ends the walk once its ride starts (or has already
+		# happened inside a fight, a meal or a detour below): chasing the far mouth after the ride
+		# would walk him out of the arrival pool and straight back in.
+		if allow_vortex != null and (g.cinematic == "travel" or p.ball != ball0):
+			set_stick(Vector2.ZERO)
+			return true
 		var tgt: Vector3 = target.call() if target is Callable else target
 		var flat := tangent_to(tgt)
 		# (Off a crossing and put back on a rim, maybe not at its end: that leg is over.)
@@ -698,6 +736,11 @@ func goto(target: Variant, radius := 0.9, timeout := 45.0, allow_vortex: Vortex 
 		var ct := _critter_threat()
 		if ct:
 			await handle_critter(ct)
+		if _test_busy > 0.0:
+			# (Regression scenarios: stand in for a fight, a meal or a detour that takes a while.)
+			var busy := _test_busy
+			_test_busy = 0.0
+			await wait(busy)
 		if p.health <= 1 and p.max_health > 1 and sim_time - _last_eat_try > 12.0:
 			# (At most every 12 s, and counted against the timeout: with no food in reach this
 			# once stalled a goto for good.)
@@ -765,6 +808,8 @@ func goto(target: Variant, radius := 0.9, timeout := 45.0, allow_vortex: Vortex 
 
 var _planning := false
 var _crossing := false
+## A one-off busy spell inside the next walk's loop (the vortexrace regression).
+var _test_busy := 0.0
 
 
 ## Walks the planned legs to `tgt` (if any are needed).
@@ -1738,7 +1783,7 @@ func enter_vortex(v: Vortex, from_b: bool) -> void:
 		return
 	mark("heading into vortex %d->%d" % [mb.index + 1, dest.index + 1])
 	await goto(func(): return v.mouth_pos(from_b), 0.3, 90.0, v)
-	for i in 60 * 10:
+	for i in 60 * 20:
 		await tick()
 		if p.ball == dest and g.cinematic == "":
 			break
