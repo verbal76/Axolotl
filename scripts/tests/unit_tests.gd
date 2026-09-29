@@ -4688,9 +4688,25 @@ func _quiet_spot(bi: int, clear := 13.0) -> Vector3:
 			for m in b.motes:
 				if m.global_position.distance_to(pos) < 6.0:
 					busy = true
-			if not busy:
+			if not busy and _open_around(b, pos):
 				return pos
 	return Vector3.INF
+
+
+## Open water round `pos`: nothing solid (terrain, platforms, leaves, gates) within 7 m at body
+## height, nor overhead. (Earlier tests heal worlds, raising gates and bridges over spots that were
+## clear at the start.)
+func _open_around(b: MossBall, pos: Vector3) -> bool:
+	var up := b.up_at(pos)
+	var space := g.get_world_3d().direct_space_state
+	var fr := MossBall.frame_at(up, 0.0)
+	for h in [0.8, 1.6]:
+		var o: Vector3 = pos + up * h
+		for k in 12:
+			var dir := (fr.z.rotated(up, TAU * k / 12.0)).normalized()
+			if not space.intersect_ray(PhysicsRayQueryParameters3D.create(o, o + dir * 7.0, 1 | 2 | 8)).is_empty():
+				return false
+	return space.intersect_ray(PhysicsRayQueryParameters3D.create(pos + up * 0.3, pos + up * 8.0, 1 | 2 | 8)).is_empty()
 
 
 func _clear_practice() -> void:

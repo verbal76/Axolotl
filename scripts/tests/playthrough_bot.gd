@@ -120,7 +120,7 @@ func run(runner) -> void:
 		g.start_play(true)
 		for b in g.balls:
 			for c in b.critters:
-				if c is CaveEel:
+				if c is CaveEel and str(Settings.test_args.get("eel", (c as CaveEel).threat_id)) in (c as CaveEel).threat_id:
 					# Outside, beyond the eel's cave (the 100% phase arrives from elsewhere).
 					var ch: Dictionary = {}
 					for h in (b.get_meta("builder") as LevelBuilder).bot_hints:
@@ -209,6 +209,12 @@ func run(runner) -> void:
 		var t0 := sim_time
 		await clear_ball(cb.index, 1.01, [])
 		t.check("debug_clear_ball%d" % (cb.index + 1), cb.completed, "%.2f in %.0f s, deaths %d, ravine falls %d" % [cb.restoration, sim_time - t0, int(g.stats["deaths"]), int(g.stats.get("ravine_falls", 0))])
+		# (--then_eels: afterwards, the 100% eel tactic on each of its cave eels still alive.)
+		if Settings.test_args.has("then_eels"):
+			for c in cb.critters:
+				if c is CaveEel and not (c as CaveEel).defeated:
+					await _fight_eel(c as CaveEel)
+					t.check("debug_eel_%s" % (c as CaveEel).threat_id, (c as CaveEel).defeated, "")
 		_report()
 		return
 	if Settings.test_args.get("start", "") == "meadow":
@@ -432,9 +438,32 @@ func _fight_eel(e: CaveEel) -> void:
 			return
 		var front := b.surface_point(b.up_at(e.mouth + e.normal * (CaveEel.STRIKE_REACH + 0.45)), 0.1)
 		if not cave_h.is_empty() and (_cave_of(p.global_position) != cave_h or height_of(p.global_position) > 1.2):
-			await goto(cave_h["entry"], 0.8, 60.0)
-			await goto(cave_h["door"], 0.8, 15.0)
+			var ok_e := await goto(cave_h["entry"], 0.8, 60.0)
+			var at_e := p.global_position.distance_to(cave_h["entry"])
+			var ok_d := await goto(cave_h["door"], 0.8, 15.0)
+			if round_ == 0:
+				var dr: Vector3 = cave_h["door"]
+				var du := b.up_at(dr)
+				var ex := []
+				var from := dr + du * 9.0
+				for k in 5:
+					var qq := PhysicsRayQueryParameters3D.create(from, dr - du * 2.0, 0xFFFFFFFF, ex)
+					var hh := p.get_world_3d().direct_space_state.intersect_ray(qq)
+					if hh.is_empty():
+						break
+					var col: Object = hh["collider"]
+					t.log_line("    over the door: %s (%s, parent %s) at alt %.2f" % [col, col.get_class(), (col as Node).get_parent().name if col is Node else "", b.altitude(hh["position"])])
+					ex.append(hh["rid"])
+				t.log_line("    him: %s alt %.2f floor %s" % [str(p.global_position.round()), b.altitude(p.global_position), p._floor_collider()])
+				t.log_line("  eel %s grotto: entry %s reached %s (%.1f m off), door %s reached %s (%.1f m off, %s), him alt %.2f, same cave as front %s" % [e.threat_id, str((cave_h["entry"] as Vector3).round()), ok_e, at_e,
+						str((cave_h["door"] as Vector3).round()), ok_d, p.global_position.distance_to(cave_h["door"]), goto_info, b.altitude(p.global_position), _cave_of(front) == cave_h])
+		# (Inside its grotto already: straight to the spot. The route planner would take him out and
+		# over the grotto's roof toward a point that is under it.)
+		var direct := not cave_h.is_empty() and _cave_of(p.global_position) == cave_h
+		var was_planning := _planning
+		_planning = _planning or direct
 		await goto(front, 0.4, 25.0, null, false)
+		_planning = was_planning
 		set_stick(Vector2.ZERO)
 		var seen := ""
 		var most := 0.0
@@ -447,6 +476,11 @@ func _fight_eel(e: CaveEel) -> void:
 				await press("swipe")
 				break
 		t.log_line("eel %s round %d: at %.2f m from the mouth (front %.2f), states %s, out %.2f of %.2f, hp %d" % [e.threat_id, round_, p.global_position.distance_to(e.mouth), p.global_position.distance_to(front), seen, most, e.reach, e.hp])
+		if round_ == 0 and p.global_position.distance_to(front) > 1.5:
+			var q := PhysicsRayQueryParameters3D.create(p.body_center(), front + b.up_at(front) * 0.3, 1)
+			var hit := p.get_world_3d().direct_space_state.intersect_ray(q)
+			t.log_line("  eel %s: front %s alt %.2f carve %.2f, cave of front %s, of him %s; mouth alt %.2f; blocked %s at %s; goto %s" % [e.threat_id, str(front.round()), b.altitude(front), b.ravine_carve(b.up_at(front)),
+					str(_cave_of(front).get("centre", "none")), str(_cave_of(p.global_position).get("centre", "none")), b.altitude(e.mouth), not hit.is_empty(), str(hit.get("position", Vector3.ZERO)), goto_info])
 		await wait(1.0)
 
 
