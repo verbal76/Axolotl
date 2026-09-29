@@ -457,6 +457,18 @@ phone-verified.
 | AQ-16 | Presentation never mutates run, completion, RNG or saves | I+V | `Game.state = "aquarium"`, snapshot/restore, gameplay actors pause | `aquarium_run_untouched`, `aquarium_clock_never_counts`, `aquarium_world_stands_still`, `aquarium_no_leaks` |
 | AQ-17 | One dev OTA, no APK | I+V (published **dev-000029**) / needs phone | game layer only; runtime r5 unchanged (`ota_runtime.py --check`); game 0.1.0, save schema 1, catalog v4 (348); no native change, no APK | local gates on `fc08131` (the game content published): unit suite 446/446 with fresh user data; playthroughs seed 7 and 4242: 23/23 each (ALL CLEAR at 3,661 s / 3,039 s, 100% by play at 5,446 s / 4,845 s, 2 deaths each); version drift passes; OTA end-to-end 42/42 (startup usable at 8.27 s with a hanging channel; offline seed 4242 to 100%). Found and fixed in qualification: a parasite could be left buried inside the terrain (World 7 stuck at 97%); startup ~10.4 → ~8 s (the colours page's pattern swatches drawn off the main thread; the gravel floor's heights computed once); Tier-2 and aquarium test isolation; the bot's eel tactic inside grottos. Perf vs dev-000028 (software renderer, proxy): frame time median +9% (bedroom hidden from inside the water when the glass passes <8% of it), video memory 124.6 → 146.5 MB, RAM +17 MB. Published **dev-000029** (OTA publish #29, source `1ad34ea`; PCK `a4c1f12a…2cdda79`, 10,870,736 bytes, 38 baked caches). Verified from the public URLs: signature (pinned key), hash, size, inspector and the new sources; 116/116 checks run from the pack; a b22 client finds it compatible and stages it. Build & Verify #39 green; no APK |
 
+## TH — Treasure Hunt postgame mode (owner brief, 2026-09-29)
+
+One dev OTA, no APK. Design: `docs/TREASURE_HUNT.md`. **Status: held, not published.** The first
+qualification of `8c12b15` failed seed 4242 twice. Treasure Hunt stays unpublished until one final
+candidate passes every gate.
+
+| ID | Requirement | Status | Evidence |
+|---|---|---|---|
+| TH-B1 | Seed 4242 `backtrack_to_ball1` failure | Root-caused (playthrough bot: a walk into a vortex did not end with the ride) and fixed in `d7619e1`; game behaviour correct | `docs/evidence/2026-09-29-release-blockers/`; regression `--start=vortexrace` (fails without the fix, passes with it) |
+| TH-B2 | World 7 eel-grotto freeze (seed 4242; also a dev-000029-era run) | **Not a player softlock.** Normal input escapes everywhere near the spot (181 probe points). Root cause is the playthrough bot: on 1 hp it walked straight at food on the far side of the grotto wall, with no progress check. Fixed (food needs a clear line; the food walk gives up without progress) | Same folder; reproduction `--start=eels --eel=b7.eel.0 --hp=2` freezes before the fix and wins after |
+| TH-O1 | Debug scenario `--start=eels`: `b5.eel.0` (a missed fight) and `b7.eel.2` (routed over the grotto roof) | Open, pre-existing (identical on dev-000029), not a release gate | `eels_all_dev29.log`, `eels_all_before_food_fix.log` |
+
 ## Precedence notes
 
 - The reconciliation prompt's floor list repeats two items that the owner changed earlier today: "diegetic

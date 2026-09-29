@@ -40,6 +40,60 @@ func run(runner) -> void:
 		t.check("debug_reached_ball1", p.ball == g.balls[0], "")
 		_report()
 		return
+	if Settings.test_args.get("start", "") == "trapprobe":
+		# Debug: can he be held somewhere near --at=x,y,z on --ball=N? Every grid point within
+		# --r m: dropped there, then the stick held each way for 1 s and a jump; points where he
+		# moves under 0.5 m whichever way he is pushed are reported.
+		g.start_play(true)
+		var tb := g.balls[int(Settings.test_args.get("ball", "7")) - 1]
+		var at_s := str(Settings.test_args.get("at", "-172,-5,55")).split(",")
+		var c0 := Vector3(float(at_s[0]), float(at_s[1]), float(at_s[2]))
+		var rr := float(Settings.test_args.get("r", "2.5"))
+		var stp := float(Settings.test_args.get("step", "0.4"))
+		var cu := tb.up_at(c0)
+		var cf := MossBall.frame_at(cu, 0.0)
+		g.audio.set_ball(tb.index, false)
+		p.invuln_t = 99999.0
+		var trapped := 0
+		var n := 0
+		var x := -rr
+		while x <= rr + 0.001:
+			var z := -rr
+			while z <= rr + 0.001:
+				if Vector2(x, z).length() <= rr:
+					var q := tb.surface_point(tb.up_at(c0 + cf.x * x + cf.z * z), 0.35)
+					p.place(tb, q, cf.z)
+					p.velocity = Vector3.ZERO
+					await wait(0.4)
+					var start := p.global_position
+					var fl: Object = p._floor_collider()
+					var most := 0.0
+					var ndir := int(Settings.test_args.get("dirs", "4"))
+					for k in ndir:
+						p.place(tb, start, cf.z)
+						p.velocity = Vector3.ZERO
+						await tick()
+						set_stick(stick_for(cf.z.rotated(cu, TAU * k / ndir)))
+						await wait(1.0)
+						most = maxf(most, p.global_position.distance_to(start))
+					set_stick(Vector2.ZERO)
+					p.place(tb, start, cf.z)
+					p.velocity = Vector3.ZERO
+					await tick()
+					await press("jump")
+					await wait(1.0)
+					most = maxf(most, p.global_position.distance_to(start))
+					n += 1
+					if Settings.test_args.has("verbose"):
+						t.log_line("probe point %s alt %.2f floor %s moved at most %.2f" % [str(start), tb.altitude(start), fl, most])
+					if most < 0.5:
+						trapped += 1
+						t.log_line("TRAP at %s (grid %.1f,%.1f) alt %.2f floor %s moved at most %.2f" % [str(start), x, z, tb.altitude(start), fl, most])
+				z += stp
+			x += stp
+		t.log_line("TRAPPROBE %d of %d points held" % [trapped, n])
+		_report()
+		return
 	if Settings.test_args.get("start", "") == "vortexrace":
 		# Regression (backtrack_to_ball1, 2026-09-29): the ride through a vortex starts while the
 		# walk to its mouth is busy elsewhere (here: forced from 30 m off), so the walk never sees
@@ -160,6 +214,10 @@ func run(runner) -> void:
 					var out: Vector3 = ch["entry"] + ((ch["entry"] as Vector3) - (ch["door"] as Vector3)).normalized() * 9.0
 					p.place(b, b.surface_point(b.up_at(out), 0.3), Vector3.FORWARD)
 					g.audio.set_ball(b.index, false)
+					if Settings.test_args.has("hp"):
+						# (The 100% phase can reach an eel low on health, as the release run did.)
+						p.max_health = maxi(p.max_health, 5)
+						p.health = int(Settings.test_args["hp"])
 					await wait(1.0)
 					await _fight_eel(c as CaveEel)
 					t.check("debug_eel_%s" % (c as CaveEel).threat_id, (c as CaveEel).defeated, "")
@@ -580,6 +638,9 @@ func tick() -> void:
 	await t.frames(1)
 	sim_time += 1.0 / 60.0
 	_hb += 1.0 / 60.0
+	_trace_n += 1
+	if Settings.test_args.has("trace_input") and _trace_n % 60 == 0:
+		t.log_line("  input %.0fs: stick %s controls %s game %s state %s vel %.2f grounded %s floor %s pos %s goto %s stack %s" % [sim_time, str(_stick), p.controls_enabled, g.state, p.state, p.velocity.length(), p.grounded, p._floor_collider(), str(p.global_position.snapped(Vector3.ONE * 0.01)), goto_info, str(get_stack().slice(1, 4).map(func(f): return "%s:%d" % [f["function"], f["line"]]))])
 	var now := Time.get_ticks_usec()
 	if _last_us > 0:
 		var ms := (now - _last_us) / 1000.0
@@ -604,6 +665,7 @@ func tick() -> void:
 		t.log_line("heartbeat %.0fs ball %d h %.1f act '%s' R %.2f %.2f %.2f hp %d cine '%s' state %s %s" % [sim_time, p.ball.index + 1,
 				(p.global_position - p.ball.global_position).length() - p.ball.radius, activity, g.balls[0].restoration,
 				g.balls[1].restoration, g.balls[2].restoration, p.health, g.cinematic, p.state, goto_info])
+
 		if Settings.test_args.has("trace_stuck"):
 			var near: Parasite = null
 			for par in p.ball.parasites:
@@ -808,6 +870,7 @@ func goto(target: Variant, radius := 0.9, timeout := 45.0, allow_vortex: Vortex 
 
 var _planning := false
 var _crossing := false
+var _trace_n := 0
 ## A one-off busy spell inside the next walk's loop (the vortexrace regression).
 var _test_busy := 0.0
 
@@ -1321,6 +1384,12 @@ func fight_parasite(par: Parasite, timeout := 25.0) -> bool:
 	return not par.is_alive()
 
 
+func _clear_line(a: Vector3, b: Vector3) -> bool:
+	var q := PhysicsRayQueryParameters3D.create(a, b, 1)
+	q.exclude = [p.get_rid()]
+	return p.get_world_3d().direct_space_state.intersect_ray(q).is_empty()
+
+
 func eat_nearby(timeout := 10.0) -> bool:
 	var el := 0.0
 	while el < timeout:
@@ -1329,7 +1398,9 @@ func eat_nearby(timeout := 10.0) -> bool:
 		for f in p.ball.foods:
 			if is_instance_valid(f) and f.is_catchable():
 				var d: float = f.catch_point().distance_to(p.global_position)
-				if d < bd:
+				# Only food he can walk straight to (lunge_at goes in a straight line): not food on
+				# the far side of a cave wall or a mound.
+				if d < bd and _clear_line(p.body_center(), f.catch_point()):
 					bd = d
 					best = f
 		if best == null:
@@ -1346,9 +1417,13 @@ func eat_nearby(timeout := 10.0) -> bool:
 ## Approach something small and catch it with the lunge (jumping first if it's higher).
 func lunge_at(target: Callable, timeout := 20.0, stay := false) -> bool:
 	var el := 0.0
+	if Settings.test_args.has("trace_input"):
+		t.log_line("  lunge_at %s from %s (%.1f m), timeout %.0f" % [str((target.call() as Vector3).snapped(Vector3.ONE * 0.1)), str(p.global_position.snapped(Vector3.ONE * 0.1)), (target.call() as Vector3).distance_to(p.global_position), timeout])
 	var h0 := p.health
 	var start_motes: int = g.stats["motes"]
 	var start_eat: int = g.stats["eaten"][0] + g.stats["eaten"][1] + g.stats["eaten"][2]
+	var prog_t := 0.0
+	var prog_d := INF
 	while el < timeout:
 		var tgt: Vector3 = target.call()
 		var flat := tangent_to(tgt)
@@ -1360,6 +1435,16 @@ func lunge_at(target: Callable, timeout := 20.0, stay := false) -> bool:
 				set_stick(stick_for(flat))
 			await tick()
 			el += 1.0 / 60.0
+			# Walking straight at it and getting no nearer (a wall, a mound, a cave's side): give
+			# up rather than push into it for the rest of the timeout (World 7 eel grotto, 2026-09-29).
+			prog_t += 1.0 / 60.0
+			if prog_t >= 1.5:
+				if not stay and prog_d - dist < 0.3:
+					stuck_events += 1
+					set_stick(Vector2.ZERO)
+					return false
+				prog_t = 0.0
+				prog_d = dist
 			continue
 		# Line up.
 		for k in 4:
