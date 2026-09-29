@@ -742,6 +742,17 @@ repository. Do not name, open or use any other game repository in Mote developme
 - **Expansion list:** all six items are done (dev-000018, dev-000019, dev-000020, dev-000021/22, dev-000023, dev-000024). Do not begin Expansion 7 unless the owner asks for it.
 - **Next task:** the owner's phone checks (§16), including items 15 (Expansion 6), 16 (dev-000025) and 17 (the world expansion, dev-000028).
 - **World expansion:** done and shipped as one OTA (dev-000028). Per the brief's stop condition: no further expansion, no eighth moss ball, no RPG systems and no new polish pass unless the owner asks.
+- **Master held package (ledger AQ):**
+  - Contents:
+    - Tier 2 (Water Cannon, Bubble Blast, Gill Rush) at shrines in Worlds 3, 5 and 7;
+    - the pufferfish repair;
+    - the aquarium experiences (Room, Inspection, Live Tank, Swim Mode) from the title and the pause menu;
+    - 13 ambient fish, including the owner's 3 bala sharks;
+    - the rebuilt gravel;
+    - the late-80s / early-90s bedroom.
+  - Docs: `docs/TIER2.md` and `docs/AQUARIUM.md`.
+  - Shipped as one dev OTA; its number and identities are recorded in §0 and §11 by the documentation commit that follows the release.
+  - Per the brief: STOP after it; start nothing new unless the owner asks.
 - **After that:** continue from the owner's feedback. Game-layer changes reach b22 by OTA on push
   (that push is also the first OTA a b22 phone downloads). Native changes need `--bump` and a new APK.
 
