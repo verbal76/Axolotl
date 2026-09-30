@@ -89,7 +89,17 @@ room's materials have their own warm ambient, so the room stays warm however mur
 
 **Light.** A warm ceiling light and a cool dusk window light (`aquarium.gd`), the desk lamp, the
 bedside lamp and the TV's glow (`Bedroom`), and the cool light the tank throws on things near it
-(`tank_spill`): all on the room layer only, none casting shadows.
+(`tank_spill`). The room's surfaces are unshaded and draw all six themselves, with the engine's omni
+falloff (`Bedroom.LIT_SHADER`, `add_scene_lights`). On the Mobile renderer a light's layer mask is
+only tested per pixel, so as scene lights these cost the whole screen's worth of lighting work: in
+the room view the bedroom went from about 107 ms to 22 ms a frame on the software test renderer, and
+the three lamps no longer touch the tank at all. The ceiling, window and tank lights stay as scene
+lights (room layer, unshadowed) for the tank hardware and the passing legs and hand.
+
+**Performance** (software test renderer, so relative only; warm, like for like against dev-000031
+with `--only=perfaqw`): Swim +3–10%; Inspection and Live Tank +11–26%; Room about +35%; play views
+unchanged. What remains is the fish and plants now visible from the room, which is the point of the
+package. The first entry into the aquarium also builds the far view and compiles its shaders once.
 
 **When it is built.** About 160 ms on a desktop, so never during startup: once, 0.6 s after the
 title is usable (`Game._build_room_soon`), or on first need (`Aquarium.ensure_room`). The unit test
@@ -149,8 +159,9 @@ all the player's own. A cosmetic stand-in of Gill idles and wanders a little whe
   A clean tank is clear glass.
 - **Far view of the worlds.** Gameplay culls vegetation beyond 55–70 units, which is every plant
   when seen from the room. Instead of raising those ranges, each moss ball builds a thinned copy of
-  its own vegetation (every 5th plant, 1.7× larger, the same meshes and materials, one MultiMesh
-  per mesh) when an outside view opens, and frees it when the view closes
+  its own vegetation when an outside view opens: the same meshes and materials, 1.7× larger, one
+  MultiMesh per mesh, leaving out plants under 0.45 m and thinned evenly to 15,000 triangles per
+  world (`MossBall.FAR_TRIS`),, and frees it when the view closes
   (`MossBall.set_far_view`). So the tank from the room shows each world's real plant cover and
   health, and play pays nothing for it.
 
