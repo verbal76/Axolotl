@@ -914,6 +914,17 @@ repository. Do not name, open or use any other game repository in Mote developme
      one-line purpose from the publishing commit and fall back to today's title. Make it in a
      publishing commit, never in a docs-only one.
 
+6. **Blocked items do not stop the queue** (owner, 2026-09-30 evening). If a queued item fails in a way
+   that genuinely needs the owner (a product or feel decision, phone-only evidence, a contradiction), record
+   it in the ledger (what failed, the evidence, the exact question) and move on to the next staged item.
+   - Never publish a red, unqualified or unverified candidate; a blocked item stays unpublished.
+   - Anything Claude can fix itself is fixed, not skipped.
+   - If a later item depends on the blocked one, carry the dependency with it: build the needed piece
+     inside the later item (for example Hard Mode builds its own returners if 00041 is blocked), or
+     skip that item too and record why.
+   - A skipped item keeps its place for when the owner answers; release numbers are assigned at
+     publish, so the names shift.
+
 ### Work queue (owner order, 2026-09-29)
 
 1. ~~dev-000031 (Treasure Hunt fix)~~: published and verified.
