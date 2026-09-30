@@ -6675,7 +6675,10 @@ func _test_treasure_play() -> void:
 		if await _lunge_at_current(tp):
 			found += 1
 		else:
+			# (Everything needed to replay the miss: the hunt's seed and the target as saved.)
 			misses.append(k)
+			t.log_line("TREASURE MISS seed %d target %s player %s near_miss %.2f" % [int(st["seed"]), JSON.stringify(TreasureHunt.current(st)),
+					str(p.global_position), tp.near_miss])
 			break
 		if i < 12:
 			await _until(func(): return not tp.celebrating, 6.0)
