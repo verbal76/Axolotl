@@ -51,10 +51,6 @@ const ATLAS := {
 	"tv_bezel": Rect2(1320, 888, 140, 128),
 }
 const UV4 := [Vector2(0, 1), Vector2(1, 1), Vector2(1, 0), Vector2(0, 0)]
-const Q_KEEP := [0, 1, 2, 0, 2, 3]
-const Q_FLIP := [0, 2, 1, 0, 3, 2]
-const T_KEEP := [0, 1, 2]
-const T_FLIP := [0, 2, 1]
 
 ## Lit room surfaces: albedo from a texture times the vertex colour (which also carries the baked
 ## occlusion), no world ambient (it is tinted by the water), a warm hemisphere ambient of its own.
@@ -90,6 +86,7 @@ void fragment() {
 
 ## One material's merged geometry (non-indexed triangles).
 class Buf:
+	var i := PackedInt32Array()
 	var v := PackedVector3Array()
 	var n := PackedVector3Array()
 	var c := PackedColorArray()
@@ -113,15 +110,12 @@ var view_pos := Vector3(330, 200, 1250)
 var view_look := Vector3(-10, -40, 0)
 ## Total vertices built (for the performance notes in docs/AQUARIUM.md).
 var vertex_count := 0
-## The worker-thread task generating the room's geometry (-1 once committed).
-var _task := -1
 var _tmin := Vector3.ZERO
 var _tmax := Vector3.ZERO
 
 
-## Builds the room. Its lamps are added at once; its geometry (tens of thousands of vertices of
-## GDScript maths) is generated on a worker thread and becomes meshes on the first frame after it
-## is done (finish() forces that now), so it never holds up startup.
+## Builds the room, complete, on the calling thread: its lamps, then its geometry merged into one
+## mesh per material.
 func build(p_floor_y: float, layer: int, tank_min: Vector3, tank_max: Vector3) -> void:
 	floor_y = p_floor_y
 	y1 = floor_y + 2300.0
@@ -131,34 +125,11 @@ func build(p_floor_y: float, layer: int, tank_min: Vector3, tank_max: Vector3) -
 	_tmax = tank_max
 	name = "Bedroom"
 	_lights()
-	_task = WorkerThreadPool.add_task(_generate, false, "build the bedroom")
-	set_process(true)
-
-
-## Waits for the room's geometry and turns it into meshes (if it is not already).
-func finish() -> void:
-	if _task < 0:
-		return
-	WorkerThreadPool.wait_for_task_completion(_task)
-	_task = -1
+	_generate()
 	_commit()
-	set_process(false)
 
 
-func _process(_dt: float) -> void:
-	if _task >= 0 and WorkerThreadPool.is_task_completed(_task):
-		finish()
-	elif _task < 0:
-		set_process(false)
-
-
-func _exit_tree() -> void:
-	if _task >= 0:
-		WorkerThreadPool.wait_for_task_completion(_task)
-		_task = -1
-
-
-## All the geometry (pure data: no nodes, safe off the main thread).
+## All the geometry (pure data: no nodes).
 func _generate() -> void:
 	_tank_corner(_tmin, _tmax)
 	_dresser_things(_tmin, _tmax)
@@ -229,6 +200,7 @@ func _commit() -> void:
 		arr[Mesh.ARRAY_NORMAL] = b.n
 		arr[Mesh.ARRAY_COLOR] = b.c
 		arr[Mesh.ARRAY_TEX_UV] = b.t
+		arr[Mesh.ARRAY_INDEX] = b.i
 		var am := ArrayMesh.new()
 		am.add_surface_from_arrays(Mesh.PRIMITIVE_TRIANGLES, arr)
 		var mi := MeshInstance3D.new()
@@ -291,23 +263,37 @@ func _emit(key: String, reg: String, ps: Array, ns: Array, uvs: Array, col: Colo
 	var p2: Vector3 = ps[2]
 	var gn := (p1 - p0).cross(p2 - p0)
 	var nsum: Vector3 = ns[0] + ns[1] + ns[2]
-	var quad := ps.size() == 4
-	if quad:
+	var np := ps.size()
+	if np == 4:
 		var p3: Vector3 = ps[3]
 		gn += (p2 - p0).cross(p3 - p0)
 		nsum += ns[3]
-	# (Godot's front faces wind clockwise.)
-	var idx: Array = (Q_FLIP if quad else T_FLIP) if gn.dot(nsum) > 0.0 else (Q_KEEP if quad else T_KEEP)
-	var glow := key == "glow"
-	var cols := []
-	for i in ps.size():
-		var k := 1.0 if glow else _occ(ps[i])
-		cols.append(Color(col.r * k, col.g * k, col.b * k, col.a))
-	for i in idx:
-		b.v.append(ps[i])
+	var shade := key != "glow" and _ao_mode >= 0
+	var base := b.v.size()
+	for i in np:
+		var p: Vector3 = ps[i]
+		var k := _occ(p) if shade else 1.0
+		b.v.append(p)
 		b.n.append(ns[i])
-		b.c.append(cols[i])
+		b.c.append(Color(col.r * k, col.g * k, col.b * k, col.a))
 		b.t.append(r.position + (uvs[i] as Vector2) * r.size if atlas else uvs[i])
+	# (Godot's front faces wind clockwise.)
+	if gn.dot(nsum) > 0.0:
+		b.i.append(base)
+		b.i.append(base + 2)
+		b.i.append(base + 1)
+		if np == 4:
+			b.i.append(base)
+			b.i.append(base + 3)
+			b.i.append(base + 2)
+	else:
+		b.i.append(base)
+		b.i.append(base + 1)
+		b.i.append(base + 2)
+		if np == 4:
+			b.i.append(base)
+			b.i.append(base + 2)
+			b.i.append(base + 3)
 
 
 ## A flat quad a-b-c-d, facing the side it is counter-clockwise from.
@@ -363,108 +349,143 @@ func _rb_uv(p: Vector3, i: int, size: Vector3, tile: float) -> Vector2:
 	return Vector2(u, v)
 
 
+## Appends one vertex to buffer `b` (occlusion, atlas region `r` when `atlas`); returns its index.
+func _put(b: Buf, p: Vector3, n: Vector3, col: Color, uv: Vector2, atlas: bool, r: Rect2, shade: bool) -> int:
+	var k := _occ(p) if shade else 1.0
+	b.v.append(p)
+	b.n.append(n)
+	b.c.append(Color(col.r * k, col.g * k, col.b * k, col.a))
+	b.t.append(r.position + uv * r.size if atlas else uv)
+	return b.v.size() - 1
+
+
+## A triangle of existing vertices, wound to face the way their normals point.
+func _tri(b: Buf, i0: int, i1: int, i2: int) -> void:
+	var p0 := b.v[i0]
+	if (b.v[i1] - p0).cross(b.v[i2] - p0).dot(b.n[i0] + b.n[i1] + b.n[i2]) > 0.0:
+		b.i.append(i0)
+		b.i.append(i2)
+		b.i.append(i1)
+	else:
+		b.i.append(i0)
+		b.i.append(i1)
+		b.i.append(i2)
+
+
+## The buffer, atlas flag, atlas region and shading flag for material `key` and region `reg`.
+func _target(key: String, reg: String) -> Array:
+	var atlas := key == "vc" or key == "atlas" or key == "gloss" or key == "glow"
+	var r := Rect2(0, 0, 1, 1)
+	if atlas:
+		var rk := reg if reg != "" else "white"
+		if not _regions.has(rk):
+			_regions[rk] = _region(rk)
+		r = _regions[rk]
+	return [_st(key), atlas, r, key != "glow" and _ao_mode >= 0]
+
+
 ## A bevelled box: flat faces joined by chamfers whose normals blend between the faces, so its
-## edges catch the light like a rounded edge. `bev` is the chamfer width.
+## edges catch the light like a rounded edge. `bev` is the chamfer width. (Every vertex is a corner
+## of one of the six inset faces, with that face's normal: 24 vertices, 44 triangles.)
 func rbox(key: String, size: Vector3, xf: Transform3D, col: Color, bev := 8.0, tile := 0.0, reg := "") -> void:
 	var h := size * 0.5
-	var b := minf(bev, minf(h.x, minf(h.y, h.z)) * 0.8)
+	var bv := minf(bev, minf(h.x, minf(h.y, h.z)) * 0.8)
 	# (Small bevels on small things are not worth their vertices.)
-	if b < 2.5 or (b < 5.0 and maxf(size.x, maxf(size.y, size.z)) < 160.0):
+	if bv < 2.5 or (bv < 5.0 and maxf(size.x, maxf(size.y, size.z)) < 160.0):
 		box(key, size, xf, col, tile, reg)
 		return
-	var hi := h - Vector3(b, b, b)
+	var tg := _target(key, reg)
+	var b: Buf = tg[0]
+	var atlas: bool = tg[1]
+	var r: Rect2 = tg[2]
+	var shade: bool = tg[3]
+	var hi := h - Vector3(bv, bv, bv)
 	var bas := xf.basis
-	var fn := []
-	for i in 3:
-		var pair := []
-		for s in [-1.0, 1.0]:
-			var nl := Vector3.ZERO
-			nl[i] = s
-			pair.append((bas * nl).normalized())
-		fn.append(pair)
-	# Faces.
+	# idx[i][s][corner code] = vertex index; corner code = the signs of x, y, z as bits.
+	var idx := {}
 	for i in 3:
 		var j := (i + 1) % 3
 		var k := (i + 2) % 3
 		for si in 2:
 			var s := -1.0 if si == 0 else 1.0
-			var nw: Vector3 = fn[i][si]
-			var ps := []
-			var uvs := []
+			var nl := Vector3.ZERO
+			nl[i] = s
+			var nw := (bas * nl).normalized()
+			var ring := []
 			for sg2 in [Vector2(-1, -1), Vector2(1, -1), Vector2(1, 1), Vector2(-1, 1)]:
 				var sg := Vector3.ZERO
 				sg[j] = sg2.x
 				sg[k] = sg2.y
+				sg[i] = s
 				var p := _rb_pt(h, hi, i, s, sg)
-				ps.append(xf * p)
-				uvs.append(_rb_uv(p, i, size, tile))
-			_emit(key, reg, ps, [nw, nw, nw, nw], uvs, col)
-	# Edge chamfers.
+				var vi := _put(b, xf * p, nw, col, _rb_uv(p, i, size, tile), atlas, r, shade)
+				idx[i * 100 + int(sg.x > 0) * 4 + int(sg.y > 0) * 2 + int(sg.z > 0)] = vi
+				ring.append(vi)
+			_tri(b, ring[0], ring[1], ring[2])
+			_tri(b, ring[0], ring[2], ring[3])
+	# Edge chamfers: between faces i and j along axis k.
 	for i in 3:
 		for j in range(i + 1, 3):
 			var k := 3 - i - j
 			for si in 2:
 				for sj in 2:
-					var sgi := -1.0 if si == 0 else 1.0
-					var sgj := -1.0 if sj == 0 else 1.0
-					var sg0 := Vector3.ZERO
-					sg0[i] = sgi
-					sg0[j] = sgj
-					sg0[k] = -1.0
-					var sg1 := sg0
-					sg1[k] = 1.0
-					var pa := _rb_pt(h, hi, i, sgi, sg0)
-					var pb := _rb_pt(h, hi, j, sgj, sg0)
-					var pc := _rb_pt(h, hi, j, sgj, sg1)
-					var pd := _rb_pt(h, hi, i, sgi, sg1)
-					var ni: Vector3 = fn[i][si]
-					var nj: Vector3 = fn[j][sj]
-					_emit(key, reg, [xf * pa, xf * pb, xf * pc, xf * pd], [ni, nj, nj, ni],
-							[_rb_uv(pa, i, size, tile), _rb_uv(pb, i, size, tile), _rb_uv(pc, i, size, tile), _rb_uv(pd, i, size, tile)], col)
+					var c0 := Vector3.ZERO
+					c0[i] = si
+					c0[j] = sj
+					var c1 := c0
+					c1[k] = 1
+					var code0 := int(c0.x) * 4 + int(c0.y) * 2 + int(c0.z)
+					var code1 := int(c1.x) * 4 + int(c1.y) * 2 + int(c1.z)
+					var a0: int = idx[i * 100 + code0]
+					var b0: int = idx[j * 100 + code0]
+					var b1: int = idx[j * 100 + code1]
+					var a1: int = idx[i * 100 + code1]
+					_tri(b, a0, b0, b1)
+					_tri(b, a0, b1, a1)
 	# Corners.
-	for sx in 2:
-		for sy in 2:
-			for sz in 2:
-				var sg := Vector3(-1.0 if sx == 0 else 1.0, -1.0 if sy == 0 else 1.0, -1.0 if sz == 0 else 1.0)
-				var pts := []
-				var nrm := []
-				var uvs := []
-				for i in 3:
-					var p := _rb_pt(h, hi, i, sg[i], sg)
-					pts.append(xf * p)
-					nrm.append(fn[i][0 if sg[i] < 0.0 else 1])
-					uvs.append(_rb_uv(p, 0, size, tile))
-				_emit(key, reg, pts, nrm, uvs, col)
+	for code in 8:
+		_tri(b, idx[code], idx[100 + code], idx[200 + code])
 
 
 ## A cylinder (axis local Y) of radius r0 at the bottom and r1 at the top, smooth-shaded sides.
 func cyl(key: String, r0: float, r1: float, height: float, xf: Transform3D, col: Color, segs := 12, caps := true, reg := "") -> void:
+	var tg := _target(key, reg)
+	var b: Buf = tg[0]
+	var atlas: bool = tg[1]
+	var r: Rect2 = tg[2]
+	var shade: bool = tg[3]
 	var bas := xf.basis
 	var slope := (r0 - r1) / maxf(height, 0.001)
 	var hh := height * 0.5
 	var nu := (bas * Vector3.UP).normalized()
+	var bot := []
+	var top := []
+	for i in segs + 1:
+		var a := TAU * i / segs
+		var c := cos(a)
+		var sn := sin(a)
+		var nw := (bas * Vector3(c, slope, sn)).normalized()
+		var u := float(i) / segs
+		bot.append(_put(b, xf * Vector3(c * r0, -hh, sn * r0), nw, col, Vector2(u, 1), atlas, r, shade))
+		top.append(_put(b, xf * Vector3(c * r1, hh, sn * r1), nw, col, Vector2(u, 0), atlas, r, shade))
 	for i in segs:
-		var a0 := TAU * i / segs
-		var a1 := TAU * (i + 1) / segs
-		var c0 := cos(a0)
-		var s0 := sin(a0)
-		var c1 := cos(a1)
-		var s1 := sin(a1)
-		var b0 := Vector3(c0 * r0, -hh, s0 * r0)
-		var b1 := Vector3(c1 * r0, -hh, s1 * r0)
-		var t0 := Vector3(c0 * r1, hh, s0 * r1)
-		var t1 := Vector3(c1 * r1, hh, s1 * r1)
-		var n0 := (bas * Vector3(c0, slope, s0)).normalized()
-		var n1 := (bas * Vector3(c1, slope, s1)).normalized()
-		var u0 := float(i) / segs
-		var u1 := float(i + 1) / segs
-		_emit(key, reg, [xf * b1, xf * b0, xf * t0, xf * t1], [n1, n0, n0, n1], [Vector2(u1, 1), Vector2(u0, 1), Vector2(u0, 0), Vector2(u1, 0)], col)
-		if caps:
-			var cu := [Vector2(0.5, 0.5), Vector2(0.5 + c1 * 0.5, 0.5 + s1 * 0.5), Vector2(0.5 + c0 * 0.5, 0.5 + s0 * 0.5)]
-			if r1 > 0.01:
-				_emit(key, reg, [xf * Vector3(0, hh, 0), xf * t1, xf * t0], [nu, nu, nu], cu, col)
-			if r0 > 0.01:
-				_emit(key, reg, [xf * Vector3(0, -hh, 0), xf * b0, xf * b1], [-nu, -nu, -nu], cu, col)
+		_tri(b, bot[i + 1], bot[i], top[i])
+		_tri(b, bot[i + 1], top[i], top[i + 1])
+	if not caps:
+		return
+	for end in 2:
+		var rr := r1 if end == 1 else r0
+		if rr <= 0.01:
+			continue
+		var y := hh if end == 1 else -hh
+		var nn := nu if end == 1 else -nu
+		var ctr := _put(b, xf * Vector3(0, y, 0), nn, col, Vector2(0.5, 0.5), atlas, r, shade)
+		var ring := []
+		for i in segs + 1:
+			var a := TAU * i / segs
+			ring.append(_put(b, xf * Vector3(cos(a) * rr, y, sin(a) * rr), nn, col, Vector2(0.5 + cos(a) * 0.5, 0.5 + sin(a) * 0.5), atlas, r, shade))
+		for i in segs:
+			_tri(b, ctr, ring[i], ring[i + 1])
 
 
 ## A cylinder from a to b.
@@ -587,12 +608,36 @@ func _surf(key: String, reg: String, rows: Array, uvs: Array, xf: Transform3D, c
 		W.append(wrow)
 		N.append(nrow)
 	var cells := nc - 1
+	# The grid's vertices once, its cells as indexed quads wound to face their normals.
+	var b := _st(key)
+	var atlas := key == "vc" or key == "atlas" or key == "gloss" or key == "glow"
+	var r := Rect2(0, 0, 1, 1)
+	if atlas:
+		r = _region(reg if reg != "" else "white")
+	var shade := key != "glow" and _ao_mode >= 0
+	var base := b.v.size()
+	for j in nr:
+		for i in nc:
+			var p: Vector3 = W[j][i]
+			var k := _occ(p) if shade else 1.0
+			b.v.append(p)
+			b.n.append(N[j][i])
+			b.c.append(Color(col.r * k, col.g * k, col.b * k, col.a))
+			b.t.append(r.position + (uvs[j][i] as Vector2) * r.size if atlas else uvs[j][i])
 	for j in nr - 1:
 		for i in cells:
 			if not mask.is_empty() and not mask[j * cells + i]:
 				continue
-			_emit(key, reg, [W[j][i], W[j][i + 1], W[j + 1][i + 1], W[j + 1][i]], [N[j][i], N[j][i + 1], N[j + 1][i + 1], N[j + 1][i]],
-					[uvs[j][i], uvs[j][i + 1], uvs[j + 1][i + 1], uvs[j + 1][i]], col)
+			var a0 := base + j * nc + i
+			var a1 := a0 + 1
+			var a2 := a0 + nc + 1
+			var a3 := a0 + nc
+			var q0: Vector3 = b.v[a0]
+			var gn := (b.v[a1] - q0).cross(b.v[a2] - q0) + (b.v[a2] - q0).cross(b.v[a3] - q0)
+			if gn.dot(b.n[a0] + b.n[a1] + b.n[a2] + b.n[a3]) > 0.0:
+				b.i.append_array(PackedInt32Array([a0, a2, a1, a0, a3, a2]))
+			else:
+				b.i.append_array(PackedInt32Array([a0, a1, a2, a0, a2, a3]))
 	if thick <= 0.0:
 		return
 	for j in nr - 1:
@@ -615,13 +660,13 @@ func _surf(key: String, reg: String, rows: Array, uvs: Array, xf: Transform3D, c
 				var ea: Vector2i = e[0]
 				var eb: Vector2i = e[1]
 				var a: Vector3 = W[ea.y][ea.x]
-				var b: Vector3 = W[eb.y][eb.x]
+				var bb: Vector3 = W[eb.y][eb.x]
 				var a2: Vector3 = a - (N[ea.y][ea.x] as Vector3) * thick
-				var b2: Vector3 = b - (N[eb.y][eb.x] as Vector3) * thick
-				var sn := (b - a).cross(a2 - a).normalized()
+				var b2: Vector3 = bb - (N[eb.y][eb.x] as Vector3) * thick
+				var sn := (bb - a).cross(a2 - a).normalized()
 				if sn.dot(a - cc) < 0.0:
 					sn = -sn
-				_emit(key, reg, [a, b, b2, a2], [sn, sn, sn, sn], [Vector2(0, 0), Vector2(1, 0), Vector2(1, 0.05), Vector2(0, 0.05)], col)
+				_emit(key, reg, [a, bb, b2, a2], [sn, sn, sn, sn], [Vector2(0, 0), Vector2(1, 0), Vector2(1, 0.05), Vector2(0, 0.05)], col)
 
 
 ## Cloth hung over an edge (a chair back, a hook, a drawer's front, the bed's side): the edge runs

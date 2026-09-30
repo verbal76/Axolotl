@@ -350,7 +350,7 @@ def note_paper(w, h):
     for y in (50, 140, 230):
         d.ellipse([8, y, 18, y + 10], fill=(215, 215, 205))
     f = font(17)
-    for i, t in enumerate(["feed Gill - a pinch!", "water change sat", "check filter", "no tapping glass!!"]):
+    for i, t in enumerate(["feed him - a pinch!", "water change sat", "check filter", "no tapping glass!!"]):
         d.text((38, 24 + i * 36), t, fill=(40, 50, 120), font=f)
     ox, oy = 80, 205
     d.ellipse([ox, oy, ox + 80, oy + 34], outline=(60, 60, 70), width=3)
@@ -414,7 +414,7 @@ def drawing(w, h):
     d.ellipse([80, 82, 88, 90], fill=(20, 20, 20))
     for x in range(20, w - 20, 16):
         d.ellipse([x, h - 30, x + 12, h - 18], fill=R.choice([(150, 120, 90), (200, 180, 120), (110, 110, 110)]))
-    d.text((20, 26), "GILL", fill=(60, 140, 60), font=font(26, "bold"))
+    d.text((20, 26), "AXOLOTL", fill=(60, 140, 60), font=font(24, "bold"))
     return im
 
 
