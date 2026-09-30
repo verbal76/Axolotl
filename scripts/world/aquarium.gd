@@ -19,8 +19,12 @@ const NOISE := preload("res://assets/textures/noise_rgb.png")
 var env: Environment
 var sun: DirectionalLight3D
 var gravel_mat: ShaderMaterial
-## The bedroom round the tank, and the cool light the tank casts into it.
-var bedroom: Bedroom
+## The bedroom round the tank, and the cool light the tank casts into it. Built once, just after
+## the title is usable (Game), or on first need, never during startup (`ensure_room`).
+var bedroom: Bedroom:
+	get:
+		return ensure_room()
+var _bedroom: Bedroom
 var tank_spill: OmniLight3D
 var pebble_mat: ShaderMaterial
 var glass_mats: Array[ShaderMaterial] = []
@@ -62,8 +66,7 @@ func build(p_env: Environment) -> void:
 	_build_bubbler()
 	_build_snail()
 	_build_plants()
-	_build_room()
-	StartupTrace.mark("aquarium: bedroom and the rest")
+	StartupTrace.mark("aquarium: the rest")
 	apply(0.0)
 
 
@@ -661,10 +664,23 @@ func _box(size: Vector3, pos: Vector3, mat: Material, parent: Node3D = null, rot
 
 ## The bedroom (Bedroom: a lived-in late-80s / early-90s kid's room round the tank), the cool light
 ## the tank throws on the things near it, and the incidental legs and hand.
+func ensure_room() -> Bedroom:
+	if _bedroom == null:
+		var t0 := Time.get_ticks_usec()
+		_build_room()
+		room_build_ms = (Time.get_ticks_usec() - t0) / 1000.0
+		print("[AQUARIUM] bedroom built in %.1f ms" % room_build_ms)
+	return _bedroom
+
+
+## How long the room took to build (diagnostics and tests).
+var room_build_ms := -1.0
+
+
 func _build_room() -> void:
-	bedroom = Bedroom.new()
-	add_child(bedroom)
-	bedroom.build(FLOOR_Y, ROOM_LAYER, TANK_MIN, TANK_MAX)
+	_bedroom = Bedroom.new()
+	add_child(_bedroom)
+	_bedroom.build(FLOOR_Y, ROOM_LAYER, TANK_MIN, TANK_MAX)
 	tank_spill = OmniLight3D.new()
 	tank_spill.name = "TankSpill"
 	tank_spill.position = Vector3(0, 60, TANK_MAX.z + 140)
@@ -674,8 +690,8 @@ func _build_room() -> void:
 	tank_spill.light_energy = 0.6
 	tank_spill.light_cull_mask = 1 << (ROOM_LAYER - 1)
 	add_child(tank_spill)
-	_build_legs(bedroom)
-	_build_hand(bedroom)
+	_build_legs(_bedroom)
+	_build_hand(_bedroom)
 
 
 func _build_legs(room: Node3D) -> void:
@@ -706,12 +722,16 @@ func _build_hand(room: Node3D) -> void:
 
 
 func play_legs() -> void:
+	if legs == null:
+		return
 	if _legs_t < 0.0:
 		_legs_t = 0.0
 		legs.visible = true
 
 
 func play_hand() -> void:
+	if hand == null:
+		return
 	if _hand_t < 0.0:
 		_hand_t = 0.0
 		hand.visible = true
@@ -761,6 +781,8 @@ func set_outside_view(on: bool) -> void:
 	if on == outside:
 		return
 	outside = on
+	if on:
+		ensure_room()
 	# Ambient fish read from the room (docs/AQUARIUM.md): drawn larger in the outside views.
 	var gm := Game.inst
 	if gm != null and gm.fish != null:
@@ -801,7 +823,7 @@ func outside_camera(cam_pos: Vector3) -> void:
 var _room_t := 0.0
 func _cull_room(dt: float) -> void:
 	_room_t -= dt
-	if _room_t > 0.0 or bedroom == null:
+	if _room_t > 0.0 or _bedroom == null:
 		return
 	_room_t = 0.2
 	var cam := get_viewport().get_camera_3d()
@@ -814,8 +836,8 @@ func _cull_room(dt: float) -> void:
 		var d_glass := minf(minf(p.x - TANK_MIN.x, TANK_MAX.x - p.x), minf(minf(p.z - TANK_MIN.z, TANK_MAX.z - p.z), TANK_MAX.y - p.y))
 		var water := lerpf(0.017, 0.007, ease(clean, 0.8))
 		show = d_glass < 1.73 / water
-	if bedroom.visible != show:
-		bedroom.visible = show
+	if _bedroom.visible != show:
+		_bedroom.visible = show
 
 
 # --- Continuous restoration ---------------------------------------------------------------

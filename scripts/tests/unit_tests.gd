@@ -5099,6 +5099,10 @@ func _test_aquarium_polish() -> void:
 	var run0: float = g.clock.run_s
 	var earned0 := g.run_save.earned().duplicate(true)
 	var invert0 := Settings.swim_invert_y
+	# The bedroom is built once after startup (never during it), and is ready before any room view.
+	var bed_ms: float = g.aquarium.room_build_ms
+	t.check("bedroom_built_after_startup", bed_ms >= 0.0 and g.aquarium._bedroom != null and StartupTrace.has("aquarium: the rest") and not StartupTrace.has("aquarium: bedroom and the rest"),
+			"built in %.1f ms" % bed_ms)
 	# --- Swim: exactly two controls, the stick aims his nose, Swim propels along it ---
 	pr.enter("play")
 	pr.go("swim")

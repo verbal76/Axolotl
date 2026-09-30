@@ -293,9 +293,21 @@ func _enter_title() -> void:
 	title.show_title()
 	cam.cinematic = true
 	Boot.report_ready()
+	_build_room_soon()
+
+
+## The bedroom round the tank is built once, just after the title is usable (so it never lengthens
+## startup), or on first need (Aquarium.ensure_room).
+func _build_room_soon() -> void:
+	if aquarium == null:
+		return
+	get_tree().create_timer(0.6).timeout.connect(func() -> void:
+		if is_instance_valid(aquarium):
+			aquarium.ensure_room())
 
 
 func start_play(immediate := false) -> void:
+	_build_room_soon()
 	state = "play"
 	run_save.note_identity(Boot.identity())
 	if clock.start():
