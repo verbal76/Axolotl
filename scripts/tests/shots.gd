@@ -352,6 +352,25 @@ func run(runner) -> void:
 			pr.ui.swim_held = false
 			pr.back()
 			await t.seconds(0.3)
+	if only == "perfaqw":
+		# The aquarium views like for like: each measured on first entry and again once warm, murky
+		# and restored (same code in both builds compared).
+		var pr: Presentation = g.presentation
+		for state in ["murky", "clean"]:
+			if state == "clean":
+				for b in g.balls:
+					b.add_heal(Vector3.UP, 340.0, 0.0)
+				g.g_disp = 1.0
+				g.aquarium.apply(1.0)
+				await t.seconds(1.0)
+			pr.enter("play")
+			for round_ in 2:
+				for m in ["room", "inspect", "live", "swim"]:
+					pr.go(m)
+					await t.seconds(2.0)
+					await _perf_view("aqw_%s_%s_%s" % [state, "first" if round_ == 0 else "warm", m])
+			pr.exit()
+			await t.seconds(1.0)
 	if only == "b2out":
 		var b := g.balls[1]
 		var v: Vortex = b.vortex_out
