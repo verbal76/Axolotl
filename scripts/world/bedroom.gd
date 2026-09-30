@@ -1068,6 +1068,12 @@ func _tv_corner() -> void:
 	for k in 7:
 		box("vc", Vector3(60, 5, 3), Transform3D(tb, tv + tb * Vector3(175, -30 - k * 14, 209)), Color(0.04, 0.04, 0.04))
 	box("glow", Vector3(8, 8, 3), Transform3D(tb, tv + tb * Vector3(175, -150, 209)), Color(1.0, 0.25, 0.2))
+	# A baseball cap tossed on top (generic: a dome, a button, a brim).
+	var cap := tv + tb * Vector3(120, 210, 60)
+	var cb2 := tb * Basis(Vector3.UP, 0.9)
+	blob("fabric", Vector3(90, 62, 100), Transform3D(cb2, cap), Color(0.2, 0.3, 0.7), 12, 6)
+	blob("fabric", Vector3(12, 8, 12), Transform3D(cb2, cap + Vector3(0, 62, 0)), Color(0.2, 0.3, 0.7), 6, 4)
+	blob("fabric", Vector3(80, 7, 70), Transform3D(cb2 * Basis(Vector3.RIGHT, 0.15), cap + cb2 * Vector3(0, 4, 120)), Color(0.9, 0.9, 0.88), 10, 4)
 	var ant := tv + tb * Vector3(0, 210, -60)
 	blob("gloss", Vector3(55, 18, 40), Transform3D(tb, ant + Vector3(0, 12, 0)), Color(0.12, 0.12, 0.12), 12, 5)
 	for e in [Vector3(-170, 330, -80), Vector3(120, 360, 90)]:
@@ -1546,7 +1552,7 @@ func _front_of_room() -> void:
 				urow.append(Vector2(u * 3.0, v * 4.0))
 			rows.append(row)
 			uvs.append(urow)
-		_surf("fabric", "", rows, uvs, Transform3D(), Color(0.3, 0.42, 0.72), Vector3(X1 + 500, wy, wz), false, 4.0)
+		_surf("fabric", "", rows, uvs, Transform3D(), Color(0.3, 0.42, 0.72), Vector3(X1 + 100000, wy, wz), false, 4.0)
 	# The door on the front wall, a jacket on the hook beside it.
 	var dx := -450.0
 	rbox("vc", Vector3(840, 2040, 40), _at(Vector3(dx, fy + 1020, Z1 - 30)), Color(0.93, 0.9, 0.84), 10.0)
