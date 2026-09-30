@@ -2610,13 +2610,32 @@ func _perf_starfish(g: Game) -> void:
 		for st in g.starfish.stars:
 			st.visible = false
 		await _star_view(g, s, 4.0, 30.0)
-		await _perf_view("%s_hidden" % sid)
-		var pc0 := _pipelines()
+		# (Standing still, the same view: hidden, shown, hidden again, shown again.)
+		for rep in 2:
+			await _perf_still("%s_hidden_%d" % [sid, rep])
+			var pc0 := _pipelines()
+			for st in g.starfish.stars:
+				st.visible = true
+			await RenderingServer.frame_post_draw
+			await RenderingServer.frame_post_draw
+			var pc1 := _pipelines()
+			if rep == 0:
+				t.log_line("PIPELINES %s first frames with starfish shown: +%d compilations%s" % [sid, pc1 - pc0, " (the first starfish ever drawn)" if first else ""])
+			first = false
+			await _perf_still("%s_shown_%d" % [sid, rep])
+			for st in g.starfish.stars:
+				st.visible = false
 		for st in g.starfish.stars:
 			st.visible = true
+
+
+func _perf_still(label: String) -> void:
+	t.g.player.bot_input = Vector2.ZERO
+	await t.seconds(0.5)
+	await RenderingServer.frame_post_draw
+	var t0 := Time.get_ticks_usec()
+	for i in 60:
 		await RenderingServer.frame_post_draw
-		await RenderingServer.frame_post_draw
-		var pc1 := _pipelines()
-		t.log_line("PIPELINES %s first frames with starfish shown: +%d compilations%s" % [sid, pc1 - pc0, " (the first starfish ever drawn)" if first else ""])
-		first = false
-		await _perf_view("%s_shown" % sid)
+	var ms := (Time.get_ticks_usec() - t0) / 1000.0 / 60.0
+	t.log_line("PERF %s  %.1f ms/frame  draw calls %d  triangles %d" % [label, ms, Performance.get_monitor(Performance.RENDER_TOTAL_DRAW_CALLS_IN_FRAME),
+			Performance.get_monitor(Performance.RENDER_TOTAL_PRIMITIVES_IN_FRAME)])

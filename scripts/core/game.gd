@@ -576,7 +576,8 @@ func best_line() -> String:
 		return ""
 	# (With the skills it was finished with, when the record has them: there is no skills-off mode.)
 	for f in rec.get("finishes", []):
-		if f is Dictionary and str(f.get("run_id", "")) == str(rec.get("best_run_id", "")) and (f as Dictionary).has("skills"):
+		if f is Dictionary and str(f.get("run_id", "")) == str(rec.get("best_run_id", "")) and absf(float(f.get("finish_s", -1.0)) - best) < 0.001 \
+				and (f as Dictionary).has("skills"):
 			return "Best finish %s  ·  Skills %d/%d" % [RunClock.format(best), int(f["skills"]), SkillTree.COUNT]
 	return "Best finish %s" % RunClock.format(best)
 

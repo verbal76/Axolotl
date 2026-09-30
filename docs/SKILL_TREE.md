@@ -58,7 +58,7 @@ before (the seeded playthroughs are unchanged: section 8).
 | Lunge | lunge 0.31 s (base 0.28): 2.96 m of travel instead of 2.71 | + the stick steers a lunge that is not homing (9 rad/s) | + catch radius +0.2 m (food 0.95 -> 1.15, Motes 0.9 -> 1.1) |
 | Water Burst | directional 9.6 / 5.5 m/s (base 8.8 / 5.2); up-only unchanged 8.4 | + its push carries: air drag x0.35 for 0.45 s | + the stick bends its path during that carry (4 rad/s, speed unchanged) |
 | Mote Magnet | range 2.5 m, 1.4 m/s² | 3.5 m, 2.2 m/s² | 4.5 m, 3.0 m/s² |
-| Glide (section 3) | s0 3.0 m/s, tau 0.9 s, v 6.7 m/s | s0 2.5, tau 1.1, v 7.0 | s0 2.0, tau 1.35, v 7.4 |
+| Glide (section 3) | s0 2.7 m/s, tau 1.0 s, v 6.9 m/s | s0 2.3, tau 1.2, v 7.2 | s0 2.0, tau 1.35, v 7.4 |
 
 Notes:
 - **Quick Gill** scales the GROUND target only. In the air the target stays the base run, so a
@@ -109,10 +109,10 @@ Compared with the research's tiers (reach in m from a running jump, best burst):
 
 | Drop below takeoff | base | G-I | G-II | G-III | research G-III |
 |---|---|---|---|---|---|
-| 1.3 m | 9.7 | 11.4 | 12.1 | 12.9 | 16.0 |
-| 4.6 m | 11.8 | 14.4 | 15.2 | 16.5 | ~24 |
-| 9.7 m | 14.0 | 17.9 | 19.0 | 20.6 | 38 |
-| 29 m (High Crown) | 19.9 | 28.9 | 30.4 | 32.5 | 88 |
+| 1.3 m | 9.7 | 11.8 | 12.4 | 12.9 | 16.0 |
+| 4.6 m | 11.8 | 14.8 | 15.7 | 16.5 | ~24 |
+| 9.7 m | 14.0 | 18.5 | 19.7 | 20.6 | 38 |
+| 29 m (High Crown) | 19.9 | 29.6 | 31.2 | 32.5 | 88 |
 
 (`glide_sim.py` / `sweep2.py` / `variants.py` in the scratchpad; the in-game measurements in the
 next table agree.)
@@ -151,7 +151,14 @@ transport the ruling removed.
 
 Impossible (everything: Glide III, Water Burst III, Quick Gill III; every burst and release time):
 
-IMPOSSIBLE_TABLE
+| Transfer | over the surface | straight line from takeoff | best reached |
+|---|---|---|---|
+| High Crown (29 m) -> a far jungle stem | 79 m | 52.3 m | 22.7 m, never there |
+| High Crown -> the far side of Giant Stems | 75 m | 53.8 m | 23.0 m |
+| Sky Spire crown (30.6 m) -> the Low Garden | 70 m | 33.2 m | 18.8 m |
+| the Mesa's foot -> the Mesa top (gaining 6.3 m) | 9 m | 8.6 m | 6.7 m: a glide never gains height |
+
+(The research's Glide III reached 83 m from the High Crown; this one, by any timing, about 23 m.)
 
 Barriers (restoration gates shut; ten tries each: jump, up-only or directional burst at five times;
 the skilled tries glide):
@@ -349,4 +356,28 @@ follows the glide's turns and dives as it follows everything else.
 
 ## 9. Qualification
 
-QUALIFICATION
+All runs on this machine (Godot 4.7.2, headless at 60 fixed fps; renders under xvfb, Vulkan Mobile).
+
+| Check | Result |
+|---|---|
+| Graph proof (`skill_graph_*`) | acyclic, 15/15 reachable, total 30, 272 reachable purchase states of 2^15, 0 deadlocks |
+| Loss-proof matrix (`_test_gill_store`, section 5) | 12 of 12 cases |
+| Starfish spots (`_test_starfish_spots`) | 30 of 30 valid restored and unrestored; nearest reserved point 1.74 m |
+| Starfish sweep (`_phase_starfish_sweep`, no skills) | 30 of 30 collected physically |
+| Quick Gill III incline / traction batch | 20 of 20 |
+| Lunge III `_phase_treasure_stress` | 112 of 112 objects |
+| Glide transfers and probe | intended, impossible and barrier tables in section 3 |
+| Full unit suite | 557 passed, 5 failed on the first run; all 5 fixed (a version literal, a name literal, the finish-line match, the Magnet test's free Mote, the walking-pickup check) and every affected test rerun green (149 + 123 + 31, 0 failures after the fixes). `parasite_combat_cheap` is a timing budget that failed once under heavy machine load and passes alone (88 us). |
+| Playthrough 4242, no skills | 23/23; finish 3068.9 s, 100% at 4844 s, 2 deaths, 171 stuck recoveries (baseline `60a24e4`: 2938.7 s, 4811 s, 2 deaths, 182) |
+| Playthrough 7, no skills | PT7 |
+| Playthrough 4242, all skills (`--skills=all`) | 23/23; finish 3189 s, 100% at 4902 s, 2 deaths, 192 stuck recoveries |
+| Performance (`--only=perfstar`, 5 starfish, hidden/shown A/B/A/B, still camera) | +0 pipeline compilations on the first starfish ever drawn; about +3 to +7 draw calls and 0.6-3.5 k triangles with a starfish in view (clean pairs; the star.b3.01 pair swung with culling); frame time within the software renderer's noise |
+
+The playthroughs are compared by outcome, not byte for byte: the baseline itself is not
+deterministic run to run here (section 8). Playthrough 7 met a pre-existing engine crash
+("propagate_notification from thread", signal 11) twice before a clean run; the same crash appears
+in other branches' logs and is not related to this feature.
+
+Evidence (renders, contact sheets) in the implementation scratchpad `skilltree_impl/evidence/`:
+`skilltree_1280x720.jpg`, `skilltree_phone_1560x720.jpg` (19.5:9), `starfish_spots.jpg`,
+`starfish_pickup.jpg`, `glide.jpg`. Shots modes: `--test=shots --only=skilltree|starfish|glide|perfstar`.

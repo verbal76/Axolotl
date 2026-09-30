@@ -417,19 +417,25 @@ func pickup() -> void:
 	var from := b.surface_point(b.up_at(sp + fr.z * 3.0), 0.1)
 	u.place_at(b.index, from, sp - from)
 	await u.wait_grounded()
-	var pressed := false
+	# (No button: nothing he does on purpose happens on the way in.)
+	var acts := [0]
+	var count := func() -> void: acts[0] += 1
+	for sg in [p.jumped, p.lunged, p.swiped, p.burst_used]:
+		sg.connect(count)
+	for a in ["jump", "lunge", "swipe", "special"]:
+		Input.action_release(a)
 	for i in 150:
 		u.stick_toward(sp - p.global_position)
-		for a in ["jump", "lunge", "swipe", "special"]:
-			pressed = pressed or Input.is_action_pressed(a)
 		await t.frames(1)
 		if gp.has_star(sid):
 			break
 	p.bot_input = Vector2.ZERO
+	for sg in [p.jumped, p.lunged, p.swiped, p.burst_used]:
+		sg.disconnect(count)
 	var on_disk: Dictionary = GillProgress._read(gp.path).get("data", {})
-	var walked := gp.has_star(sid) and not pressed and (on_disk.get("collected", {}) as Dictionary).has(sid)
+	var walked: bool = gp.has_star(sid) and acts[0] == 0 and (on_disk.get("collected", {}) as Dictionary).has(sid)
 	t.check("starfish_touch_pickup_walking", walked and gp.stars() == n0 + 1 and gp.balance() == gp.stars() - gp.spent(),
-			"%s collected by walking into it, no button; on disk at once; %d collected" % [sid, gp.stars()])
+			"%s collected by walking into it, %d actions; on disk at once; %d collected, balance %d" % [sid, acts[0], gp.stars(), gp.balance()])
 	t.check("starfish_hud_chip_shows", g.hud.star_chip.showing() and g.hud.star_chip.text == "%d/30" % gp.stars(), g.hud.star_chip.text)
 	await t.frames(30)
 	t.check("starfish_gone_after_pickup", not is_instance_valid(s) or s.collected, "")
@@ -902,18 +908,35 @@ func glide_control() -> void:
 ## An available Mote in plain sight within range drifts toward him; it is never captured by it; a
 ## missed lunge startles it out of the pull; behind something solid it is not drawn.
 func magnet() -> void:
-	var b := g.balls[0]
+	# (A ground Mote still free, on any ball: earlier tests may have returned the first ball's.)
+	var b: MossBall = null
 	var m: Mote = null
-	for mm in b.motes:
-		if mm.h_hint < 0.1 and mm.is_available() and m == null:
-			m = mm
+	for bb in g.balls:
+		for mm in bb.motes:
+			if mm.h_hint < 0.1 and mm.is_available() and m == null:
+				m = mm
+				b = bb
+	# (Every Mote returned already, e.g. after the all-clear test: one comes back for this test and
+	# goes home again at the end.)
+	var revived := false
+	if m == null:
+		b = g.balls[0]
+		for mm in b.motes:
+			if mm.h_hint < 0.1 and m == null:
+				m = mm
+		m.state = "wander"
+		m.visible = true
+		m.intensity = 1.0
+		m.scale = Vector3.ONE
+		revived = true
+	var bi := b.index
 	var up := m.anchor_up
 	var fwd := MossBall.frame_at(up, 0).z
 	var trial := func(tier: int) -> float:
 		tiers({"magnet": tier})
 		m.global_position = m.anchor + up * 0.6
 		m.vel = Vector3.ZERO
-		u.place_at(0, m.anchor + up * 0.2 + fwd * 3.2, -fwd)
+		u.place_at(bi, m.anchor + up * 0.2 + fwd * 3.2, -fwd)
 		p.invuln_t = 999
 		await t.frames(2)
 		var d0 := m.global_position.distance_to(p.head_position())
@@ -929,7 +952,7 @@ func magnet() -> void:
 	# A miss startles it: the pull stops for a moment.
 	tiers({"magnet": 3})
 	m.global_position = m.anchor + up * 0.6
-	u.place_at(0, m.anchor + up * 0.2 + fwd * 2.5 + fwd.cross(up) * 2.0, -fwd)
+	u.place_at(bi, m.anchor + up * 0.2 + fwd * 2.5 + fwd.cross(up) * 2.0, -fwd)
 	await t.frames(20)
 	var on_before := m.magnet_on
 	await u.press("lunge")
@@ -967,7 +990,7 @@ func magnet() -> void:
 		m._target = m.global_position
 		m._retarget = 0.0
 		m._t = 0.0
-		u.place(3, 10, 30, 0.2)
+		u.place((bi + 1) % g.balls.size(), 10, 30, 0.2)
 		seed(777)
 		for i in 240:
 			m._update_wander(1.0 / 60.0)
@@ -976,6 +999,8 @@ func magnet() -> void:
 	tiers()
 	t.check("magnet_draws_no_random_numbers", calls1 == calls0 and not body.contains("rand") and body.length() > 100 and runs[0][0].is_equal_approx(runs[1][0]) and runs[0][1] == runs[1][1],
 			"calls with no Magnet in 2 s of play: %d; same seed, 240 steps, next random number: %s / %s" % [calls1 - calls0, str(runs[0][1]), str(runs[1][1])])
+	if revived:
+		m.restore_done()
 	p.invuln_t = 0.0
 
 
