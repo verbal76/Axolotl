@@ -2,16 +2,16 @@
 
 importer="texture"
 type="CompressedTexture2D"
-uid="uid://pseo4emf1wqa"
-path="res://.godot/imported/cassette_labels.png-260aecb70bce0bb719c6fa149399a83e.ctex"
+uid="uid://bet4npk868uty"
+path="res://.godot/imported/wood.png-f978a118330fe99c77224e32d54db8c7.ctex"
 metadata={
 "vram_texture": false
 }
 
 [deps]
 
-source_file="res://assets/textures/room/cassette_labels.png"
-dest_files=["res://.godot/imported/cassette_labels.png-260aecb70bce0bb719c6fa149399a83e.ctex"]
+source_file="res://assets/textures/room/wood.png"
+dest_files=["res://.godot/imported/wood.png-f978a118330fe99c77224e32d54db8c7.ctex"]
 
 [params]
 
@@ -23,7 +23,7 @@ compress/rdo_quality_loss=0.0
 compress/hdr_compression=1
 compress/normal_map=0
 compress/channel_pack=0
-mipmaps/generate=false
+mipmaps/generate=true
 mipmaps/limit=-1
 roughness/mode=0
 roughness/src_normal=""

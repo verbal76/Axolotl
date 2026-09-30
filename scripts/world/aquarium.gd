@@ -102,19 +102,24 @@ func _build_light() -> void:
 	window_light.shadow_enabled = false
 	window_light.light_cull_mask = sun.light_cull_mask
 	add_child(window_light)
+	# The bedroom at dusk (Bedroom): the warm ceiling light (on), and the cool evening sky through the
+	# window. The bedside lamp, desk lamp and TV glow are the Bedroom's own. Room layer only, unshadowed.
 	_room_light = OmniLight3D.new()
-	_room_light.position = Vector3(0, 1250, 1500)
-	_room_light.omni_range = 6000
-	_room_light.omni_attenuation = 0.4
-	_room_light.light_energy = 1.4
-	_room_light.light_color = Color(1.0, 0.86, 0.68)
+	_room_light.name = "RoomCeilingLight"
+	_room_light.position = Vector3(0, 1300, 1300)
+	_room_light.omni_range = 5200
+	_room_light.omni_attenuation = 0.9
+	_room_light.light_energy = 1.1
+	_room_light.light_color = Color(1.0, 0.82, 0.62)
 	_room_light.light_cull_mask = 1 << (ROOM_LAYER - 1)
 	add_child(_room_light)
 	var fill := OmniLight3D.new()
-	fill.position = Vector3(1400, 400, 1000)
-	fill.omni_range = 4000
-	fill.light_energy = 1.0
-	fill.light_color = Color(0.85, 0.92, 1.0)
+	fill.name = "RoomWindowLight"
+	fill.position = Vector3(1450, 700, 1100)
+	fill.omni_range = 3600
+	fill.omni_attenuation = 1.0
+	fill.light_energy = 0.7
+	fill.light_color = Color(0.55, 0.66, 1.0)
 	fill.light_cull_mask = 1 << (ROOM_LAYER - 1)
 	add_child(fill)
 

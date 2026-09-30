@@ -10,7 +10,7 @@ Outputs:
                  keep the two in step.
   wallpaper.png  512 tile: faded cream paper with pinstripes and sprigs.
   blanket.png    512 tile: a loud geometric comforter print.
-  wood.png       512 tile: pale wood planks with grain (tinted per piece by vertex colour).
+  wood.png       512 tile: pale seamless wood grain (tinted per piece by vertex colour).
   fabric.png     256 tile: a soft weave for clothes, sheets and cushions.
 All are sampled with mipmaps (see the .import files).
 """
@@ -638,34 +638,36 @@ def blanket():
 
 
 def wood():
-    """Pale planks (four across) with grain, knots and dark seams, seamless: tinted per piece."""
+    """Pale wood grain (seamless both ways, no plank seams: the floor's boards are geometry), tinted
+    per piece by vertex colour."""
     n = 512
     im = Image.new("RGB", (n, n))
     px = im.load()
     rr = random.Random(5)
-    planks = 4
-    pw = n // planks
-    offs = [rr.random() * 100 for _ in range(planks)]
-    tones = [rr.uniform(0.9, 1.08) for _ in range(planks)]
-    knots = [(rr.randrange(n), rr.randrange(n)) for _ in range(5)]
+    knots = [(rr.randrange(n), rr.randrange(n)) for _ in range(3)]
+    t = math.tau
+    waves = [(rr.choice([0, 1]), rr.randint(1, 3), rr.uniform(0.2, 0.6), rr.random() * t) for _ in range(5)]
+    # Streaks: 1-D noise across the grain (tileable), for the fine lines.
+    streak = [rr.random() for _ in range(n)]
+    for _ in range(2):
+        streak = [(streak[i - 1] + streak[i] * 2 + streak[(i + 1) % n]) / 4 for i in range(n)]
+    lo, hi = min(streak), max(streak)
+    streak = [(v - lo) / (hi - lo) for v in streak]
     for y in range(n):
         for x in range(n):
-            p = x // pw
-            lx = x - p * pw
-            yy = y / n * math.tau
-            g = math.sin(lx * 0.25 + offs[p] + 2.2 * math.sin(yy * 2 + offs[p]) + 0.8 * math.sin(yy * 5 + p)) * 0.5 + 0.5
-            g2 = math.sin(lx * 1.3 + offs[p] * 3 + math.sin(yy * 3) * 4) * 0.5 + 0.5
-            v = 0.78 + 0.13 * g + 0.06 * g2
+            fx, fy = x / n, y / n
+            warp = sum(a * math.sin(t * (i * fx + j * fy) + ph) for i, j, a, ph in waves)
+            g = math.sin(t * fx * 9 + warp * 1.5) * 0.5 + 0.5
+            sx = int((fx + warp * 0.012) * n) % n
+            v = 0.82 + 0.07 * g * g + 0.09 * streak[sx]
             for kx, ky in knots:
-                dx, dy = x - kx, (y - ky + n // 2) % n - n // 2
-                dd = dx * dx * 4 + dy * dy
-                if dd < 400:
-                    v *= 0.8 + 0.2 * dd / 400
-            v *= tones[p]
-            if lx < 2 or lx > pw - 2:
-                v *= 0.45
-            px[x, y] = (int(min(255, 235 * v)), int(min(255, 225 * v)), int(min(255, 210 * v)))
-    im = im.filter(ImageFilter.GaussianBlur(0.5))
+                dx = (x - kx + n // 2) % n - n // 2
+                dy = (y - ky + n // 2) % n - n // 2
+                dd = dx * dx * 5 + dy * dy
+                if dd < 500:
+                    v *= 0.85 + 0.15 * dd / 500
+            px[x, y] = (int(min(255, 235 * v)), int(min(255, 224 * v)), int(min(255, 208 * v)))
+    im = im.filter(ImageFilter.GaussianBlur(0.6))
     save(im, "wood.png")
 
 

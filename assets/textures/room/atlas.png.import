@@ -2,16 +2,16 @@
 
 importer="texture"
 type="CompressedTexture2D"
-uid="uid://binwm3h6knmt8"
-path="res://.godot/imported/cork.png-af30e90e4f343b12fefd266f8fa544b2.ctex"
+uid="uid://d0brx17wqu7qk"
+path="res://.godot/imported/atlas.png-fb48168d0a6feba65c67a16fe960009b.ctex"
 metadata={
 "vram_texture": false
 }
 
 [deps]
 
-source_file="res://assets/textures/room/cork.png"
-dest_files=["res://.godot/imported/cork.png-af30e90e4f343b12fefd266f8fa544b2.ctex"]
+source_file="res://assets/textures/room/atlas.png"
+dest_files=["res://.godot/imported/atlas.png-fb48168d0a6feba65c67a16fe960009b.ctex"]
 
 [params]
 
@@ -23,7 +23,7 @@ compress/rdo_quality_loss=0.0
 compress/hdr_compression=1
 compress/normal_map=0
 compress/channel_pack=0
-mipmaps/generate=false
+mipmaps/generate=true
 mipmaps/limit=-1
 roughness/mode=0
 roughness/src_normal=""

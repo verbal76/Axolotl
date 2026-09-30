@@ -2,16 +2,16 @@
 
 importer="texture"
 type="CompressedTexture2D"
-uid="uid://7y726kofmwg3"
-path="res://.godot/imported/rug.png-d2560d988167f8c12693e277207a613e.ctex"
+uid="uid://cfpqkaqelo14u"
+path="res://.godot/imported/fabric.png-202da67871748795de53110b759f07fb.ctex"
 metadata={
 "vram_texture": false
 }
 
 [deps]
 
-source_file="res://assets/textures/room/rug.png"
-dest_files=["res://.godot/imported/rug.png-d2560d988167f8c12693e277207a613e.ctex"]
+source_file="res://assets/textures/room/fabric.png"
+dest_files=["res://.godot/imported/fabric.png-202da67871748795de53110b759f07fb.ctex"]
 
 [params]
 
@@ -23,7 +23,7 @@ compress/rdo_quality_loss=0.0
 compress/hdr_compression=1
 compress/normal_map=0
 compress/channel_pack=0
-mipmaps/generate=false
+mipmaps/generate=true
 mipmaps/limit=-1
 roughness/mode=0
 roughness/src_normal=""
