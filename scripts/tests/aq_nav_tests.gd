@@ -453,7 +453,11 @@ func frames_phase() -> void:
 	await t.frames(3)
 	pr.go("live", true)
 	var tot := {"frames": 0, "deep": 0, "touch": 0, "l4": 0, "cam_bad": 0, "cam_min": 99.0}
+	# (--hi=N[,M]: only those of the eight homes, so the job can be split.)
+	var only_hi: String = Settings.test_args.get("hi", "")
 	for hi in rows.size():
+		if only_hi != "" and not only_hi.split(",", false).has(str(hi)):
+			continue
 		var r: Array = rows[hi]
 		var b: MossBall = g.balls[r[1]]
 		var home := ground_at(b, r[2])
@@ -478,6 +482,8 @@ func frames_phase() -> void:
 				n += 1
 				if bs.has(2):
 					deep += 1
+					var e := pr.explorer
+					t.log_line("AQFRAMEDEEP home %d view %s frame %d %s state %d speed %.2f alt %.2f t %.2f p %s" % [hi, name_, fr, str(bs), e.state, e.speed, e.ball.altitude(e.p), e.t, e.p])
 				elif bs.has(1):
 					touch += 1
 				var cam := g.get_viewport().get_camera_3d()

@@ -131,6 +131,8 @@ var stuck_level := 0
 var _stuck_since := -1.0
 var _stuck_at := Vector3.ZERO
 var _ep_base := 0.0
+## Just set down in the water: straight out, slowly, no turning yet (s left).
+var _calm_t := 0.0
 var _trail: Array = []
 var _backing := 0.0
 ## After L2: the open way he is turning to (and for how long more), and where L3 looks.
@@ -218,26 +220,33 @@ func _start() -> void:
 		var q: Vector3 = home + up * h
 		if not _clear(q, DEST_CLEAR) or _cast_free(start, q, 0.15) < 0.999:
 			continue
+		# (Of the headings his body fits in, the most open ahead: he swims straight out.)
+		var best_free := -1.0
 		for k in 8:
 			var f := face.rotated(up, k * TAU / 8.0)
-			if _body_clear(Transform3D(Basis(f.cross(up).normalized(), up, -f), q - up * SPINE_Y), 1.0):
-				at = q
-				face = f
-				found = true
-				break
+			if _body_clear(Transform3D(Basis(f.cross(up).normalized(), up, -f), q - up * SPINE_Y), 1.0, 0.2):
+				var fr := _cast_free(q, q + f * 2.0)
+				if fr > best_free:
+					best_free = fr
+					at = q
+					face = f
+					found = true
 		if found:
 			break
 	p = at
 	body.global_position = p
 	state = SWIM
+	# (He first drifts straight out the open way, before turning anywhere.)
+	_calm_t = 1.5
 	_update_model_swim()
 
 
 ## Whether the straight body at model transform `xf` is clear of the scenery (sample radii scaled).
-func _body_clear(xf: Transform3D, scale: float) -> bool:
+## `swing`: extra room toward the tail, where the swimming wave swings it from side to side.
+func _body_clear(xf: Transform3D, scale: float, swing := 0.0) -> bool:
 	for s in [[-0.18, 0.135], [0.0, 0.16], [0.25, 0.15], [0.5, 0.095], [0.8, 0.045], [0.98, 0.02]]:
 		var z: float = s[0]
-		if not _clear(xf * Vector3(0, SPINE_Y - 0.03 * maxf(0.0, z - 0.35), z), float(s[1]) * scale):
+		if not _clear(xf * Vector3(0, SPINE_Y - 0.03 * maxf(0.0, z - 0.35), z), float(s[1]) * scale + swing * clampf(z / 0.8, 0.0, 1.0)):
 			return false
 	return true
 
@@ -434,9 +443,12 @@ func _swim(dt: float) -> void:
 	var max_rate := minf(TURN_MAX, maxf(0.7, speed / MIN_RADIUS)) * om.turn * (0.5 if _widen > 0.0 else 1.0)
 	if lingering:
 		max_rate = minf(max_rate, 0.35)
+	if _calm_t > 0.0:
+		_calm_t -= dt
+		max_rate = 0.0
 	yaw_v = move_toward(yaw_v, clampf(d_az * 2.2, -max_rate, max_rate), 4.0 * dt)
 	var rise := 0.0
-	if speed < 0.35 and absf(yaw_v) > 0.05:
+	if speed < 0.6 and absf(yaw_v) > 0.05:
 		# Turning nearly on the spot swings the hips and tail round: only where they fit (else
 		# he stops turning and lifts a little, clear of whatever is in the way).
 		var nf := face.rotated(_up, yaw_v * dt * 4.0)
@@ -461,6 +473,8 @@ func _swim(dt: float) -> void:
 		v = minf(v, 0.25 + dist * 0.7)
 	if stuck_level == 1:
 		v *= 0.4
+	if _calm_t > 0.0:
+		v = minf(v, 0.3)
 	speed = move_toward(speed, maxf(v, 0.0), (1.2 if v > speed else 2.5) * dt)
 	_widen = maxf(0.0, _widen - dt)
 	var motion := _dir3() * speed * dt + _push * dt + _up * rise * dt
