@@ -128,6 +128,8 @@ func place(p_ball: MossBall, pos: Vector3, face_dir := Vector3.ZERO) -> void:
 	apex_r = _r()
 	last_safe_pos = pos
 	last_safe_ball = ball
+	# (No smear of his body from where he was.)
+	model.reset_follow()
 
 
 func _r() -> float:
@@ -201,6 +203,7 @@ func body_center() -> Vector3:
 func _physics_process(dt: float) -> void:
 	if ball == null or state != "normal":
 		model.idle_ok = false
+		model.conform = false
 		_update_shadow()
 		return
 	_jumped_this_frame = false
@@ -643,6 +646,8 @@ func _update_model(_dt: float) -> void:
 	var vh := velocity - up * velocity.dot(up)
 	model.speed = vh.length() / RUN_SPEED
 	model.grounded = grounded
+	# (His body lies along the ground under it while he is on it.)
+	model.conform = model.grounded
 	model.vup = velocity.dot(up)
 	model.swipe_t = swipe_t
 	model.lunge_t = lunge_t
