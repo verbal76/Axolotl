@@ -701,7 +701,9 @@ func bubble_column(dir: Vector3, radius: float, height: float, speed := 5.0, zon
 	glow.material_override = gm
 	glow.cast_shadow = GeometryInstance3D.SHADOW_CASTING_SETTING_OFF
 	glow.visibility_range_end = 90.0
-	holder.add_child(glow)
+	# (Under the bubbles, not the gate's body: shown and hidden with them, and never mistaken for
+	# part of a platform.)
+	mmi.add_child(glow)
 	glow.global_transform = Transform3D(MossBall.frame_at(up, 0.0), base + up * 0.08)
 	# The vent: a low ring of pebbles (decoration; no collision to trip on).
 	var ring := MeshInstance3D.new()

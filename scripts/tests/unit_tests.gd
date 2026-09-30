@@ -6603,8 +6603,8 @@ func _test_treasure_play() -> void:
 	await _until(func(): return not tp.celebrating, 6.0)
 	await t.frames(3)
 	t.check("treasure_no_double_and_clean_end", not double and int(st["index"]) == 1 and p.state == "normal" and p.controls_enabled and not p.model.dancing()
-			and tp.node != null and tp.node_index == 1 and absf(p.ball.altitude(p.global_position)) < 1.5,
-			"index %d, state %s, next shown %s, %.2f m up" % [int(st["index"]), p.state, tp.node != null, p.ball.altitude(p.global_position)])
+			and tp.node != null and tp.node_index == 1 and p.is_on_floor(),
+			"index %d, state %s, next shown %s, on the floor %s (%.2f m up: the first object may be on a perch)" % [int(st["index"]), p.state, tp.node != null, p.is_on_floor(), p.ball.altitude(p.global_position)])
 	# The celebration's effects draw on their own generators (the game's frames in between may use
 	# the global one legitimately, so this is checked on the effects themselves).
 	seed(99)
