@@ -575,6 +575,8 @@ func run(runner) -> void:
 		await _glide_shots(g)
 	if only == "perfstar":
 		await _perf_starfish(g)
+	if only == "organic":
+		await _organic_shots(g)
 	if only == "loco2":
 		await _loco2_shots(g)
 	if only == "spots":
@@ -2639,3 +2641,66 @@ func _perf_still(label: String) -> void:
 	var ms := (Time.get_ticks_usec() - t0) / 1000.0 / 60.0
 	t.log_line("PERF %s  %.1f ms/frame  draw calls %d  triangles %d" % [label, ms, Performance.get_monitor(Performance.RENDER_TOTAL_DRAW_CALLS_IN_FRAME),
 			Performance.get_monitor(Performance.RENDER_TOTAL_PRIMITIVES_IN_FRAME)])
+
+## Organic enemy movement (Open Issue #3): each enemy type from a fixed camera, one frame a second
+## for STRIP_N seconds (--org=on|off picks the expression layer; frames org_<type>_<n>.png).
+func _organic_shots(g: Game) -> void:
+	var tag: String = Settings.test_args.get("org", "on")
+	var sp := "res://scripts/actors/organic_motion.gd"
+	if ResourceLoader.exists(sp):
+		(load(sp) as GDScript).set("enabled", tag != "off")
+	var n := int(Settings.test_args.get("strip", "16"))
+	var p := g.player
+	p.invuln_t = 99999.0
+	for b in g.balls:
+		b.add_heal(Vector3.UP, 340.0, 0.0)
+	g.g_disp = 1.0
+	g.aquarium.apply(1.0)
+	var park := func(b: MossBall, pos: Vector3, dist: float) -> void:
+		var u := b.up_at(pos)
+		p.place(b, b.surface_point(u.rotated(MossBall.frame_at(u, 0.0).x, dist / b.radius), 0.2), Vector3.FORWARD)
+		g.audio.set_ball(b.index, false)
+	var subjects: Array = []
+	for kind in [Parasite.Kind.SMALL, Parasite.Kind.MEDIUM, Parasite.Kind.LARGE]:
+		var done := false
+		for b in g.balls:
+			for par in b.parasites:
+				if not done and par.is_alive() and par.kind == kind and par.variant == "" and par.state == "graze":
+					subjects.append(["par%d" % kind, par])
+					done = true
+	for c in g.ecosystem.all_critters():
+		for want in [["stalker", ReedStalker], ["puffer", Pufferfish], ["crab", CrabGuardian], ["eel", CaveEel]]:
+			if is_instance_of(c, want[1]) and not subjects.any(func(s): return s[0] == want[0]):
+				subjects.append([want[0], c])
+	for s in subjects:
+		var name_: String = s[0]
+		var node: Node3D = s[1]
+		var b: MossBall = node.get("ball")
+		var home: Vector3 = node.global_position
+		if node is Parasite:
+			home = b.surface_point((node as Parasite).home_dir)
+		elif node is ReedStalker:
+			home = b.surface_point((node as ReedStalker).patch_dir)
+		elif node is CrabGuardian:
+			home = (node as CrabGuardian).post
+		elif node is CaveEel:
+			home = (node as CaveEel).mouth
+		park.call(b, home, 24.0)
+		var u := b.up_at(home)
+		var fr := MossBall.frame_at(u, 0.0)
+		for i in n:
+			var at: Vector3 = node.global_position
+			if node is CaveEel:
+				var e := node as CaveEel
+				_close(g, e.mouth + e.normal * 1.6 + u * 0.35, e.mouth, u)
+			elif node is CrabGuardian:
+				_close(g, at + u * 3.0 + (node as CrabGuardian).facing * 2.2, at, u)
+			elif node is Pufferfish:
+				_close(g, home + fr.x * 7.0 + u * 0.3, home + u * (node as Pufferfish).hover * 0.5, u)
+			else:
+				# Top-down over its home, far enough to see where it goes.
+				var hgt := 9.0 if name_ != "par1" else 7.0
+				_close(g, home + u * hgt + fr.z * 0.5, home, -fr.z)
+			await t.seconds(1.0)
+			await t.shot("org_%s_%02d" % [name_, i])
+	_open(g)

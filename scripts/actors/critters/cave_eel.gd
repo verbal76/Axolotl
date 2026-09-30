@@ -31,6 +31,9 @@ var _segs_mi: MeshInstance3D
 var _head: Node3D
 var _eye_mat: StandardMaterial3D
 var _bubble_t := 0.0
+## Simulated time for cosmetic motion (the ripple runs on continuously instead of restarting with
+## each state).
+var _clock := 0.0
 
 
 var _probe_from := Vector3.ZERO
@@ -41,6 +44,7 @@ var _probe_len := 10.0
 ## Lives in the wall found from `from` (inside the cave) along `dir` (see late_place).
 func place(p_ball: MossBall, from: Vector3, dir: Vector3, cave_radius: float, seed_v: int) -> void:
 	setup(p_ball, "eel", "grotto wall", seed_v)
+	org = OrganicMotion.new(rng.seed, OrganicMotion.EEL)
 	hp = 2
 	seen_radius = 4.5
 	p_ball.add_child(self)
@@ -122,6 +126,14 @@ func tick(dt: float) -> void:
 	if defeated or _head == null:
 		return
 	state_t += dt
+	_clock += dt
+	# Expression (OrganicMotion), cosmetic only: hidden or resting it sways its head in the cleft and
+	# now and then peeks a little further out; noticing him and striking, none (its aim, reach and
+	# timing never change).
+	if state in ["hidden", "cooldown"]:
+		org.step(dt, 1.0, 0.0, 1.0)
+	else:
+		org.step(dt, 0.0, 0.0, 0.0, true)
 	var p := player()
 	match state:
 		"hidden":
@@ -211,6 +223,8 @@ func _pose() -> void:
 	var up := ball.up_at(mouth)
 	var tail := mouth - normal * 0.5
 	var head := mouth + _dir * ext - normal * (0.12 if ext < 0.05 else 0.0)
+	if ext < 0.05 and org != null:
+		head += normal * clampf(org.lift, 0.0, 0.05)
 	# Head first, then back into the crevice (the body shader runs head to tail).
 	var pts := PackedVector4Array()
 	var ups := PackedVector4Array()
@@ -220,7 +234,8 @@ func _pose() -> void:
 		var k := 1.0 - float(i) / SEGS
 		var p := tail.lerp(head, k)
 		# A sideways ripple along the body while it is out.
-		p += _dir.cross(up).normalized() * sin(k * 9.0 - state_t * 12.0) * 0.06 * clampf(ext, 0.0, 1.0) * (1.0 - k * 0.6)
+		var rt := _clock if OrganicMotion.enabled else state_t
+		p += _dir.cross(up).normalized() * sin(k * 9.0 - rt * 12.0) * 0.06 * clampf(ext, 0.0, 1.0) * (1.0 - k * 0.6)
 		pts[i] = Vector4(p.x, p.y, p.z, 0.15 * lerpf(1.05, 0.85, float(i) / SEGS))
 		ups[i] = Vector4(up.x, up.y, up.z, 0.0)
 	_segs_mi.global_position = head
@@ -228,7 +243,10 @@ func _pose() -> void:
 	_body_mat.set_shader_parameter("ups", ups)
 	_segs_mi.visible = ext > 0.05 and not defeated
 	var look := _dir if ext > 0.05 else normal
-	_head.global_transform = Transform3D(Basis(look.cross(up).normalized(), up, -look).orthonormalized(), head)
+	var hb := Basis(look.cross(up).normalized(), up, -look).orthonormalized()
+	if org != null and (org.look != 0.0 or org.nod != 0.0):
+		hb = Basis(up, org.look) * hb * Basis(Vector3.RIGHT, org.nod)
+	_head.global_transform = Transform3D(hb, head)
 	_head.visible = not defeated
 	var glow := 0.25
 	if state == "alert":
