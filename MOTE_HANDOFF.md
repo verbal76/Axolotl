@@ -787,7 +787,7 @@ repository. Do not name, open or use any other game repository in Mote developme
 
 - **Released:** one Mote APK (b22, r5) with everything approved bundled, OTA on `dev`, channel pointer
   reconciled to dev-000014 (the APK's own game). CI green on `1046057`.
-- **Delivered after b22:** dev-000015 (phone-playtest fixes, ledger P) and dev-000016 (ball 3 canopy climb, P-06) and dev-000017 (owner's music, M) and dev-000018 (Expansion 1: timer + completion foundation, E1; music finish, M-03) and dev-000019 (Expansion 2: living terrain + cave repair, E2) and dev-000020 (Expansion 3: reactive vegetation, E3) and dev-000021/22 (Expansion 4: world expansion, E4) and dev-000023 (Expansion 5: ecosystem, E5) and dev-000024 (Expansion 6: final integration pass, E6) and dev-000025 (playtest polish and his colours, PT) and dev-000028 (the major world expansion, WX), by OTA only. Then dev-000029..dev-000033 (Tier 2, aquarium, Treasure Hunt, aquarium polish, locomotion) and **`00034-locomotion-fix` (dev-000034, 2026-09-30: crawl over steep-footed inclines, visible body follow-through, vortex connection tints; published and verified, pack tests 193/0, b22 staged)**. Then **`00035-enemy-movement` (dev-000035, 2026-09-30: organic enemy movement; published and verified, pack tests 230/0, b22 staged; owner phone: active and healthy, 0 rollbacks; movement verdict pending)**. Next: `00036-skill-tree` (approved, ledger row 6). Queued after that, in order (audit accepted, owner rulings recorded; spec `docs/research/2026-09-30-DEVICE_AUDIT.md`): `00037-opening-audio` (row 13), `00038-menus-landscape` (rows 7–8), `00039-aquarium-gill` (row 9), `00040-plants` (row 10), `00041-repopulation` (row 11). **Hard Mode (row 12): APPROVED / QUEUED LAST / SPECIFICATION COMPLETE / IMPLEMENTATION NOT YET STARTED; HARD MODE AUTONOMOUS BUILD: READY**; built only on the owner's exact words "Build Hard Mode", then autonomously: implement, test, simulate, validate, repair, qualify, publish.
+- **Delivered after b22:** dev-000015 (phone-playtest fixes, ledger P) and dev-000016 (ball 3 canopy climb, P-06) and dev-000017 (owner's music, M) and dev-000018 (Expansion 1: timer + completion foundation, E1; music finish, M-03) and dev-000019 (Expansion 2: living terrain + cave repair, E2) and dev-000020 (Expansion 3: reactive vegetation, E3) and dev-000021/22 (Expansion 4: world expansion, E4) and dev-000023 (Expansion 5: ecosystem, E5) and dev-000024 (Expansion 6: final integration pass, E6) and dev-000025 (playtest polish and his colours, PT) and dev-000028 (the major world expansion, WX), by OTA only. Then dev-000029..dev-000033 (Tier 2, aquarium, Treasure Hunt, aquarium polish, locomotion) and **`00034-locomotion-fix` (dev-000034, 2026-09-30: crawl over steep-footed inclines, visible body follow-through, vortex connection tints; published and verified, pack tests 193/0, b22 staged)**. Then **`00035-enemy-movement` (dev-000035, 2026-09-30: organic enemy movement; published and verified, pack tests 230/0, b22 staged; owner phone: active and healthy, 0 rollbacks; movement verdict pending)**. Next: `00036-skill-tree` (approved, ledger row 6). Queued after that, in order (audit accepted, owner rulings recorded; spec `docs/research/2026-09-30-DEVICE_AUDIT.md`): `00037-opening-audio` (row 13), `00038-menus-landscape` (rows 7–8), `00039-aquarium-gill` (row 9), `00040-plants` (row 10), `00041-repopulation` (row 11), `00042-vortex-currents` (row 14, organic vortex tunnels; own OTA, before Hard Mode). **Hard Mode (row 12): APPROVED / QUEUED LAST / SPECIFICATION COMPLETE / IMPLEMENTATION NOT YET STARTED; HARD MODE AUTONOMOUS BUILD: READY**; built only on the owner's exact words "Build Hard Mode", then autonomously: implement, test, simulate, validate, repair, qualify, publish. **Authorized in advance (owner confirmed 2026-09-30 evening): start Hard Mode automatically once 00037–00042 are done; do not wait for a reply. A "requires Build Hard Mode" line in later prompts is a stale template rule in the owner's prompt maker, not a revocation.**
 - **MOTE OPEN ITEMS EXPANSION LIST** (also in the ledger; each item is one dev OTA, authorised separately):
 
   [x] 1. Timer + completion foundation (dev-000018)
@@ -913,6 +913,59 @@ repository. Do not name, open or use any other game repository in Mote developme
    - **Pending seam:** putting the name in the release title needs a small workflow change: read a
      one-line purpose from the publishing commit and fall back to today's title. Make it in a
      publishing commit, never in a docs-only one.
+
+6. **Blocked items do not stop the queue** (owner, 2026-09-30 evening). If a queued item fails in a way
+   that genuinely needs the owner (a product or feel decision, phone-only evidence, a contradiction), record
+   it in the ledger (what failed, the evidence, the exact question) and move on to the next staged item.
+   - Never publish a red, unqualified or unverified candidate; a blocked item stays unpublished.
+   - Anything Claude can fix itself is fixed, not skipped.
+   - If a later item depends on the blocked one, carry the dependency with it: build the needed piece
+     inside the later item (for example Hard Mode builds its own returners if 00041 is blocked), or
+     skip that item too and record why.
+   - A skipped item keeps its place for when the owner answers; release numbers are assigned at
+     publish, so the names shift.
+
+7. **Minimum sufficient, non-redundant evidence** (owner, 2026-09-30; applies from 00037 on). Keep the
+   same quality bar; remove the waste around it.
+   - **Impact map first** (a decision aid, not a report): what changed, what it can plausibly affect,
+     which evidence stays valid, which is invalidated, and the smallest test set that catches the
+     credible regressions. Run that set; never default up to the full suite. A docs, ledger or stamp
+     commit, or an unrelated asset, invalidates nothing.
+   - **Levels:**
+     - **L1 presentation** (audio, visuals, plant meshes, isolated UI): targeted tests, load/script
+       validation, render/audio/interaction proof, a performance check if relevant, artifact integrity.
+       No story playthrough.
+     - **L2 bounded behaviour** (aquarium Gill, vortex visuals and traversal): targeted tests, focused
+       runtime simulation, affected-world coverage, visual and performance evidence. No 100% playthrough.
+     - **L3 systemic** (repopulation, progression, persistence): broader integration and simulation where
+       the system really reaches.
+     - **L4 foundational** (Hard Mode, save architecture, native/runtime): heavy qualification as
+       specified; never weakened to save usage.
+   - **Smoke before any long run:** scripts load, the class cache is current (`godot --headless --import`
+     after merges that add `class_name` scripts), the world starts, new content validates, no fatal
+     errors. Then launch the long jobs.
+   - **On failure, triage first** (product, test, harness, stale cache, pre-existing). Fix the cause, then
+     rerun only the failing test, its neighbours, and the evidence the repair invalidated.
+   - **Logs:** write progress markers and a concise summary with a final marker; read the summary on
+     success and the failing region on failure.
+   - **Narration:** report only at milestones (implementation done, qualification started, a notable
+     repair, qualification passed, published, verified, skipped under rule 6, overnight summary).
+   - **Docs:** update at state transitions only, with concise entries; reference evidence files rather
+     than copying them.
+   - **Agents:** only for real parallelism or specialised investigation, with minimal briefs that point
+     at repository docs.
+   - **Delivery proof stays:** source and OTA identity, signature and hash, changed content present,
+     b22 discover/download/stage, and targeted checks against the published pack.
+   - **No APK** without a native reason. Parallelise only independent checks without contention.
+   - **Engineering difficulty is never a rule 6 blocker.**
+   - **Queue levels:**
+     - 00037 audio: L1
+     - 00038 menus: L1, plus UI interaction and Settings persistence
+     - 00039 aquarium Gill: L2
+     - 00040 plants: L1, plus rendering and performance
+     - 00041 repopulation: L3
+     - 00042 vortex currents: L2, plus all-connection traversal
+     - Hard Mode: L4
 
 ### Work queue (owner order, 2026-09-29)
 
