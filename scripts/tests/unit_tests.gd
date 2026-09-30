@@ -6678,16 +6678,27 @@ func _test_treasure_play() -> void:
 	var tg: Dictionary = TreasureHunt.current(st)
 	var b0: MossBall = g.balls[int(tg["world"])]
 	var target: Vector3 = tp.node.global_position
-	var from := _approach(b0, target)
-	place_at(b0.index, from + b0.up_at(from) * 0.1, target - from)
-	await t.seconds(0.3)
-	for k in 80:
-		var flat: Vector3 = target - p.global_position
-		flat -= p.up * flat.dot(p.up)
-		stick_toward(flat.normalized())
-		await t.frames(2)
-	p.bot_input = Vector2.ZERO
-	var touched := p.global_position.distance_to(target) < 1.5
+	# (Walk up to it; if the random hunt put it where this approach wedges him, try the next
+	# approach point, as the lunge helper does. The test is about touching, not route finding.)
+	var touched := false
+	for skip in 4:
+		var from := _approach(b0, target, skip)
+		if from == Vector3.INF:
+			break
+		place_at(b0.index, from + b0.up_at(from) * 0.1, target - from)
+		await t.seconds(0.3)
+		for k in 80:
+			var flat: Vector3 = target - p.global_position
+			flat -= p.up * flat.dot(p.up)
+			stick_toward(flat.normalized())
+			await t.frames(2)
+			if p.global_position.distance_to(target) < 1.2:
+				break
+		p.bot_input = Vector2.ZERO
+		touched = p.global_position.distance_to(target) < 1.5
+		if touched:
+			break
+		t.log_line("TREASURE TOUCH approach %d wedged at %.2f m; trying the next" % [skip, p.global_position.distance_to(target)])
 	var idx_touch := int(st["index"])
 	await press("swipe")
 	await t.seconds(0.5)
