@@ -1676,13 +1676,21 @@ func _loco_shots(g: Game) -> void:
 	var c := p.global_position + up * 0.2
 	_close(g, c + up * 3.2 + fwd * 0.3 + right * 0.4, c + right * 0.2, fwd)
 	await t.seconds(0.5)
-	Engine.time_scale = 0.15
-	for i in 5:
-		hold.call(right)
-		await t.frames(2 if i < 4 else 6)
-		await t.shot("turn_%d" % i)
+	var at_f := [3, 6, 9, 13, 20, 40]
+	var fi := 0
+	for f in 41:
+		# (Only a turn: he faces round on the spot, then would set off; stop him there.)
+		hold.call(right if f < 8 else Vector3.ZERO)
+		if f >= 8:
+			p.bot_input = Vector2.ZERO
+		await t.frames(1)
+		if fi < at_f.size() and f == at_f[fi]:
+			Engine.time_scale = 0.02
+			await t.frames(1)
+			await t.shot("turn_%d" % fi)
+			Engine.time_scale = 1.0
+			fi += 1
 	p.bot_input = Vector2.ZERO
-	Engine.time_scale = 1.0
 	# 2. A running curve, from above and behind.
 	p.place(b0, b0.surface_point(at, 0.05), fwd)
 	_open(g)
