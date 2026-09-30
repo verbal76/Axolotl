@@ -925,6 +925,48 @@ repository. Do not name, open or use any other game repository in Mote developme
    - A skipped item keeps its place for when the owner answers; release numbers are assigned at
      publish, so the names shift.
 
+7. **Minimum sufficient, non-redundant evidence** (owner, 2026-09-30; applies from 00037 on). Keep the
+   same quality bar; remove the waste around it.
+   - **Impact map first** (a decision aid, not a report): what changed, what it can plausibly affect,
+     which evidence stays valid, which is invalidated, and the smallest test set that catches the
+     credible regressions. Run that set; never default up to the full suite. A docs, ledger or stamp
+     commit, or an unrelated asset, invalidates nothing.
+   - **Levels:**
+     - **L1 presentation** (audio, visuals, plant meshes, isolated UI): targeted tests, load/script
+       validation, render/audio/interaction proof, a performance check if relevant, artifact integrity.
+       No story playthrough.
+     - **L2 bounded behaviour** (aquarium Gill, vortex visuals and traversal): targeted tests, focused
+       runtime simulation, affected-world coverage, visual and performance evidence. No 100% playthrough.
+     - **L3 systemic** (repopulation, progression, persistence): broader integration and simulation where
+       the system really reaches.
+     - **L4 foundational** (Hard Mode, save architecture, native/runtime): heavy qualification as
+       specified; never weakened to save usage.
+   - **Smoke before any long run:** scripts load, the class cache is current (`godot --headless --import`
+     after merges that add `class_name` scripts), the world starts, new content validates, no fatal
+     errors. Then launch the long jobs.
+   - **On failure, triage first** (product, test, harness, stale cache, pre-existing). Fix the cause, then
+     rerun only the failing test, its neighbours, and the evidence the repair invalidated.
+   - **Logs:** write progress markers and a concise summary with a final marker; read the summary on
+     success and the failing region on failure.
+   - **Narration:** report only at milestones (implementation done, qualification started, a notable
+     repair, qualification passed, published, verified, skipped under rule 6, overnight summary).
+   - **Docs:** update at state transitions only, with concise entries; reference evidence files rather
+     than copying them.
+   - **Agents:** only for real parallelism or specialised investigation, with minimal briefs that point
+     at repository docs.
+   - **Delivery proof stays:** source and OTA identity, signature and hash, changed content present,
+     b22 discover/download/stage, and targeted checks against the published pack.
+   - **No APK** without a native reason. Parallelise only independent checks without contention.
+   - **Engineering difficulty is never a rule 6 blocker.**
+   - **Queue levels:**
+     - 00037 audio: L1
+     - 00038 menus: L1, plus UI interaction and Settings persistence
+     - 00039 aquarium Gill: L2
+     - 00040 plants: L1, plus rendering and performance
+     - 00041 repopulation: L3
+     - 00042 vortex currents: L2, plus all-connection traversal
+     - Hard Mode: L4
+
 ### Work queue (owner order, 2026-09-29)
 
 1. ~~dev-000031 (Treasure Hunt fix)~~: published and verified.
