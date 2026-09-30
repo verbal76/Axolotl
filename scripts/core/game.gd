@@ -570,8 +570,15 @@ func finish_skills() -> int:
 
 
 func best_line() -> String:
-	var best: float = run_save.records()["best_finish_s"]
-	return "Best finish %s" % RunClock.format(best) if best >= 0.0 else ""
+	var rec := run_save.records()
+	var best: float = rec["best_finish_s"]
+	if best < 0.0:
+		return ""
+	# (With the skills it was finished with, when the record has them: there is no skills-off mode.)
+	for f in rec.get("finishes", []):
+		if f is Dictionary and str(f.get("run_id", "")) == str(rec.get("best_run_id", "")) and (f as Dictionary).has("skills"):
+			return "Best finish %s  ·  Skills %d/%d" % [RunClock.format(best), int(f["skills"]), SkillTree.COUNT]
+	return "Best finish %s" % RunClock.format(best)
 
 
 func _autosave(dt: float) -> void:

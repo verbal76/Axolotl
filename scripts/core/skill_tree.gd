@@ -61,12 +61,12 @@ const TIERS := {
 	"magnet": {"range": [0.0, 2.5, 3.5, 4.5], "accel": [0.0, 1.4, 2.2, 3.0], "leash": [0.0, 1.0, 1.8, 2.6], "startle": [0.0, 2.5, 2.5, 2.5]},
 	# Glide ("tiring wing", docs/SKILL_TREE.md): fresh sink s0 and forward speed v, tiring with time
 	# constant tau toward a parachute sink s_end and a slow drift v_end.
-	"glide": {"s0": [0.0, 3.0, 2.5, 2.0], "tau": [0.0, 0.9, 1.1, 1.35], "v": [0.0, 6.7, 7.0, 7.4]},
+	"glide": {"s0": [0.0, 2.7, 2.3, 2.0], "tau": [0.0, 1.0, 1.2, 1.35], "v": [0.0, 6.9, 7.2, 7.4]},
 }
 ## Shared by every glide tier: tired sink (a soft landing: 6.5 m/s is a 1.06 m fall), tired drift,
 ## how quickly the forward speed eases to the target, and how hard a faster fall is braked.
 const GLIDE_S_END := 6.5
-const GLIDE_V_END := 2.5
+const GLIDE_V_END := 3.5
 const GLIDE_ACCEL := 9.0
 const GLIDE_BRAKE := 14.0
 ## He opens into the glide near the top of a jump: once rising slower than this (m/s).

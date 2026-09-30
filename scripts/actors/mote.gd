@@ -31,6 +31,8 @@ var startle_t := 0.0
 var magnet_on := false
 var _los := false
 var _los_t := 0.0
+## How many times any Mote has run the Magnet (tests: never with no Magnet).
+static var magnet_calls := 0
 
 
 func setup(p_ball: MossBall, p_zone: String, dir: Vector3, h := 0.0, p_wander := 2.2) -> void:
@@ -252,6 +254,7 @@ func _update_wander(dt: float) -> void:
 ## a ravine and not while startled, it drifts toward his head. No randomness is drawn (the seeded
 ## playthroughs stay identical), and with no Magnet this is never called.
 func _magnet(dt: float, pl: Axolotl) -> void:
+	magnet_calls += 1
 	magnet_on = false
 	if startle_t > 0.0:
 		startle_t -= dt

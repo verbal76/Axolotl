@@ -583,6 +583,16 @@ func ui() -> void:
 	page.done.emit()
 	await t.frames(3)
 	t.check("skill_page_from_title", from_title and not page.visible and not pm.visible, "")
+	# Finishes show the skills they were finished with (there is no skills-off mode).
+	var keep_rec: Dictionary = g.run_save.data["records"].duplicate(true)
+	var keep_fin: Dictionary = g.run_save.run()["finish"].duplicate(true)
+	g.run_save.data["records"]["best_finish_s"] = -1.0
+	g.run_save.record_finish(1234.5, 88.0, Completion.CATALOG_VERSION, Boot.identity(), gp.skills())
+	var best := g.best_line()
+	var fin_ok := best.ends_with("Skills %d/15" % gp.skills()) and g.finish_skills() == gp.skills() and int(g.run_save.run()["finish"]["skills"]) == gp.skills()
+	g.run_save.data["records"] = keep_rec
+	g.run_save.run()["finish"] = keep_fin
+	t.check("finish_shows_skills", fin_ok, best)
 	g.get_tree().paused = false
 	gp.collected = keep_c
 	gp.purchased = keep_p
@@ -940,7 +950,32 @@ func magnet() -> void:
 	var hidden: float = await trial.call(3)
 	wall.queue_free()
 	t.check("magnet_needs_line_of_sight", hidden < gain3 * 0.5 and m.is_available(), "behind a wall it closed in %.2f m" % hidden)
+	# No randomness: with no Magnet it never runs; its code draws nothing; and a Mote stepped with the
+	# same seed moves identically with Magnet III (out of his reach) and without.
 	tiers()
+	var calls0 := Mote.magnet_calls
+	await t.seconds(2.0)
+	var calls1 := Mote.magnet_calls
+	var src := FileAccess.get_file_as_string("res://scripts/actors/mote.gd")
+	var body := src.substr(src.find("func _magnet("), src.find("func startle(") - src.find("func _magnet("))
+	var runs := []
+	for tier in [0, 3]:
+		tiers({"magnet": tier})
+		m.set_physics_process(false)
+		m.global_position = m.anchor + up * 0.6
+		m.vel = Vector3.ZERO
+		m._target = m.global_position
+		m._retarget = 0.0
+		m._t = 0.0
+		u.place(3, 10, 30, 0.2)
+		seed(777)
+		for i in 240:
+			m._update_wander(1.0 / 60.0)
+		runs.append([m.global_position, randi()])
+		m.set_physics_process(true)
+	tiers()
+	t.check("magnet_draws_no_random_numbers", calls1 == calls0 and not body.contains("rand") and body.length() > 100 and runs[0][0].is_equal_approx(runs[1][0]) and runs[0][1] == runs[1][1],
+			"calls with no Magnet in 2 s of play: %d; same seed, 240 steps, next random number: %s / %s" % [calls1 - calls0, str(runs[0][1]), str(runs[1][1])])
 	p.invuln_t = 0.0
 
 
@@ -1000,6 +1035,9 @@ func _attempt(bi: int, from: Vector3, to: Vector3, strat: Dictionary, col := fal
 				break
 		Input.action_press("jump")
 	var takeoff := p.global_position
+	var landing := [""]
+	var on_land := func(k: String) -> void: landing[0] = k
+	p.landed.connect(on_land)
 	var air := 0
 	var burst_done := col
 	var held := true
@@ -1037,11 +1075,13 @@ func _attempt(bi: int, from: Vector3, to: Vector3, strat: Dictionary, col := fal
 			break
 	Input.action_release("jump")
 	p.bot_input = Vector2.ZERO
+	await t.frames(2)
+	p.landed.disconnect(on_land)
 	var land := p.global_position
 	var off := to - land
 	off -= b.up_at(land) * off.dot(b.up_at(land))
 	var dalt: float = b.altitude(land) - b.altitude(to)
-	return {"ok": off.length() <= 1.6 and absf(dalt) <= 0.6, "dist": off.length(), "dalt": dalt, "progress": progress, "air": air / 60.0,
+	return {"ok": off.length() <= 1.6 and absf(dalt) <= 0.6, "dist": off.length(), "dalt": dalt, "progress": progress, "air": air / 60.0, "landing": landing[0],
 			"top": top - alt0, "glided": glided, "across": (to - takeoff - b.up_at(takeoff) * (to - takeoff).dot(b.up_at(takeoff))).length()}
 
 
@@ -1082,17 +1122,24 @@ func _plain_strats() -> Array:
 ## The transfers (docs/SKILL_TREE.md): each [name, ball, from, to, tier the design gives it, column?].
 ## Intended: base movement cannot, the named Glide tier can (and each higher one). Impossible: no
 ## tier, no burst timing, no release timing gets there.
+## [name, ball, from, to, design tier, from a bubble column, glide-only (base movement cannot)].
 const INTENDED := [
-	["Grand Terraces crown -> the Twin Terrace bridge", 3, [3, 27.2, -64.1, 4.8], [3, 10.6, -65.2, 3.5], 3, false],
-	["Undercut bridge crown -> the other bridge", 6, [6, -32.9, 93.1, 3.9], [6, -29.3, 109.7, 1.2], 2, false],
-	["canopy spiral leaf (15.8 m) -> a jungle stem leaf", 2, [2, 29.1, -28.3, 15.8], [2, 25.7, -13.9, 3.8], 1, false],
-	["lower canopy leaf -> a jungle stem leaf", 2, [2, 26.8, -26.4, 7.7], [2, 25.7, -13.9, 3.8], 2, false],
-	["canopy spiral leaf (16.7 m) -> a high jungle stem leaf", 2, [2, 26.9, -26.8, 16.7], [2, 26.7, -13.4, 10.5], 3, false],
-	["jungle stem leaf -> the next stem's leaf", 2, [2, -41.8, 71.2, 15.4], [2, -43.9, 56.3, 8.0], 1, false],
-	["canyon bridge -> the south crest", 4, [4, 32.3, -110.5, 3.1], [4, 21.1, -111.3, 2.7], 3, false],
-	["Mesa column top -> the Mesa's lower step", 1, [1, 21.9, -20.0, 0.0], [1, 14.7, -31.5, 1.6], 1, true],
-	["Fern column top -> the other fern shelf", 0, [0, -33.0, -70.0, 0.0], [0, -42.0, -81.2, 4.2], 1, true],
-	["Hollows column top -> a coral shelf", 1, [1, 12.0, 25.6, 0.0], [1, 4.0, 36.0, 2.8], 1, true],
+	["Undercut bridge crown -> the east bridge", 6, [6, -32.9, 93.1, 3.9], [6, -29.3, 109.7, 1.2], 1, false, true],
+	["Undercut bridge crown -> the west bridge", 6, [6, -32.9, 110.1, 3.9], [6, -29.3, 93.4, 2.4], 2, false, true],
+	["Grand Terraces crown -> the Twin Terrace bridge", 3, [3, 27.2, -64.1, 4.8], [3, 10.6, -65.2, 3.5], 1, false, false],
+	["Twin Terrace bridge -> the Grand Terraces' second tier", 3, [3, 14.5, -65.2, 3.5], [3, 26.8, -54.2, 2.4], 1, false, false],
+	["canopy crown leaf -> a jungle stem leaf 15 m below", 2, [2, 19.3, -35.2, 17.4], [2, 5.1, -34.3, 1.9], 1, false, false],
+	["canopy column top -> a lower canopy leaf", 2, [2, 22.8, -31.0, 0.0], [2, 24.9, -24.5, 4.7], 1, true, false],
+	["jungle stem leaf -> a lower stem leaf 14 m on", 2, [2, -41.8, 71.2, 15.4], [2, -43.9, 56.3, 8.0], 1, false, false],
+]
+## Candidates for glide-only transfers (probe only).
+const EXTRA := [
+	["Undercut bridge crown (east) -> the west bridge", 6, [6, -32.9, 110.1, 3.9], [6, -29.3, 93.4, 2.4], 2, false],
+	["Twin Terrace bridge -> the Grand Terraces' second tier", 3, [3, 14.5, -65.2, 3.5], [3, 26.8, -54.2, 2.4], 3, false],
+	["jungle stem leaf -> a stem leaf 10 m on", 2, [2, 34.0, -158.8, 8.7], [2, 42.4, -159.9, 8.1], 2, false],
+	["high jungle stem leaf -> a stem leaf 10 m on", 2, [2, -65.5, 14.9, 13.3], [2, -68.8, 33.9, 12.9], 3, false],
+	["jungle stem leaf -> a stem leaf 10 m on (b)", 2, [2, 22.7, 38.9, 2.6], [2, 13.8, 41.3, 1.9], 2, false],
+	["jungle stem leaf -> a lower stem leaf 14 m on", 2, [2, -41.8, 71.2, 15.4], [2, -43.9, 56.3, 8.0], 1, false],
 ]
 const IMPOSSIBLE := [
 	["High Crown -> a far jungle stem (79 m)", 2, [2, 42.23, 113.3, 28.96], [2, -11.9, 139.1, 1.0]],
@@ -1118,8 +1165,20 @@ func _barrier_ends(bi: int, zone: String) -> Array:
 		for h in _hints(b):
 			if h.has("gate") and h["gate"] == rg:
 				inside = h["inside"]
+		# (Across the gate: of its two horizontal axes, the one along which a line at body height from
+		# one side to the other meets the gate itself.)
 		var n := rg.closed_xf.basis.z
-		n = (n - b.up_at(c) * n.dot(b.up_at(c))).normalized()
+		var upc := b.up_at(c)
+		var space := g.get_world_3d().direct_space_state
+		for ax in [rg.closed_xf.basis.z, rg.closed_xf.basis.x]:
+			var a: Vector3 = (ax - upc * ax.dot(upc)).normalized()
+			var p0 := b.surface_point(b.up_at(c - a * 4.5), 0.9)
+			var p1 := b.surface_point(b.up_at(c + a * 4.5), 0.9)
+			var hit := space.intersect_ray(PhysicsRayQueryParameters3D.create(p0, p1, 1 | 2))
+			if not hit.is_empty() and hit["collider"] == rg:
+				n = a
+				break
+		n = (n - upc * n.dot(upc)).normalized()
 		if inside != Vector3.INF and (inside - c).dot(n) < 0.0:
 			n = -n
 		var from := b.surface_point(b.up_at(c - n * 4.5))
@@ -1139,12 +1198,47 @@ func _barrier_strats(glide: bool) -> Array:
 ## Diagnostic (by name only): every intended and impossible transfer at every tier, printed.
 func glide_probe() -> void:
 	var part := str(Settings.test_args.get("part", "all"))
+	if part == "coldbg":
+		var prev0: Array = await _gates(true)
+		tiers({"glide": 3, "burst": 3})
+		var from := _pt([1, 21.9, -20.0, 0.0])
+		var to := _pt([1, 14.7, -31.5, 1.6])
+		var b: MossBall = g.balls[1]
+		u.place_at(1, from + b.up_at(from) * 0.3, to - from)
+		for i in 480:
+			await t.frames(1)
+			if i % 20 == 0:
+				t.log_line("COL f%d alt %.2f vup %.2f in_col %s grounded %s" % [i, b.altitude(p.global_position), p.velocity.dot(p.up), p._in_column, p.grounded])
+			if i > 60 and absf(p.velocity.dot(p.up)) < 1.2 and p._in_column:
+				t.log_line("COL top at f%d alt %.2f" % [i, b.altitude(p.global_position)])
+				break
+		for i in 6:
+			u.stick_toward(to - p.global_position)
+			await t.frames(1)
+		Input.action_press("jump")
+		var start := p.global_position
+		for i in 200:
+			u.stick_toward(to - p.global_position)
+			await t.frames(1)
+			if i % 5 == 0:
+				t.log_line("COL air f%d alt %.2f vup %.2f vh %.2f in_col %s gliding %s burst_avail %s dist %.2f" % [i, b.altitude(p.global_position), p.velocity.dot(p.up), (p.velocity - p.up * p.velocity.dot(p.up)).length(), p._in_column, p.gliding, p.burst_available, (p.global_position - start).length()])
+			if p.grounded and i > 6:
+				break
+		Input.action_release("jump")
+		tiers()
+		await _gates_restore(prev0)
+		t.check("coldbg", true, "")
+		return
 	var prev: Array = await _gates(true)
 	if part in ["all", "barrier"]:
 		await _gates_restore(prev)
 		prev = await _gates(false)
 		for e in BARRIERS:
+			if Settings.test_args.has("barrier") and not str(e[0]).contains(str(Settings.test_args["barrier"])):
+				continue
 			var ends := _barrier_ends(int(e[1]), e[2])
+			var bb: MossBall = g.balls[int(e[1])]
+			t.log_line("BARRIER %s: from ll %s alt %.2f, to ll %s alt %.2f, gate at ll %s alt %.2f" % [e[0], str(_ll(bb, ends[0])), bb.altitude(ends[0]), str(_ll(bb, ends[1])), bb.altitude(ends[1]), str(_ll(bb, ends[2])), bb.altitude(ends[2])])
 			for gt in [0, 3]:
 				var ts := {"glide": 3, "burst": 3, "quick": 3} if gt == 3 else {}
 				tiers(ts)
@@ -1153,6 +1247,8 @@ func glide_probe() -> void:
 				for st in _barrier_strats(gt == 3):
 					var r: Dictionary = await _attempt(int(e[1]), ends[0], ends[1], st)
 					var depth: float = (p.global_position - (ends[2] as Vector3)).dot(ends[3])
+					if Settings.test_args.has("barrier"):
+						t.log_line("BARRIER try %s: landed at ll %s alt %.2f, depth %.2f, progress %.2f" % [str(st), str(_ll(bb, p.global_position)), bb.altitude(p.global_position), depth, r["progress"]])
 					deepest = maxf(deepest, depth)
 					if depth > 0.8:
 						crossed += 1
@@ -1164,14 +1260,14 @@ func glide_probe() -> void:
 		await _gates_restore(prev)
 		t.check("glide_probe_ran", true, "")
 		return
-	for e in (INTENDED if part in ["all", "intended"] else []):
+	for e in (EXTRA if part == "extra" else (INTENDED if part in ["all", "intended"] else [])):
 		var from := _pt(e[2])
 		var to := _pt(e[3])
 		for gt in [0, 1, 2, 3]:
 			var ts := {"glide": gt, "burst": 3 if gt >= 2 else 1} if gt > 0 else {"burst": 3}
-			var r: Array = await _best(int(e[1]), from, to, ts, _strats() if gt > 0 else _plain_strats(), e[5])
+			var r: Array = await _best(int(e[1]), from, to, ts, _strats([-1.0, 1.0]) if gt > 0 else _plain_strats(), e[5])
 			var d: Dictionary = r[1]
-			t.log_line("GLIDE %s G%d: %s, landed %.1f m from it (alt %+.1f), progress %.1f of %.1f m, air %.1f s, strat %s" % [e[0], gt, "REACHED" if r[0] else "no", d["dist"], d["dalt"], d["progress"], d["across"], d["air"], str(r[2])])
+			t.log_line("GLIDE %s G%d: %s, landed %.1f m from it (alt %+.1f), progress %.1f of %.1f m, air %.1f s, landing %s, strat %s" % [e[0], gt, "REACHED" if r[0] else "no", d["dist"], d["dalt"], d["progress"], d["across"], d["air"], d["landing"], str(r[2])])
 	for e in (IMPOSSIBLE if part in ["all", "impossible"] else []):
 		var from := _pt(e[2])
 		var to := _pt(e[3])
@@ -1188,24 +1284,35 @@ func _hints(b: MossBall) -> Array:
 	return (b.get_meta("builder") as LevelBuilder).bot_hints
 
 
-## Walks (and hops when stuck) toward a starfish until he touches it.
-func _walk_to_star(s: Starfish, timeout := 8.0) -> bool:
+## Walks (and hops when stuck, with a water burst on a second hop) toward a starfish until he touches
+## it. (It may already be gone: picked up on the way.)
+func _walk_to_star(id: String, target: Vector3, timeout := 8.0) -> bool:
 	var last := p.global_position
 	var still := 0.0
+	var hops := 0
 	for i in int(timeout * 60):
-		if g.gill.has_star(s.id):
+		if g.gill.has_star(id):
 			break
-		var off := s.pick_point() - p.global_position
+		var off := target - p.global_position
 		u.stick_toward(off)
 		await t.frames(1)
 		still = still + 1.0 / 60.0 if p.global_position.distance_to(last) < 0.01 else 0.0
 		last = p.global_position
-		# (A small step or a low rock in the way: hop, as a player would.)
+		# (A small step or a low rock in the way: hop, as a player would; every other hop with a burst
+		# toward it at the top.)
 		if p.grounded and (still > 0.4 or (off.dot(p.up) > 0.5 and (off - p.up * off.dot(p.up)).length() < 2.2)):
 			await u.press("jump")
+			hops += 1
+			if hops % 2 == 0:
+				for j in 40:
+					u.stick_toward(target - p.global_position)
+					await t.frames(1)
+					if p.velocity.dot(p.up) <= 0.5:
+						break
+				await u.press("jump")
 			still = 0.0
 	p.bot_input = Vector2.ZERO
-	return g.gill.has_star(s.id)
+	return g.gill.has_star(id)
 
 
 ## Routes (bot hints) whose climb passes within reach of `pos`: [[hint, top index], ...], lifts last.
@@ -1237,7 +1344,74 @@ func _route_ending_at(b: MossBall, start: Vector3) -> Dictionary:
 	return {}
 
 
-## Climbs `h` up to top `k` with plain jumps (unit_tests._climb), first climbing the route that ends
+## One step of a climb: from where he stands to `target`, with a plain jump, or (`burst` > 0) a jump
+## and a water burst toward it that many seconds in (base movement: no skill).
+func _step(b: MossBall, target: Vector3, burst: float, back := 1.9) -> void:
+	var flat := target - p.global_position
+	flat -= p.up * flat.dot(p.up)
+	var upward := (target - p.global_position).dot(p.up) > 0.3
+	if upward:
+		for i in 60:
+			flat = target - p.global_position
+			flat -= p.up * flat.dot(p.up)
+			if flat.length() >= back:
+				break
+			u.stick_toward(-flat)
+			await t.frames(1)
+	for i in 6:
+		u.stick_toward(target - p.global_position)
+		await t.frames(1)
+	if upward or flat.length() > 2.5 or burst > 0.0:
+		await u.press("jump")
+	var air := 0
+	for i in 150:
+		var off := target - p.global_position
+		off -= p.up * off.dot(p.up)
+		if off.length() > 0.3:
+			u.stick_toward(off)
+		else:
+			p.bot_input = Vector2.ZERO
+		await t.frames(1)
+		air += 1
+		if burst > 0.0 and air == int(burst * 60.0):
+			await u.press("jump")
+		if p.grounded and i > 12 and off.length() < 0.6:
+			break
+	p.bot_input = Vector2.ZERO
+	await u.wait_grounded()
+
+
+## Climbs a route's tops 0..k with base movement: a plain jump per step, and when that falls short, a
+## jump with a burst (as the audited "burst" routes need). True when he stands on top k.
+func _climb_steps(b: MossBall, tops: Array, k: int) -> bool:
+	var i := 0
+	while i <= k:
+		var target: Vector3 = tops[i]
+		var on := -1
+		for tries in [[0.0, 1.9], [0.4, 1.9], [0.0, 1.3], [0.35, 2.6], [0.3, 1.3], [0.5, 2.6]]:
+			await _step(b, target, tries[0], tries[1])
+			on = -1
+			for j in range(i, tops.size()):
+				var tj: Vector3 = tops[j]
+				if absf(b.altitude(p.global_position) - b.altitude(tj)) <= 0.6 and p.global_position.distance_to(tj) <= 2.0:
+					on = j
+			if on >= 0:
+				break
+			# (Fell short: back to where this step starts, as a player would try again.)
+			if i > 0:
+				var back: Vector3 = tops[i - 1]
+				u.place_at(b.index, back + b.up_at(back) * 0.3, target - back)
+			else:
+				return false
+			await u.wait_grounded()
+		if on < 0:
+			t.log_line("SWEEP climb: stuck before step %d of %d" % [i + 1, tops.size()])
+			return false
+		i = on + 1
+	return true
+
+
+## Climbs `h` up to top `k` (plain jumps, bursts where needed), first climbing the route that ends
 ## where this one starts when it begins up high. True when he stands on top k.
 func _climb_to(b: MossBall, h: Dictionary, k: int) -> bool:
 	var st: Vector3 = h["start"]
@@ -1245,8 +1419,10 @@ func _climb_to(b: MossBall, h: Dictionary, k: int) -> bool:
 		var pre := _route_ending_at(b, st)
 		if pre.is_empty():
 			return false
-		var got: int = await u._climb(b, pre)
-		if got < (pre["tops"] as Array).size():
+		var ps: Vector3 = pre["start"]
+		u.place_at(b.index, ps + b.up_at(ps) * 0.2, (pre["tops"][0] as Vector3) - ps)
+		await u.wait_grounded()
+		if not await _climb_steps(b, pre["tops"], (pre["tops"] as Array).size() - 1):
 			return false
 	var h2 := h.duplicate()
 	h2["tops"] = (h["tops"] as Array).slice(0, k + 1)
@@ -1257,7 +1433,15 @@ func _climb_to(b: MossBall, h: Dictionary, k: int) -> bool:
 			await t.frames(1)
 			if i > 60 and absf(p.velocity.dot(p.up)) < 1.2 and p._in_column:
 				break
+		# (Out onto the column's landing: the first top off the column's axis; the rest is walked.)
 		var target: Vector3 = h2["tops"][h2["tops"].size() - 1]
+		for tp in h2["tops"]:
+			var fl: Vector3 = (tp as Vector3) - st
+			fl -= b.up_at(st) * fl.dot(b.up_at(st))
+			if fl.length() > 1.5:
+				target = tp
+				break
+		t.log_line("SWEEP column %s: tops %s, landing at alt %.2f, %.2f m from the axis" % [h["route"], str((h["tops"] as Array).map(func(x): return snappedf(b.altitude(x), 0.01))), b.altitude(target), (target - st - b.up_at(st) * (target - st).dot(b.up_at(st))).length()])
 		u.stick_toward(target - p.global_position)
 		await t.frames(8)
 		await u.press("jump")
@@ -1269,8 +1453,10 @@ func _climb_to(b: MossBall, h: Dictionary, k: int) -> bool:
 		p.bot_input = Vector2.ZERO
 		await u.wait_grounded()
 		return p.global_position.distance_to(target) < 2.5
-	var reached: int = await u._climb(b, h2)
-	return reached == (h2["tops"] as Array).size()
+	if b.altitude(st) <= 1.0:
+		u.place_at(b.index, st + b.up_at(st) * 0.2, (h2["tops"][0] as Vector3) - st)
+		await u.wait_grounded()
+	return await _climb_steps(b, h2["tops"], k)
 
 
 ## From open ground a short walk away (a proven anchor: a bloom, a burrower hole or the arrival
@@ -1296,6 +1482,7 @@ func _ground_start(b: MossBall, pos: Vector3) -> Vector3:
 func _sweep_one(s: Starfish, e: Dictionary) -> String:
 	var b := s.ball
 	var pos := s.pick_point()
+	var sid := s.id
 	var kind := str(e["kind"])
 	if kind == "cave":
 		for h in _hints(b):
@@ -1308,7 +1495,7 @@ func _sweep_one(s: Starfish, e: Dictionary) -> String:
 					await t.frames(1)
 					if p.global_position.distance_to(h["door"]) < 0.8:
 						break
-				if await _walk_to_star(s):
+				if await _walk_to_star(sid, pos):
 					return "walked in through the cave door"
 		for h in _hints(b):
 			if h.has("hollow") and (h["inside"] as Vector3).distance_to(pos) < 14.0:
@@ -1316,27 +1503,41 @@ func _sweep_one(s: Starfish, e: Dictionary) -> String:
 				var out := door + ((door - (h["inside"] as Vector3)) * Vector3(1, 1, 1)).normalized() * 3.0
 				u.place_at(b.index, b.surface_point(b.up_at(out), 0.3), pos - out)
 				await u.wait_grounded()
-				if await _walk_to_star(s, 12.0):
+				if await _walk_to_star(sid, pos, 12.0):
 					return "walked in through the doorway"
 	if float(e["alt"]) > 0.8:
 		for rk in _routes_near(b, pos):
-			if await _climb_to(b, rk[0], int(rk[1])):
-				if await _walk_to_star(s, 4.0):
-					return "climbed %s to step %d" % [rk[0]["route"], int(rk[1]) + 1]
+			var climbed: bool = await _climb_to(b, rk[0], int(rk[1]))
+			# (Even if the last step read short, he may be on the perch: walk to it from there.)
+			if await _walk_to_star(sid, pos, 6.0):
+				return "climbed %s to step %d%s" % [rk[0]["route"], int(rk[1]) + 1, "" if climbed else " (then walked)"]
 		# (A low perch with no route: from the ground beside it, a plain jump.)
 		var gs := _ground_start(b, b.surface_point(b.up_at(pos)))
 		if gs != Vector3.INF:
 			u.place_at(b.index, gs + b.up_at(gs) * 0.3, pos - gs)
 			await u.wait_grounded()
-			if await _walk_to_star(s, 10.0):
+			if await _walk_to_star(sid, pos, 14.0):
 				return "walked and jumped from the ground"
+		# (From the ground beside it, all round: run in and jump, bursting at the top.)
+		var up := b.up_at(pos)
+		var fr := MossBall.frame_at(up, 0.0)
+		for k in 8:
+			var q := b.surface_point(b.up_at(pos + fr.z.rotated(up, TAU * k / 8.0) * 3.5))
+			if b.altitude(q) > 0.6 or not TreasureHunt.spot_ok(b, q, 0.5):
+				continue
+			u.place_at(b.index, q + b.up_at(q) * 0.3, pos - q)
+			await u.wait_grounded()
+			await _step(b, pos, 0.4)
+			if await _walk_to_star(sid, pos, 5.0):
+				return "jumped up from the ground beside it"
+		t.log_line("SWEEP %s: last at ll %s alt %.2f (the starfish at alt %.2f)" % [e["id"], str(_ll(b, p.global_position)), b.altitude(p.global_position), b.altitude(pos)])
 		return "NOT REACHED (elevated)"
 	var start := _ground_start(b, pos)
 	if start == Vector3.INF:
 		return "NOT REACHED (no ground start)"
 	u.place_at(b.index, start + b.up_at(start) * 0.3, pos - start)
 	await u.wait_grounded()
-	if await _walk_to_star(s, 14.0):
+	if await _walk_to_star(sid, pos, 14.0):
 		return "walked %.1f m from a proven anchor" % start.distance_to(pos)
 	return "NOT REACHED (walk)"
 
@@ -1352,9 +1553,10 @@ func sweep() -> void:
 	var rows: Array[String] = []
 	var missed: Array[String] = []
 	var got := 0
+	var only_ids := str(Settings.test_args.get("stars", "")).split(",", false)
 	for e in StarfishTable.STARS:
 		var s: Starfish = g.starfish.find(e["id"])
-		if s == null:
+		if s == null or (not only_ids.is_empty() and not only_ids.has(e["id"])):
 			continue
 		var how: String = await _sweep_one(s, e)
 		if g.gill.has_star(e["id"]):
@@ -1368,3 +1570,55 @@ func sweep() -> void:
 	await _gates_restore(prev)
 	t.check("starfish_sweep_all_thirty_no_skills", g.gill.stars() == 30 and missed.is_empty() and p.skill_tiers.values().max() == 0,
 			"%d of 30 collected with no skills; missed: %s" % [g.gill.stars(), str(missed)])
+
+
+## Glide on the real authored geometry (owner ruling 3): every intended transfer is made with its
+## design tier (and the Water Burst that tier requires) and NOT with base movement; every impossible
+## one stays impossible with everything (Glide III, Water Burst III, Quick Gill III), whatever the
+## burst and release timing; and no barrier is crossed by a skill that base movement cannot cross.
+func glide_transfers() -> void:
+	var prev: Array = await _gates(true)
+	var rows: Array[String] = []
+	var ok_all := true
+	for e in INTENDED:
+		var from := _pt(e[2])
+		var to := _pt(e[3])
+		var gt := int(e[4])
+		var base: Array = await _best(int(e[1]), from, to, {}, _plain_strats(), e[5])
+		var ts := {"glide": gt, "burst": 2 if gt >= 2 else 1}
+		var with: Array = await _best(int(e[1]), from, to, ts, _strats([-1.0, 1.0]), e[5])
+		var ok: bool = with[0] and (not base[0] or not e[6])
+		ok_all = ok_all and ok
+		rows.append("%s: base %s%s, Glide %s %s (%s landing)" % [e[0], "reached" if base[0] else "no", (" (" + str(base[1]["landing"]) + " landing)") if base[0] else "",
+				SkillTree.ROMAN[gt], "reached" if with[0] else "NOT reached", with[1]["landing"]])
+	t.check("glide_intended_transfers", ok_all, "; ".join(rows))
+	rows.clear()
+	ok_all = true
+	for e in IMPOSSIBLE:
+		var from := _pt(e[2])
+		var to := _pt(e[3])
+		var r: Array = await _best(int(e[1]), from, to, {"glide": 3, "burst": 3, "quick": 3}, _strats([-1.0, 0.8, 1.6]))
+		var d: Dictionary = r[1]
+		ok_all = ok_all and not r[0]
+		rows.append("%s: %s, best %.1f of %.1f m" % [e[0], "REACHED" if r[0] else "no", d["progress"], d["across"]])
+	t.check("glide_impossible_transfers", ok_all, "; ".join(rows))
+	await _gates_restore(prev)
+	prev = await _gates(false)
+	rows.clear()
+	ok_all = true
+	for e in BARRIERS:
+		var ends := _barrier_ends(int(e[1]), e[2])
+		var crossed := [0, 0]
+		for k in 2:
+			tiers({"glide": 3, "burst": 3, "quick": 3} if k == 1 else {})
+			for st in _barrier_strats(k == 1):
+				await _attempt(int(e[1]), ends[0], ends[1], st)
+				if (p.global_position - (ends[2] as Vector3)).dot(ends[3]) > 0.8:
+					crossed[k] += 1
+			tiers()
+		# (A barrier base movement already gets past is reported, not a skill's doing.)
+		ok_all = ok_all and (crossed[1] == 0 or crossed[0] > 0)
+		rows.append("%s: crossed %d/10 with no skills, %d/10 gliding with Glide III + Water Burst III + Quick Gill III" % [e[0], crossed[0], crossed[1]])
+	await _gates_restore(prev)
+	t.check("glide_bypasses_no_barrier", ok_all, "; ".join(rows))
+	p.invuln_t = 0.0

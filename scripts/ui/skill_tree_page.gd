@@ -22,6 +22,7 @@ const FAMILY_COLOURS := {
 var buttons := {}
 var selected := ""
 var tree_area: Control
+var overlay: Control
 var card: PanelContainer
 var _card_title: Label
 var _card_state: Label
@@ -45,7 +46,7 @@ func _ready() -> void:
 	mouse_filter = Control.MOUSE_FILTER_STOP
 	process_mode = Node.PROCESS_MODE_ALWAYS
 	var shade := ColorRect.new()
-	shade.color = Color(0.0, 0.05, 0.05, 0.55)
+	shade.color = Color(0.0, 0.05, 0.05, 0.72)
 	shade.set_anchors_preset(Control.PRESET_FULL_RECT)
 	shade.mouse_filter = Control.MOUSE_FILTER_IGNORE
 	add_child(shade)
@@ -92,6 +93,12 @@ func _ready() -> void:
 		b.focus_entered.connect(func() -> void: select(id, false))
 		tree_area.add_child(b)
 		buttons[id] = b
+	overlay = Overlay.new()
+	overlay.name = "Overlay"
+	(overlay as Overlay).page = self
+	overlay.mouse_filter = Control.MOUSE_FILTER_IGNORE
+	overlay.set_anchors_preset(Control.PRESET_FULL_RECT)
+	tree_area.add_child(overlay)
 	card = PanelContainer.new()
 	card.name = "Card"
 	var box := UiStyle._box(Color(UiStyle.PANEL, 0.97), Color(UiStyle.MINT, 0.35))
@@ -355,7 +362,9 @@ func _unhandled_input(event: InputEvent) -> void:
 		get_viewport().set_input_as_handled()
 
 
-## Where the links and the flourish are drawn (under the node buttons).
+## The dependency links, drawn under the node buttons: a soft S from a prerequisite's foot to the
+## node's head, or straight across between neighbours in the same tier. Gold once the prerequisite
+## is owned; the selected node's links brighter.
 class TreeArea extends Control:
 	var page: SkillTreePage
 
@@ -363,43 +372,58 @@ class TreeArea extends Control:
 		var gp := page._gp()
 		for n in SkillTree.NODES:
 			var b: Button = page.buttons[n["id"]]
-			var to := b.position + Vector2(b.size.x * 0.5, 0)
 			for r in n["requires"]:
 				var rb: Button = page.buttons[r]
-				var from := rb.position + Vector2(rb.size.x * 0.5, rb.size.y)
 				var owned := gp != null and gp.owns(r)
 				var sel: bool = page.selected == n["id"] or page.selected == r
-				var col := Color(UiStyle.GOLD, 0.9) if owned else Color(0.6, 0.8, 0.78, 0.35)
+				var col := Color(UiStyle.GOLD, 0.9) if owned else Color(0.6, 0.8, 0.78, 0.4)
 				if sel:
 					col = col.lightened(0.25)
 					col.a = 1.0
 				var w := 5.0 if sel else 3.5
-				# A soft S from the prerequisite's foot to the node's head.
-				var mid := (from.y + to.y) * 0.5
+				var from: Vector2
+				var to: Vector2
 				var pts := PackedVector2Array()
-				for i in 17:
-					var t := float(i) / 16.0
-					var p0 := from.lerp(Vector2(from.x, mid), t)
-					var p1 := Vector2(from.x, mid).lerp(Vector2(to.x, mid), t)
-					var p2 := Vector2(to.x, mid).lerp(to, t)
-					pts.append(p0.lerp(p1, t).lerp(p1.lerp(p2, t), t))
+				if absf(rb.position.y - b.position.y) < 1.0:
+					var left := rb.position.x < b.position.x
+					from = rb.position + Vector2(rb.size.x if left else 0.0, rb.size.y * 0.5)
+					to = b.position + Vector2(0.0 if left else b.size.x, b.size.y * 0.5)
+					pts = PackedVector2Array([from, to])
+				else:
+					from = rb.position + Vector2(rb.size.x * 0.5, rb.size.y)
+					to = b.position + Vector2(b.size.x * 0.5, 0)
+					var mid := (from.y + to.y) * 0.5
+					for i in 17:
+						var t := float(i) / 16.0
+						var p0 := from.lerp(Vector2(from.x, mid), t)
+						var p1 := Vector2(from.x, mid).lerp(Vector2(to.x, mid), t)
+						var p2 := Vector2(to.x, mid).lerp(to, t)
+						pts.append(p0.lerp(p1, t).lerp(p1.lerp(p2, t), t))
 				draw_polyline(pts, col, w, true)
 				draw_circle(to, w * 1.1, col)
-		# The cost glyph on every node not yet bought; a lock on locked ones.
+		if page.overlay != null:
+			page.overlay.queue_redraw()
+
+
+## Drawn over the node buttons: each node's red-star cost (bright when it can be bought, faded when
+## there are too few), a lock on locked ones, and the unlock flourish (a ring and sparks).
+class Overlay extends Control:
+	var page: SkillTreePage
+
+	func _draw() -> void:
 		for n in SkillTree.NODES:
 			var b: Button = page.buttons[n["id"]]
 			var st := str(b.get_meta("state", "locked"))
-			var r := b.size.y * 0.16
-			var c := b.position + Vector2(b.size.x - r * 1.7, b.size.y * 0.5)
+			var r := b.size.y * 0.15
+			var c := b.position + Vector2(b.size.x - r * 1.9, b.size.y * 0.5)
 			if st == "purchased":
 				continue
 			if st == "locked":
-				var lc := Color(0.75, 0.82, 0.8, 0.55)
+				var lc := Color(0.75, 0.82, 0.8, 0.5)
 				draw_rect(Rect2(c + Vector2(-r * 0.7, -r * 0.1), Vector2(r * 1.4, r * 1.1)), lc)
 				draw_arc(c + Vector2(0, -r * 0.1), r * 0.5, PI, TAU, 10, lc, 2.0)
 			else:
-				StarChip.draw_star(self, c + Vector2(r * 1.05, 0), r, Color(0.95, 0.2, 0.16, 1.0 if st == "available" else 0.5))
-		# The unlock flourish: a ring and sparks from the node just bought.
+				StarChip.draw_star(self, c, r * 1.1, Color(0.95, 0.2, 0.16, 1.0 if st == "available" else 0.45))
 		var k := page.flash_amount()
 		if k > 0.0 and page.buttons.has(page._flash_id):
 			var b: Button = page.buttons[page._flash_id]

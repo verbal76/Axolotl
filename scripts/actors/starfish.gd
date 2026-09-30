@@ -145,11 +145,24 @@ func pick_point() -> Vector3:
 	return rest + up * 0.12
 
 
+## The pickup burst: red and gold motes of light thrown out in a small sphere. Laid out on a golden
+## spiral, not rolled: WaterFX's own random sequence also decides where his running stirs the water
+## (WaterFX.trail), which moves Motes and parasites, so a pickup must not draw from it (the seeded
+## playthroughs stay identical whether or not the bot happens to touch a starfish).
 func collect_fx() -> void:
 	collected = true
 	_gone_t = 0.0
-	WaterFX.inst.sparkle(pick_point(), Color(1.0, 0.3, 0.22, 0.95), 22, 1.7, 0.07, 0.9)
-	WaterFX.inst.sparkle(pick_point(), Color(1.0, 0.85, 0.6, 0.9), 8, 1.1, 0.05, 0.6)
+	var fx := WaterFX.inst
+	var c := pick_point()
+	var n := 30
+	for i in n:
+		var y := 1.0 - 2.0 * (i + 0.5) / n
+		var r := sqrt(maxf(0.0, 1.0 - y * y))
+		var a := i * 2.39996
+		var d := (Vector3(cos(a) * r, y, sin(a) * r) + up * 0.5).normalized()
+		var gold := i % 4 == 0
+		fx._spawn_puff(c, d * (1.1 if gold else 1.7) * (0.7 + 0.3 * float(i % 3) / 2.0), 0.6 if gold else 0.9, 0.05 if gold else 0.07,
+				Color(1.0, 0.85, 0.6, 0.9) if gold else Color(1.0, 0.3, 0.22, 0.95), 1.5)
 
 
 # --- Placement (StarfishTable spots, validated with Treasure Hunt's checks) ----------------------
