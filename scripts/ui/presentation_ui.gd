@@ -14,6 +14,7 @@ var mode := ""
 var swim_stick := Vector2.ZERO
 ## Swim is held.
 var swim_held := false
+var _key_held := false
 
 var _root: Control
 var _canvas: UiCanvas
@@ -151,8 +152,11 @@ func _process(dt: float) -> void:
 		var k := Input.get_vector("move_left", "move_right", "move_back", "move_forward")
 		if k.length() > 0.05:
 			swim_stick = k
-		if not _btn_touch.values().has("swim"):
-			swim_held = Input.is_action_pressed("jump") or Input.is_action_pressed("lunge")
+		# (Only a change of the keys counts, so a held key never overrides the Swim button.)
+		var kh := Input.is_action_pressed("jump") or Input.is_action_pressed("lunge")
+		if kh != _key_held and not _btn_touch.values().has("swim"):
+			swim_held = kh
+		_key_held = kh
 	_canvas.queue_redraw()
 
 

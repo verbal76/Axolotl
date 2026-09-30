@@ -1032,41 +1032,53 @@ func add_vegetation(node: Node3D) -> void:
 ## A thinned copy of this world's own vegetation (every `keep`-th plant of every chunk, a little
 ## larger to make up the density), with the same meshes and materials, so the plant cover and its
 ## health read from outside the tank, where the real chunks are beyond their visibility ranges.
-## Built the first time an outside view is shown; shown only while one is.
+## Built each time an outside view opens and freed when it closes.
 var _far_veg: Node3D
 
 
 func set_far_view(on: bool, keep := 5, grow := 1.7) -> void:
-	if on and _far_veg == null:
-		_far_veg = Node3D.new()
-		_far_veg.name = "FarVegetation"
-		_veg_parent.get_parent().add_child(_far_veg)
-		_far_veg.transform = _veg_parent.transform
-		for c in _veg_parent.get_children():
-			if not (c is MultiMeshInstance3D and c.has_meta("veg_transforms")):
-				continue
-			var src: MultiMeshInstance3D = c
-			var list: Array = src.get_meta("veg_transforms")
-			var picks: Array[Transform3D] = []
-			for j in range(0, list.size(), keep):
-				var x: Transform3D = list[j]
-				picks.append(Transform3D(x.basis.scaled(Vector3.ONE * grow), x.origin))
-			if picks.is_empty():
-				continue
-			var mm := MultiMesh.new()
-			mm.transform_format = MultiMesh.TRANSFORM_3D
-			mm.mesh = src.multimesh.mesh
-			mm.instance_count = picks.size()
-			for j in picks.size():
-				mm.set_instance_transform(j, picks[j])
-			var far := MultiMeshInstance3D.new()
-			far.multimesh = mm
-			far.material_override = src.material_override
-			far.cast_shadow = GeometryInstance3D.SHADOW_CASTING_SETTING_OFF
-			far.set_meta("far_of", src.name)
-			_far_veg.add_child(far)
+	if not on:
+		# (Nothing of it stays behind in play: built on the way out, freed on the way back in.)
+		if _far_veg != null:
+			_far_veg.queue_free()
+			_far_veg = null
+		return
 	if _far_veg != null:
-		_far_veg.visible = on
+		return
+	# Every kept plant of the same mesh and material goes into one MultiMesh.
+	var groups := {}
+	for c in _veg_parent.get_children():
+		if not (c is MultiMeshInstance3D and c.has_meta("veg_transforms")):
+			continue
+		var src: MultiMeshInstance3D = c
+		var key := [src.multimesh.mesh, src.material_override]
+		if not groups.has(key):
+			groups[key] = []
+		var list: Array = src.get_meta("veg_transforms")
+		var into: Array = groups[key]
+		var base := src.transform
+		for j in range(0, list.size(), keep):
+			var x: Transform3D = base * list[j]
+			into.append(Transform3D(x.basis.scaled(Vector3.ONE * grow), x.origin))
+	_far_veg = Node3D.new()
+	_far_veg.name = "FarVegetation"
+	_veg_parent.get_parent().add_child(_far_veg)
+	_far_veg.transform = _veg_parent.transform
+	for key in groups:
+		var picks: Array = groups[key]
+		if picks.is_empty():
+			continue
+		var mm := MultiMesh.new()
+		mm.transform_format = MultiMesh.TRANSFORM_3D
+		mm.mesh = key[0]
+		mm.instance_count = picks.size()
+		for j in picks.size():
+			mm.set_instance_transform(j, picks[j])
+		var far := MultiMeshInstance3D.new()
+		far.multimesh = mm
+		far.material_override = key[1]
+		far.cast_shadow = GeometryInstance3D.SHADOW_CASTING_SETTING_OFF
+		_far_veg.add_child(far)
 
 
 func far_vegetation() -> Node3D:

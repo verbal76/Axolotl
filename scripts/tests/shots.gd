@@ -929,8 +929,8 @@ func _tier2_shots(g: Game) -> void:
 ## fine-tuned look), and the aquarium's controls (room, Live Tank, Swim).
 func _ui_shots(g: Game) -> void:
 	var pm: PauseMenu = g.pause_menu
-	g.title.show_title()
-	await t.seconds(1.0)
+	g._enter_title()
+	await t.seconds(1.5)
 	await t.shot("ui_01_title")
 	g.title._on_settings()
 	await t.seconds(0.8)

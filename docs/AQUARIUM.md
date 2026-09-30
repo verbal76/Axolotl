@@ -49,7 +49,14 @@ There are 13 fish at a middle scale, about 6–18× Gill's length (owner decisio
 - **Noncombatants.** They are never targeted, never hurt and never completion entries.
 - **Randomness.** They use their own random generator, never the global one, so the playthroughs are
   unchanged.
-- **Test:** `_test_ambient_fish` (6 checks, including `bala_trio_bolts_and_regroups`).
+- **Seen from the room.** From the room the tank is several hundred units away, so a fish at its
+  real size is only 10–20 px long. In the outside views (Room, Inspection, Live Tank) each fish is
+  drawn `Aquarium.OUTSIDE_FISH_SCALE` (3.4×) larger, with a little more colour, glow and rim
+  (`pop`), and the boid keeps them further from the glass and the moss balls so the larger bodies
+  never poke through. This is presentation only: their positions, speeds, steering and gameplay
+  size are unchanged, and inside the tank (play and Swim Mode) they are drawn at 1×.
+- **Test:** `_test_ambient_fish` (6 checks, including `bala_trio_bolts_and_regroups`), and
+  `_test_aquarium_polish` (`live_tank_fish_present`, `fish_scale_only_outside`).
 - **Renders:** `--test=shots --only=bala`.
 
 ## Bedroom (`scripts/world/bedroom.gd`, `tools/gen_room.py`)
@@ -83,7 +90,7 @@ this. `quit_on_go_back` is off: in play, back opens the pause menu, and on the t
 | **Room** | The bedroom, with the tank as its focal point. The camera has a slow breathing drift. | Tap the tank → Inspection. "Live Tank" and "Swim" buttons. |
 | **Aquarium Inspection** | Leaning in at the front glass | Drag to look round the front (bounded yaw ±0.7 and pitch, always outside the glass) |
 | **Live Tank** | Full screen and landscape, the phone as the tank's glass. Views: whole tank, left, right, and a slowly circling close-up of Gill in the water. | Nothing is on screen until you touch it; then Back and View appear and fade again. |
-| **Swim Mode** | Gill swims freely anywhere in the tank's water | Camera-directed stick (owner decision): push toward where the camera looks, so looking up and pushing forward rises. Drag on the right to look. Up / Down / Faster (held). |
+| **Swim Mode** | Gill swims freely anywhere in the tank's water | Exactly two controls (owner decision, 2026-09-30). **Left: a flight stick** that aims his nose: left and right turn him; pulling down pitches him up and pushing up pitches him down. **Right: Swim**, held to swim along his nose; let go and he glides to a stop. The camera rides behind his nose. Settings → **Invert swim up/down** reverses only the pitch. Keyboard: move keys aim, jump or lunge holds Swim. |
 
 **The run is never touched.** On the way in:
 
@@ -116,8 +123,16 @@ all the player's own. A cosmetic stand-in of Gill idles and wanders a little whe
   hazes sooner.
 - **Glass.** The glass shader's `outside` mode is clear apart from its film and algae, with a faint
   grazing sheen, the waterline meniscus and a water tint.
-- **A dirty tank reads as a dirty tank from the room.** Its algae-covered glass hides most of the
-  inside until it is restored.
+- **A dirty tank reads as a dirty tank from the room** (owner decision: murk is a progression cue).
+  The algae grows in from the glass edges and corners, with a light film across the middle, so even
+  the dirtiest tank looks deliberate and its fish and moss balls stay readable through the centre.
+  A clean tank is clear glass.
+- **Far view of the worlds.** Gameplay culls vegetation beyond 55–70 units, which is every plant
+  when seen from the room. Instead of raising those ranges, each moss ball builds a thinned copy of
+  its own vegetation (every 5th plant, 1.7× larger, the same meshes and materials, one MultiMesh
+  per mesh) when an outside view opens, and frees it when the view closes
+  (`MossBall.set_far_view`). So the tank from the room shows each world's real plant cover and
+  health, and play pays nothing for it.
 
 **Tests.** `_test_aquarium_experiences` (11 checks) covers:
 
@@ -134,3 +149,28 @@ all the player's own. A cosmetic stand-in of Gill idles and wanders a little whe
 - not available mid-cinematic.
 
 **Renders.** `--test=shots --only=aquarium` (murky and clean), `--only=room` and `--only=gravel`.
+
+## Menus and settings (2026-09-30 package)
+
+- **One visual language** (`scripts/ui/ui_style.gd`): dark teal panels with a mint edge, rounded
+  buttons with a soft shadow, a gold border on hover and focus, a pressed state that visibly darkens
+  and shifts, a pink primary button, and round slider grabbers. The title, pause menu, Settings,
+  Gill's colours, the aquarium buttons and the Treasure Hunt card all use it. No default grey or
+  black boxes remain.
+- **Settings from the title.** A gear (the owner's artwork, `assets/ui/settings_gear.png`, used as
+  supplied) sits top right of the title, a 96 px touch target. It opens the same Settings as the
+  pause menu, diagnostics included. Its **Back** returns to the title, and nothing starts: no run,
+  no clock, no save. The in-game Settings are unchanged. (The earlier title Settings button had been
+  pushed off a phone screen by the longer menu.)
+- **Invert swim up/down** is saved in `settings.cfg` `[controls] swim_invert_y` (default off). The
+  settings schema stays 1.
+- **Gill's colours** is a split workspace: the controls on the left in their own scrolling column,
+  Gill on the right on a neutral studio stage, always visible. Drag on him to turn him (a flick keeps
+  him turning briefly). Presets and sliders update him live, and scrolling or sliding never turns
+  him. The colours are saved exactly as before (`[gill]`).
+- **Tests:** `_test_aquarium_polish`: the two swim controls, stick pitch (default and inverted),
+  turning, propulsion and glide, no drift, persistence; the Live Tank fish; the title gear, Settings
+  from the title and Back; the colours split, scroll, live updates, drag-to-turn, sliders never
+  turning, persistence. `_test_menu_scrollbar` covers the colours column's scrollbar.
+- **Renders:** `--test=shots --only=uiq` (title, Settings from the title, the colours workspace
+  scrolled, turned and recoloured, the aquarium buttons and the Swim controls).

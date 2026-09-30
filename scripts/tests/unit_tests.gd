@@ -5192,6 +5192,7 @@ func _test_aquarium_polish() -> void:
 		far_ok = far_ok and ((b as MossBall).far_vegetation() == null or (b as MossBall).far_vegetation().visible)
 	pr.back()
 	await t.seconds(0.2)
+	var run_out: float = g.clock.run_s
 	pr.exit()
 	await t.frames(3)
 	var back_scale := true
@@ -5200,7 +5201,8 @@ func _test_aquarium_polish() -> void:
 	for b in g.balls:
 		far_ok = far_ok and ((b as MossBall).far_vegetation() == null or not (b as MossBall).far_vegetation().visible)
 	t.check("fish_scale_only_outside", back_scale and far_ok and g.fish.display_scale == 1.0, "scale back %s far %s" % [back_scale, far_ok])
-	t.check("aquarium_polish_run_untouched", g.run_save.earned() == earned0 and is_equal_approx(g.clock.run_s, run0), "")
+	t.check("aquarium_polish_run_untouched", g.run_save.earned() == earned0 and is_equal_approx(run_out, run0),
+			"earned %d -> %d, clock %.3f -> %.3f" % [earned0.size(), g.run_save.earned().size(), run0, run_out])
 	release.call()
 	# --- The title: a gear opens the same Settings (diagnostics included); Back returns ---
 	g._enter_title()
@@ -5229,6 +5231,10 @@ func _test_aquarium_polish() -> void:
 	g.title._on_colours()
 	await t.frames(4)
 	var page: GillPage = pm.gill_page
+	# (Laid out as on a 1280 x 720 phone.)
+	page.layout_in(Rect2(18, 14, 1244, 692))
+	await t.frames(2)
+	vp = Vector2(1280, 720)
 	var cr := page.controls.get_global_rect()
 	var sr := page.stage.get_global_rect()
 	var screen := Rect2(Vector2.ZERO, vp)
@@ -5308,6 +5314,9 @@ func _test_menu_scrollbar() -> void:
 		if which == "colours":
 			pm._open_gill()
 			await t.frames(3)
+			# (Laid out as on a 1280 x 720 phone, where the controls need their scrollbar.)
+			pm.gill_page.layout_in(Rect2(18, 14, 1244, 692))
+			await t.frames(2)
 		var holder: Control = pm._panel if which == "settings" else pm.gill_page.controls
 		var sc: ScrollContainer = holder.find_children("*", "ScrollContainer", true, false)[0]
 		var bar := sc.get_v_scroll_bar()

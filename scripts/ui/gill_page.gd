@@ -41,6 +41,10 @@ func _ready() -> void:
 	add_child(stage)
 	controls = PanelContainer.new()
 	controls.name = "Controls"
+	# (Solid enough that nothing behind it shows through the controls.)
+	var box := UiStyle._box(Color(UiStyle.PANEL, 0.97), Color(UiStyle.MINT, 0.35))
+	box.set_content_margin_all(22)
+	controls.add_theme_stylebox_override("panel", box)
 	add_child(controls)
 	var scroll := ScrollContainer.new()
 	scroll.name = "ControlsScroll"
@@ -145,6 +149,7 @@ func _on_visibility() -> void:
 	preview.set_process(on)
 	if on:
 		_style_patterns()
+		_layout.call_deferred()
 
 
 ## Controls on the left, his stage filling the rest, inside the display's safe area.
@@ -158,19 +163,32 @@ func _layout() -> void:
 		m.y = maxf(m.y, safe.position.y * vp.y / win.y)
 		m.z = maxf(m.z, (win.x - safe.end.x) * vp.x / win.x)
 		m.w = maxf(m.w, (win.y - safe.end.y) * vp.y / win.y)
-	var area := Rect2(m.x, m.y, vp.x - m.x - m.z, vp.y - m.y - m.w)
+	layout_in(Rect2(m.x, m.y, vp.x - m.x - m.z, vp.y - m.y - m.w))
+
+
+## Lays the page out in `area` (the safe area; tests use it to stand in for a phone's screen).
+func layout_in(area: Rect2) -> void:
 	var w := clampf(area.size.x * 0.48, 440.0, 660.0)
 	controls.position = area.position
 	controls.size = Vector2(w, area.size.y)
 	controls.clip_contents = true
 	var sc: ScrollContainer = controls.get_node("ControlsScroll")
-	sc.custom_minimum_size = Vector2(w - 70, area.size.y - 56)
+	sc.custom_minimum_size = Vector2(0, area.size.y - 56)
 	# (The swatch grids take as many columns as the column has room for, never wider.)
-	var cols := clampi(int((w - 70.0 + 10.0) / 132.0), 2, 4)
 	for g in [controls.find_child("Morphs", true, false), controls.find_child("Patterns", true, false)]:
-		(g as GridContainer).columns = cols
+		var grid := g as GridContainer
+		var bw := 122.0
+		for b in grid.get_children():
+			bw = maxf(bw, (b as Control).get_combined_minimum_size().x)
+		grid.columns = clampi(int((w - 70.0 + 10.0) / (bw + 10.0)), 2, 4)
+	controls.size = Vector2(w, area.size.y)
 	stage.position = Vector2(area.position.x + w + 14, area.position.y)
 	stage.size = Vector2(area.end.x - stage.position.x, area.size.y)
+	# (A narrow stage steps the camera back so all of him fits side on.)
+	var aspect := stage.size.x / maxf(stage.size.y, 1.0)
+	var dist := 3.1 * maxf(1.0, 1.2 / maxf(aspect, 0.3))
+	var cam: Camera3D = _vp.get_node("Cam")
+	cam.look_at_from_position(Vector3(0.0, 0.2, 0.0) + Vector3(0.0, 0.85, 2.9).normalized() * dist, Vector3(0.0, 0.2, 0.0))
 
 
 ## His stage: neutral studio light (the colour you pick is the colour you see, without the
