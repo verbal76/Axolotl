@@ -379,10 +379,11 @@ def sfx():
 
 def ambience():
     # Water: low rumble + soft hiss, seamless (circular reverb / filtering).
+    # (The old noise bed's draws are kept so every sound after it stays byte-identical; the bed
+    # itself is aquarium_bed(), which has its own random stream.)
     L = int(8 * SR)
-    x = lowpass_fast(noise(L), 220) * 0.8 + highpass_fast(noise(L), 3000) * 0.05
-    x *= 0.8 + 0.2 * np.sin(2 * np.pi * np.arange(L) / L * 2)
-    write_wav("amb_water", x, loop=True, peak=0.5)
+    noise(L), noise(L)
+    aquarium_bed()
     L = int(6 * SR)
     b = np.zeros(L)
     for i in range(70):
@@ -518,10 +519,61 @@ def parasites():
     write_wav("sfx_parasite_flee", s)
 
 
+def loopify(x, n, fade):
+    """The first n samples of x (which holds n + fade), crossfaded so the end runs into the start."""
+    out = np.array(x[:n], dtype=np.float64)
+    r = np.linspace(0.0, 1.0, fade)
+    out[:fade] = x[n:n + fade] * (1.0 - r) + x[:fade] * r
+    return out
+
+
+def aquarium_bed():
+    """The household-aquarium bed heard from launch (docs/research/2026-09-30-DEVICE_AUDIT.md §G).
+    Two layers on co-prime loops so the pair repeats only every 221 s:
+    amb_water (17 s): soft water movement pitched where phone speakers play (≈180–750 Hz, slow
+    swells, a few low glugs), nothing hissy above ~1.5 kHz.
+    amb_aerator (13 s): a distant bubbler, irregular trains of small pitched bubbles, rolled off
+    above ~2.6 kHz. The old bed (220 Hz rumble + a >3 kHz hiss band) read as static on phones."""
+    r = np.random.default_rng(4077)
+    fade = int(0.8 * SR)
+    # Water movement.
+    n = int(17 * SR)
+    x = bandpass_fast(r.standard_normal(n + fade), 180, 750)
+    env = lowpass_fast(r.standard_normal(n + fade), 0.35)
+    env = env / (np.max(np.abs(env)) + 1e-9)
+    x *= 0.72 + 0.28 * env
+    for _ in range(9):
+        f0 = r.uniform(170, 380)
+        place(x, r.uniform(0, (n + fade) / SR - 0.3), drop(f0, f0 * 1.5, r.uniform(0.08, 0.16)), r.uniform(0.25, 0.5), wrap=False)
+    w = loopify(x, n, fade)
+    w = lowpass_fast(np.tile(w, 2), 1500)[n:]
+    write_wav("amb_water", w, loop=True, peak=0.5)
+    # Aerator.
+    n = int(13 * SR)
+    b = np.zeros(n)
+    t = r.uniform(0.0, 0.3)
+    while t < 13.0:
+        count = int(r.integers(3, 10))
+        base = r.uniform(650, 1350)
+        tt = t
+        for _ in range(count):
+            f0 = base * r.uniform(0.85, 1.2)
+            place(b, tt, drop(f0, f0 * 1.8, r.uniform(0.03, 0.07)), r.uniform(0.15, 0.6))
+            tt += r.uniform(0.025, 0.09)
+        t += r.exponential(0.55) + 0.12
+    b = reverb(b, 0.35, 0.8, circular=True)
+    b = lowpass_fast(np.tile(b, 2), 2600)[n:]   # (filtered around the loop: no click at the seam)
+    write_wav("amb_aerator", b, loop=True, peak=0.45)
+
+
 def main():
     os.makedirs(OUT, exist_ok=True)
     # (--only=skills writes just the skill-tree sounds, leaving every other file untouched.)
     import sys
+    if "--only=bed" in sys.argv:
+        aquarium_bed()
+        print("audio written to", os.path.abspath(OUT))
+        return
     if "--only=skills" not in sys.argv:
         sfx()
         ambience()

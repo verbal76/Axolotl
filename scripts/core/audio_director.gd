@@ -24,6 +24,17 @@ var cutoff_target := CLEAR_HZ
 var _lowpass: AudioEffectLowPassFilter
 var _out_lowpass: AudioEffectLowPassFilter
 var _water: AudioStreamPlayer
+var _aerator: AudioStreamPlayer
+## The aquarium bed's levels (dB). It fades in at launch, eases under the music once the title's
+## songs start, and in play follows update_mix; every change glides (BED_GLIDE dB/s), never jumps.
+const WATER_DB := -12.0
+const AERATOR_DB := -17.0
+const BED_UNDER_MUSIC_DB := -3.0
+const BED_FADE_IN := 1.5
+const BED_GLIDE := 4.0
+var _water_target := WATER_DB
+var _aerator_target := AERATOR_DB
+var _bed_in := 0.0
 var _life: AudioStreamPlayer
 var _travel: AudioStreamPlayer
 var _outside: AudioStreamPlayer
@@ -67,7 +78,10 @@ func _ready() -> void:
 	_song.volume_db = SONG_DB
 	_song.finished.connect(next_song)
 	add_child(_song)
-	_water = _loop_player("res://assets/audio/amb_water.wav", "Ambience", -12.0)
+	# The household-aquarium bed, heard from the loading screen on (two co-prime loops; see
+	# tools/gen_audio.py aquarium_bed): it starts silent and fades in over BED_FADE_IN.
+	_water = _loop_player("res://assets/audio/amb_water.wav", "Ambience", -80.0)
+	_aerator = _loop_player("res://assets/audio/amb_aerator.wav", "Ambience", -80.0)
 	_life = _loop_player("res://assets/audio/amb_life.wav", "Ambience", -40.0)
 	_travel = _loop_player("res://assets/audio/amb_travel.wav", "SFX", -80.0, false)
 	_outside = AudioStreamPlayer.new()
@@ -95,6 +109,9 @@ func _loop_player(path: String, bus: String, db: float, autoplay := true) -> Aud
 func set_ball(_i: int, _fade: bool) -> void:
 	if not _song.playing:
 		_play_song(song_index)
+		# (The songs take the lead: the bed eases a little under them.)
+		_water_target = WATER_DB + BED_UNDER_MUSIC_DB
+		_aerator_target = AERATOR_DB + BED_UNDER_MUSIC_DB
 	_started = true
 
 
@@ -133,7 +150,8 @@ func update_mix(ball_r: Array[float], g: float, current: int) -> void:
 	var rc: float = ball_r[current]
 	cutoff_target = lerpf(MURKY_HZ, CLEAR_HZ, pow(rc, 1.4))
 	# The aquarium's own soundscape grows; outside sounds recede.
-	_water.volume_db = lerpf(-13.0, -10.0, g)
+	_water_target = lerpf(-13.0, -10.0, g) + BED_UNDER_MUSIC_DB
+	_aerator_target = lerpf(-18.0, -15.0, g) + BED_UNDER_MUSIC_DB
 	_life.volume_db = linear_to_db(maxf(0.0001, g * 0.55))
 	var ob := AudioServer.get_bus_index("Outside")
 	if ob >= 0:
@@ -152,8 +170,25 @@ func _glide_cutoff(dt: float) -> void:
 	_lowpass.cutoff_hz = exp(move_toward(l, log(target), dt * 1.4))
 
 
+## The bed's level: a linear fade-in from silence at launch, then gliding toward its targets.
+func bed_levels() -> Vector2:
+	return Vector2(_water.volume_db, _aerator.volume_db)
+
+
+func _glide_bed(dt: float) -> void:
+	if _bed_in < 1.0:
+		_bed_in = minf(1.0, _bed_in + dt / BED_FADE_IN)
+		var k := linear_to_db(maxf(0.0001, _bed_in))
+		_water.volume_db = _water_target + k
+		_aerator.volume_db = _aerator_target + k
+		return
+	_water.volume_db = move_toward(_water.volume_db, _water_target, BED_GLIDE * dt)
+	_aerator.volume_db = move_toward(_aerator.volume_db, _aerator_target, BED_GLIDE * dt)
+
+
 func _process(dt: float) -> void:
 	_glide_cutoff(dt)
+	_glide_bed(dt)
 	if not _started or Game.inst == null or Game.inst.state != "play":
 		return
 	_out_timer -= dt

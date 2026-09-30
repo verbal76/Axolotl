@@ -14,7 +14,7 @@ func run(runner) -> void:
 	p.use_bot_input = true
 	await t.seconds(0.5)
 	var only: String = Settings.test_args.get("only", "")
-	for name_ in ["_test_startup", "_test_ota_and_version", "_test_mesh_winding", "_test_terrain", "_test_ravines", "_test_terrain_grounded", "_test_no_floating_platforms", "_test_parasite_locomotion", "_test_parasite_body_and_death", "_test_parasite_combat", "_test_organic_motion", "_test_gill_look", "_test_gill_idles", "_test_gill_colours", "_test_gill_patterns", "_test_tail_whip", "_test_gill_traction", "_test_gill_incline_transitions", "_test_traction_no_shortcuts", "_test_gill_body_follow", "_test_swim_body_follow", "_test_ambient_sway", "_test_placements", "_test_tutorial_route", "_test_sphere_walk", "_test_jump_and_burst", "_test_coyote_and_buffer", "_test_swipe_direction_and_stages", "_test_hard_landing", "_test_food", "_test_food_reach", "_test_darter_and_burrower", "_test_food_repopulates", "_test_motes", "_test_checkpoint_and_regen", "_test_crumble", "_test_restoration_gates", "_test_bubble_columns", "_test_restoration_continuity", "_test_health_map", "_test_vortex", "_test_vortex_tints", "_test_current", "_test_canopy", "_test_canopy_plain_jumps", "_test_climbs_physical", "_test_jungle_ladders_physical", "_test_leaf_geometry", "_test_leaf_footing", "_test_caves", "_test_mounds", "_test_vegetation", "_test_vortex_mouths_clear", "_test_route_audit", "_test_new_areas", "_test_ecosystem", "_test_music", "_test_run_clock", "_test_completion_catalog", "_test_completion_frozen", "_test_run_save_file", "_test_run_timer_live", "_test_run_continue", "_test_timer_integrity", "_test_resume_points_safe", "_phase_continue_write", "_phase_continue_read", "_test_upgrades", "_test_ui", "_test_menu_scrollbar", "_test_tier2_rules", "_test_tier2_world", "_test_ambient_fish", "_test_parasite_never_buried", "_test_tier2_loadout", "_test_aquarium_experiences", "_test_aquarium_polish", "_test_all_clear", "_test_treasure_unlock", "_test_treasure_generation", "_test_treasure_play", "_phase_treasure_stress", "_phase_live_fish_diag", "_phase_cpu_probe", "_phase_incline_survey", "_phase_loco_diag", "_phase_crawl_trace", "_phase_mouth_crawls", "_phase_organic_trace", "_test_skilltree_graph", "_test_progress_store", "_test_starfish_spots", "_test_starfish_pickup", "_test_skill_ui", "_test_quick_gill", "_test_lunge_skills", "_test_burst_skills", "_test_glide_control", "_test_glide_transfers", "_test_mote_magnet", "_phase_starfish_survey", "_phase_starfish_sweep", "_phase_glide_probe"]:
+	for name_ in ["_test_startup", "_test_ota_and_version", "_test_mesh_winding", "_test_terrain", "_test_ravines", "_test_terrain_grounded", "_test_no_floating_platforms", "_test_parasite_locomotion", "_test_parasite_body_and_death", "_test_parasite_combat", "_test_organic_motion", "_test_gill_look", "_test_gill_idles", "_test_gill_colours", "_test_gill_patterns", "_test_tail_whip", "_test_gill_traction", "_test_gill_incline_transitions", "_test_traction_no_shortcuts", "_test_gill_body_follow", "_test_swim_body_follow", "_test_ambient_sway", "_test_placements", "_test_tutorial_route", "_test_sphere_walk", "_test_jump_and_burst", "_test_coyote_and_buffer", "_test_swipe_direction_and_stages", "_test_hard_landing", "_test_food", "_test_food_reach", "_test_darter_and_burrower", "_test_food_repopulates", "_test_motes", "_test_checkpoint_and_regen", "_test_crumble", "_test_restoration_gates", "_test_bubble_columns", "_test_restoration_continuity", "_test_health_map", "_test_vortex", "_test_vortex_tints", "_test_current", "_test_canopy", "_test_canopy_plain_jumps", "_test_climbs_physical", "_test_jungle_ladders_physical", "_test_leaf_geometry", "_test_leaf_footing", "_test_caves", "_test_mounds", "_test_vegetation", "_test_vortex_mouths_clear", "_test_route_audit", "_test_new_areas", "_test_ecosystem", "_test_music", "_test_opening_audio", "_test_run_clock", "_test_completion_catalog", "_test_completion_frozen", "_test_run_save_file", "_test_run_timer_live", "_test_run_continue", "_test_timer_integrity", "_test_resume_points_safe", "_phase_continue_write", "_phase_continue_read", "_test_upgrades", "_test_ui", "_test_menu_scrollbar", "_test_tier2_rules", "_test_tier2_world", "_test_ambient_fish", "_test_parasite_never_buried", "_test_tier2_loadout", "_test_aquarium_experiences", "_test_aquarium_polish", "_test_all_clear", "_test_treasure_unlock", "_test_treasure_generation", "_test_treasure_play", "_phase_treasure_stress", "_phase_live_fish_diag", "_phase_cpu_probe", "_phase_incline_survey", "_phase_loco_diag", "_phase_crawl_trace", "_phase_mouth_crawls", "_phase_organic_trace", "_test_skilltree_graph", "_test_progress_store", "_test_starfish_spots", "_test_starfish_pickup", "_test_skill_ui", "_test_quick_gill", "_test_lunge_skills", "_test_burst_skills", "_test_glide_control", "_test_glide_transfers", "_test_mote_magnet", "_phase_starfish_survey", "_phase_starfish_sweep", "_phase_glide_probe"]:
 		# "_phase_*" tests are halves of a relaunch test: they run only when asked for by name
 		# (in a child process started by _test_run_continue).
 		if name_.begins_with("_phase") and not only.split(",", false).has(name_):
@@ -7938,3 +7938,58 @@ func _phase_starfish_sweep() -> void:
 
 func _phase_glide_probe() -> void:
 	await _skills().glide_probe()
+
+
+## Opening audio (00037-opening-audio): the household-aquarium bed heard from the loading screen.
+func _test_opening_audio() -> void:
+	var paths := ["res://assets/audio/amb_water.wav", "res://assets/audio/amb_aerator.wav"]
+	# A fresh director, as at launch: the bed starts silent and fades in, then glides, never jumps.
+	var a := AudioDirector.new()
+	g.add_child(a)
+	await t.frames(1)
+	var ok := a._water.stream != null and a._aerator.stream != null and a._water.playing and a._aerator.playing
+	for p in [a._water, a._aerator]:
+		var st := p.stream as AudioStreamWAV
+		ok = ok and st != null and st.loop_mode != AudioStreamWAV.LOOP_DISABLED and p.bus == "Ambience"
+	var lw := (a._water.stream as AudioStreamWAV).get_length() if a._water.stream else 0.0
+	var la := (a._aerator.stream as AudioStreamWAV).get_length() if a._aerator.stream else 0.0
+	t.check("opening_bed_loops", ok and absf(lw - 17.0) < 0.1 and absf(la - 13.0) < 0.1, "water %.1f s, aerator %.1f s (co-prime loops)" % [lw, la])
+	var first := a.bed_levels()
+	var worst_step := 0.0
+	var prev := first
+	for i in 150:
+		await t.frames(1)
+		var now := a.bed_levels()
+		if prev.x > -40.0:
+			worst_step = maxf(worst_step, absf(now.x - prev.x))
+		prev = now
+	t.check("opening_bed_fades_in", first.x < -30.0 and absf(prev.x - a.WATER_DB) < 0.6 and absf(prev.y - a.AERATOR_DB) < 0.6,
+			"first %.1f dB, after 2.5 s water %.1f / aerator %.1f dB" % [first.x, prev.x, prev.y])
+	# Title: the songs start and the bed eases under them, with no step over 0.2 dB a frame.
+	a.set_ball(0, false)
+	worst_step = 0.0
+	prev = a.bed_levels()
+	for i in 60:
+		await t.frames(1)
+		var now := a.bed_levels()
+		worst_step = maxf(worst_step, absf(now.x - prev.x))
+		prev = now
+	t.check("opening_bed_eases_under_music", absf(prev.x - (a.WATER_DB + a.BED_UNDER_MUSIC_DB)) < 0.6 and worst_step <= a.BED_GLIDE / 60.0 + 0.01,
+			"water %.1f dB, largest step %.2f dB/frame" % [prev.x, worst_step])
+	a._song.stop()
+	a.queue_free()
+	await t.frames(2)
+	# In the running game: exactly one player per bed layer (no stacking), routed through the Sound
+	# slider's bus.
+	var counts := {}
+	var stack: Array[Node] = [g.get_tree().root]
+	while not stack.is_empty():
+		var n: Node = stack.pop_back()
+		stack.append_array(n.get_children())
+		if n is AudioStreamPlayer and (n as AudioStreamPlayer).stream != null:
+			var rp := (n as AudioStreamPlayer).stream.resource_path
+			if rp in paths:
+				counts[rp] = int(counts.get(rp, 0)) + 1
+	var amb := AudioServer.get_bus_index("Ambience")
+	t.check("opening_bed_single_players_through_sound_bus", counts.get(paths[0], 0) == 1 and counts.get(paths[1], 0) == 1 and amb >= 0 and AudioServer.get_bus_send(amb) == "SFX",
+			str(counts))
