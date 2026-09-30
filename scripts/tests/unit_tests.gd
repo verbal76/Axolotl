@@ -14,7 +14,7 @@ func run(runner) -> void:
 	p.use_bot_input = true
 	await t.seconds(0.5)
 	var only: String = Settings.test_args.get("only", "")
-	for name_ in ["_test_startup", "_test_ota_and_version", "_test_mesh_winding", "_test_terrain", "_test_ravines", "_test_terrain_grounded", "_test_no_floating_platforms", "_test_parasite_locomotion", "_test_parasite_body_and_death", "_test_parasite_combat", "_test_gill_look", "_test_gill_idles", "_test_gill_colours", "_test_gill_patterns", "_test_tail_whip", "_test_ambient_sway", "_test_placements", "_test_tutorial_route", "_test_sphere_walk", "_test_jump_and_burst", "_test_coyote_and_buffer", "_test_swipe_direction_and_stages", "_test_hard_landing", "_test_food", "_test_food_reach", "_test_darter_and_burrower", "_test_food_repopulates", "_test_motes", "_test_checkpoint_and_regen", "_test_crumble", "_test_restoration_gates", "_test_bubble_columns", "_test_restoration_continuity", "_test_health_map", "_test_vortex", "_test_current", "_test_canopy", "_test_canopy_plain_jumps", "_test_climbs_physical", "_test_jungle_ladders_physical", "_test_leaf_geometry", "_test_leaf_footing", "_test_caves", "_test_mounds", "_test_vegetation", "_test_vortex_mouths_clear", "_test_route_audit", "_test_new_areas", "_test_ecosystem", "_test_music", "_test_run_clock", "_test_completion_catalog", "_test_completion_frozen", "_test_run_save_file", "_test_run_timer_live", "_test_run_continue", "_test_timer_integrity", "_test_resume_points_safe", "_phase_continue_write", "_phase_continue_read", "_test_upgrades", "_test_ui", "_test_menu_scrollbar", "_test_tier2_rules", "_test_tier2_world", "_test_ambient_fish", "_test_parasite_never_buried", "_test_tier2_loadout", "_test_aquarium_experiences", "_test_all_clear", "_test_treasure_unlock", "_test_treasure_generation", "_test_treasure_play", "_phase_treasure_stress", "_phase_live_fish_diag"]:
+	for name_ in ["_test_startup", "_test_ota_and_version", "_test_mesh_winding", "_test_terrain", "_test_ravines", "_test_terrain_grounded", "_test_no_floating_platforms", "_test_parasite_locomotion", "_test_parasite_body_and_death", "_test_parasite_combat", "_test_gill_look", "_test_gill_idles", "_test_gill_colours", "_test_gill_patterns", "_test_tail_whip", "_test_ambient_sway", "_test_placements", "_test_tutorial_route", "_test_sphere_walk", "_test_jump_and_burst", "_test_coyote_and_buffer", "_test_swipe_direction_and_stages", "_test_hard_landing", "_test_food", "_test_food_reach", "_test_darter_and_burrower", "_test_food_repopulates", "_test_motes", "_test_checkpoint_and_regen", "_test_crumble", "_test_restoration_gates", "_test_bubble_columns", "_test_restoration_continuity", "_test_health_map", "_test_vortex", "_test_current", "_test_canopy", "_test_canopy_plain_jumps", "_test_climbs_physical", "_test_jungle_ladders_physical", "_test_leaf_geometry", "_test_leaf_footing", "_test_caves", "_test_mounds", "_test_vegetation", "_test_vortex_mouths_clear", "_test_route_audit", "_test_new_areas", "_test_ecosystem", "_test_music", "_test_run_clock", "_test_completion_catalog", "_test_completion_frozen", "_test_run_save_file", "_test_run_timer_live", "_test_run_continue", "_test_timer_integrity", "_test_resume_points_safe", "_phase_continue_write", "_phase_continue_read", "_test_upgrades", "_test_ui", "_test_menu_scrollbar", "_test_tier2_rules", "_test_tier2_world", "_test_ambient_fish", "_test_parasite_never_buried", "_test_tier2_loadout", "_test_aquarium_experiences", "_test_aquarium_polish", "_test_all_clear", "_test_treasure_unlock", "_test_treasure_generation", "_test_treasure_play", "_phase_treasure_stress", "_phase_live_fish_diag"]:
 		# "_phase_*" tests are halves of a relaunch test: they run only when asked for by name
 		# (in a child process started by _test_run_continue).
 		if name_.begins_with("_phase") and not only.split(",", false).has(name_):
@@ -4373,7 +4373,7 @@ func _test_gill_colours() -> void:
 	var fr: Color = m._skin_mats[0].get_shader_parameter("freckle_color")
 	var dots_darker := fr.v < (golden["freckle"] as Color).v * 0.7
 	var cf := ConfigFile.new()
-	cf.load(Settings.SETTINGS_PATH)
+	cf.load("user://settings.cfg")
 	var saved := str(cf.get_value("gill", "morph", "")) == "golden" and absf(float(cf.get_value("gill", "body_hue", 0.0)) - 0.25) < 0.001 \
 			and int(cf.get_value("meta", "save_schema", -1)) == SaveSchema.SAVE_SCHEMA and SaveSchema.SAVE_SCHEMA == 1
 	# Read back as on the next launch.
@@ -4479,7 +4479,7 @@ func _test_gill_patterns() -> void:
 	Settings.gill_pattern = "none"
 	Settings._load()
 	var cf := ConfigFile.new()
-	cf.load(Settings.SETTINGS_PATH)
+	cf.load("user://settings.cfg")
 	var reload_ok := Settings.gill_pattern == GillLook.UPLOAD and int(cf.get_value("meta", "save_schema", -1)) == 1
 	t.check("gill_picture_upload_becomes_pattern", up_ok and bad_ok and reload_ok,
 			"uploaded, %dx%d, on him %s; a bad file refused politely %s; kept for next launch (schema 1) %s" % [stored.get_width() if stored else 0, stored.get_height() if stored else 0, up_ok, bad_ok, reload_ok])
@@ -4857,10 +4857,10 @@ func _test_aquarium_experiences() -> void:
 		await t.seconds(0.5)
 		modes_ok = modes_ok and pr.swimmer != null and not g.aquarium.outside
 		pr.ui.swim_stick = Vector2(0.3, 1.0)
-		pr.ui.swim_fast = true
+		pr.ui.swim_held = true
 		await t.seconds(1.5)
 		pr.ui.swim_stick = Vector2.ZERO
-		pr.ui.swim_fast = false
+		pr.ui.swim_held = false
 		clock_ok = clock_ok and is_equal_approx(g.clock.run_s, run_in)
 		# Back, one level at a time (as Android back does): swim -> room -> play.
 		g._go_back()
@@ -4898,11 +4898,10 @@ func _test_aquarium_experiences() -> void:
 	var last := sw.global_position
 	var dirs := [Vector2(0, 1), Vector2(1, 0.3), Vector2(-1, 0.5), Vector2(0.2, -1)]
 	for k in 8:
-		sw.cam_yaw = k * 0.9
-		sw.cam_pitch = [0.9, -0.9, 0.0, 0.5][k % 4]
+		sw.heading = k * 0.9
+		sw.pitch = [0.9, -0.9, 0.0, 0.5][k % 4]
 		pr.ui.swim_stick = dirs[k % 4]
-		pr.ui.swim_up = [1.0, -1.0, 0.0, 0.0][k % 4]
-		pr.ui.swim_fast = true
+		pr.ui.swim_held = true
 		for f in 60 * 8:
 			await t.frames(1)
 			if f % 20 == 0:
@@ -4913,8 +4912,7 @@ func _test_aquarium_experiences() -> void:
 				for b in g.balls:
 					worst_in = maxf(worst_in, b.radius * 0.75 - sp.distance_to(b.global_position))
 	pr.ui.swim_stick = Vector2.ZERO
-	pr.ui.swim_up = 0.0
-	pr.ui.swim_fast = false
+	pr.ui.swim_held = false
 	t.check("swim_stays_in_the_water", travelled > 200.0 and worst_out < 0.5 and worst_in <= 0.0, "swum %.0f, outside by %.2f, inside a ball by %.2f" % [travelled, worst_out, worst_in])
 	var par: Node3D = null
 	for x in b0.parasites:
@@ -5085,6 +5083,221 @@ func _test_tier2_world() -> void:
 	p.restore_full()
 
 
+## The aquarium/UI polish package (docs/AQUARIUM.md): the two swim controls and their inversion,
+## Settings from the title's gear, the fish seen from the room, and the colours workspace.
+func _test_aquarium_polish() -> void:
+	var pr: Presentation = g.presentation
+	var pm: PauseMenu = g.pause_menu
+	var b0 := g.balls[0]
+	var release := _hold_threats(b0)
+	p.restore_full()
+	var spot := _quiet_spot(0)
+	var up := b0.up_at(spot)
+	place_at(0, spot + up * 0.2, -MossBall.frame_at(up, 0.0).z)
+	await t.seconds(0.5)
+	g.save_run()
+	var run0: float = g.clock.run_s
+	var earned0 := g.run_save.earned().duplicate(true)
+	var invert0 := Settings.swim_invert_y
+	# --- Swim: exactly two controls, the stick aims his nose, Swim propels along it ---
+	pr.enter("play")
+	pr.go("swim")
+	await t.frames(3)
+	var sw := pr.swimmer
+	var names: Array = pr.ui.swim_buttons().keys()
+	t.check("swim_exactly_two_controls", names == ["swim"] and not ("swim_up" in pr.ui) and not ("swim_fast" in pr.ui) and not ("swim_look" in pr.ui),
+			"buttons %s" % [names])
+	# The stick lives on the left half; a touch there takes it, the button takes its own touch.
+	var vp := g.get_viewport().get_visible_rect().size
+	var sb: Array = pr.ui.swim_buttons()["swim"]
+	pr.ui._down(0, Vector2(vp.x * 0.2, vp.y * 0.7))
+	pr.ui._move(0, Vector2(vp.x * 0.2, vp.y * 0.7 + 200.0), Vector2(0, 200))
+	var stick_down: Vector2 = pr.ui.swim_stick
+	pr.ui._down(1, sb[0])
+	var held: bool = pr.ui.swim_held
+	pr.ui._up(1, sb[0])
+	pr.ui._up(0, Vector2(vp.x * 0.2, vp.y * 0.7 + 200.0))
+	t.check("swim_touch_controls", stick_down.y < -0.5 and held and not pr.ui.swim_held and pr.ui.swim_stick == Vector2.ZERO,
+			"stick %s held %s" % [stick_down, held])
+	# Pitch: pulling down (stick y < 0) raises his nose by default, lowers it when inverted.
+	var pitches := []
+	for inv in [false, true]:
+		Settings.swim_invert_y = inv
+		sw.pitch = 0.0
+		sw.velocity = Vector3.ZERO
+		pr.ui.swim_stick = Vector2(0, -1)
+		await t.seconds(0.6)
+		pr.ui.swim_stick = Vector2.ZERO
+		pitches.append(sw.pitch)
+		await t.seconds(0.3)
+	t.check("swim_pitch_default_and_inverted", pitches[0] > 0.3 and pitches[1] < -0.3, "pitch %.2f / inverted %.2f" % pitches)
+	Settings.swim_invert_y = false
+	# Yaw: the stick turns him; the camera follows behind his nose.
+	sw.pitch = 0.0
+	var h0 := sw.heading
+	pr.ui.swim_stick = Vector2(1, 0)
+	await t.seconds(0.8)
+	pr.ui.swim_stick = Vector2.ZERO
+	var turned := absf(wrapf(sw.heading - h0, -PI, PI))
+	await t.seconds(1.2)
+	t.check("swim_stick_turns_him", turned > 0.5 and absf(wrapf(sw.cam_yaw - sw.heading, -PI, PI)) < 0.3, "turned %.2f, cam lag %.2f" % [turned, wrapf(sw.cam_yaw - sw.heading, -PI, PI)])
+	# Swim held: speed builds along his nose. Released: he glides to a stop.
+	sw.pitch = 0.2
+	sw.velocity = Vector3.ZERO
+	pr.ui.swim_held = true
+	await t.seconds(2.0)
+	var v_on := sw.velocity
+	var along := v_on.normalized().dot(sw.nose())
+	pr.ui.swim_held = false
+	await t.seconds(0.5)
+	var v_glide := sw.velocity.length()
+	await t.seconds(6.0)
+	var v_end := sw.velocity.length()
+	t.check("swim_button_propels_along_nose", v_on.length() > 5.0 and along > 0.9 and v_glide > 1.0 and v_end < v_glide * 0.3,
+			"speed %.1f along %.2f, glide %.1f -> %.1f" % [v_on.length(), along, v_glide, v_end])
+	# Without Swim he never moves off by himself.
+	sw.velocity = Vector3.ZERO
+	var still0 := sw.global_position
+	await t.seconds(1.0)
+	t.check("swim_no_drift_without_input", sw.global_position.distance_to(still0) < 0.05, "%.3f" % sw.global_position.distance_to(still0))
+	# The setting persists in settings.cfg [controls] (schema unchanged).
+	Settings.swim_invert_y = true
+	Settings.save()
+	var cf := ConfigFile.new()
+	cf.load("user://settings.cfg")
+	var saved_inv: bool = cf.get_value("controls", "swim_invert_y", false)
+	Settings.swim_invert_y = invert0
+	Settings.save()
+	t.check("swim_invert_persists", saved_inv and int(cf.get_value("meta", "save_schema", 1)) == 1, "saved %s" % saved_inv)
+	pr.back()
+	await t.seconds(0.3)
+	# --- Live Tank fish: all thirteen, the bala trio, drawn larger from outside, same simulation ---
+	pr.go("live")
+	await t.seconds(1.0)
+	var kinds := {}
+	var in_bounds := true
+	var scaled := true
+	for f in g.fish.fish:
+		kinds[f["kind"]] = int(kinds.get(f["kind"], 0)) + 1
+		var n: Node3D = f["node"]
+		in_bounds = in_bounds and (f["pos"] as Vector3) == (f["pos"] as Vector3).clamp(Aquarium.TANK_MIN, Aquarium.TANK_MAX)
+		scaled = scaled and n.visible and is_equal_approx(n.scale.x, Aquarium.OUTSIDE_FISH_SCALE)
+	var p0: Vector3 = g.fish.fish[0]["pos"]
+	await t.seconds(0.5)
+	var swimming: bool = (g.fish.fish[0]["pos"] as Vector3).distance_to(p0) > 0.05
+	t.check("live_tank_fish_present", g.fish.fish.size() == AmbientFish.COUNT and kinds.get("bala", 0) == 3 and in_bounds and scaled and swimming,
+			"%d fish %s, in bounds %s, scaled %s, swimming %s" % [g.fish.fish.size(), kinds, in_bounds, scaled, swimming])
+	var far_ok := true
+	for b in g.balls:
+		far_ok = far_ok and ((b as MossBall).far_vegetation() == null or (b as MossBall).far_vegetation().visible)
+	pr.back()
+	await t.seconds(0.2)
+	pr.exit()
+	await t.frames(3)
+	var back_scale := true
+	for f in g.fish.fish:
+		back_scale = back_scale and is_equal_approx((f["node"] as Node3D).scale.x, 1.0)
+	for b in g.balls:
+		far_ok = far_ok and ((b as MossBall).far_vegetation() == null or not (b as MossBall).far_vegetation().visible)
+	t.check("fish_scale_only_outside", back_scale and far_ok and g.fish.display_scale == 1.0, "scale back %s far %s" % [back_scale, far_ok])
+	t.check("aquarium_polish_run_untouched", g.run_save.earned() == earned0 and is_equal_approx(g.clock.run_s, run0), "")
+	release.call()
+	# --- The title: a gear opens the same Settings (diagnostics included); Back returns ---
+	g._enter_title()
+	await t.frames(3)
+	var run_file0 := FileAccess.get_file_as_string(RunSave.PATH)
+	run0 = g.clock.run_s
+	var gear: Button = g.title.gear
+	var gr := gear.get_global_rect()
+	var gear_ok := gear.is_visible_in_tree() and gear.name == "SettingsGear" and gear.icon != null and gr.size.x >= 88.0 and gr.size.y >= 88.0 \
+			and Rect2(Vector2.ZERO, vp).encloses(gr)
+	t.check("title_settings_gear", gear_ok, "rect %s in %s" % [gr, vp])
+	gear.pressed.emit()
+	await t.frames(3)
+	var diag_btn: Button = null
+	for c in pm.find_children("*", "Button", true, false):
+		if (c as Button).text == "About / Diagnostics":
+			diag_btn = c
+	var st_ok: bool = pm.visible and pm._from_title and diag_btn != null and diag_btn.is_visible_in_tree() and not g.get_tree().paused and g.state == "title"
+	var resume := pm._panel.find_child("Resume", true, false) as Button
+	resume.pressed.emit()
+	await t.frames(3)
+	t.check("title_settings_open_and_back", st_ok and not pm.visible and g.title.visible and g.state == "title"
+			and FileAccess.get_file_as_string(RunSave.PATH) == run_file0 and is_equal_approx(g.clock.run_s, run0),
+			"opened %s diag %s resume '%s'" % [st_ok, diag_btn != null, resume.text])
+	# --- Gill's colours: controls left, Gill right, always visible, turned by dragging him ---
+	g.title._on_colours()
+	await t.frames(4)
+	var page: GillPage = pm.gill_page
+	var cr := page.controls.get_global_rect()
+	var sr := page.stage.get_global_rect()
+	var screen := Rect2(Vector2.ZERO, vp)
+	var split_ok := cr.end.x <= sr.position.x + 0.5 and screen.encloses(cr.grow(-1)) and screen.encloses(sr.grow(-1)) and sr.size.x >= 300.0 and sr.size.y >= 300.0 \
+			and page.controls.get_combined_minimum_size().x <= cr.size.x + 0.5
+	t.check("colours_split_workspace", split_ok, "controls %s stage %s min %s" % [cr, sr, page.controls.get_combined_minimum_size()])
+	var csc: ScrollContainer = page.controls.get_node("ControlsScroll")
+	csc.scroll_vertical = 100000
+	await t.frames(3)
+	t.check("colours_scroll_keeps_gill", csc.scroll_vertical > 0 and page.stage.get_global_rect() == sr and page.stage.is_visible_in_tree(),
+			"scroll %d" % csc.scroll_vertical)
+	csc.scroll_vertical = 0
+	# A preset recolours him at once; so does a slider.
+	var base0 := page.preview.look_base()
+	(page.find_child("Morph_golden", true, false) as Button).pressed.emit()
+	await t.frames(1)
+	var base1 := page.preview.look_base()
+	page._body_hue.value = 0.3
+	await t.frames(1)
+	var base2 := page.preview.look_base()
+	t.check("colours_live_update", base1 != base0 and base2 != base1 and Settings.gill_morph == "golden", "%s %s %s" % [base0, base1, base2])
+	# Dragging on him turns him and never scrolls; a slider never turns him.
+	page._touched = true
+	page._yaw_v = 0.0
+	var yaw0 := page.yaw
+	var scroll0 := csc.scroll_vertical
+	var c := sr.get_center()
+	var to_win := g.get_viewport().get_screen_transform()
+	var ev := InputEventMouseButton.new()
+	ev.button_index = MOUSE_BUTTON_LEFT
+	ev.pressed = true
+	ev.position = to_win * c
+	ev.global_position = ev.position
+	g.get_viewport().push_input(ev)
+	for k in 5:
+		var mv := InputEventMouseMotion.new()
+		mv.button_mask = MOUSE_BUTTON_MASK_LEFT
+		mv.position = to_win * (c + Vector2(30.0 * (k + 1), 40.0 * (k + 1)))
+		mv.global_position = mv.position
+		mv.relative = to_win.basis_xform(Vector2(30.0, 40.0))
+		g.get_viewport().push_input(mv)
+		await t.frames(1)
+	var rel := ev.duplicate() as InputEventMouseButton
+	rel.pressed = false
+	rel.position = to_win * (c + Vector2(150, 200))
+	rel.global_position = rel.position
+	g.get_viewport().push_input(rel)
+	await t.frames(2)
+	var yaw1 := page.yaw
+	t.check("colours_drag_turns_gill", absf(yaw1 - yaw0) > 0.5 and csc.scroll_vertical == scroll0, "yaw %.2f -> %.2f scroll %d" % [yaw0, yaw1, csc.scroll_vertical])
+	page._yaw_v = 0.0
+	await t.frames(2)
+	var yaw2 := page.yaw
+	page._dots_bright.value = 0.7
+	await t.frames(3)
+	t.check("colours_slider_never_turns", absf(page.yaw - yaw2) < 0.01, "%.3f" % (page.yaw - yaw2))
+	# Persisted as before ([gill], schema 1), and restored by Pink.
+	var cf2 := ConfigFile.new()
+	cf2.load("user://settings.cfg")
+	t.check("colours_persist", cf2.get_value("gill", "morph", "") == "golden" and is_equal_approx(float(cf2.get_value("gill", "dots_bright", 0.0)), 0.7), "")
+	(page.find_child("Morph_pink", true, false) as Button).pressed.emit()
+	(page.find_child("Done", true, false) as Button).pressed.emit()
+	await t.frames(2)
+	pm.close()
+	await t.frames(2)
+	g.title._on_play()
+	await t.seconds(0.5)
+
+
 func _test_menu_scrollbar() -> void:
 	var pm := g.pause_menu
 	pm.open()
@@ -5095,7 +5308,7 @@ func _test_menu_scrollbar() -> void:
 		if which == "colours":
 			pm._open_gill()
 			await t.frames(3)
-		var holder: Control = pm._panel if which == "settings" else pm.gill_page
+		var holder: Control = pm._panel if which == "settings" else pm.gill_page.controls
 		var sc: ScrollContainer = holder.find_children("*", "ScrollContainer", true, false)[0]
 		var bar := sc.get_v_scroll_bar()
 		var br := bar.get_global_rect()

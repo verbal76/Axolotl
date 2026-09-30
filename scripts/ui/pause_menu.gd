@@ -15,6 +15,8 @@ var _timer_toggle: CheckButton
 var _run_time: Label
 var _run_detail: Label
 var _haptics: CheckButton
+var _swim_invert: CheckButton
+var _resume: Button
 var _music: HSlider
 var _sfx: HSlider
 var _session_rows: Array[Control] = []
@@ -48,6 +50,8 @@ func _ready() -> void:
 	v.size_flags_horizontal = Control.SIZE_EXPAND_FILL
 	scroll.add_child(v)
 	var resume := UiStyle.button("Resume", close)
+	resume.theme_type_variation = "PrimaryButton"
+	_resume = resume
 	v.add_child(resume)
 	# This run: time, completion, finished or not, best finish.
 	_run_time = Label.new()
@@ -72,6 +76,15 @@ func _ready() -> void:
 	_haptics.text = "Haptics"
 	_haptics.toggled.connect(_on_haptics)
 	v.add_child(_haptics)
+	# Swim Mode only: the flight-stick pitch the other way round (owner, 2026-09-30).
+	_swim_invert = CheckButton.new()
+	_swim_invert.name = "SwimInvert"
+	_swim_invert.text = "Invert swim up/down"
+	_swim_invert.tooltip_text = "Off: pull the stick down to swim up. On: push it up to swim up. Swim Mode only."
+	_swim_invert.toggled.connect(func(on: bool) -> void:
+		Settings.swim_invert_y = on
+		Settings.save())
+	v.add_child(_swim_invert)
 	var colours := UiStyle.button("%s's colours" % GameVersion.CHARACTER_NAME, _open_gill)
 	colours.name = "GillColours"
 	v.add_child(colours)
@@ -108,7 +121,7 @@ func _ready() -> void:
 	# His colours: a page of its own in place of the menu.
 	gill_page = GillPage.new()
 	gill_page.visible = false
-	center.add_child(gill_page)
+	_root.add_child(gill_page)
 	gill_page.done.connect(_close_gill)
 	resume.name = "Resume"
 	visible = false
@@ -240,6 +253,9 @@ func _refresh() -> void:
 			lines.append(g.best_line())
 		_run_detail.text = "\n".join(lines)
 	_haptics.set_pressed_no_signal(Settings.haptics)
+	_swim_invert.set_pressed_no_signal(Settings.swim_invert_y)
+	# (From the title it is Settings: back to the title, not "resume" a run that is not running.)
+	_resume.text = "Back" if _from_title else "Resume"
 	_music.set_value_no_signal(Settings.music_volume)
 	_sfx.set_value_no_signal(Settings.sfx_volume)
 	_status.text = Settings.controller_status()

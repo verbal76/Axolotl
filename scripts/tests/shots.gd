@@ -497,6 +497,8 @@ func run(runner) -> void:
 		await _bala_shots(g)
 	if only == "tier2":
 		await _tier2_shots(g)
+	if only == "uiq":
+		await _ui_shots(g)
 	if only == "aqquick":
 		# Quick iteration: the views from the room at three states of the tank.
 		for st in [["murky", 0.0], ["half", 0.5], ["clean", 1.0]]:
@@ -922,6 +924,70 @@ func _tier2_shots(g: Game) -> void:
 
 ## The aquarium experiences (docs/AQUARIUM.md), through the real controller: the room, inspection
 ## (centre and both ends of its drag), each Live Tank view and Swim Mode (still, swimming, near fish).
+## The UI package (owner, 2026-09-30): title with the Settings gear, Settings from the title, the
+## colours workspace (top, scrolled to the bottom, turned front / side / back, two presets and a
+## fine-tuned look), and the aquarium's controls (room, Live Tank, Swim).
+func _ui_shots(g: Game) -> void:
+	var pm: PauseMenu = g.pause_menu
+	g.title.show_title()
+	await t.seconds(1.0)
+	await t.shot("ui_01_title")
+	g.title._on_settings()
+	await t.seconds(0.8)
+	await t.shot("ui_02_settings_from_title")
+	var sc: ScrollContainer = pm._panel.find_children("*", "ScrollContainer", true, false)[0]
+	sc.scroll_vertical = 100000
+	await t.seconds(0.4)
+	await t.shot("ui_03_settings_bottom")
+	pm.close()
+	await t.seconds(0.4)
+	await t.shot("ui_03b_back_to_title")
+	g.title._on_colours()
+	await t.seconds(1.2)
+	var page: GillPage = pm.gill_page
+	await t.shot("ui_04_colours_open")
+	var csc: ScrollContainer = page.controls.get_node("ControlsScroll")
+	csc.scroll_vertical = 100000
+	await t.seconds(0.5)
+	await t.shot("ui_05_colours_scrolled")
+	csc.scroll_vertical = 0
+	for v in [["front", PI], ["side", PI * 0.5], ["rear", 0.0]]:
+		page._touched = true
+		page.yaw = v[1]
+		await t.seconds(0.4)
+		await t.shot("ui_06_turned_%s" % v[0])
+	page.yaw = PI * 0.78
+	(page.find_child("Morph_golden", true, false) as Button).pressed.emit()
+	await t.seconds(0.5)
+	await t.shot("ui_07_preset_golden")
+	(page.find_child("Morph_melanoid", true, false) as Button).pressed.emit()
+	await t.seconds(0.5)
+	await t.shot("ui_08_preset_melanoid")
+	(page.find_child("Morph_pink", true, false) as Button).pressed.emit()
+	page._body_hue.value = 0.3
+	page._dots_bright.value = 0.5
+	await t.seconds(0.5)
+	await t.shot("ui_09_fine_tuned")
+	(page.find_child("Morph_pink", true, false) as Button).pressed.emit()
+	(page.find_child("Done", true, false) as Button).pressed.emit()
+	await t.seconds(0.5)
+	g.title._on_aquarium()
+	await t.seconds(2.5)
+	await t.shot("ui_10_aquarium_room")
+	g.presentation.go("live")
+	await t.seconds(2.5)
+	await t.shot("ui_11_live_tank")
+	g.presentation.back()
+	await t.seconds(0.6)
+	g.presentation.go("swim")
+	await t.seconds(1.5)
+	await t.shot("ui_12_swim_hud")
+	g.presentation.back()
+	await t.seconds(0.6)
+	g.presentation.back()
+	await t.seconds(0.6)
+
+
 func _aquarium_shots(g: Game, tag: String) -> void:
 	g.player.invuln_t = 9999
 	var pr := g.presentation
@@ -945,15 +1011,16 @@ func _aquarium_shots(g: Game, tag: String) -> void:
 	pr.go("swim")
 	await t.seconds(1.5)
 	await t.shot("%s_6swim_start" % tag)
+	# (Pull down to climb, then level out and swim.)
 	pr.ui.swim_stick = Vector2(0, 1)
-	pr.ui.swim_up = 1.0
-	await t.seconds(2.5)
-	pr.ui.swim_up = 0.0
-	pr.ui.swim_fast = true
-	await t.seconds(3.0)
-	await t.shot("%s_7swim_fast" % tag)
-	pr.ui.swim_fast = false
+	pr.ui.swim_held = true
+	await t.seconds(1.2)
+	pr.ui.swim_stick = Vector2(0, -0.6)
+	await t.seconds(1.0)
 	pr.ui.swim_stick = Vector2.ZERO
+	await t.seconds(2.5)
+	await t.shot("%s_7swim_fast" % tag)
+	pr.ui.swim_held = false
 	# Out in open water among the fish.
 	var f: Vector3 = g.fish.nearest_point(Vector3(0, 20, 0))
 	pr.swimmer.global_position = f + Vector3(0, 2, 14)
@@ -1664,7 +1731,7 @@ func _colour_shots(g: Game) -> void:
 	await t.seconds(0.5)
 	await t.shot("pattern_page_upload")
 	# The pattern swatches themselves (drawn off the main thread since this package).
-	var psc := g.pause_menu.gill_page.find_child("*", false, false) as ScrollContainer
+	var psc := g.pause_menu.gill_page.find_child("ControlsScroll", true, false) as ScrollContainer
 	var pb := g.pause_menu.gill_page.find_child("Pattern_spots", true, false) as Control
 	if psc and pb:
 		psc.ensure_control_visible(pb)

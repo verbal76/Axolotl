@@ -41,16 +41,18 @@ func _ready() -> void:
 	_root = Control.new()
 	_root.set_anchors_preset(Control.PRESET_FULL_RECT)
 	_root.mouse_filter = Control.MOUSE_FILTER_IGNORE
+	_root.theme = UiStyle.theme()
 	add_child(_root)
 	_canvas = UiCanvas.new()
 	_canvas.ui = self
 	_canvas.set_anchors_preset(Control.PRESET_FULL_RECT)
 	_canvas.mouse_filter = Control.MOUSE_FILTER_IGNORE
 	_root.add_child(_canvas)
-	_back = UiStyle.button("‹  Back", func(): p.back())
+	_back = UiStyle.button("‹ Back", func(): p.back())
 	_back.name = "AquariumBack"
 	_root.add_child(_back)
 	_live_btn = UiStyle.button("Live Tank", func(): p.go("live"))
+	_live_btn.theme_type_variation = "PrimaryButton"
 	_live_btn.name = "LiveTank"
 	_root.add_child(_live_btn)
 	_swim_btn = UiStyle.button("Swim", func(): p.go("swim"))
@@ -58,6 +60,7 @@ func _ready() -> void:
 	_root.add_child(_swim_btn)
 	_view_btn = UiStyle.button("View", func():
 		p.next_live_view()
+		_view_btn.text = view_name()
 		_live_show = 3.0)
 	_view_btn.name = "LiveView"
 	_root.add_child(_view_btn)
@@ -84,12 +87,14 @@ func _layout() -> void:
 	_safe = Rect2(ml, mt, vp.x - ml - mr, vp.y - mt - mb)
 	_s = clampf(vp.y / 720.0, 0.75, 1.4)
 	_back.position = _safe.position + Vector2(6, 6)
-	_back.size = Vector2(170, 64) * _s
+	_back.size = Vector2(150, 60) * _s
+	for b in [_back, _live_btn, _swim_btn, _view_btn]:
+		b.add_theme_font_size_override("font_size", int(26 * _s))
 	_live_btn.size = Vector2(210, 72) * _s
 	_swim_btn.size = Vector2(170, 72) * _s
 	_swim_btn.position = _safe.end - _swim_btn.size - Vector2(6, 6)
 	_live_btn.position = _swim_btn.position - Vector2(_live_btn.size.x + 16, 0)
-	_view_btn.size = Vector2(150, 64) * _s
+	_view_btn.size = Vector2(250, 60) * _s
 	_view_btn.position = Vector2(_safe.end.x - _view_btn.size.x - 6, _safe.position.y + 6)
 	# (Above the bottom row of buttons, never under them.)
 	_hint.position = Vector2(_safe.position.x, _swim_btn.position.y - 52 * _s)
@@ -99,8 +104,15 @@ func _layout() -> void:
 	stick_home = Vector2(_safe.position.x + 150 * _s, _safe.end.y - 140 * _s)
 
 
+## The Live Tank view's name, for its button.
+func view_name() -> String:
+	return {"tank": "Whole tank", "left": "Left side", "right": "Right side", "gill": "Gill close-up"}.get(Presentation.LIVE_VIEWS[p.live_view][0], "View") + "  ›"
+
+
 func set_mode(m: String) -> void:
 	mode = m
+	if m == "live":
+		_view_btn.text = view_name()
 	_live_btn.visible = m == "room"
 	_swim_btn.visible = m == "room"
 	_view_btn.visible = m == "live"

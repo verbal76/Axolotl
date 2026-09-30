@@ -1,8 +1,12 @@
 class_name GillPage
-extends PanelContainer
-## The colours page (owner request after the dev-000024 playtest), opened from the pause menu:
-## real axolotl morphs as swatches, fine-tuning sliders for his body and his freckles, and a live
-## close-up of him that recolours as you tap. Saved per device (Settings, GillLook).
+extends Control
+## The colours page (owner request after the dev-000024 playtest), opened from the pause menu and
+## the title: real axolotl morphs as swatches, fine-tuning sliders for his body and his freckles,
+## patterns. Saved per device (Settings, GillLook).
+## A landscape workspace (owner, 2026-09-30, phone playtest of dev-000031): the controls on the left
+## in a panel that scrolls on its own, and Gill on the right, large, always in view whatever the
+## panel is scrolled to, recolouring live. A finger on him turns him round (front, sides, back);
+## the panel's gestures never turn him and turning him never scrolls the panel.
 
 signal done
 
@@ -19,24 +23,40 @@ var _full_colour: CheckButton
 var _pattern_size: HSlider
 var _pattern_note: Label
 var _file_dialog: FileDialog
+## The controls' panel and the stage he stands on (laid out side by side).
+var controls: PanelContainer
+var stage: SubViewportContainer
+## His turn about his middle (radians), its spin from a flick, and whether he has been touched yet.
+var yaw := PI * 0.8
+var _yaw_v := 0.0
+var _dragging := -2
+var _touched := false
 
 
 func _ready() -> void:
 	name = "GillPage"
+	set_anchors_preset(Control.PRESET_FULL_RECT)
+	mouse_filter = Control.MOUSE_FILTER_STOP
+	stage = _preview()
+	add_child(stage)
+	controls = PanelContainer.new()
+	controls.name = "Controls"
+	add_child(controls)
 	var scroll := ScrollContainer.new()
+	scroll.name = "ControlsScroll"
 	scroll.horizontal_scroll_mode = ScrollContainer.SCROLL_MODE_DISABLED
-	scroll.custom_minimum_size = Vector2(560, 560)
-	add_child(scroll)
+	controls.add_child(scroll)
 	var v := VBoxContainer.new()
 	v.add_theme_constant_override("separation", 12)
 	v.size_flags_horizontal = Control.SIZE_EXPAND_FILL
 	scroll.add_child(v)
 	var title := Label.new()
 	title.text = "%s's colours" % GameVersion.CHARACTER_NAME
-	title.add_theme_font_size_override("font_size", 30)
+	title.add_theme_font_size_override("font_size", 32)
+	title.add_theme_color_override("font_color", UiStyle.GOLD)
 	v.add_child(title)
-	v.add_child(_preview())
 	var grid := GridContainer.new()
+	grid.name = "Morphs"
 	grid.columns = 4
 	grid.add_theme_constant_override("h_separation", 10)
 	grid.add_theme_constant_override("v_separation", 10)
@@ -65,6 +85,7 @@ func _ready() -> void:
 	# Patterns: built-in ones, the player's own picture, as markings or in full colour.
 	v.add_child(UiStyle.note("Pattern", 22))
 	var pgrid := GridContainer.new()
+	pgrid.name = "Patterns"
 	pgrid.columns = 4
 	pgrid.add_theme_constant_override("h_separation", 10)
 	pgrid.add_theme_constant_override("v_separation", 10)
@@ -91,7 +112,8 @@ func _ready() -> void:
 	v.add_child(_pattern_note)
 	_full_colour = CheckButton.new()
 	_full_colour.name = "FullColour"
-	_full_colour.text = "Full colour (off: markings in the freckle colour)"
+	_full_colour.text = "Full colour"
+	_full_colour.tooltip_text = "Off: the markings take the freckle colour"
 	_full_colour.toggled.connect(func(_on: bool) -> void: _pattern_tuned())
 	v.add_child(_full_colour)
 	# (How many times it repeats round his body: left, a few big; right, many small.)
@@ -109,6 +131,8 @@ func _ready() -> void:
 	back.custom_minimum_size = Vector2(200, 64)
 	row.add_child(back)
 	v.add_child(row)
+	get_viewport().size_changed.connect(_layout)
+	_layout()
 	# The preview costs nothing while the page is closed.
 	visibility_changed.connect(_on_visibility)
 	_on_visibility()
@@ -123,57 +147,153 @@ func _on_visibility() -> void:
 		_style_patterns()
 
 
-## A small stage of his own: soft aquarium light, a slow sway, and his idles.
-func _preview() -> Control:
+## Controls on the left, his stage filling the rest, inside the display's safe area.
+func _layout() -> void:
+	var vp := get_viewport_rect().size
+	var safe := DisplayServer.get_display_safe_area()
+	var win := DisplayServer.window_get_size()
+	var m := Vector4(18, 14, 18, 14)
+	if win.x > 0 and win.y > 0 and safe.size.x > 0:
+		m.x = maxf(m.x, safe.position.x * vp.x / win.x)
+		m.y = maxf(m.y, safe.position.y * vp.y / win.y)
+		m.z = maxf(m.z, (win.x - safe.end.x) * vp.x / win.x)
+		m.w = maxf(m.w, (win.y - safe.end.y) * vp.y / win.y)
+	var area := Rect2(m.x, m.y, vp.x - m.x - m.z, vp.y - m.y - m.w)
+	var w := clampf(area.size.x * 0.48, 440.0, 660.0)
+	controls.position = area.position
+	controls.size = Vector2(w, area.size.y)
+	controls.clip_contents = true
+	var sc: ScrollContainer = controls.get_node("ControlsScroll")
+	sc.custom_minimum_size = Vector2(w - 70, area.size.y - 56)
+	# (The swatch grids take as many columns as the column has room for, never wider.)
+	var cols := clampi(int((w - 70.0 + 10.0) / 132.0), 2, 4)
+	for g in [controls.find_child("Morphs", true, false), controls.find_child("Patterns", true, false)]:
+		(g as GridContainer).columns = cols
+	stage.position = Vector2(area.position.x + w + 14, area.position.y)
+	stage.size = Vector2(area.end.x - stage.position.x, area.size.y)
+
+
+## His stage: neutral studio light (the colour you pick is the colour you see, without the
+## aquarium's tint or haze), a soft floor under him, and his idles. The model is his own, drawn with
+## the same look as in the game.
+func _preview() -> SubViewportContainer:
 	var box := SubViewportContainer.new()
 	box.name = "Preview"
 	box.stretch = true
-	box.custom_minimum_size = Vector2(520, 230)
+	box.mouse_filter = Control.MOUSE_FILTER_STOP
+	box.gui_input.connect(_stage_input)
 	var vp := SubViewport.new()
 	_vp = vp
 	vp.own_world_3d = true
+	vp.transparent_bg = false
 	vp.msaa_3d = Viewport.MSAA_2X
 	box.add_child(vp)
 	var env := WorldEnvironment.new()
 	env.environment = Environment.new()
 	env.environment.background_mode = Environment.BG_COLOR
-	env.environment.background_color = Color(0.08, 0.26, 0.28)
+	env.environment.background_color = Color(0.1, 0.24, 0.26)
 	env.environment.ambient_light_source = Environment.AMBIENT_SOURCE_COLOR
-	# (Neutral light, so the colour you pick is the colour you see.)
-	env.environment.ambient_light_color = Color(0.9, 0.9, 0.9)
-	env.environment.ambient_light_energy = 0.65
+	env.environment.ambient_light_color = Color(0.92, 0.94, 0.96)
+	env.environment.ambient_light_energy = 0.55
+	env.environment.tonemap_mode = Environment.TONE_MAPPER_AGX
 	vp.add_child(env)
-	var sun := DirectionalLight3D.new()
-	sun.rotation = Vector3(-0.9, 0.5, 0.0)
-	sun.light_energy = 1.1
-	vp.add_child(sun)
+	var key := DirectionalLight3D.new()
+	key.rotation = Vector3(-0.8, 0.55, 0.0)
+	key.light_energy = 1.15
+	vp.add_child(key)
+	var fill := DirectionalLight3D.new()
+	fill.rotation = Vector3(-0.35, -2.4, 0.0)
+	fill.light_energy = 0.45
+	fill.light_color = Color(0.85, 0.93, 1.0)
+	vp.add_child(fill)
+	var floor := MeshInstance3D.new()
+	var disc := CylinderMesh.new()
+	disc.top_radius = 1.05
+	disc.bottom_radius = 1.05
+	disc.height = 0.02
+	disc.radial_segments = 48
+	floor.mesh = disc
+	var fm := StandardMaterial3D.new()
+	fm.albedo_color = Color(0.07, 0.18, 0.19)
+	fm.roughness = 0.9
+	floor.material_override = fm
+	floor.position = Vector3(0, -0.01, 0)
+	vp.add_child(floor)
 	var cam := Camera3D.new()
-	cam.fov = 38.0
+	cam.name = "Cam"
+	cam.fov = 30.0
 	vp.add_child(cam)
-	cam.look_at_from_position(Vector3(0.0, 0.62, 2.0), Vector3(0.0, 0.2, 0.15))
+	cam.look_at_from_position(Vector3(0.0, 1.05, 3.1), Vector3(0.0, 0.2, 0.0))
 	_turn = Node3D.new()
 	vp.add_child(_turn)
 	preview = AxolotlModel.new()
 	preview.idle_ok = true
+	# (Turned about his middle, not his nose.)
+	preview.position = Vector3(0, 0, -0.36)
 	_turn.add_child(preview)
 	return box
+
+
+## A finger (or the mouse) on his stage turns him; a flick keeps him turning briefly.
+func _stage_input(e: InputEvent) -> void:
+	if e is InputEventScreenTouch:
+		var t := e as InputEventScreenTouch
+		if t.pressed and _dragging == -2:
+			_dragging = t.index
+			_touched = true
+			_yaw_v = 0.0
+		elif not t.pressed and t.index == _dragging:
+			_dragging = -2
+		accept_event()
+	elif e is InputEventScreenDrag:
+		var d := e as InputEventScreenDrag
+		if d.index == _dragging:
+			turn_by(d.relative.x)
+			_yaw_v = d.velocity.x * 0.006
+		accept_event()
+	elif e is InputEventMouseButton and (e as InputEventMouseButton).button_index == MOUSE_BUTTON_LEFT:
+		var mb := e as InputEventMouseButton
+		_dragging = -1 if mb.pressed else -2
+		if mb.pressed:
+			_touched = true
+			_yaw_v = 0.0
+		accept_event()
+	elif e is InputEventMouseMotion and _dragging == -1:
+		var mm := e as InputEventMouseMotion
+		turn_by(mm.relative.x)
+		_yaw_v = mm.velocity.x * 0.006
+		accept_event()
+
+
+## Turns him by a horizontal drag of `px` design pixels (a full drag across his stage is about a
+## full turn).
+func turn_by(px: float) -> void:
+	_touched = true
+	yaw = wrapf(yaw + px * 0.011, -PI, PI)
 
 
 var _t := 0.0
 
 
 func _process(dt: float) -> void:
-	# A slow sway about a three-quarter view, so his face is always toward you.
-	if visible and _turn:
-		_t += dt
-		_turn.rotation.y = PI * 0.8 + sin(_t * 0.45) * 0.55
+	if not visible or _turn == null:
+		return
+	_t += dt
+	if _dragging == -2:
+		# The flick eases out (no endless spinning).
+		yaw = wrapf(yaw + _yaw_v * dt, -PI, PI)
+		_yaw_v *= exp(-dt * 5.0)
+		if absf(_yaw_v) < 0.02:
+			_yaw_v = 0.0
+	# Untouched, a slow sway about a three-quarter view keeps his face toward you.
+	_turn.rotation.y = yaw + (0.0 if _touched else sin(_t * 0.45) * 0.45)
 
 
 func _slider(parent: Control, text: String, lo: float, hi: float) -> HSlider:
 	var row := HBoxContainer.new()
 	var l := Label.new()
 	l.text = text
-	l.custom_minimum_size = Vector2(190, 0)
+	l.custom_minimum_size = Vector2(170, 0)
 	row.add_child(l)
 	var s := HSlider.new()
 	s.name = text.replace(" ", "")
@@ -181,7 +301,7 @@ func _slider(parent: Control, text: String, lo: float, hi: float) -> HSlider:
 	s.max_value = hi
 	s.step = 0.01
 	s.size_flags_horizontal = Control.SIZE_EXPAND_FILL
-	s.custom_minimum_size = Vector2(300, 48)
+	s.custom_minimum_size = Vector2(160, 48)
 	row.add_child(s)
 	parent.add_child(row)
 	return s

@@ -99,6 +99,7 @@ func _ready() -> void:
 	cs.content_margin_bottom = 22
 	_card.add_theme_stylebox_override("panel", cs)
 	_card.visible = false
+	_card.theme = UiStyle.theme()
 	# (It pauses the game while it is up, so it must run when paused.)
 	_card.process_mode = Node.PROCESS_MODE_ALWAYS
 	add_child(_card)
