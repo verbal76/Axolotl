@@ -873,6 +873,18 @@ repository. Do not name, open or use any other game repository in Mote developme
    keep the restoration-driven murk; fix the presentation around it.
 3. **Mote Open Issue #1: Gill fluid body locomotion and terrain traversal** (ledger), straight after,
    with no playtest wait. Mote Open Issue #2 (elevated content reachability) is investigated alongside it.
+   (Owner, 2026-09-29: started in parallel on a separate worktree while the aquarium package qualifies;
+   the Open Issue #2 bubble-column fix ships with it.)
+4. **Organic Enemy Movement** (owner-authorized 2026-09-30; ledger, Mote Open Issue #3), straight
+   after locomotion is published and verified, with no wait for the owner. "Deterministic underneath,
+   apparently spontaneous to the observer" (the Data-blinking principle): the existing AI keeps
+   deciding intent; several smooth deterministic rhythms at unrelated frequencies and phases shape
+   how each creature expresses it (wander, weave, vertical drift, speed, body motion), with per-species
+   personality and per-individual phase, never at the cost of combat readability or collision.
+   Read-only research may run now without competing with the active work. Acceptance is visual:
+   "their little movements are difficult to consciously predict, yet smooth, purposeful and
+   believable."
+5. Then the next authorized work, without waiting for physical playtests.
 
 ---
 
