@@ -61,19 +61,39 @@ There are 13 fish at a middle scale, about 6–18× Gill's length (owner decisio
 
 ## Bedroom (`scripts/world/bedroom.gd`, `tools/gen_room.py`)
 
-A lived-in late-80s / early-90s kid's room, built as a few merged meshes. It contains:
+A lived-in late-80s / early-90s kid's room at dusk, rebuilt 2026-09-30. Every prop is original and
+unbranded. It contains:
 
-- **Tank corner:** the tank on a dresser; the hood and its light strip; the filter, air pump and
-  tubing; a food tub, a net, a power strip and cords.
-- **Desk:** with homework on it.
-- **Bed:** a patterned blanket and an alarm clock reading 7:42.
-- **TV corner:** a CRT TV and cassettes.
-- **Shelf.**
-- **Floor:** a rug and things on the floor.
-- **Walls:** posters (space, 90s shapes), a corkboard with notes ("feed Gill - a pinch!") and warm
-  wallpaper.
+- **The dresser under the tank:** wood grain, routed drawer fronts, brass pulls and stickers; the
+  top drawer pulled open with shirts stuffed in and a sleeve and sock hanging out. On top: the fish
+  food, water conditioner, a pencil cup, cassettes (one out of its case), homework, a small robot on
+  a comic, and the air pump and tubing. A kid's crayon drawing of an axolotl is taped to the wall.
+- **Above the tank:** a shelf with books, a trophy, a snow globe, a model rocket and a dinosaur.
+- **TV corner:** a wood-grain CRT on a cart with a glowing game on its screen, rabbit ears and a cap
+  on top; a console with a cartridge in, more cartridges, and controllers with cords across the rug.
+- **Bed:** a bookcase headboard (books, a tape player and headphones, a lit lamp, a red-digit clock
+  reading 7:42, a glass of water); a rumpled patterned comforter, a dented pillow, a plush bear and
+  a flannel shirt.
+- **Desk and walls:** a lit desk lamp, homework, a notebook, a calculator, a mug, textbooks and a
+  boombox; a tall bookshelf, a corkboard with notes ("feed him - a pinch!"), photos and a calendar,
+  a pennant, posters, a two-tone wall with an 80s border; a window with a dusk sky, blinds and
+  curtains; a door, a beanbag, a toy chest and a laundry pile.
+- **Floor:** floorboards with seams, a braided rug, clothes, sneakers, comics, a skateboard and a
+  wastebasket.
 
-The tank throws a cool light (`tank_spill`) onto nearby things. The room's light is warm.
+**Construction.** Bevelled boxes, smooth cylinders and cables, soft blobs and draped cloth, with
+occlusion baked into vertex colours, merged per material into 7 indexed meshes (about 32,000
+vertices; 7 draw calls). The textures come from `tools/gen_room.py`: a 2048×1024 prop atlas
+(VRAM-compressed with mipmaps, about 1.4 MB) plus wallpaper, blanket, wood and fabric tiles. The
+room's materials have their own warm ambient, so the room stays warm however murky the tank.
+
+**Light.** A warm ceiling light and a cool dusk window light (`aquarium.gd`), the desk lamp, the
+bedside lamp and the TV's glow (`Bedroom`), and the cool light the tank throws on things near it
+(`tank_spill`): all on the room layer only, none casting shadows.
+
+**When it is built.** About 160 ms on a desktop, so never during startup: once, 0.6 s after the
+title is usable (`Game._build_room_soon`), or on first need (`Aquarium.ensure_room`). The unit test
+`bedroom_built_after_startup` checks this.
 
 ## The aquarium experiences (`scripts/core/presentation.gd`, `scripts/ui/presentation_ui.gd`, `scripts/actors/swimmer.gd`)
 
