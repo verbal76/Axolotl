@@ -886,6 +886,14 @@ repository. Do not name, open or use any other game repository in Mote developme
    believable."
 5. Then the next authorized work, without waiting for physical playtests.
 
+**Owner's combined morning handoff (2026-09-30), superseding the order above where they differ:**
+(1) root-cause and correct locomotion on the phone (Open Issue #4: Gill not visibly flowing; face-
+planting and sliding sideways at ordinary moss inclines), proven on real authored terrain and against
+dev-000032 from the gameplay camera; (2) subtle per-connection vortex tints (Open Issue #5) riding
+with it if clean; (3) one corrective OTA, verified; (4) then Organic Enemy Movement (its read-only
+research and self-contained work may continue meanwhile, but nothing built on body-follow
+assumptions until locomotion is sound), as its own OTA; (5) continue. No waiting for playtests.
+
 ---
 
 ## NEW SESSION — READ THIS FIRST
