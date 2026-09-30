@@ -51,6 +51,9 @@ const ATLAS := {
 	"tv_bezel": Rect2(1320, 888, 140, 128),
 }
 const UV4 := [Vector2(0, 1), Vector2(1, 1), Vector2(1, 0), Vector2(0, 0)]
+## A box's faces: corner indices (counter-clockwise from outside), normal, UV plane (xy, zy, xz).
+const BOX_FACES := [[4, 5, 6, 7, Vector3.BACK, 0], [1, 0, 3, 2, Vector3.FORWARD, 0], [5, 1, 2, 6, Vector3.RIGHT, 1],
+		[0, 4, 7, 3, Vector3.LEFT, 1], [7, 6, 2, 3, Vector3.UP, 2], [0, 1, 5, 4, Vector3.DOWN, 2]]
 
 ## Lit room surfaces: albedo from a texture times the vertex colour (which also carries the baked
 ## occlusion), no world ambient (it is tinted by the water), a warm hemisphere ambient of its own.
@@ -316,17 +319,25 @@ func _print(reg: String, xf: Transform3D, size: Vector2, col := Color.WHITE, key
 ## A box of `size` whose transform is `xf` (centred), each face UV-mapped 0..1 (or by `tile`
 ## world units when tile > 0). Sharp edges: for small things.
 func box(key: String, size: Vector3, xf: Transform3D, col: Color, tile := 0.0, reg := "") -> void:
+	var tg := _target(key, reg)
+	var b: Buf = tg[0]
+	var atlas: bool = tg[1]
+	var r: Rect2 = tg[2]
+	var shade: bool = tg[3]
 	var h := size * 0.5
+	var bas := xf.basis
 	var c := [Vector3(-h.x, -h.y, -h.z), Vector3(h.x, -h.y, -h.z), Vector3(h.x, h.y, -h.z), Vector3(-h.x, h.y, -h.z),
 			Vector3(-h.x, -h.y, h.z), Vector3(h.x, -h.y, h.z), Vector3(h.x, h.y, h.z), Vector3(-h.x, h.y, h.z)]
-	var faces := [[4, 5, 6, 7, Vector2(size.x, size.y)], [1, 0, 3, 2, Vector2(size.x, size.y)], [5, 1, 2, 6, Vector2(size.z, size.y)],
-			[0, 4, 7, 3, Vector2(size.z, size.y)], [7, 6, 2, 3, Vector2(size.x, size.z)], [0, 1, 5, 4, Vector2(size.x, size.z)]]
-	for f in faces:
-		var uvs := UV4
-		if tile > 0.0:
-			var s: Vector2 = f[4] / tile
-			uvs = [Vector2(0, s.y), Vector2(s.x, s.y), Vector2(s.x, 0), Vector2(0, 0)]
-		_quad(key, xf * (c[f[0]] as Vector3), xf * (c[f[1]] as Vector3), xf * (c[f[2]] as Vector3), xf * (c[f[3]] as Vector3), col, uvs, reg)
+	for f in BOX_FACES:
+		var fs: Vector2 = Vector2(size.x, size.y) if f[5] == 0 else (Vector2(size.z, size.y) if f[5] == 1 else Vector2(size.x, size.z))
+		var s := fs / tile if tile > 0.0 else Vector2.ONE
+		var uvs := [Vector2(0, s.y), Vector2(s.x, s.y), Vector2(s.x, 0), Vector2(0, 0)]
+		var nw := (bas * (f[4] as Vector3)).normalized()
+		var base := b.v.size()
+		for q in 4:
+			_put(b, xf * (c[f[q]] as Vector3), nw, col, uvs[q], atlas, r, shade)
+		# (Each face's corners run counter-clockwise seen from outside: Godot's front is clockwise.)
+		b.i.append_array(PackedInt32Array([base, base + 2, base + 1, base, base + 3, base + 2]))
 
 
 func bx(key: String, size: Vector3, pos: Vector3, col: Color, rot := Vector3.ZERO) -> void:
@@ -575,13 +586,21 @@ func _surf(key: String, reg: String, rows: Array, uvs: Array, xf: Transform3D, c
 	var nr := rows.size()
 	var nc := (rows[0] as Array).size()
 	var bas := xf.basis
+	var P := PackedVector3Array()
+	P.resize(nr * nc)
+	for j in nr:
+		var row: Array = rows[j]
+		for i in nc:
+			P[j * nc + i] = row[i]
 	var W := []
 	var N := []
 	for j in nr:
 		var wrow := []
 		var nrow := []
+		var jd := maxi(j - 1, 0) * nc
+		var ju := mini(j + 1, nr - 1) * nc
 		for i in nc:
-			var p: Vector3 = rows[j][i]
+			var p := P[j * nc + i]
 			var il := i - 1
 			var ir := i + 1
 			if wrap_u:
@@ -592,9 +611,7 @@ func _surf(key: String, reg: String, rows: Array, uvs: Array, xf: Transform3D, c
 			else:
 				il = maxi(il, 0)
 				ir = mini(ir, nc - 1)
-			var du: Vector3 = (rows[j][ir] as Vector3) - (rows[j][il] as Vector3)
-			var dv: Vector3 = (rows[mini(j + 1, nr - 1)][i] as Vector3) - (rows[maxi(j - 1, 0)][i] as Vector3)
-			var n := du.cross(dv)
+			var n := (P[j * nc + ir] - P[j * nc + il]).cross(P[ju + i] - P[jd + i])
 			var out := p - ref
 			if drape_ref:
 				# (Away from the fold's ridge line, along local x: sideways where it hangs.)
@@ -1227,7 +1244,7 @@ func _bed() -> void:
 	cyl("gloss", 60, 70, 24, _at(lp + Vector3(0, 12, 0)), Color(0.85, 0.82, 0.75), 16)
 	cyl("gloss", 14, 14, 200, _at(lp + Vector3(0, 120, 0)), Color(0.85, 0.82, 0.75), 10)
 	blob("gloss", Vector3(55, 70, 55), _at(lp + Vector3(0, 80, 0)), Color(0.85, 0.5, 0.35), 14, 8)
-	cyl("glow", 112, 74, 135, _at(lp + Vector3(0, 240, 0)), Color(0.82, 0.55, 0.33), 18, false)
+	cyl("glow", 112, 74, 135, _at(lp + Vector3(0, 240, 0)), Color(0.72, 0.47, 0.28), 18, false)
 	_lining(110, 72, 133, _at(lp + Vector3(0, 240, 0)), Color(1.0, 0.88, 0.66), 18)
 	blob("glow", Vector3(30, 36, 30), _at(lp + Vector3(0, 205, 0)), Color(1.0, 0.95, 0.8), 8, 5)
 	var ck := Vector3(x0 + 380, ty, hb.z + 20)
