@@ -1,6 +1,6 @@
 class_name OrganicMotion
 extends RefCounted
-## The expression layer of enemy movement (Open Issue #3, docs/ORGANIC_MOTION.md): deterministic
+## The expression layer of enemy movement (Open Issue #3, organic enemy movement): deterministic
 ## underneath, apparently spontaneous to the observer.
 ##
 ## A creature's AI stays its INTENT (graze, prowl, pursue, retreat, guard, return home...). This adds
