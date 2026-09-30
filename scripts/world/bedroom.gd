@@ -935,9 +935,11 @@ func _dresser_things(tmin: Vector3, tmax: Vector3) -> void:
 		pencil(base, base + Vector3(cos(a) * 45 + 10, 175, sin(a) * 40), pcs[k], k == 4)
 	# A ruler.
 	box("gloss", Vector3(30, 300, 3), Transform3D(Basis(Vector3.FORWARD, 0.25), pc + Vector3(-10, 170, 10)), Color(0.85, 0.9, 0.95))
+	# A homework sheet under it all, hanging over the front edge.
+	_print("homework", Transform3D(Basis(Vector3.UP, 0.35) * Basis(Vector3.RIGHT, -PI * 0.5), Vector3(tmin.x - 115, top + 0.8, sz + 175)), Vector2(170, 220))
 	# Cassettes: a little stack at the front and one out of its case.
 	for k in 3:
-		cassette(Vector3(tmin.x - 100, top + k * 17, sz + 210) + Vector3(_r.randf_range(-6, 6), 0, 0), _r.randf_range(-0.25, 0.25) + PI * 0.5, k)
+		cassette(Vector3(tmin.x - 100, top + 1.5 + k * 17, sz + 210) + Vector3(_r.randf_range(-6, 6), 0, 0), _r.randf_range(-0.25, 0.25) + PI * 0.5, k)
 	cassette(Vector3(tmin.x - 70, top + 51, sz + 195), PI * 0.5 + 0.5, 3, false)
 	# Right of the tank: a water conditioner bottle, a little wind-up robot, the net leaning on the glass.
 	comic(Vector3(tmax.x + 110, top, sz + 150), 0.35, 4)
@@ -1180,8 +1182,8 @@ func _bed() -> void:
 	cyl("gloss", 60, 70, 24, _at(lp + Vector3(0, 12, 0)), Color(0.85, 0.82, 0.75), 16)
 	cyl("gloss", 14, 14, 200, _at(lp + Vector3(0, 120, 0)), Color(0.85, 0.82, 0.75), 10)
 	blob("gloss", Vector3(55, 70, 55), _at(lp + Vector3(0, 80, 0)), Color(0.85, 0.5, 0.35), 14, 8)
-	cyl("glow", 118, 78, 140, _at(lp + Vector3(0, 240, 0)), Color(0.95, 0.66, 0.4), 18, false)
-	_lining(116, 76, 138, _at(lp + Vector3(0, 240, 0)), Color(1.0, 0.9, 0.7), 18)
+	cyl("glow", 112, 74, 135, _at(lp + Vector3(0, 240, 0)), Color(0.82, 0.55, 0.33), 18, false)
+	_lining(110, 72, 133, _at(lp + Vector3(0, 240, 0)), Color(1.0, 0.88, 0.66), 18)
 	blob("glow", Vector3(30, 36, 30), _at(lp + Vector3(0, 205, 0)), Color(1.0, 0.95, 0.8), 8, 5)
 	var ck := Vector3(x0 + 380, ty, hb.z + 20)
 	var kb := Basis(Vector3.UP, -0.35)
