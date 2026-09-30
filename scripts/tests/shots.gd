@@ -454,6 +454,8 @@ func run(runner) -> void:
 		await _sway_shots(g)
 	if only == "gillanim":
 		await _gill_anim(g)
+	if only == "loco":
+		await _loco_shots(g)
 	if only == "spots":
 		await _spot_shots(g)
 	if only == "report":
@@ -1634,6 +1636,137 @@ func _gill_anim(g: Game) -> void:
 			await t.shot("whip_%s_%d" % [view, i])
 			t.log_line("whip %s at %.3f s: tail tip %.0f deg" % [view, m._whip_s, rad_to_deg(m.whip_tip_az)])
 			i += 1
+	Engine.time_scale = 1.0
+	_open(g)
+
+
+## Mote Open Issue #1: his body through a turn on the spot, a running curve, onto a slope and over
+## a short lip, slowed down. `--nofollow=1` shows the old rigid body (and no pull over the lip) for
+## a before/after pair.
+func _loco_shots(g: Game) -> void:
+	var p := g.player
+	var m := p.model
+	var old: bool = Settings.test_args.get("nofollow", "0") == "1"
+	m.follow = not old
+	for b in g.balls:
+		b.add_heal(Vector3.UP, 340.0, 0.0)
+	g.g_disp = 1.0
+	g.aquarium.apply(1.0)
+	var b0 := g.balls[0]
+	var at := MossBall.dir_ll(12, 30)
+	var up := b0.up_at(b0.surface_point(at))
+	var fwd := -MossBall.frame_at(up, 0.0).z
+	var right := fwd.cross(up)
+	var frame := Transform3D(Basis(right, up, -fwd), b0.surface_point(at))
+	var mat := StandardMaterial3D.new()
+	mat.albedo_color = Color(0.36, 0.42, 0.3)
+	mat.roughness = 0.9
+	var hold := func(dir: Vector3) -> void:
+		var cf: Vector3 = -g.cam.global_basis.z
+		cf = (cf - p.up * cf.dot(p.up)).normalized()
+		var cr := cf.cross(p.up)
+		var d := (dir - p.up * dir.dot(p.up)).normalized()
+		p.bot_input = Vector2(d.dot(cr), d.dot(cf))
+	p.use_bot_input = true
+	p.invuln_t = 9999
+	# 1. A quarter turn from a standstill, from above.
+	p.place(b0, b0.surface_point(at, 0.05), fwd)
+	g.cam.snap_behind()
+	await t.seconds(1.2)
+	var c := p.global_position + up * 0.2
+	_close(g, c + up * 3.2 + fwd * 0.3 + right * 0.4, c + right * 0.2, fwd)
+	await t.seconds(0.5)
+	Engine.time_scale = 0.15
+	for i in 5:
+		hold.call(right)
+		await t.frames(2 if i < 4 else 6)
+		await t.shot("turn_%d" % i)
+	p.bot_input = Vector2.ZERO
+	Engine.time_scale = 1.0
+	# 2. A running curve, from above and behind.
+	p.place(b0, b0.surface_point(at, 0.05), fwd)
+	_open(g)
+	g.cam.snap_behind()
+	await t.seconds(0.3)
+	var dir := fwd
+	for f in 150:
+		if f >= 60:
+			dir = dir.rotated(p.up, -0.05)
+		hold.call(fwd if f < 60 else dir)
+		await t.frames(1)
+		if f == 100:
+			var cc := p.global_position + p.up * 0.2
+			_close(g, cc + p.up * 3.4 - p.facing * 0.6, cc - p.facing * 0.3, p.facing)
+			Engine.time_scale = 0.1
+			await t.frames(2)
+			await t.shot("curve")
+			Engine.time_scale = 1.0
+	p.bot_input = Vector2.ZERO
+	_open(g)
+	# 3. Onto a 30 degree slope (side view), and 4. over a 0.3 m lip (side view).
+	for what in ["slope", "lip"]:
+		var body := StaticBody3D.new()
+		var cs := CollisionShape3D.new()
+		var mi := MeshInstance3D.new()
+		if what == "slope":
+			var run := 1.0 / tan(deg_to_rad(30.0))
+			var pts := PackedVector3Array()
+			for x in [-1.5, 1.5]:
+				pts.append(Vector3(x, -0.4, -(1.6 - 0.4 * run)))
+				pts.append(Vector3(x, 2.0, -(1.6 + 2.0 * run)))
+				pts.append(Vector3(x, 2.0, -(1.6 + 2.0 * run + 3.0)))
+				pts.append(Vector3(x, -0.4, -(1.6 + 2.0 * run + 3.0)))
+			var sh := ConvexPolygonShape3D.new()
+			sh.points = pts
+			cs.shape = sh
+			var st := SurfaceTool.new()
+			st.begin(Mesh.PRIMITIVE_TRIANGLES)
+			for q in [[0, 1, 5, 4], [1, 2, 6, 5], [0, 4, 7, 3], [4, 5, 6, 7], [0, 3, 2, 1], [3, 7, 6, 2]]:
+				for k in [0, 1, 2, 0, 2, 3]:
+					st.add_vertex(pts[q[k]])
+			st.generate_normals()
+			mi.mesh = st.commit()
+		else:
+			var bx := BoxShape3D.new()
+			bx.size = Vector3(3.0, 0.7, 6.0)
+			cs.shape = bx
+			var bm := BoxMesh.new()
+			bm.size = bx.size
+			mi.mesh = bm
+			cs.position = Vector3(0, -0.05, -(1.3 + 3.0))
+			mi.position = cs.position
+		mi.material_override = mat
+		body.add_child(cs)
+		body.add_child(mi)
+		g.add_child(body)
+		body.global_transform = frame
+		await t.frames(2)
+		p.place(b0, b0.surface_point(at, 0.05), fwd)
+		g.cam.snap_behind()
+		await t.seconds(0.6)
+		var side := p.global_position + up * 0.4 + fwd * 1.6
+		_close(g, side + right * 2.6 + up * 0.2, side, up)
+		await t.seconds(0.3)
+		var shots_at: Array = [0.3, 0.38, 0.46, 0.56] if what == "slope" else [0.2, 0.28, 0.33, 0.4, 0.5]
+		var el := 0.0
+		var si := 0
+		Engine.time_scale = 1.0
+		while si < shots_at.size() and el < 3.0:
+			if old:
+				p._lip_armed = false
+			hold.call(fwd)
+			await t.frames(1)
+			el += 1.0 / 60.0
+			if el >= shots_at[si]:
+				Engine.time_scale = 0.05
+				await t.frames(1)
+				await t.shot("%s_%d" % [what, si])
+				t.log_line("%s %d at %.2f s: %.2f m ahead, %.2f m up, pulls %d" % [what, si, el, (p.global_position - frame.origin).dot(fwd), (p.global_position - frame.origin).dot(up), p.mantles])
+				Engine.time_scale = 1.0
+				si += 1
+		p.bot_input = Vector2.ZERO
+		body.queue_free()
+		await t.frames(2)
 	Engine.time_scale = 1.0
 	_open(g)
 
