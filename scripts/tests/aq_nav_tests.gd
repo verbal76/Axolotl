@@ -605,7 +605,13 @@ func renders_phase() -> void:
 	]
 	for sc in scen:
 		var done := false
-		for c in (leaf_cands.slice(0, 12) + cands if sc[0] == "under_leaf" else cands):
+		# (Round the scenery: from other balls than the worst home, whose tall grass hides him.)
+		var order: Array = cands
+		if sc[0] == "under_leaf":
+			order = leaf_cands.slice(0, 12) + cands
+		elif sc[0] == "curving_round_moss" or sc[0] == "near_mound":
+			order = cands.slice(8) + cands.slice(0, 8)
+		for c in order:
 			if await _seek_and_shoot(c[0], c[1], sc[0], sc[1]):
 				done = true
 				break
