@@ -836,6 +836,33 @@ repository. Do not name, open or use any other game repository in Mote developme
    gameplay loops, rendering, startup and world building) are cut to a sanity check. Document what was
    reduced and why; do not ask each time. Keep removing unnecessary serial duplication between local
    qualification and CI (see the pipeline audit's recommendations).
+3. **Release policy: evidence reuse, not ritual repetition** (owner, 2026-09-30). Before running
+   anything, ask: *what new failure can this run detect that the existing evidence for this
+   candidate does not already cover?* If there is no meaningful answer, do not run it.
+   - **Evidence is cached, with dependencies.** A passed result stays valid until something it
+     depends on changes. Track the qualified source/content identity.
+     - Placement changes invalidate placement, collection and recovery tests.
+     - Lunge changes invalidate lunge, food and collection tests.
+     - Locomotion changes invalidate movement, traversal, combat, playthrough integration and
+       performance.
+     - Rendering or world-building changes invalidate visuals, performance and startup.
+     - Docs and a ledger-only publishing commit invalidate nothing.
+   - **Randomised systems** get multi-seed stress/property coverage (for example
+     `_phase_treasure_stress`), not repeats of the same two seeds.
+   - **Always unique, always run:**
+     - targeted tests for what changed;
+     - game-wide integration evidence when gameplay changed;
+     - exact candidate identity;
+     - required CI (it satisfies duplicated evidence; do not also run an identical local copy just
+       beforehand);
+     - package, signature and hash integrity;
+     - tests against the downloaded published pack;
+     - real b22 discovery, download, verification and staging.
+   - **Only when the change touches the surface:** OTA end-to-end (the OTA client, bootstrap or
+     packaging changed), performance/startup campaigns (rendering, startup, simulation, continuous
+     gameplay, memory).
+   - Small fixes move fast; large changes (the aquarium overhaul, Gill locomotion) get deeper
+     qualification.
 
 ### Work queue (owner order, 2026-09-29)
 
