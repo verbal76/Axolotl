@@ -271,7 +271,7 @@ At load, a spot that no longer holds is moved to the nearest valid point on the 
 (the same collider), within 3 m, keeping its id (`Starfish.resolve`; `starfish_invalid_spot_
 relocates_on_same_feature`). Today all 30 hold as authored, unrestored and restored.
 
-**Presentation.** Clearly red (albedo 0.92/0.10/0.08, a red emission) with a soft local glow (the
+**Presentation.** Clearly red (albedo 0.80/0.04/0.03, a red emission) with a soft local glow (the
 Motes' own glow billboard, tinted), about 0.45 m across and lying flat on the surface, with only a
 slow breath of its glow. The materials reuse set-ups already drawn in the first scene (the Mote
 core's StandardMaterial3D features; `glow_billboard.gdshader`), so the first one in view compiles
@@ -369,7 +369,7 @@ All runs on this machine (Godot 4.7.2, headless at 60 fixed fps; renders under x
 | Glide transfers and probe | intended, impossible and barrier tables in section 3 |
 | Full unit suite | 557 passed, 5 failed on the first run; all 5 fixed (a version literal, a name literal, the finish-line match, the Magnet test's free Mote, the walking-pickup check) and every affected test rerun green (149 + 123 + 31, 0 failures after the fixes). `parasite_combat_cheap` is a timing budget that failed once under heavy machine load and passes alone (88 us). |
 | Playthrough 4242, no skills | 23/23; finish 3068.9 s, 100% at 4844 s, 2 deaths, 171 stuck recoveries (baseline `60a24e4`: 2938.7 s, 4811 s, 2 deaths, 182) |
-| Playthrough 7, no skills | PT7 |
+| Playthrough 7, no skills | 23/23; finish 3740.6 s, 100% at 5433.5 s, 1 death, 224 stuck recoveries (a clean third run) |
 | Playthrough 4242, all skills (`--skills=all`) | 23/23; finish 3189 s, 100% at 4902 s, 2 deaths, 192 stuck recoveries |
 | Performance (`--only=perfstar`, 5 starfish, hidden/shown A/B/A/B, still camera) | +0 pipeline compilations on the first starfish ever drawn; about +3 to +7 draw calls and 0.6-3.5 k triangles with a starfish in view (clean pairs; the star.b3.01 pair swung with culling); frame time within the software renderer's noise |
 
