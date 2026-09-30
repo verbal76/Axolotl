@@ -18,6 +18,9 @@ uniform float flow_speed = 9.0;
 uniform float opacity = 1.0;
 uniform vec3 deep : source_color = vec3(0.16, 0.62, 0.78);
 uniform vec3 foam : source_color = vec3(0.9, 0.98, 1.0);
+// The connection's own faint hue (Vortex.TINTS): the same at both ends, mostly in the bright water.
+uniform vec3 tint : source_color = vec3(1.0);
+uniform float tint_amt = 0.0;
 
 varying float v_t;
 varying float v_jet;
@@ -69,7 +72,9 @@ void fragment() {
 	float n2 = vnoise(vec2(rd.x * 1.4 - v_jet * 1.3, along * 1.3 - TIME * flow_speed * 1.1 + rd.y * 1.4));
 	float streak = smoothstep(0.45, 0.8, n1 * 0.65 + n2 * 0.45);
 	float fres = pow(1.0 - clamp(abs(dot(NORMAL, VIEW)), 0.0, 1.0), 2.0);
-	vec3 col = mix(deep, foam, clamp(streak * 0.85 + fres * 0.45 + pulse * 0.3, 0.0, 1.0));
+	vec3 foam_t = mix(foam, tint, tint_amt);
+	vec3 deep_t = mix(deep, deep * tint * 1.35, tint_amt * 0.7);
+	vec3 col = mix(deep_t, foam_t, clamp(streak * 0.85 + fres * 0.45 + pulse * 0.3, 0.0, 1.0));
 	float end_fade = smoothstep(0.0, 0.015, t) * (1.0 - smoothstep(0.985, 1.0, t));
 	float a = (0.42 + fres * 0.4 + streak * 0.4) * (0.25 + strength * 0.75) * (1.0 + pulse * 0.5);
 	ALBEDO = col;

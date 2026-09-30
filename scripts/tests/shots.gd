@@ -384,6 +384,51 @@ func run(runner) -> void:
 		g.aquarium._room_t = 0.0
 		bed.visible = true
 		pr.exit()
+	if only == "vtint":
+		# Each connection's hue (owner, 2026-09-30): every ball's vortex mouths seen together from
+		# above-and-behind the middle of them, murky then restored, and each mouth close up.
+		g.player.invuln_t = 9999
+		for v in g.vortices:
+			v._target = 1.0
+			v.strength = 1.0
+			v.connected = true
+		for state in ["murky", "clean"]:
+			if state == "clean":
+				for b in g.balls:
+					b.add_heal(Vector3.UP, 340.0, 0.0)
+				g.g_disp = 1.0
+				g.aquarium.apply(1.0)
+			await t.seconds(1.5)
+			for b in g.balls:
+				var mouths: Array[Vector3] = []
+				for v in b.vortices:
+					mouths.append((v as Vortex)._mouth_a.global_position if (v as Vortex).ball_a == b else (v as Vortex)._mouth_b.global_position)
+				if mouths.size() < 2:
+					continue
+				var mid := Vector3.ZERO
+				for m in mouths:
+					mid += m
+				mid /= mouths.size()
+				var up := b.up_at(mid)
+				var spread := 0.0
+				for m in mouths:
+					spread = maxf(spread, m.distance_to(mid))
+				g.player.place(b, b.surface_point(up, 0.2), MossBall.frame_at(up, 0.0).z)
+				var side := MossBall.frame_at(up, 0.0).z
+				_close(g, mid + up * (spread * 0.9 + 8.0) + side * (spread * 0.8 + 6.0), mid, up)
+				await t.seconds(1.2)
+				await t.shot("vtint_%s_ball%d_all" % [state, b.index + 1])
+				var k := 0
+				for m in mouths:
+					var mu := b.up_at(m)
+					var toward := (mid - m)
+					toward -= mu * toward.dot(mu)
+					var back := -toward.normalized() if toward.length() > 0.1 else MossBall.frame_at(mu, 0.0).z
+					_close(g, m + mu * 4.5 - back * -9.0, m + mu * 1.5, mu)
+					await t.seconds(0.8)
+					await t.shot("vtint_%s_ball%d_mouth%d" % [state, b.index + 1, k])
+					k += 1
+		_open(g)
 	if only == "b2out":
 		var b := g.balls[1]
 		var v: Vortex = b.vortex_out
