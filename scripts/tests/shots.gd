@@ -369,6 +369,21 @@ func run(runner) -> void:
 					await _perf_view("aqw_%s_%s_%s" % [state, "first" if round_ == 0 else "warm", m])
 			pr.exit()
 			await t.seconds(1.0)
+	if only == "perfroom":
+		# The Room view with the bedroom shown and hidden in turn (its visibility check paused).
+		var pr: Presentation = g.presentation
+		pr.enter("play")
+		pr.go("room")
+		await t.seconds(3.0)
+		await _perf_view("room warmup")
+		var bed: Bedroom = g.aquarium.bedroom
+		for k in 6:
+			g.aquarium._room_t = 1e9
+			bed.visible = k % 2 == 1
+			await _perf_view("room %s %d" % ["shown" if bed.visible else "hidden", k / 2])
+		g.aquarium._room_t = 0.0
+		bed.visible = true
+		pr.exit()
 	if only == "b2out":
 		var b := g.balls[1]
 		var v: Vortex = b.vortex_out
