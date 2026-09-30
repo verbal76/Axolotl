@@ -6337,7 +6337,7 @@ func _test_treasure_generation() -> void:
 
 
 ## A spot a couple of metres from the target that he can walk from (for the pickup tests).
-func _approach(b: MossBall, target: Vector3) -> Vector3:
+func _approach(b: MossBall, target: Vector3, skip := 0) -> Vector3:
 	var up := b.up_at(target)
 	var fr := MossBall.frame_at(up, 0.0)
 	# Up on a leaf or rock: the spot beside it the game promised when it chose the place.
@@ -6363,8 +6363,11 @@ func _approach(b: MossBall, target: Vector3) -> Vector3:
 		for k in 12:
 			var d := fr.z.rotated(up, TAU * k / 12.0)
 			var q := b.surface_point((target + d * dist - b.global_position).normalized())
-			if TreasureHunt.spot_ok(b, q, 0.3) and TreasureHunt.path_ok(b, q, target):
-				return q
+			# (Level with it, as a player walking up would be: not down in a dip below it.)
+			if absf((q - target).dot(up)) < 0.6 and TreasureHunt.spot_ok(b, q, 0.3) and TreasureHunt.path_ok(b, q, target):
+				if skip == 0:
+					return q
+				skip -= 1
 	return Vector3.INF
 
 
@@ -6404,8 +6407,19 @@ func _lunge_at_current(tp: TreasurePlay) -> bool:
 			stick_toward(flat.normalized())
 			await t.frames(2)
 		p.bot_input = Vector2.ZERO
+		var before := p.global_position
 		await press("lunge")
 		await t.seconds(0.6)
+		# (Wedged where nothing moves him: start again from the next open spot beside it.)
+		if p.global_position.distance_to(before) < 0.05 and int(st["index"]) == idx0:
+			var alt := _approach(b, target, tries + 1)
+			if alt != Vector3.INF:
+				var d2 := target - alt
+				place_at(b.index, alt + b.up_at(alt) * 0.1, d2 - b.up_at(alt) * d2.dot(b.up_at(alt)))
+				await t.seconds(0.4)
+		if Settings.test_args.get("trace_lunge", "0") == "1":
+			t.log_line("LUNGE try %d: state %s controls %s floor %s moved %.2f m, now %.2f m from it, near miss %.2f" % [tries, p.state,
+					p.controls_enabled, p.is_on_floor(), p.global_position.distance_to(before), p.global_position.distance_to(target), tp.near_miss])
 		if int(st["index"]) > idx0:
 			return true
 	return false
