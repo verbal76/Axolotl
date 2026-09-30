@@ -14,7 +14,7 @@ func run(runner) -> void:
 	p.use_bot_input = true
 	await t.seconds(0.5)
 	var only: String = Settings.test_args.get("only", "")
-	for name_ in ["_test_startup", "_test_ota_and_version", "_test_mesh_winding", "_test_terrain", "_test_ravines", "_test_terrain_grounded", "_test_no_floating_platforms", "_test_parasite_locomotion", "_test_parasite_body_and_death", "_test_parasite_combat", "_test_gill_look", "_test_gill_idles", "_test_gill_colours", "_test_gill_patterns", "_test_tail_whip", "_test_gill_traction", "_test_traction_no_shortcuts", "_test_gill_body_follow", "_test_swim_body_follow", "_test_ambient_sway", "_test_placements", "_test_tutorial_route", "_test_sphere_walk", "_test_jump_and_burst", "_test_coyote_and_buffer", "_test_swipe_direction_and_stages", "_test_hard_landing", "_test_food", "_test_food_reach", "_test_darter_and_burrower", "_test_food_repopulates", "_test_motes", "_test_checkpoint_and_regen", "_test_crumble", "_test_restoration_gates", "_test_bubble_columns", "_test_restoration_continuity", "_test_health_map", "_test_vortex", "_test_current", "_test_canopy", "_test_canopy_plain_jumps", "_test_climbs_physical", "_test_jungle_ladders_physical", "_test_leaf_geometry", "_test_leaf_footing", "_test_caves", "_test_mounds", "_test_vegetation", "_test_vortex_mouths_clear", "_test_route_audit", "_test_new_areas", "_test_ecosystem", "_test_music", "_test_run_clock", "_test_completion_catalog", "_test_completion_frozen", "_test_run_save_file", "_test_run_timer_live", "_test_run_continue", "_test_timer_integrity", "_test_resume_points_safe", "_phase_continue_write", "_phase_continue_read", "_test_upgrades", "_test_ui", "_test_menu_scrollbar", "_test_tier2_rules", "_test_tier2_world", "_test_ambient_fish", "_test_parasite_never_buried", "_test_tier2_loadout", "_test_aquarium_experiences", "_test_aquarium_polish", "_test_all_clear", "_test_treasure_unlock", "_test_treasure_generation", "_test_treasure_play", "_phase_treasure_stress", "_phase_live_fish_diag"]:
+	for name_ in ["_test_startup", "_test_ota_and_version", "_test_mesh_winding", "_test_terrain", "_test_ravines", "_test_terrain_grounded", "_test_no_floating_platforms", "_test_parasite_locomotion", "_test_parasite_body_and_death", "_test_parasite_combat", "_test_gill_look", "_test_gill_idles", "_test_gill_colours", "_test_gill_patterns", "_test_tail_whip", "_test_gill_traction", "_test_traction_no_shortcuts", "_test_gill_body_follow", "_test_swim_body_follow", "_test_ambient_sway", "_test_placements", "_test_tutorial_route", "_test_sphere_walk", "_test_jump_and_burst", "_test_coyote_and_buffer", "_test_swipe_direction_and_stages", "_test_hard_landing", "_test_food", "_test_food_reach", "_test_darter_and_burrower", "_test_food_repopulates", "_test_motes", "_test_checkpoint_and_regen", "_test_crumble", "_test_restoration_gates", "_test_bubble_columns", "_test_restoration_continuity", "_test_health_map", "_test_vortex", "_test_current", "_test_canopy", "_test_canopy_plain_jumps", "_test_climbs_physical", "_test_jungle_ladders_physical", "_test_leaf_geometry", "_test_leaf_footing", "_test_caves", "_test_mounds", "_test_vegetation", "_test_vortex_mouths_clear", "_test_route_audit", "_test_new_areas", "_test_ecosystem", "_test_music", "_test_run_clock", "_test_completion_catalog", "_test_completion_frozen", "_test_run_save_file", "_test_run_timer_live", "_test_run_continue", "_test_timer_integrity", "_test_resume_points_safe", "_phase_continue_write", "_phase_continue_read", "_test_upgrades", "_test_ui", "_test_menu_scrollbar", "_test_tier2_rules", "_test_tier2_world", "_test_ambient_fish", "_test_parasite_never_buried", "_test_tier2_loadout", "_test_aquarium_experiences", "_test_aquarium_polish", "_test_all_clear", "_test_treasure_unlock", "_test_treasure_generation", "_test_treasure_play", "_phase_treasure_stress", "_phase_live_fish_diag", "_phase_cpu_probe"]:
 		# "_phase_*" tests are halves of a relaunch test: they run only when asked for by name
 		# (in a child process started by _test_run_continue).
 		if name_.begins_with("_phase") and not only.split(",", false).has(name_):
@@ -6427,6 +6427,47 @@ func _lunge_at_current(tp: TreasurePlay) -> bool:
 
 ## Stress (run by name only, after _test_all_clear): --hunts=N seeded hunts from --seed0, every
 ## object attempted by a real approach and lunge; each miss is logged (seed, kind, spot, world,
+## Diagnostic (by name only): Gill running a curve for 10 s on ball 1; the engine's own process and
+## physics time per frame (the locomotion's per-frame cost, like for like between builds).
+func _phase_cpu_probe() -> void:
+	var b := g.balls[0]
+	var spot := _quiet_spot(0)
+	var up := b.up_at(spot)
+	place_at(0, spot + up * 0.2, -MossBall.frame_at(up, 0.0).z)
+	await t.seconds(1.0)
+	p.use_bot_input = true
+	var proc := 0.0
+	var phys := 0.0
+	var n := 0
+	for i in 600:
+		p.bot_input = Vector2(sin(i * 0.02), cos(i * 0.02)).normalized()
+		await t.frames(1)
+		if i >= 60:
+			proc += Performance.get_monitor(Performance.TIME_PROCESS)
+			phys += Performance.get_monitor(Performance.TIME_PHYSICS_PROCESS)
+			n += 1
+	p.bot_input = Vector2.ZERO
+	t.log_line("CPUPROBE process %.3f ms physics %.3f ms per frame over %d frames" % [proc / n * 1000.0, phys / n * 1000.0, n])
+	# His own per-frame work, timed directly (medians, so other load on the machine barely counts).
+	var mt: Array[float] = []
+	var pt: Array[float] = []
+	p.bot_input = Vector2(1, 0)
+	for i in 400:
+		var t0 := Time.get_ticks_usec()
+		p.model._process(1.0 / 60.0)
+		var t1 := Time.get_ticks_usec()
+		p._physics_process(1.0 / 60.0)
+		var t2 := Time.get_ticks_usec()
+		mt.append(float(t1 - t0))
+		pt.append(float(t2 - t1))
+		if i % 20 == 0:
+			await t.frames(1)
+	p.bot_input = Vector2.ZERO
+	mt.sort()
+	pt.sort()
+	t.log_line("CPUPROBE2 model median %.0f us p90 %.0f us | body median %.0f us p90 %.0f us" % [mt[200], mt[360], pt[200], pt[360]])
+
+
 ## position) and then skipped so the rest of the hunt is still tried.
 func _phase_treasure_stress() -> void:
 	_make_complete()

@@ -919,6 +919,10 @@ func reset_follow() -> void:
 
 ## The follow-through, once a frame (see FOLLOW_RATE_MIN): writes _f_yaw, _f_pitch (each segment's
 ## direction in model space, toward the tail) and _f_lift (the head joint onto the ground).
+var _prof: Array = []
+var _prof_tick := 0
+
+
 func _update_follow(dt: float) -> void:
 	var n := BONE_Z.size() - 1
 	if _f_yaw.size() != n:
@@ -943,6 +947,7 @@ func _update_follow(dt: float) -> void:
 		_f_lift = 0.0
 		_conform_w = 0.0
 		_f_prev_pos = pos
+		_prof = []
 		return
 	var spd := pos.distance_to(_f_prev_pos) / dt
 	_f_prev_pos = pos
@@ -954,7 +959,15 @@ func _update_follow(dt: float) -> void:
 	var a := 1.0 - exp(-maxf(FOLLOW_RATE_MIN, spd / (FOLLOW_SEG * (1.6 if swim > 0.0 else 1.0))) * dt)
 	var a_stiff := 1.0 - exp(-30.0 * dt)
 	var ac := 1.0 - exp(-CONFORM_RATE * dt)
-	var prof: Array = _ground_profile() if conform else []
+	# (The ground under him is re-probed every other frame while he moves and every sixth while he
+	# stands; the body eases toward it at CONFORM_RATE either way, so this reads the same at half
+	# the raycasts.)
+	_prof_tick += 1
+	if not conform:
+		_prof = []
+	elif _prof.is_empty() or _prof_tick % (2 if spd > 0.05 else 6) == 0:
+		_prof = _ground_profile()
+	var prof: Array = _prof
 	_conform_w = move_toward(_conform_w, 0.0 if prof.is_empty() else 1.0, dt * 6.0)
 	# The head leads: in the air its nose rises and dips with the jump, the body following.
 	var lead := 0.0
