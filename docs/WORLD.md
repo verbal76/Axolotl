@@ -30,6 +30,13 @@ twice as far apart) and its completion id; each world gained regions in its own 
 
 - Topology is `Levels.LINKS` (`[a, b]` pairs, one vortex each). `Levels.CENTERS`, `RADII`, `NAMES` and
   `PALETTES` hold one entry per ball.
+- Each connection has its own faint hue (owner, 2026-09-30: nearby vortices were mistaken for one
+  another): `Vortex.TINTS` by its index in `Levels.LINKS` — rose, green, amber, violet, coral, blue —
+  the same at both ends and never reshuffled, and no two connections from the same ball alike (ball
+  2's three are rose, green and violet). It tints the bright water (foam and streaks on the jets, the
+  ring round the pool's eye, the rising debris; `TINT_AMT` 0.5), so they stay water. Destinations,
+  travel, progression and saves are untouched. Test `vortex_tints_per_connection`; renders
+  `--test=shots --only=vtint` (each ball's mouths together and close up, murky and restored).
 - A vortex opens when the ball it leaves is 70% restored (`Vortex.CONNECT_AT`). The original two vortices are unchanged,
   so the original route plays exactly as before.
 - A ball can now have several outgoing vortices (`MossBall.vortices`); `vortex_out` stays the
