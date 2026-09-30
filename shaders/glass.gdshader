@@ -50,10 +50,21 @@ void fragment() {
 		float fres = pow(1.0 - clamp(abs(dot(normalize(NORMAL), normalize(VIEW))), 0.0, 1.0), 4.0);
 		float below = step(v_wpos.y, waterline);
 		float men = exp(-abs(v_wpos.y - waterline + 1.0) * 0.9);
+		// From the room a dirty tank reads as a dirty tank (the restoration cue), but as a tank, not a
+		// green box: algae crowd the pane's edges and corners and thin toward its middle, and the
+		// film is a translucent tint, so the sick tank inside still shows. Both recede to clear
+		// glass as the tank heals.
+		vec2 e2 = min(UV, 1.0 - UV);
+		float edge = 1.0 - smoothstep(0.0, 0.32, min(e2.x, e2.y));
+		float othresh = mix(0.5, 0.95, clean) - edge * mix(0.38, 0.12, clean);
+		float oalgae = smoothstep(othresh, othresh + 0.1, m);
+		float ofilm = mix(0.42, 0.02, clean) * (0.65 + gr * 0.7);
 		vec3 tint = water_color * 1.3;
-		C = mix(tint, col, clamp(ga * 1.2, 0.0, 1.0));
+		vec3 ocol = mix(film_color * 1.1, mix(algae_a, algae_b, m) * 1.15, oalgae);
+		float oa = clamp(max(ofilm, oalgae * mix(0.9, 0.6, clean)), 0.0, 1.0);
+		C = mix(tint, ocol, clamp(oa * 1.4, 0.0, 1.0));
 		C = mix(C, vec3(0.85, 0.95, 1.0), clamp(men * 0.8 + fres * 0.5, 0.0, 1.0));
-		A = clamp(ga * 0.85 + below * 0.07 + men * 0.55 + fres * 0.35, 0.0, 0.95);
+		A = clamp(oa + below * 0.05 + men * 0.5 + fres * 0.3, 0.0, 0.92);
 	}
 	ALBEDO = vec3(0.0);
 	EMISSION = C;

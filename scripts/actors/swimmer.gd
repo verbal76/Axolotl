@@ -5,16 +5,23 @@ extends CharacterBody3D
 ## Mode can touch the run: blooms, shrines, Motes, food, damage, falls and the timer all look at
 ## Game.player, never at this. It collides with the moss balls, their terrain and leaves, the glass,
 ## the gravel and the water surface (sliding along them, never stuck), and swims with assisted,
-## watery controls:
-## - the stick steers where the camera looks (look up and push forward to rise, down to dive);
-## - Up / Down rise and sink straight; Faster is held for purposeful swimming;
-## - he turns smoothly toward where he is told to go, keeps a little momentum and glides to a stop.
+## flight-style controls (owner, 2026-09-30):
+## - the stick aims his nose: left and right turn him, and (like a flight stick) pulling down pitches
+##   him up and pushing up pitches him down; the Settings "Invert swim up/down" reverses only that;
+## - Swim (held) propels him along his nose; let go and he glides to a stop;
+## - the camera rides behind his nose, dipping with his pitch.
 
+## Swimming speed while Swim is held (units/s), and how quickly he gets up to it.
+const SPEED := 10.0
+const ACCEL := 2.2
+const GLIDE := 1.4
+## Turn and pitch rates at full stick (rad/s), how fast they respond, and the pitch limit.
+const YAW_RATE := 1.9
+const PITCH_RATE := 1.5
+const RATE_EASE := 6.0
+const PITCH_MAX := 1.2
+## (Kept for the gait: the speed at which he swims "relaxed".)
 const RELAXED := 5.0
-const FAST := 14.0
-const ACCEL := 2.4
-const GLIDE := 1.6
-const TURN := 3.5
 const RADIUS := 0.32
 ## The glass, gravel and water surface (Aquarium.TANK_LAYER), plus terrain, platforms and leaves.
 const MASK := 1 | 2 | 8
@@ -23,11 +30,15 @@ var model: AxolotlModel
 var facing := Vector3.FORWARD
 var pitch := 0.0
 var stick := Vector2.ZERO
-var up_in := 0.0
-var fast := false
+## Swim is held.
+var swim_held := false
+## Pitch input is reversed (Settings.swim_invert_y).
+var invert_y := false
+var heading := 0.0
+var _yaw_v := 0.0
+var _pitch_v := 0.0
 var cam_yaw := 0.0
 var cam_pitch := 0.15
-var _cam_manual := 0.0
 var _prev_heading := 0.0
 var _perk_cd := 0.0
 var _rng := RandomNumberGenerator.new()
@@ -48,63 +59,56 @@ func setup(pos: Vector3, face: Vector3, tank_layer: int) -> void:
 	global_position = pos
 	var f := Vector3(face.x, 0, face.z)
 	facing = f.normalized() if f.length() > 0.05 else Vector3.FORWARD
-	cam_yaw = atan2(-facing.x, -facing.z)
-	_prev_heading = cam_yaw
+	heading = atan2(-facing.x, -facing.z)
+	cam_yaw = heading
+	_prev_heading = heading
 	_rng.seed = 0x5117
 
 
-## Where the camera looks (horizontal yaw and pitch): the stick steers relative to it.
+## Where his nose points.
+func nose() -> Vector3:
+	return Vector3(-sin(heading) * cos(pitch), sin(pitch), -cos(heading) * cos(pitch)).normalized()
+
+
+## Where the camera looks: behind his nose, dipping with only part of his pitch (so a dive or a
+## climb stays readable).
 func cam_forward() -> Vector3:
 	return Vector3(-sin(cam_yaw) * cos(cam_pitch), sin(cam_pitch), -cos(cam_yaw) * cos(cam_pitch)).normalized()
 
 
-func look(delta: Vector2) -> void:
-	cam_yaw -= delta.x
-	cam_pitch = clampf(cam_pitch + delta.y, -1.1, 1.1)
-	if delta.length() > 0.0001:
-		_cam_manual = 1.2
-
-
 func _physics_process(dt: float) -> void:
-	var fwd := cam_forward()
-	var right := Vector3(cos(cam_yaw), 0, -sin(cam_yaw))
-	var wish := right * stick.x + fwd * stick.y + Vector3.UP * up_in
-	var mag := clampf(wish.length(), 0.0, 1.0)
-	var target := Vector3.ZERO
-	if mag > 0.05:
-		target = wish.normalized() * mag * (FAST if fast else RELAXED)
-		velocity = velocity.lerp(target, clampf(ACCEL * dt, 0.0, 1.0))
+	# Aim: the stick sets how fast his nose turns and pitches (eased, never a snap).
+	var st := stick.limit_length(1.0)
+	var pitch_in := -st.y * (-1.0 if invert_y else 1.0)
+	_yaw_v = lerpf(_yaw_v, -st.x * YAW_RATE, clampf(RATE_EASE * dt, 0.0, 1.0))
+	_pitch_v = lerpf(_pitch_v, pitch_in * PITCH_RATE, clampf(RATE_EASE * dt, 0.0, 1.0))
+	heading = wrapf(heading + _yaw_v * dt, -PI, PI)
+	pitch = clampf(pitch + _pitch_v * dt, -PITCH_MAX, PITCH_MAX)
+	facing = Vector3(-sin(heading), 0, -cos(heading))
+	# Propulsion along the nose while Swim is held; otherwise a glide.
+	var n := nose()
+	if swim_held:
+		velocity = velocity.lerp(n * SPEED, clampf(ACCEL * dt, 0.0, 1.0))
 	else:
-		# A glide, slowing naturally in the water.
 		velocity = velocity.move_toward(Vector3.ZERO, GLIDE * maxf(1.0, velocity.length() * 0.35) * dt)
+	# (Momentum turns with him a little, so a turn while coasting curves rather than skids.)
+	if velocity.length() > 0.2:
+		velocity = velocity.slerp(n * velocity.length(), clampf(dt * 1.5, 0.0, 1.0))
 	move_and_slide()
-	# Heading follows travel (smoothly; never a rigid snap), nose up or down with the climb.
 	var sp := velocity.length()
-	var flat := Vector3(velocity.x, 0, velocity.z)
-	if flat.length() > 0.3:
-		var want := flat.normalized()
-		# (Turned about the vertical: a slerp between near-opposite directions has no stable axis.)
-		var a := Tier2.signed_angle(facing, want, Vector3.UP)
-		facing = facing.rotated(Vector3.UP, a * clampf(TURN * dt, 0.0, 1.0)).normalized()
-	var want_pitch := atan2(velocity.y, maxf(flat.length(), 0.01)) if sp > 0.4 else 0.0
-	pitch = lerpf(pitch, clampf(want_pitch, -1.0, 1.0), clampf(dt * 3.0, 0.0, 1.0))
-	var heading := atan2(-facing.x, -facing.z)
 	var turn_rate := wrapf(heading - _prev_heading, -PI, PI) / maxf(dt, 0.001)
 	_prev_heading = heading
 	global_basis = Basis(Vector3.UP, heading) * Basis(Vector3.RIGHT, pitch)
-	# The swimming gait: effort from speed (hovering still undulates gently).
-	model.swim = clampf(0.25 + sp / RELAXED * 0.75, 0.25, 2.0) if sp < RELAXED else clampf(1.0 + (sp - RELAXED) / (FAST - RELAXED), 1.0, 2.0)
+	# The swimming gait: effort from speed and from holding Swim (hovering still undulates gently).
+	model.swim = clampf(0.3 + sp / RELAXED * 0.7, 0.3, 2.0) + (0.25 if swim_held else 0.0)
 	model.swim_turn = lerpf(model.swim_turn, clampf(turn_rate, -3.0, 3.0), clampf(dt * 6.0, 0.0, 1.0))
 	model.swim_pitch = 0.0
 	model.speed = clampf(sp / RELAXED, 0.0, 1.0) * 0.4
 	model.grounded = false
 	model.idle_ok = false
-	# The camera drifts back behind his direction of travel when not being turned by hand.
-	_cam_manual = maxf(0.0, _cam_manual - dt)
-	if _cam_manual <= 0.0 and flat.length() > 1.0:
-		var a := wrapf(heading - cam_yaw, -PI, PI)
-		if absf(a) < 2.6:
-			cam_yaw += a * clampf(dt * 0.9, 0.0, 1.0)
+	# The camera follows behind his nose (a little behind the turn, so the turn reads).
+	cam_yaw += wrapf(heading - cam_yaw, -PI, PI) * clampf(dt * 3.0, 0.0, 1.0)
+	cam_pitch = lerpf(cam_pitch, pitch * 0.55 + 0.08, clampf(dt * 3.0, 0.0, 1.0))
 	_perk_cd = maxf(0.0, _perk_cd - dt)
 
 

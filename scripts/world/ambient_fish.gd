@@ -39,18 +39,45 @@ var tank_max := Vector3.ZERO
 var obstacles: Array = []
 ## Extra reaction to Gill: 1 in play, higher in Swim Mode (he is right among them).
 var reactivity := 1.0
+## How big the fish are drawn (1 in play and Swim Mode). From the room (Room, Inspection, the Live
+## Tank's whole-tank views) the tank is hundreds of units away and a middle-scale fish is a speck, so
+## they are shown larger there; their clearances from the glass and the moss balls grow to match.
+var display_scale := 1.0
+var _balls: Array = []
 var _meshes := {}
 
 
 func setup(p_min: Vector3, p_max: Vector3, balls: Array, seed_v := 0x5f15) -> void:
-	tank_min = p_min + Vector3(MARGIN, 4.0, MARGIN)
-	tank_max = p_max - Vector3(MARGIN, 10.0, MARGIN)
+	_tank = [p_min, p_max]
+	_balls = balls
 	rng.seed = seed_v
-	obstacles.clear()
-	for b in balls:
-		obstacles.append([b.global_position, b.radius + 9.0])
+	_fit_bounds()
 	for i in ROSTER.size():
 		_spawn(ROSTER[i], i)
+
+
+var _tank := [Vector3.ZERO, Vector3.ZERO]
+
+
+## Glass margins and moss-ball clearances for the current display scale.
+func _fit_bounds() -> void:
+	var extra := 5.5 * (display_scale - 1.0)
+	tank_min = _tank[0] + Vector3(MARGIN + extra, 4.0 + extra * 0.5, MARGIN + extra)
+	tank_max = _tank[1] - Vector3(MARGIN + extra, 10.0 + extra * 0.5, MARGIN + extra)
+	obstacles.clear()
+	for b in _balls:
+		obstacles.append([b.global_position, b.radius + 9.0 + extra])
+
+
+func set_display_scale(s: float) -> void:
+	if is_equal_approx(s, display_scale):
+		return
+	display_scale = s
+	_fit_bounds()
+	for f in fish:
+		(f["node"] as MeshInstance3D).scale = Vector3.ONE * s
+		(f["node"] as MeshInstance3D).set_instance_shader_parameter("pop", 1.0 if s > 1.0 else 0.0)
+		f["pos"] = f["pos"].clamp(tank_min, tank_max)
 
 
 func _spawn(kind: String, i: int) -> void:
@@ -209,7 +236,8 @@ func _steer(f: Dictionary, dt: float, gill: Vector3, sc: Vector3, sv: Vector3, s
 		flat = -mi.global_basis.z
 	var look := flat.normalized().lerp(fwd, 0.5).normalized()
 	var b := Basis.looking_at(look, Vector3.UP)
-	mi.global_transform = Transform3D(mi.global_basis.orthonormalized().slerp(b, clampf(dt * 5.0, 0.0, 1.0)), pos)
+	var ob := mi.global_basis.orthonormalized().slerp(b, clampf(dt * 5.0, 0.0, 1.0))
+	mi.global_transform = Transform3D(ob.scaled_local(Vector3.ONE * display_scale), pos)
 	mi.set_instance_shader_parameter("swim", clampf(vel.length() / maxf(0.1, speed), 0.2, 2.5))
 
 

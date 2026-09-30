@@ -954,6 +954,9 @@ func scatter(mesh: Mesh, mat: Material, count: int, seed_v: int, scale_min: floa
 		mmi.visibility_range_end_margin = 10.0
 		mmi.visibility_range_fade_mode = GeometryInstance3D.VISIBILITY_RANGE_FADE_SELF
 		fill_chunk(mmi, mesh, list)
+		var xfs: Array[Transform3D] = []
+		xfs.assign(list)
+		mmi.set_meta("veg_transforms", xfs)
 		_veg_parent.add_child(mmi)
 		out.append(mmi)
 	return out
@@ -1022,6 +1025,52 @@ static func tag_chunk(node: Node3D, xforms: Array) -> void:
 ## so it is density-scaled with the rest.
 func add_vegetation(node: Node3D) -> void:
 	_veg_parent.add_child(node)
+
+
+# --- The view from the room (docs/AQUARIUM.md) -------------------------------------------------
+
+## A thinned copy of this world's own vegetation (every `keep`-th plant of every chunk, a little
+## larger to make up the density), with the same meshes and materials, so the plant cover and its
+## health read from outside the tank, where the real chunks are beyond their visibility ranges.
+## Built the first time an outside view is shown; shown only while one is.
+var _far_veg: Node3D
+
+
+func set_far_view(on: bool, keep := 5, grow := 1.7) -> void:
+	if on and _far_veg == null:
+		_far_veg = Node3D.new()
+		_far_veg.name = "FarVegetation"
+		_veg_parent.get_parent().add_child(_far_veg)
+		_far_veg.transform = _veg_parent.transform
+		for c in _veg_parent.get_children():
+			if not (c is MultiMeshInstance3D and c.has_meta("veg_transforms")):
+				continue
+			var src: MultiMeshInstance3D = c
+			var list: Array = src.get_meta("veg_transforms")
+			var picks: Array[Transform3D] = []
+			for j in range(0, list.size(), keep):
+				var x: Transform3D = list[j]
+				picks.append(Transform3D(x.basis.scaled(Vector3.ONE * grow), x.origin))
+			if picks.is_empty():
+				continue
+			var mm := MultiMesh.new()
+			mm.transform_format = MultiMesh.TRANSFORM_3D
+			mm.mesh = src.multimesh.mesh
+			mm.instance_count = picks.size()
+			for j in picks.size():
+				mm.set_instance_transform(j, picks[j])
+			var far := MultiMeshInstance3D.new()
+			far.multimesh = mm
+			far.material_override = src.material_override
+			far.cast_shadow = GeometryInstance3D.SHADOW_CASTING_SETTING_OFF
+			far.set_meta("far_of", src.name)
+			_far_veg.add_child(far)
+	if _far_veg != null:
+		_far_veg.visible = on
+
+
+func far_vegetation() -> Node3D:
+	return _far_veg
 
 
 ## Fraction of scattered vegetation instances kept visible (thermal scaling).

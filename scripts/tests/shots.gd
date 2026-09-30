@@ -497,6 +497,26 @@ func run(runner) -> void:
 		await _bala_shots(g)
 	if only == "tier2":
 		await _tier2_shots(g)
+	if only == "aqquick":
+		# Quick iteration: the views from the room at three states of the tank.
+		for st in [["murky", 0.0], ["half", 0.5], ["clean", 1.0]]:
+			if st[1] > 0.0:
+				for b in g.balls:
+					b.add_heal(Vector3.UP, 340.0 * st[1], 0.0)
+				g.g_disp = st[1]
+				g.aquarium.apply(st[1])
+			var pr := g.presentation
+			pr.enter("play")
+			await t.seconds(2.5)
+			await t.shot("aqq_%s_1room" % st[0])
+			pr.go("inspect")
+			await t.seconds(2.5)
+			await t.shot("aqq_%s_2inspect" % st[0])
+			pr.go("live")
+			await t.seconds(3.0)
+			await t.shot("aqq_%s_3live" % st[0])
+			pr.exit()
+			await t.seconds(0.5)
 	if only == "aquarium":
 		await _aquarium_shots(g, "aq_murky")
 		for b in g.balls:

@@ -319,11 +319,8 @@ func _end_swim() -> void:
 
 func _swim_step(_dt: float) -> void:
 	swimmer.stick = ui.swim_stick
-	swimmer.up_in = ui.swim_up
-	swimmer.fast = ui.swim_fast
-	if ui.swim_look != Vector2.ZERO:
-		swimmer.look(ui.swim_look)
-		ui.swim_look = Vector2.ZERO
+	swimmer.swim_held = ui.swim_held
+	swimmer.invert_y = Settings.swim_invert_y
 	var fp: Vector3 = g.fish.nearest_point(swimmer.global_position)
 	if fp != Vector3.INF and fp.distance_to(swimmer.global_position) < 6.0:
 		swimmer.notice_fish(fp)

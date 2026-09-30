@@ -14,7 +14,7 @@ func run(runner) -> void:
 	p.use_bot_input = true
 	await t.seconds(0.5)
 	var only: String = Settings.test_args.get("only", "")
-	for name_ in ["_test_startup", "_test_ota_and_version", "_test_mesh_winding", "_test_terrain", "_test_ravines", "_test_terrain_grounded", "_test_no_floating_platforms", "_test_parasite_locomotion", "_test_parasite_body_and_death", "_test_parasite_combat", "_test_gill_look", "_test_gill_idles", "_test_gill_colours", "_test_gill_patterns", "_test_tail_whip", "_test_ambient_sway", "_test_placements", "_test_tutorial_route", "_test_sphere_walk", "_test_jump_and_burst", "_test_coyote_and_buffer", "_test_swipe_direction_and_stages", "_test_hard_landing", "_test_food", "_test_food_reach", "_test_darter_and_burrower", "_test_food_repopulates", "_test_motes", "_test_checkpoint_and_regen", "_test_crumble", "_test_restoration_gates", "_test_bubble_columns", "_test_restoration_continuity", "_test_health_map", "_test_vortex", "_test_current", "_test_canopy", "_test_canopy_plain_jumps", "_test_climbs_physical", "_test_jungle_ladders_physical", "_test_leaf_geometry", "_test_leaf_footing", "_test_caves", "_test_mounds", "_test_vegetation", "_test_vortex_mouths_clear", "_test_route_audit", "_test_new_areas", "_test_ecosystem", "_test_music", "_test_run_clock", "_test_completion_catalog", "_test_completion_frozen", "_test_run_save_file", "_test_run_timer_live", "_test_run_continue", "_test_timer_integrity", "_test_resume_points_safe", "_phase_continue_write", "_phase_continue_read", "_test_upgrades", "_test_ui", "_test_menu_scrollbar", "_test_tier2_rules", "_test_tier2_world", "_test_ambient_fish", "_test_parasite_never_buried", "_test_tier2_loadout", "_test_aquarium_experiences", "_test_all_clear", "_test_treasure_unlock", "_test_treasure_generation", "_test_treasure_play", "_phase_treasure_stress"]:
+	for name_ in ["_test_startup", "_test_ota_and_version", "_test_mesh_winding", "_test_terrain", "_test_ravines", "_test_terrain_grounded", "_test_no_floating_platforms", "_test_parasite_locomotion", "_test_parasite_body_and_death", "_test_parasite_combat", "_test_gill_look", "_test_gill_idles", "_test_gill_colours", "_test_gill_patterns", "_test_tail_whip", "_test_ambient_sway", "_test_placements", "_test_tutorial_route", "_test_sphere_walk", "_test_jump_and_burst", "_test_coyote_and_buffer", "_test_swipe_direction_and_stages", "_test_hard_landing", "_test_food", "_test_food_reach", "_test_darter_and_burrower", "_test_food_repopulates", "_test_motes", "_test_checkpoint_and_regen", "_test_crumble", "_test_restoration_gates", "_test_bubble_columns", "_test_restoration_continuity", "_test_health_map", "_test_vortex", "_test_current", "_test_canopy", "_test_canopy_plain_jumps", "_test_climbs_physical", "_test_jungle_ladders_physical", "_test_leaf_geometry", "_test_leaf_footing", "_test_caves", "_test_mounds", "_test_vegetation", "_test_vortex_mouths_clear", "_test_route_audit", "_test_new_areas", "_test_ecosystem", "_test_music", "_test_run_clock", "_test_completion_catalog", "_test_completion_frozen", "_test_run_save_file", "_test_run_timer_live", "_test_run_continue", "_test_timer_integrity", "_test_resume_points_safe", "_phase_continue_write", "_phase_continue_read", "_test_upgrades", "_test_ui", "_test_menu_scrollbar", "_test_tier2_rules", "_test_tier2_world", "_test_ambient_fish", "_test_parasite_never_buried", "_test_tier2_loadout", "_test_aquarium_experiences", "_test_all_clear", "_test_treasure_unlock", "_test_treasure_generation", "_test_treasure_play", "_phase_treasure_stress", "_phase_live_fish_diag"]:
 		# "_phase_*" tests are halves of a relaunch test: they run only when asked for by name
 		# (in a child process started by _test_run_continue).
 		if name_.begins_with("_phase") and not only.split(",", false).has(name_):
@@ -6202,6 +6202,71 @@ func _phase_treasure_stress() -> void:
 				await t.frames(3)
 	t.log_line("STRESS %d of %d collected; misses %s" % [tried - missed.size(), tried, str(missed)])
 	t.check("treasure_stress_all_collectible", missed.is_empty(), "%d missed of %d" % [missed.size(), tried])
+
+
+## Diagnostic (by name only): each fish seen from the real Live Tank camera in every view, sampled
+## over time: alive, visible, simulating, in the tank, its length on screen in pixels, and whether a
+## moss ball hides it.
+func _phase_live_fish_diag() -> void:
+	var pr: Presentation = g.presentation
+	var fish: AmbientFish = g.fish
+	var view_px := Vector2(g.get_viewport().get_visible_rect().size)
+	var sec := float(Settings.test_args.get("secs", "12"))
+	pr.enter("play")
+	pr.go("live", true)
+	for vi in 4:
+		pr.live_view = vi
+		if vi > 0:
+			pr.next_live_view()
+			pr.live_view = vi
+		await t.seconds(1.5)
+		var onscreen_sum := 0.0
+		var samples := 0
+		var px_all: Array[float] = []
+		var bala_px: Array[float] = []
+		var hidden := 0
+		var out_of_tank := 0
+		var not_vis := 0
+		var el := 0.0
+		while el < sec:
+			await t.seconds(1.0)
+			el += 1.0
+			var cam: Camera3D = g.get_viewport().get_camera_3d()
+			var n := 0
+			for f in fish.fish:
+				var mi: MeshInstance3D = f["node"]
+				var k: Dictionary = AmbientFish.KINDS[f["kind"]]
+				if not mi.is_visible_in_tree():
+					not_vis += 1
+				var pos := mi.global_position
+				if pos.x < fish.tank_min.x - 1 or pos.x > fish.tank_max.x + 1 or pos.y < fish.tank_min.y - 1 or pos.y > fish.tank_max.y + 1 or pos.z < fish.tank_min.z - 1 or pos.z > fish.tank_max.z + 1:
+					out_of_tank += 1
+				if cam.is_position_behind(pos) or not Rect2(Vector2.ZERO, view_px).has_point(cam.unproject_position(pos)):
+					continue
+				var fwd := mi.global_basis.z.normalized()
+				var a: Vector2 = cam.unproject_position(pos + fwd * k["len"] * 0.5)
+				var b: Vector2 = cam.unproject_position(pos - fwd * k["len"] * 0.5)
+				var px: float = a.distance_to(b)
+				var q := PhysicsRayQueryParameters3D.create(cam.global_position, pos, 1 | 2)
+				if not g.get_world_3d().direct_space_state.intersect_ray(q).is_empty():
+					hidden += 1
+					continue
+				n += 1
+				px_all.append(px)
+				if f["kind"] == "bala":
+					bala_px.append(px)
+			onscreen_sum += n
+			samples += 1
+		px_all.sort()
+		bala_px.sort()
+		t.log_line("LIVEFISH view %s: fish unhidden on screen avg %.1f of %d; px median %.1f max %.1f; bala px median %.1f (n %d); hidden by balls %d; not visible %d; out of tank %d; cam %s fov %.1f viewport %s" % [
+				pr.LIVE_VIEWS[vi][0], onscreen_sum / maxf(1, samples), fish.fish.size(),
+				px_all[px_all.size() / 2] if px_all.size() > 0 else 0.0, px_all.back() if px_all.size() > 0 else 0.0,
+				bala_px[bala_px.size() / 2] if bala_px.size() > 0 else 0.0, bala_px.size(), hidden, not_vis, out_of_tank,
+				str(g.get_viewport().get_camera_3d().global_position.round()), g.get_viewport().get_camera_3d().fov, str(view_px)])
+	t.log_line("LIVEFISH water %.2f glass clean %.2f, fish processing %s" % [g.aquarium.water_q if "water_q" in g.aquarium else -1.0, -1.0, fish.is_physics_processing()])
+	pr.exit()
+	t.check("live_fish_diag_ran", true, "")
 
 
 func _full_scale(kind: String) -> float:

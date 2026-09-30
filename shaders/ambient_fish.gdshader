@@ -18,10 +18,18 @@ void vertex() {
 	VERTEX.x += w * amp * size;
 }
 
+// Seen from the room the fish are drawn larger (AmbientFish.display_scale) and read through murky
+// water: a touch more colour and a little self-light keep them fish, not grey specks.
+instance uniform float pop = 0.0;
+
 void fragment() {
-	ALBEDO = COLOR.rgb;
+	vec3 c = COLOR.rgb;
+	float l = dot(c, vec3(0.3, 0.59, 0.11));
+	c = mix(vec3(l), c, 1.0 + 0.35 * pop);
+	ALBEDO = c;
+	EMISSION = c * 0.22 * pop;
 	ROUGHNESS = 0.55;
-	SPECULAR = 0.35;
-	RIM = 0.35;
+	SPECULAR = 0.35 + 0.2 * pop;
+	RIM = 0.35 + 0.3 * pop;
 	RIM_TINT = 0.4;
 }

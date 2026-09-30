@@ -747,11 +747,22 @@ func ensure_tank_body() -> StaticBody3D:
 	return tank_body
 
 
+## How much larger the ambient fish are drawn in the views from the room.
+const OUTSIDE_FISH_SCALE := 3.4
+
+
 ## Switches between the view from the room (true) and the view from inside the water (false).
 func set_outside_view(on: bool) -> void:
 	if on == outside:
 		return
 	outside = on
+	# Ambient fish read from the room (docs/AQUARIUM.md): drawn larger in the outside views.
+	var gm := Game.inst
+	if gm != null and gm.fish != null:
+		gm.fish.set_display_scale(OUTSIDE_FISH_SCALE if on else 1.0)
+	if gm != null:
+		for b in gm.balls:
+			(b as MossBall).set_far_view(on)
 	if on:
 		_fog_saved = {"mode": env.fog_mode, "density": env.fog_density}
 		env.fog_mode = Environment.FOG_MODE_DEPTH
