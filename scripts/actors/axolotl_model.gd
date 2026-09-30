@@ -124,6 +124,41 @@ var _leg_idle: Array = []
 var _leg_idle_w := 0.0
 var _leg_swing := 1.0
 
+# Follow-through (Mote Open Issue #1): the head leads, the body follows, the tail completes the
+# motion. Each spine segment (bone i to bone i + 1) keeps its own direction in the world and swings
+# after the segment ahead of it: quickly when he is moving, so the body lies along the path his head
+# took (the lag of each segment is its length over his speed), and more slowly when he turns on the
+# spot (a C-bend that then straightens). The head segment always points where the controller faces.
+# Pitch follows the same way in the air and in the water; on the ground each segment lies along the
+# ground under it (FOLLOW_RAYS rays), so the body drapes over crests and dips and climbs onto a slope
+# front first. All of it is the model: the gameplay body, its collision and its controls are untouched.
+## Per-segment follow rate (1/s): turning on the spot; moving, speed / FOLLOW_SEG (the lag that lays
+## each segment on the path the one ahead of it took).
+const FOLLOW_RATE_MIN := 14.0
+const FOLLOW_SEG := 0.12
+## Largest bend between neighbouring segments (radians), sideways and up/down.
+const FOLLOW_MAX_YAW := 0.42
+const FOLLOW_MAX_PITCH := 0.32
+## How quickly the body settles onto the ground under it (1/s).
+const CONFORM_RATE := 16.0
+## Where the ground is felt, along the body (model z): under the chin, the middle, the hips and the
+## tail tip.
+const FOLLOW_RAYS := [-0.45, 0.0, 0.45, 0.9]
+## On (the player, the swimmer): off, the spine is laid straight along the model as before.
+var follow := true
+## Lay the body on the ground under it (the player on the ground; set by the controller each frame).
+var conform := false
+var conform_mask := 1 | 2 | 8
+## Nose up (+) or down while airborne (radians), led by the head (set by the controller).
+var air_pitch := 0.0
+var _seg_w: Array[Vector3] = []          # world direction of each segment, toward the tail
+var _f_yaw: Array[float] = []            # this frame's follow yaw / pitch per segment (model space)
+var _f_pitch: Array[float] = []
+var _f_lift := 0.0                        # the head joint raised or lowered onto the ground under it
+var _f_prev_pos := Vector3.INF
+var _conform_w := 0.0
+var _ray_q: PhysicsRayQueryParameters3D
+
 
 func _ready() -> void:
 	_fx.seed = 0x6711
@@ -872,7 +907,151 @@ func _process(dt: float) -> void:
 		_wave += dt * 7.0
 	_advance_timers(dt)
 	_update_idle(dt)
+	_update_follow(dt)
 	_animate(dt)
+
+
+## Clears the follow-through: the body lies straight along the model at once. Placing him (a
+## respawn, a checkpoint, a teleport) leaves no smear from where he was.
+func reset_follow() -> void:
+	_f_prev_pos = Vector3.INF
+
+
+## The follow-through, once a frame (see FOLLOW_RATE_MIN): writes _f_yaw, _f_pitch (each segment's
+## direction in model space, toward the tail) and _f_lift (the head joint onto the ground).
+func _update_follow(dt: float) -> void:
+	var n := BONE_Z.size() - 1
+	if _f_yaw.size() != n:
+		_f_yaw.resize(n)
+		_f_pitch.resize(n)
+		_seg_w.resize(n)
+		_f_prev_pos = Vector3.INF
+	if not follow or not is_inside_tree():
+		_f_yaw.fill(0.0)
+		_f_pitch.fill(0.0)
+		_f_lift = 0.0
+		_f_prev_pos = Vector3.INF
+		return
+	var bas := global_transform.basis.orthonormalized()
+	var pos := global_transform.origin
+	if _f_prev_pos == Vector3.INF or pos.distance_to(_f_prev_pos) > 2.5 or dt <= 0.0:
+		# (Placed, respawned or teleported: straight, where he is now.)
+		for i in n:
+			_seg_w[i] = bas.z
+		_f_yaw.fill(0.0)
+		_f_pitch.fill(0.0)
+		_f_lift = 0.0
+		_conform_w = 0.0
+		_f_prev_pos = pos
+		return
+	var spd := pos.distance_to(_f_prev_pos) / dt
+	_f_prev_pos = pos
+	var inv := bas.inverse()
+	# Authored whole-body moves (the tail whip, whose water arc is drawn from the straight body, the
+	# lunge, a landing, rising onto his back legs) straighten him quickly instead.
+	var stiff := _whip_s >= 0.0 or lunge_t >= 0.0 or land_t >= 0.0 or idle_kind == Idle.DANCE or idle_kind == Idle.LOOKAROUND
+	# (In the water the body is looser: the tail trails further through a turn or a dive.)
+	var a := 1.0 - exp(-maxf(FOLLOW_RATE_MIN, spd / (FOLLOW_SEG * (1.6 if swim > 0.0 else 1.0))) * dt)
+	var a_stiff := 1.0 - exp(-30.0 * dt)
+	var ac := 1.0 - exp(-CONFORM_RATE * dt)
+	var prof: Array = _ground_profile() if conform else []
+	_conform_w = move_toward(_conform_w, 0.0 if prof.is_empty() else 1.0, dt * 6.0)
+	# The head leads: in the air its nose rises and dips with the jump, the body following.
+	var lead := 0.0
+	if not grounded and swim <= 0.0:
+		lead = clampf(vup * 0.045, -0.55, 0.4)
+	var lift := 0.0
+	if not prof.is_empty():
+		var hl: float = _profile_h(prof, BONE_Z[0])
+		lift = clampf(0.0 if is_nan(hl) else hl, -0.25, 0.3)
+	_f_lift = lerpf(_f_lift, lift * _conform_w, ac)
+	var prev_yaw := 0.0
+	var prev_pitch := 0.0
+	for i in n:
+		var dl := inv * _seg_w[i]
+		var yaw := atan2(dl.x, dl.z)
+		var pitch := asin(clampf(-dl.y, -1.0, 1.0))
+		# On the ground: the slope of the ground under this segment (NAN where nothing is under it).
+		var pg := NAN
+		if not prof.is_empty():
+			var h0: float = _profile_h(prof, BONE_Z[i])
+			var h1: float = _profile_h(prof, BONE_Z[i + 1])
+			if not is_nan(h0) and not is_nan(h1):
+				pg = atan2(h0 - h1, BONE_Z[i + 1] - BONE_Z[i])
+		if i == 0:
+			yaw = 0.0
+			# (Off the ground the head segment points where the head does; on it, it eases onto the
+			# ground ahead.)
+			var target := lead if is_nan(pg) else lerpf(lead, pg, _conform_w)
+			pitch = lerpf(pitch, target, lerpf(1.0, ac, _conform_w))
+		else:
+			var rel := wrapf(yaw - prev_yaw, -PI, PI)
+			rel *= 1.0 - (a_stiff if stiff else a)
+			yaw = prev_yaw + clampf(rel, -FOLLOW_MAX_YAW, FOLLOW_MAX_YAW)
+			var lagged := pitch + (prev_pitch - pitch) * a
+			if not is_nan(pg):
+				pitch = lerpf(lagged, lerpf(pitch, pg, ac), _conform_w)
+			else:
+				# Hanging over an edge: it follows the segment ahead, drooping a little.
+				pitch = lagged + (0.06 * _conform_w * a)
+			if stiff and is_nan(pg):
+				pitch = lerpf(pitch, prev_pitch, a_stiff)
+			pitch = prev_pitch + clampf(pitch - prev_pitch, -FOLLOW_MAX_PITCH, FOLLOW_MAX_PITCH)
+		pitch = clampf(pitch, -1.2, 1.2)
+		_f_yaw[i] = yaw
+		_f_pitch[i] = pitch
+		_seg_w[i] = bas * Vector3(sin(yaw) * cos(pitch), -sin(pitch), cos(yaw) * cos(pitch))
+		prev_yaw = yaw
+		prev_pitch = pitch
+
+
+## The ground under his body, in model space: [[z, height], ...] by z, NAN where nothing is under
+## that point (over an edge). Empty when nothing is found under him at all.
+func _ground_profile() -> Array:
+	var space := get_world_3d().direct_space_state
+	if _ray_q == null:
+		_ray_q = PhysicsRayQueryParameters3D.new()
+		_ray_q.hit_from_inside = false
+		_ray_q.hit_back_faces = false
+	_ray_q.collision_mask = conform_mask
+	var xf := Transform3D(global_transform.basis.orthonormalized(), global_transform.origin)
+	var inv := xf.affine_inverse()
+	var out := []
+	var found := false
+	var base := 0.0
+	for z in FOLLOW_RAYS:
+		# (Ahead from his own footing; behind, each from the ground found just before it, so the
+		# rays start above ground rising behind him and reach ground falling away.)
+		var from_h: float = (0.0 if z < 0.0 else base) + 0.6
+		_ray_q.from = xf * Vector3(0, from_h, z)
+		_ray_q.to = xf * Vector3(0, from_h - 1.5, z)
+		var hit := space.intersect_ray(_ray_q)
+		var h := NAN
+		if not hit.is_empty():
+			var lp: Vector3 = inv * (hit["position"] as Vector3)
+			h = lp.y
+			found = true
+		if z >= 0.0 and not is_nan(h):
+			base = h
+		out.append([z, h])
+	if not found:
+		return []
+	out.sort_custom(func(p, q): return p[0] < q[0])
+	return out
+
+
+## Ground height at `z` along the body from a profile (linear between samples; NAN past a gap).
+static func _profile_h(prof: Array, z: float) -> float:
+	if z <= prof[0][0]:
+		return prof[0][1]
+	for i in range(1, prof.size()):
+		var b: Array = prof[i]
+		if z <= b[0]:
+			var a: Array = prof[i - 1]
+			if is_nan(a[1]) or is_nan(b[1]):
+				return NAN
+			return lerpf(a[1], b[1], (z - a[0]) / (b[0] - a[0]))
+	return prof[prof.size() - 1][1]
 
 
 func _advance_timers(dt: float) -> void:
@@ -933,7 +1112,9 @@ func _animate(dt: float) -> void:
 
 	if not grounded:
 		leg_mode = 1
-		rig_rot.x = clampf(vup * 0.035, -0.4, 0.3)
+		# (With the follow-through the head leads the jump's rise and fall and the body follows it
+		# (_update_follow); the whole body tips only a little.)
+		rig_rot.x = clampf(vup * (0.012 if follow else 0.035), -0.4, 0.3)
 		arch = clampf(-vup * 0.02, -0.12, 0.12)
 		wave_amp = 0.2
 		gill_back = maxf(gill_back, 0.6)
@@ -947,7 +1128,8 @@ func _animate(dt: float) -> void:
 		# Into the turn (the body curves, the tail swings out), nose up or down with the climb.
 		rig_rot.z = clampf(-swim_turn * 0.18, -0.35, 0.35)
 		rig_rot.x = clampf(swim_pitch, -0.6, 0.6)
-		tail_base = clampf(-swim_turn * 0.5, -0.8, 0.8)
+		# (The follow-through already swings the tail out round a turn: a lighter push here.)
+		tail_base = clampf(-swim_turn * (0.25 if follow else 0.5), -0.8, 0.8)
 		arch = clampf(-swim_pitch * 0.15, -0.12, 0.12)
 	if burst_t >= 0.0:
 		var k := sin(burst_t * PI)
@@ -1074,7 +1256,14 @@ func _animate(dt: float) -> void:
 	var hx := sin(rig.rotation.y) * BONE_Z[0]
 	var hz := cos(rig.rotation.y) * BONE_Z[0]
 	var heading := rig.rotation.y
+	# The follow-through (_update_follow) sets each segment's direction; the wave, the whip, the arch
+	# and the idles bend it further, relative to it, as they always have.
+	var has_f := _f_yaw.size() == n - 1
+	var fb_prev := Basis()
 	for i in n:
+		var fb := Basis.from_euler(Vector3(_f_pitch[i], _f_yaw[i], 0.0)) if has_f and i < n - 1 else fb_prev
+		var q_f := Quaternion(fb_prev.inverse() * fb) if i > 0 else Quaternion(fb)
+		fb_prev = fb
 		var f := float(i) / (n - 1)
 		var amp := wave_amp * lerpf(0.12, 1.25, pow(f, 1.1))
 		var yaw := sin(_wave - i * wave_len) * amp
@@ -1094,11 +1283,16 @@ func _animate(dt: float) -> void:
 		if i > 0:
 			heading += _bone_rot[i].y
 		var seg: float = (BONE_Z[i + 1] - BONE_Z[i]) if i < n - 1 else 0.12
-		hx += sin(heading) * seg
-		hz += cos(heading) * seg
+		var fy: float = _f_yaw[mini(i, n - 2)] if has_f else 0.0
+		hx += sin(heading + fy) * seg
+		hz += cos(heading + fy) * seg
 		if i == 0:
-			continue   # the head stays aligned with the controller's facing
-		skeleton.set_bone_pose_rotation(i, Quaternion.from_euler(_bone_rot[i]))
+			# The head stays aligned with the controller's facing; it only tips with the ground
+			# ahead (or the jump), and sits on the ground under it.
+			skeleton.set_bone_pose_rotation(0, q_f)
+			skeleton.set_bone_pose_position(0, Vector3(0, BODY_Y + _f_lift, BONE_Z[0]))
+			continue
+		skeleton.set_bone_pose_rotation(i, q_f * Quaternion.from_euler(_bone_rot[i]))
 	whip_tip_az = atan2(hx, hz)
 	_leg_idle = ip.get("legs", [])
 	_leg_idle_w = ip.get("legw", 0.0)

@@ -36,6 +36,21 @@ const LIFT_ACCEL := 34.0          # how hard a bubble column pushes toward its l
 const HEAD_REACH := 0.4
 const HEAD_HEIGHT := 0.28
 const HEAD_RADIUS := 0.17
+## Distributed traction (Mote Open Issue #1). A short steep lip, up to LIP_MAX above the ground he
+## stands on, is pulled over once his front has purchase on top of it: standing on gentle, stable
+## ground and pushing into the lip, with a gentle surface on top of it LIP_REACH ahead (where his
+## front feet reach), room for his body there, and nothing rising above the lip. The pull is one
+## short, bounded move (MANTLE_UP up, MANTLE_FWD forward, at most MANTLE_TIME), and it is re-armed
+## only by standing on gentle, stable ground again: so a long steep face gives no purchase, he slides
+## back down it (nothing holds him to a face over 52 degrees) and repeated pushes never ratchet him up.
+## A pull is always less than a plain jump from where he stands would do (LIP_MAX vs 1.85 m), so it
+## opens no route that was not already there.
+const LIP_MAX := 0.42
+const LIP_REACH := 0.72
+const LIP_FLOOR_DOT := 0.766          # cos 40 degrees: what counts as gentle ground
+const MANTLE_UP := 3.2
+const MANTLE_FWD := 2.0
+const MANTLE_TIME := 0.35
 
 var ball: MossBall
 var cam: Node3D                  # FollowCam
@@ -77,6 +92,12 @@ var _stream_t := 0.0
 var _acted := false               # a jump, swipe or lunge was pressed this frame
 var _fell_at := Vector3.ZERO      # where he last came down in a ravine
 var _in_column := false            # being carried by a bubble column
+var mantles := 0                   # lips pulled over (tests and diagnostics)
+var _mantle_t := -1.0              # time into a pull over a lip, -1 when not pulling
+var _mantle_r := 0.0               # how far from the ball's centre his feet rise to
+var _lip_armed := true             # re-armed only on gentle, stable ground
+var _blocked := false              # his head or body met something steep last frame
+var _guard_pushed := false
 
 var model: AxolotlModel
 var blob_shadow: MeshInstance3D
@@ -128,6 +149,11 @@ func place(p_ball: MossBall, pos: Vector3, face_dir := Vector3.ZERO) -> void:
 	apex_r = _r()
 	last_safe_pos = pos
 	last_safe_ball = ball
+	_mantle_t = -1.0
+	_lip_armed = true
+	_blocked = false
+	# (No smear of his body from where he was.)
+	model.reset_follow()
 
 
 func _r() -> float:
@@ -181,6 +207,7 @@ func _guard_head() -> void:
 				push = out
 		if push == Vector3.ZERO:
 			return
+		_guard_pushed = true
 		global_position += push
 		var pn := push.normalized()
 		var into := velocity.dot(pn)
@@ -201,6 +228,7 @@ func body_center() -> Vector3:
 func _physics_process(dt: float) -> void:
 	if ball == null or state != "normal":
 		model.idle_ok = false
+		model.conform = false
 		_update_shadow()
 		return
 	_jumped_this_frame = false
@@ -377,13 +405,43 @@ func _physics_process(dt: float) -> void:
 	var stream := ball.stream_at(global_position) if ball != null and not ball.streams.is_empty() else Vector3.ZERO
 	if stream != Vector3.ZERO and not grounded:
 		vup = move_toward(vup, 0.0, 30.0 * dt)
+	# Traction: pulling himself over a short lip (see LIP_MAX).
+	if _mantle_t >= 0.0:
+		_mantle_t += dt
+		var push_on := wish.length() > 0.05 and wish.normalized().dot(facing) > 0.2
+		if not push_on or _mantle_t > MANTLE_TIME or lunge_t >= 0.0 or t2_busy or _jumped_this_frame or hurt_lock > 0.0:
+			_mantle_t = -1.0
+		elif _r() >= _mantle_r:
+			# Over: on across the top.
+			_mantle_t = -1.0
+			vup = 0.0
+			vh = facing * maxf(vh.dot(facing), MANTLE_FWD)
+		else:
+			vup = MANTLE_UP
+			vh = facing * MANTLE_FWD
+	elif grounded and _lip_armed and _blocked and not _jumped_this_frame and lunge_t < 0.0 and swipe_t < 0.0 and not t2_busy \
+			and not _in_column and stream == Vector3.ZERO and hurt_lock <= 0.0 and wish.length() > 0.3 and wish.normalized().dot(facing) > 0.7 \
+			and get_floor_normal().dot(up) >= LIP_FLOOR_DOT and _floor_is_stable():
+		var lip := _lip_ahead()
+		if lip > 0.0:
+			_mantle_t = 0.0
+			_mantle_r = _r() + lip + 0.04
+			_lip_armed = false
+			mantles += 1
+			vup = MANTLE_UP
+			vh = facing * MANTLE_FWD
+			grounded = false
 	# (Inside a bubble column its upflow shelters him from the ball's current.)
 	var cur := ball.current_at(global_position) * (0.0 if _in_column else (0.45 if grounded else 1.0)) + ext_vel + stream
 	velocity = vh + up * vup + cur
 	var was_grounded := grounded
 	var pre_vup := vup
 	move_and_slide()
-	_guard_head()
+	# (While he pulls himself over a lip his head is over it: the probe found it clear.)
+	_guard_pushed = false
+	if _mantle_t < 0.0:
+		_guard_head()
+	_blocked = _guard_pushed or is_on_wall()
 	velocity -= cur
 	grounded = is_on_floor()
 	if _jumped_this_frame:
@@ -406,6 +464,9 @@ func _physics_process(dt: float) -> void:
 		if _floor_is_stable():
 			last_safe_pos = global_position
 			last_safe_ball = ball
+			# (Only gentle, stable ground gives him the purchase for another pull: no ratchet.)
+			if _mantle_t < 0.0 and get_floor_normal().dot(up) >= LIP_FLOOR_DOT:
+				_lip_armed = true
 	else:
 		if was_grounded and not _jumped_this_frame:
 			coyote_t = COYOTE
@@ -465,7 +526,64 @@ func _floor_collider() -> Object:
 	return null
 
 
+## Height of a lip he can pull himself over, straight ahead (see LIP_MAX), or -1: a gentle top
+## within LIP_MAX of his feet where his front reaches, going on for a body length, with room for him
+## on it and on the way up, nothing rising above the lip, never a ravine's.
+func _lip_ahead() -> float:
+	var space := get_world_3d().direct_space_state
+	var feet := global_position
+	var mask := 1 | 2
+	var probe := feet + facing * LIP_REACH
+	var q := PhysicsRayQueryParameters3D.create(probe + up * (LIP_MAX + 0.45), probe + up * 0.08, mask, [get_rid()])
+	q.hit_back_faces = false
+	var hit := space.intersect_ray(q)
+	if hit.is_empty():
+		return -1.0
+	var h: float = ((hit["position"] as Vector3) - feet).dot(up)
+	if h < 0.1 or h > LIP_MAX or (hit["normal"] as Vector3).dot(up) < LIP_FLOOR_DOT or not _purchase_ok(hit["collider"]):
+		return -1.0
+	if ball.ravine_carve(ball.up_at(hit["position"])) > 0.15:
+		return -1.0
+	# The top goes on: somewhere to be, not the edge of a fin.
+	var probe2 := feet + facing * (LIP_REACH + 0.3)
+	q = PhysicsRayQueryParameters3D.create(probe2 + up * (h + 0.45), probe2 + up * (h - 0.15), mask, [get_rid()])
+	q.hit_back_faces = false
+	var hit2 := space.intersect_ray(q)
+	if hit2.is_empty() or absf(((hit2["position"] as Vector3) - feet).dot(up) - h) > 0.12 or (hit2["normal"] as Vector3).dot(up) < LIP_FLOOR_DOT:
+		return -1.0
+	# Nothing rises above the lip (a wall that goes on up is a wall), and nothing overhead on the way up.
+	for from in [feet + up * (h + 0.12), feet + up * (h + 0.45)]:
+		q = PhysicsRayQueryParameters3D.create(from, from + facing * (LIP_REACH + 0.4), mask, [get_rid()])
+		if not space.intersect_ray(q).is_empty():
+			return -1.0
+	q = PhysicsRayQueryParameters3D.create(feet + up * 0.3, feet + up * (h + 0.7), mask, [get_rid()])
+	if not space.intersect_ray(q).is_empty():
+		return -1.0
+	# Room for his body on top.
+	var sq := PhysicsShapeQueryParameters3D.new()
+	var sph := SphereShape3D.new()
+	sph.radius = BODY_RADIUS - 0.03
+	sq.shape = sph
+	sq.collision_mask = mask
+	sq.exclude = [get_rid()]
+	sq.transform = Transform3D(Basis(), feet + facing * LIP_REACH + up * (h + BODY_RADIUS + 0.03))
+	if not space.intersect_shape(sq, 1).is_empty():
+		return -1.0
+	return h
+
+
+## What he may pull himself onto: still, solid ground (not a leaf that bends or sways, a crumbling
+## cap, or anything moving).
+func _purchase_ok(col: Object) -> bool:
+	if col == null or col.has_meta("unsafe") or col.has_method("absorb") or col is Platforms.Crumble:
+		return false
+	if col is AnimatableBody3D and not col.has_meta("settled"):
+		return false
+	return true
+
+
 func _do_jump() -> float:
+	_mantle_t = -1.0
 	_jumped_this_frame = true
 	coyote_t = 0.0
 	buffer_t = 0.0
@@ -642,7 +760,10 @@ func _apply_orientation(t: float) -> void:
 func _update_model(_dt: float) -> void:
 	var vh := velocity - up * velocity.dot(up)
 	model.speed = vh.length() / RUN_SPEED
-	model.grounded = grounded
+	# (Pulling himself over a lip he is on the ground, as far as his body is concerned.)
+	model.grounded = grounded or _mantle_t >= 0.0
+	# (His body lies along the ground under it while he is on it.)
+	model.conform = model.grounded
 	model.vup = velocity.dot(up)
 	model.swipe_t = swipe_t
 	model.lunge_t = lunge_t

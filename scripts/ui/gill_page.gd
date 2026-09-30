@@ -246,6 +246,8 @@ func _preview() -> SubViewportContainer:
 	vp.add_child(_turn)
 	preview = AxolotlModel.new()
 	preview.idle_ok = true
+	# (A colour preview turned on a stand: laid straight, no follow-through as it turns.)
+	preview.follow = false
 	# (Turned about his middle, not his nose.)
 	preview.position = Vector3(0, 0, -0.36)
 	_turn.add_child(preview)
