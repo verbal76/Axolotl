@@ -690,6 +690,7 @@ func _build_room() -> void:
 	tank_spill.light_energy = 0.6
 	tank_spill.light_cull_mask = 1 << (ROOM_LAYER - 1)
 	add_child(tank_spill)
+	_bedroom.add_scene_lights([_room_light, get_node_or_null("RoomWindowLight"), tank_spill])
 	_build_legs(_bedroom)
 	_build_hand(_bedroom)
 

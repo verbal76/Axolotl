@@ -59,34 +59,35 @@ const BOX_FACES := [[4, 5, 6, 7, Vector3.BACK, 0], [1, 0, 3, 2, Vector3.FORWARD,
 ## occlusion), no world ambient (it is tinted by the water), a warm hemisphere ambient of its own.
 const LIT_SHADER := """
 shader_type spatial;
-render_mode ambient_light_disabled, fog_disabled;
+render_mode unshaded, fog_disabled;
 uniform sampler2D tex : source_color, filter_linear_mipmap, repeat_enable;
 uniform float rough = 0.85;
 uniform float spec = 0.35;
 uniform vec3 amb_up : source_color = vec3(0.60, 0.50, 0.42);
 uniform vec3 amb_down : source_color = vec3(0.28, 0.21, 0.17);
 uniform float amb = 1.0;
-// The room's own lamps (desk, bedside, TV), lit here rather than as scene lights: a scene light's
-// layer mask is only tested per pixel on the Mobile renderer, so real lights this size would be
-// evaluated over the whole tank too.
-uniform vec3 lamp_pos[3];
-uniform vec3 lamp_col[3];
-uniform float lamp_range[3];
+// Every light in the room, lit here (the room is unshaded, so the engine's lights never run over
+// it): the ceiling light, the window, the tank's glow (Aquarium) and the desk lamp, bedside lamp and
+// TV (Bedroom). Same falloff as the engine's omni lights.
+uniform int lamp_n = 0;
+uniform vec3 lamp_pos[6];
+uniform vec3 lamp_col[6];
+uniform float lamp_range[6];
+uniform float lamp_decay[6];
 void fragment() {
 	vec3 a = texture(tex, UV).rgb * COLOR.rgb;
-	ALBEDO = a;
-	ROUGHNESS = rough;
-	SPECULAR = spec;
-	vec3 wn = (INV_VIEW_MATRIX * vec4(NORMAL, 0.0)).xyz;
+	vec3 wn = normalize((INV_VIEW_MATRIX * vec4(NORMAL, 0.0)).xyz);
 	vec3 wp = (INV_VIEW_MATRIX * vec4(VERTEX, 1.0)).xyz;
 	vec3 lit = mix(amb_down, amb_up, wn.y * 0.5 + 0.5) * amb;
-	for (int k = 0; k < 3; k++) {
+	for (int k = 0; k < lamp_n; k++) {
 		vec3 l = lamp_pos[k] - wp;
 		float d = length(l);
-		float att = pow(clamp(1.0 - d / max(lamp_range[k], 1.0), 0.0, 1.0), 1.2);
+		float nd = d / max(lamp_range[k], 1.0);
+		nd = max(1.0 - nd * nd * nd * nd, 0.0);
+		float att = nd * nd * pow(max(d, 0.0001), -lamp_decay[k]);
 		lit += lamp_col[k] * att * max(dot(wn, l / max(d, 0.001)), 0.0);
 	}
-	EMISSION = a * lit;
+	ALBEDO = a * lit;
 }
 """
 ## Lamps, screens, the window's dusk view and indicator lights: their own colour, unlit.
@@ -1849,15 +1850,22 @@ func _shell() -> void:
 	_ao_mode = 0
 
 
-## A lamp for the room's shader (LIT_SHADER): position (room space), colour times energy, range.
+## A light for the room's shader (LIT_SHADER): world position, colour times energy, range, decay.
 var _lamps: Array = []
 func _lamp_light(pos: Vector3, col: Color, energy: float, rng: float) -> void:
-	_lamps.append([pos, Vector3(col.r, col.g, col.b) * energy * LAMP_GAIN, rng])
+	_lamps.append([pos, Vector3(col.r, col.g, col.b) * energy, rng, 1.2, false])
 
 
-## Converts a lamp's energy to the shader's units (matched by eye against the scene lights it
-## replaced).
-const LAMP_GAIN := 1.0
+## The aquarium's lights that also fall on the room (its ceiling light, window and tank glow): the
+## room draws them itself; the lights stay for everything else on the room layer.
+func add_scene_lights(lights: Array) -> void:
+	for l in lights:
+		var o := l as OmniLight3D
+		if o == null:
+			continue
+		var c := o.light_color
+		_lamps.append([o.global_position, Vector3(c.r, c.g, c.b) * o.light_energy, o.omni_range, o.omni_attenuation, true])
+	_apply_lamps()
 
 
 ## Hands the lamps to every lit room material, in world space.
@@ -1865,16 +1873,20 @@ func _apply_lamps() -> void:
 	var pos := PackedVector3Array()
 	var col := PackedVector3Array()
 	var rng := PackedFloat32Array()
-	for l in _lamps:
-		pos.append(global_transform * (l[0] as Vector3) if is_inside_tree() else l[0])
+	var dec := PackedFloat32Array()
+	for l in _lamps.slice(0, 6):
+		pos.append(l[0] if l[4] or not is_inside_tree() else global_transform * (l[0] as Vector3))
 		col.append(l[1])
 		rng.append(l[2])
+		dec.append(l[3])
 	for key in _mats:
 		var m: ShaderMaterial = _mats[key]
 		if key != "glow":
+			m.set_shader_parameter("lamp_n", pos.size())
 			m.set_shader_parameter("lamp_pos", pos)
 			m.set_shader_parameter("lamp_col", col)
 			m.set_shader_parameter("lamp_range", rng)
+			m.set_shader_parameter("lamp_decay", dec)
 
 
 ## The room's own lamps (the ceiling light and the window's dusk are in Aquarium._build_light):
