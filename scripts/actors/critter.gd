@@ -30,6 +30,9 @@ var hp := 0
 var defeated := false
 ## Distance at which the axolotl discovers the species (and it must be in view: not hidden).
 var seen_radius := 6.0
+## Expression layer (Open Issue #3; OrganicMotion), for the creatures that move: seeded from `rng.seed`
+## (read, never drawn from).
+var org: OrganicMotion = null
 
 
 func setup(p_ball: MossBall, p_species: String, p_habitat: String, seed_v: int) -> void:

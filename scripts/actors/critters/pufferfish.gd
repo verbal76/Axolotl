@@ -43,6 +43,7 @@ var _flash := 0.0
 
 func place(p_ball: MossBall, p_home: Vector3, p_deg: float, p_hover: float, seed_v: int) -> void:
 	setup(p_ball, "puffer", "open water", seed_v)
+	org = OrganicMotion.new(rng.seed, OrganicMotion.PUFFER)
 	seen_radius = 7.0
 	p_ball.add_child(self)
 	home_dir = p_home.normalized()
@@ -220,6 +221,10 @@ func tick(dt: float) -> void:
 		if puffed and calm_t > STAY_PUFFED:
 			puffed = false
 	inflate = move_toward(inflate, 1.0 if puffed else 0.0, dt / (INFLATE_TIME if puffed else 1.5))
+	# Expression (OrganicMotion): a bounded drift, a slow rise and sink, a lazy roll; all of it
+	# fading as it puffs (puffed, it holds its line at him).
+	org.step(dt, 1.0, 1.0, 1.0)
+	var calm := 1.0 - inflate
 	# Drift: a slow wander leashed to home, the ball's current, the height it likes.
 	_wander_t -= dt
 	if _wander_t <= 0.0:
@@ -241,8 +246,15 @@ func tick(dt: float) -> void:
 	# swipe can reach it and its spines are a real threat.
 	if puffed and near:
 		want_alt = minf(want_alt, maxf(_ground_alt + 0.9, ball.altitude(p.body_center()) + FACE_UP))
+	# (The rise and sink stays within 0.3 m of the height it wants.)
+	want_alt += org.lift * calm
 	var alt_err := want_alt - ball.altitude(global_position)
 	var target_v := _wander * (1.0 - inflate * 0.8) + home_pull + ball.current_at(global_position) * 0.35 + up * clampf(alt_err, -0.6, 0.6)
+	var wd := org.wander2()
+	if wd != Vector4.ZERO and calm > 0.0:
+		# (The rate of change of a drift bounded in metres: it can never carry the fish away.)
+		var fr := MossBall.frame_at(up, 0.0)
+		target_v += (fr.x * wd.z + fr.z * wd.w) * calm
 	_vel = _vel.lerp(target_v, clampf(dt * 1.5, 0.0, 1.0))
 	global_position += _vel * dt
 	# Puffed: it hurts to touch.
@@ -264,6 +276,9 @@ func _pose(_dt: float) -> void:
 		fwd = -global_basis.z
 	fwd = fwd.normalized()
 	global_basis = Basis(fwd.cross(up).normalized(), up, -fwd).orthonormalized()
+	if org != null and (org.look != 0.0 or org.nod != 0.0):
+		# Visual only (its body is a sphere to every test): a lazy roll and pitch, stiller puffed.
+		global_basis = global_basis * Basis.from_euler(Vector3(org.nod, 0.0, org.look) * (1.0 - inflate * 0.7))
 	_mat.set_shader_parameter("inflate", inflate)
 	_body.scale = Vector3.ONE * (1.0 + _flash * 0.12)
 
