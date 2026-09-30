@@ -511,7 +511,16 @@ Game 0.1.0, save schema 1, catalog v4 (348), runtime r5. No APK.
 | AX-08 | Persistent "Invert swim up/down" (pitch only) | I+V | `[controls] swim_invert_y`, schema 1; `swim_invert_persists` |
 | AX-09 | Bedroom rebuilt as a lived-in late-80s/early-90s room, original unbranded props | I+V | `bedroom.gd`, `gen_room.py`; renders; built after the title (`bedroom_built_after_startup`), unshaded with its own lights (bedroom ~107 → 22 ms/frame on the test renderer) |
 | AX-10 | Performance measured | I+V | Like for like vs dev-000031 (`--only=perfaqw`, warm): play unchanged; Swim +3–10%; Inspection/Live +11–26%; Room ≈ +35% (the fish and plants now visible) |
-| AX-11 | One OTA, verified | I+V (one open check) | dev-000032: source `92cb988`, PCK `e3ade9ab…a878bd`, 12,950,784 bytes, runtime r5, game 0.1.0; signature, hash, baked shaders, inspector from public URLs; Build & Verify #42 and OTA publish #32 green; b22 client downloads, verifies and stages it (hash matched). Unit suite 495/0 and seed 4242 23/23 before the last performance fixes; aquarium/UI tests 54/54 on the final code. Pack tests: 168/172 — `treasure_full_hunt_by_lunges` missed one object once (random-seeded hunt; spot not recorded); not reproduced from source (173/0) or by seeded stress (168/168); larger stress running; the test now logs any miss in full |
+| AX-11 | One OTA, verified | I+V | dev-000032: source `92cb988`, PCK `e3ade9ab…a878bd`, 12,950,784 bytes, runtime r5, game 0.1.0; signature, hash, baked shaders, inspector from public URLs; Build & Verify #42 and OTA publish #32 green; b22 client downloads, verifies and stages it (hash matched). Unit suite 495/0 and seed 4242 23/23 before the last performance fixes; aquarium/UI tests 54/54 on the final code. Pack tests: 168/172 — `treasure_full_hunt_by_lunges` missed one object once (random-seeded hunt; spot not recorded); root-caused and fixed in dev-000033 (LOCO-03) |
+
+## LOCO: Gill locomotion, readable lift columns, Treasure Hunt pickup (dev-000033)
+
+| ID | Requirement | Status | Evidence |
+|---|---|---|---|
+| LOCO-01 | Open Issue #1 locomotion and traversal | I+V | See Mote Open Issues #1; docs/LOCOMOTION.md |
+| LOCO-02 | Open Issue #2 elevated content readable | I+V | See Mote Open Issues #2 |
+| LOCO-03 | Every Treasure Hunt object collectable by a lunge (dev-000032 published-pack check: a missed object) | I+V | Stress over 672 hiding places found 3 misses, all the tall rubber duck: pickup was measured to one point 45% up the object, above the lunge's sweep; now to the upright axis (15–85% of height). Re-stressed 671/672, the last a test-helper wedge (fixed: the helper steps round when he cannot move), then 14/14 on that hunt. |
+| LOCO-04 | One OTA, verified | I+V | dev-000033: source `fe5bbc6`, PCK `b85c1f34…b7fa25`, 12,977,508 bytes, runtime r5, game 0.1.0; signature, hash, baked shaders and inspector from public URLs; OTA publish #33 green; the b22 client discovers, downloads, verifies and stages it (hash matched); tests from the downloaded pack 172/0 (treasure included). Candidate evidence: full unit suite 509/0, seeds 4242 and 7 23/23 to 100%, rendering unchanged vs dev-000032 (20 views, two rounds), memory +1 MB; after the last ground-probe change the locomotion, model and aquarium tests 37/37. |
 
 ## MOTE OPEN ISSUES (owner, 2026-09-29)
 
