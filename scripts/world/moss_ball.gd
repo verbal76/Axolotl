@@ -1098,7 +1098,7 @@ func set_far_view(on: bool, keep := 5, grow := 1.7) -> void:
 
 ## The far view's triangle budget per world, and the smallest plant it keeps (its mesh's longest
 ## side, in metres): a whole tank of them costs about what one world's near view does.
-const FAR_TRIS := 30000.0
+const FAR_TRIS := 15000.0
 const FAR_MIN_SIZE := 0.45
 
 

@@ -60,7 +60,7 @@ const BOX_FACES := [[4, 5, 6, 7, Vector3.BACK, 0], [1, 0, 3, 2, Vector3.FORWARD,
 const LIT_SHADER := """
 shader_type spatial;
 render_mode ambient_light_disabled, fog_disabled;
-uniform sampler2D tex : source_color, filter_linear_mipmap_anisotropic, repeat_enable;
+uniform sampler2D tex : source_color, filter_linear_mipmap, repeat_enable;
 uniform float rough = 0.85;
 uniform float spec = 0.35;
 uniform vec3 amb_up : source_color = vec3(0.60, 0.50, 0.42);
