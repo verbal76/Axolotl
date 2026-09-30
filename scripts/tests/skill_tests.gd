@@ -1008,7 +1008,7 @@ func magnet() -> void:
 		runs.append([m.global_position, randi()])
 		m.set_physics_process(true)
 	tiers()
-	t.check("magnet_draws_no_random_numbers", calls1 == calls0 and not body.contains("rand") and body.length() > 100 and runs[0][0].is_equal_approx(runs[1][0]) and runs[0][1] == runs[1][1],
+	t.check("magnet_draws_no_random_numbers", calls1 == calls0 and (not body.contains("rand") and body.length() > 100 or _no_source()) and runs[0][0].is_equal_approx(runs[1][0]) and runs[0][1] == runs[1][1],
 			"calls with no Magnet in 2 s of play: %d; same seed, 240 steps, next random number: %s / %s" % [calls1 - calls0, str(runs[0][1]), str(runs[1][1])])
 	if revived:
 		m.restore_done()
@@ -1679,3 +1679,10 @@ func glide_transfers() -> void:
 	await _gates_restore(prev)
 	t.check("glide_bypasses_no_barrier", ok_all, "; ".join(rows))
 	p.invuln_t = 0.0
+
+
+## True when scripts carry no source text (an exported pack holds compiled scripts only), so a test
+## that reads source must rely on its behavioural checks instead.
+func _no_source() -> bool:
+	var sc := load("res://scripts/actors/mote.gd") as GDScript
+	return sc == null or sc.source_code.is_empty()

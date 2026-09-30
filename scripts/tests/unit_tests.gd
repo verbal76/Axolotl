@@ -6946,6 +6946,9 @@ func _test_treasure_play() -> void:
 	# A saved spot that became bad is replaced by a good one in the same world; same object, same place in the order.
 	var cur: Dictionary = TreasureHunt.current(st)
 	var cw: MossBall = g.balls[int(cur["world"])]
+	# (A random hunt may already have moved this object once, e.g. off a top with no room: count the
+	# recovery, not the total.)
+	var rec0 := int(cur.get("recovered", 0))
 	var buried := TreasureHunt.target_pos(cur) - cw.up_at(TreasureHunt.target_pos(cur)) * 3.0
 	cur["pos"] = [buried.x, buried.y, buried.z]
 	tp.stop()
@@ -6953,7 +6956,8 @@ func _test_treasure_play() -> void:
 	await t.frames(3)
 	var fixed := TreasureHunt.current(st)
 	t.check("treasure_bad_spot_recovered", fixed["kind"] == cur["kind"] and int(fixed["world"]) == int(cur["world"]) and int(st["index"]) == 1
-			and TreasureHunt.spot_ok(cw, TreasureHunt.target_pos(fixed), float(fixed["scale"])) and int(fixed.get("recovered", 0)) == 1, "")
+			and TreasureHunt.spot_ok(cw, TreasureHunt.target_pos(fixed), float(fixed["scale"])) and int(fixed.get("recovered", 0)) == rec0 + 1,
+			"kind %s world %d index %d recovered %d -> %d" % [fixed["kind"], int(fixed["world"]), int(st["index"]), rec0, int(fixed.get("recovered", 0))])
 	# dev-000030 (2026-09-29): tower and shelf tops with no room beside the object could hold it, so a
 	# hunt could not be finished. Those tops are no longer hiding places, and a saved hunt whose
 	# current object sits on one moves it (same world, same object) when it is shown.
