@@ -24,6 +24,10 @@ var selected := ""
 var tree_area: Control
 var overlay: Control
 var card: PanelContainer
+## Behind everything: a dimming layer over the whole screen, and a soft rounded panel behind the tree,
+## so the title or pause menu underneath never competes with it (both are sized in _layout).
+var _shade: ColorRect
+var _backdrop: Panel
 var _card_title: Label
 var _card_state: Label
 var _card_effect: Label
@@ -45,11 +49,18 @@ func _ready() -> void:
 	set_anchors_preset(Control.PRESET_FULL_RECT)
 	mouse_filter = Control.MOUSE_FILTER_STOP
 	process_mode = Node.PROCESS_MODE_ALWAYS
-	var shade := ColorRect.new()
-	shade.color = Color(0.0, 0.05, 0.05, 0.88)
-	shade.set_anchors_preset(Control.PRESET_FULL_RECT)
-	shade.mouse_filter = Control.MOUSE_FILTER_IGNORE
-	add_child(shade)
+	_shade = ColorRect.new()
+	_shade.name = "Shade"
+	_shade.color = Color(0.0, 0.05, 0.05, 0.9)
+	_shade.mouse_filter = Control.MOUSE_FILTER_IGNORE
+	add_child(_shade)
+	_backdrop = Panel.new()
+	_backdrop.name = "Backdrop"
+	var bs := UiStyle._box(Color(UiStyle.PANEL, 0.97), Color(UiStyle.MINT, 0.22))
+	bs.set_corner_radius_all(26)
+	_backdrop.add_theme_stylebox_override("panel", bs)
+	_backdrop.mouse_filter = Control.MOUSE_FILTER_IGNORE
+	add_child(_backdrop)
 	_header = HBoxContainer.new()
 	_header.name = "Header"
 	_header.add_theme_constant_override("separation", 18)
@@ -177,6 +188,13 @@ func _layout() -> void:
 	card.custom_minimum_size = card.size
 	tree_area.position = Vector2(m.x, top)
 	tree_area.size = Vector2(vp.x - card_w - m.x * 3, vp.y - top - m.y)
+	# (Sized here, not by anchors: the page can open before its parent has a size, and then an
+	# anchored shade stayed zero-sized and the menu behind showed through.)
+	_shade.position = Vector2.ZERO
+	_shade.size = vp
+	var pad := 12.0 * s
+	_backdrop.position = Vector2(m.x - pad, m.y - pad * 0.5)
+	_backdrop.size = Vector2(tree_area.size.x + pad * 2, vp.y - m.y * 2 + pad * 0.5)
 	var cols := COLUMNS.size()
 	var cw := tree_area.size.x / cols
 	var rh := (tree_area.size.y - 40 * s) / 3.0

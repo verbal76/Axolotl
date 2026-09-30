@@ -567,6 +567,14 @@ func run(runner) -> void:
 		await _gill_anim(g)
 	if only == "loco":
 		await _loco_shots(g)
+	if only == "skilltitle":
+		# (The Skills page opened from the title screen, as the owner saw it.)
+		g._enter_title()
+		await t.seconds(1.5)
+		await t.shot("skilltitle_menu")
+		g.title._on_skills()
+		await t.seconds(0.6)
+		await t.shot("skilltitle_page")
 	if only == "skilltree":
 		await _skilltree_shots(g)
 	if only == "starfish":
