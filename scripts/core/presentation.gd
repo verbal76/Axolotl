@@ -36,19 +36,18 @@ var _snap := {}
 var _cam_pos := Vector3.ZERO
 var _cam_look := Vector3.ZERO
 var _t := 0.0
-var _rng := RandomNumberGenerator.new()
-# The stand-in's little wanders round where Gill really is.
+# The stand-in explores the water round where Gill really is (GillExplorer).
 var _home := Vector3.ZERO
 var _home_ball: MossBall
-var _stand_pos := Vector3.ZERO
-var _stand_face := Vector3.FORWARD
-var _stand_goal := Vector3.ZERO
-var _stand_wait := 2.0
+var explorer: GillExplorer
+## The Gill close-up's camera: which of GILL_CAM it is using, and its sphere cast.
+var _gill_cam_k := 0
+var _gill_cam_q: PhysicsShapeQueryParameters3D
+var _cam_upv := Vector3.ZERO
 
 
 func _init() -> void:
 	name = "Presentation"
-	_rng.seed = 0xA0A1
 
 
 func active() -> bool:
@@ -83,10 +82,7 @@ func enter(p_from: String) -> void:
 	standin = AxolotlModel.new()
 	standin.name = "GillStandIn"
 	g.add_child(standin)
-	_stand_pos = _home
-	_stand_face = p.facing
-	_stand_goal = _home
-	_place_standin(0.0)
+	start_explorer(_home_ball, _home, p.facing)
 	ui.visible = true
 	go("room", true)
 
@@ -113,6 +109,9 @@ func go(m: String, snap := false) -> void:
 			g.cam.fov = 70.0
 	if standin:
 		standin.visible = m != "swim"
+	if snap and explorer:
+		# (A cut: the only moment a last-resort relocation may happen, unseen.)
+		explorer.on_cut()
 	var tgt := _camera_target(0.0)
 	if snap:
 		_cam_pos = tgt[0]
@@ -140,6 +139,9 @@ func exit() -> void:
 	if standin:
 		standin.queue_free()
 		standin = null
+	if explorer:
+		explorer.free_body()
+		explorer = null
 	g.aquarium.set_outside_view(false)
 	var p := g.player
 	p.global_position = _snap["pos"]
@@ -165,8 +167,9 @@ func _process(dt: float) -> void:
 	if mode == "":
 		return
 	_t += dt
-	if standin and mode != "swim":
-		_wander(dt)
+	if standin and explorer and mode != "swim":
+		explorer.step(dt)
+		_apply_explorer()
 	if swimmer:
 		_swim_step(dt)
 	var tgt := _camera_target(dt)
@@ -176,7 +179,7 @@ func _process(dt: float) -> void:
 	g.cam.global_position = _cam_pos
 	g.aquarium.outside_camera(_cam_pos)
 	if _cam_pos.distance_to(_cam_look) > 0.01:
-		g.cam.look_at(_cam_look, Vector3.UP)
+		g.cam.look_at(_cam_look, _cam_up(dt))
 
 
 ## [camera position, look target] for the current mode.
@@ -192,18 +195,8 @@ func _camera_target(_dt: float) -> Array:
 			return [pos, INSPECT_CENTRE + Vector3(sin(inspect_yaw) * -40.0, 0, 0)]
 		"live":
 			var v: Array = LIVE_VIEWS[live_view]
-			if v[0] == "gill" and standin:
-				# A quiet nature-camera close-up in the water beside him, slowly circling.
-				var s := standin.global_position
-				var up := _home_ball.up_at(s)
-				var fr := MossBall.frame_at(up, rad_to_deg(_t * 0.06))
-				var pivot := s + up * 0.35
-				var want := pivot + up * 0.9 + fr.z * 2.6
-				var q := PhysicsRayQueryParameters3D.create(pivot, want, 1 | 2)
-				var hit := g.get_world_3d().direct_space_state.intersect_ray(q)
-				if not hit.is_empty():
-					want = pivot + (want - pivot).normalized() * maxf(0.5, pivot.distance_to(hit["position"]) - 0.25)
-				return [want, pivot]
+			if v[0] == "gill" and standin and explorer:
+				return _gill_camera()
 			var drift := Vector3(sin(_t * 0.05) * 3.0, sin(_t * 0.037) * 2.0, 0)
 			return [Vector3(0, 0, Aquarium.TANK_MAX.z) + (v[1] as Vector3) + drift, v[2]]
 		"swim":
@@ -216,6 +209,24 @@ func _camera_target(_dt: float) -> Array:
 				want = pivot + (want - pivot).normalized() * maxf(0.6, pivot.distance_to(hit["position"]) - 0.3)
 			return [want, pivot + fwd * 2.0]
 	return [_cam_pos, _cam_look]
+
+
+## The camera's up: the world's, except in the Gill close-up, where it is the moss ball's up where
+## he is (eased), so the ground is level wherever on the ball he swims.
+func _cam_up(dt: float) -> Vector3:
+	if not (mode == "live" and LIVE_VIEWS[live_view][0] == "gill" and explorer):
+		_cam_upv = Vector3.ZERO
+		return Vector3.UP
+	var want := _home_ball.up_at(explorer.p)
+	if _cam_upv == Vector3.ZERO or dt <= 0.0:
+		_cam_upv = want
+	else:
+		_cam_upv = _cam_upv.slerp(want, 1.0 - exp(-dt * 2.0)).normalized()
+	var fwd := (_cam_look - _cam_pos).normalized()
+	if absf(fwd.dot(_cam_upv)) > 0.97:
+		# (Looking straight down at him: his heading is up on the screen.)
+		return explorer.face
+	return _cam_upv
 
 
 ## Live Tank: the vertical field of view that fits the tank's width (a little inside the glass).
@@ -234,6 +245,8 @@ func next_live_view() -> void:
 	g.cam.fov = _live_fov() if LIVE_VIEWS[live_view][0] != "gill" else 50.0
 	g.aquarium.set_outside_view(_outside())
 	# (A cut, not a glide through the glass.)
+	if explorer:
+		explorer.on_cut()
 	var tgt := _camera_target(0.0)
 	_cam_pos = tgt[0]
 	_cam_look = tgt[1]
@@ -260,41 +273,86 @@ func tap_hits_tank(sp: Vector2) -> bool:
 
 # --- The stand-in (room, inspection, Live Tank) ----------------------------------------------
 
-## Now and then a short wander round where Gill really is, then a pause (his own idles play).
-func _wander(dt: float) -> void:
-	var b := _home_ball
-	_stand_wait -= dt
-	var to := _stand_goal - _stand_pos
-	var up := b.up_at(_stand_pos)
-	to -= up * to.dot(up)
-	var moving := to.length() > 0.08
-	if moving:
-		var step := minf(to.length(), 0.35 * dt)
-		var ang := Tier2.signed_angle(_stand_face, to.normalized(), up)
-		_stand_face = _stand_face.rotated(up, ang * clampf(dt * 3.0, 0.0, 1.0)).normalized()
-		_stand_pos += _stand_face * step
-	elif _stand_wait <= 0.0:
-		_stand_wait = _rng.randf_range(4.0, 9.0)
-		var fr := MossBall.frame_at(b.up_at(_home), _rng.randf() * 360.0)
-		_stand_goal = _home + fr.z * _rng.randf_range(0.3, 1.2)
-	standin.speed = 0.25 if moving else 0.0
-	standin.grounded = true
-	standin.idle_ok = not moving
-	_place_standin(dt)
+## Gill's explorer round `home` on `ball` (also used by the tests to set him down anywhere).
+func start_explorer(ball: MossBall, home: Vector3, facing: Vector3) -> void:
+	if explorer:
+		explorer.free_body()
+	_home = home
+	_home_ball = ball
+	explorer = GillExplorer.new()
+	explorer.model = standin
+	var hk := Vector3i((home * 10.0).round())
+	explorer.setup(g, ball, home, facing, hash([ball.index, hk.x, hk.y, hk.z]))
+	_apply_explorer()
+	standin.reset_follow()
 
 
-func _place_standin(_dt: float) -> void:
-	var b := _home_ball
-	var up := b.up_at(_stand_pos)
-	# Onto the ground or leaf under him (the real terrain, never floating).
-	var q := PhysicsRayQueryParameters3D.create(_stand_pos + up * 1.5, _stand_pos - up * 2.0, 1 | 2 | 8)
-	var hit := g.get_world_3d().direct_space_state.intersect_ray(q)
-	if not hit.is_empty():
-		_stand_pos = hit["position"]
-	var face := (_stand_face - up * _stand_face.dot(up)).normalized()
-	if face.length() < 0.1:
-		face = MossBall.frame_at(up, 0.0).z
-	standin.global_transform = Transform3D(Basis(face.cross(up).normalized(), up, -face).orthonormalized(), _stand_pos)
+## The stand-in model where the explorer has him, moving as he moves.
+func _apply_explorer() -> void:
+	var e := explorer
+	standin.global_transform = e.model_xf
+	standin.swim = e.swim_effort
+	standin.swim_turn = clampf(e.yaw_v, -3.0, 3.0)
+	standin.swim_pitch = 0.0
+	standin.speed = clampf(e.speed / Swimmer.RELAXED, 0.0, 1.0) * 0.4
+	standin.grounded = e.grounded
+	standin.conform = e.conform
+	standin.idle_ok = e.idle_ok
+
+
+## Offsets round him the Gill close-up tries, in order: [yaw offset (rad), height (m)].
+const GILL_CAM := [[0.0, 0.9], [0.5, 0.9], [-0.5, 0.9], [1.0, 1.3], [-1.0, 1.3], [0.0, 1.8], [1.7, 1.2], [-1.7, 1.2],
+		[PI, 1.0], [0.0, 2.6]]
+## The close-up never comes nearer than his body length (nose to tail tip).
+const GILL_CAM_MIN := 1.35
+
+
+## The Gill close-up: a quiet nature camera in the water beside him, slowly circling. It keeps
+## clear of the scenery (terrain, leaves, climbable stems) and never comes closer than his length:
+## if the way to its place is blocked it moves round him to the nearest open view.
+func _gill_camera() -> Array:
+	var e := explorer
+	var s := e.p
+	var up := _home_ball.up_at(s)
+	var pivot := s + up * (0.35 if e.grounded else 0.1)
+	var space := g.get_world_3d().direct_space_state
+	if _gill_cam_q == null:
+		_gill_cam_q = PhysicsShapeQueryParameters3D.new()
+		var sph := SphereShape3D.new()
+		sph.radius = 0.2
+		_gill_cam_q.shape = sph
+		_gill_cam_q.collision_mask = 1 | 2 | 8 | Aquarium.TANK_LAYER_BIT
+	var q := _gill_cam_q
+	q.transform = Transform3D(Basis.IDENTITY, pivot)
+	var best := Vector3.INF
+	var best_d := -1.0
+	var best_k := _gill_cam_k
+	# (The view it has first, so it stays put while that is open; then the others in order.)
+	var order := [_gill_cam_k]
+	for k in GILL_CAM.size():
+		if k != _gill_cam_k:
+			order.append(k)
+	for k in order:
+		var o: Array = GILL_CAM[k]
+		var fr := MossBall.frame_at(up, rad_to_deg(_t * 0.06 + float(o[0])))
+		var want := pivot + up * float(o[1]) + fr.z * (2.6 if float(o[1]) < 2.0 else 0.8)
+		q.motion = want - pivot
+		var f: float = space.cast_motion(q)[0]
+		var d := f * pivot.distance_to(want)
+		if f >= 0.999:
+			_gill_cam_k = k
+			return [want, pivot]
+		if d > best_d:
+			best_d = d
+			best = pivot + (want - pivot).normalized() * maxf(0.0, d - 0.1)
+			best_k = k
+	_gill_cam_k = best_k
+	if best_d < GILL_CAM_MIN:
+		# (Nowhere open at his length: straight above, as high as the water allows.)
+		q.motion = up * 3.0
+		var fu: float = space.cast_motion(q)[0]
+		return [pivot + up * maxf(GILL_CAM_MIN, fu * 3.0 - 0.1), pivot]
+	return [best, pivot]
 
 
 # --- Swim Mode ---------------------------------------------------------------------------------

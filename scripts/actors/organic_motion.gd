@@ -63,6 +63,11 @@ const CRAB := {"drift": Vector2(0.3, 0.09), "weave": Vector2(0.08, 0.3), "speed"
 		"warp": Vector2(0.25, 0.009)}
 ## Cave eel: a flowing head sway in its crevice, and now and then a slight peek out.
 const EEL := {"lift": Vector2(0.04, 0.05), "look": Vector2(0.2, 0.07), "hes": Vector3(0.04, 0.7, 0.0), "warp": Vector2(0.25, 0.009)}
+## Gill exploring the aquarium (the Live Tank stand-in, GillExplorer; not an enemy and no AI shared):
+## a long lazy drift and a small weave in his heading, gentle speed swells, a slow rise and fall in
+## the water, and now and then a hover to look round.
+const GILL_EXPLORE := {"drift": Vector2(0.35, 0.03), "weave": Vector2(0.12, 0.2), "speed": Vector2(0.25, 0.08),
+		"hes": Vector3(0.03, 0.8, 0.85), "lift": Vector2(0.4, 0.04), "look": Vector2(0.25, 0.12), "turn": 0.85}
 
 # --- Outputs (read after step) -------------------------------------------------------------
 

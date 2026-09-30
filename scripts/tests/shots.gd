@@ -557,6 +557,10 @@ func run(runner) -> void:
 		g.g_disp = 1.0
 		g.aquarium.apply(1.0)
 		await _gill_shots(g, "gill_restored")
+	if only == "aqframes":
+		await load("res://scripts/tests/aq_nav_tests.gd").new(t, g).frames_phase()
+	if only == "aqgill":
+		await load("res://scripts/tests/aq_nav_tests.gd").new(t, g).renders_phase()
 	if only == "settingsscroll":
 		await _settings_scroll_shots(g)
 	if only == "colours":

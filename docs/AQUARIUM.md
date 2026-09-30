@@ -134,7 +134,38 @@ this. `quit_on_go_back` is off: in play, back opens the pause menu, and on the t
 - No global random numbers are drawn.
 
 **The tank shown is the real one.** Its restoration, water, plants, creatures and his colours are
-all the player's own. A cosmetic stand-in of Gill idles and wanders a little where he really is.
+all the player's own. A cosmetic stand-in of Gill explores the water round where he really is.
+
+**Gill exploring (00039-aquarium-gill; `scripts/actors/gill_explorer.gd`).** In the room, Inspection
+and Live Tank the stand-in is driven by `GillExplorer`, a cosmetic brain (nothing in the run looks
+at it; its own seeded generator, no global random numbers):
+
+- He swims in a shell 0.4–3.5 m above his moss ball, in a soft home range of about 10 m round where
+  he was left: destinations fall off past 8 m and none are beyond 12 m, but steering may pass the edge.
+- He picks a destination every 6–14 s or on arrival, from 12 candidates scored for distance (2–8 m),
+  novelty (a decaying memory of the 1.5 m cells he has been in), interest (leaf and mound tops) and
+  a route he can swim (straight, or two legs). Each must have 0.35 m of clear water round it.
+- He steers by anticipatory context steering. Sphere casts of his body's size (r 0.30) look ahead
+  (speed × 0.9 s + 0.7 m) along 16 headings at three pitches (±25°), four casts a frame round-robin.
+  He turns no faster than 1.6 rad/s and no tighter than 0.6 m, and slows near things. The swim gait
+  and the model's time-based follow-through do the rest: the head leads, and the body and tail
+  follow his path.
+- His expression is `OrganicMotion.GILL_EXPLORE` (a lazy drift, a small weave, speed swells, a slow
+  rise and fall, now and then a hover to look round). It is the signal library only; no enemy AI
+  is shared.
+- He rests now and then (owner ruling F). The scorer picks a flat spot his whole body fits on; he
+  settles on it, laid on the ground (`conform`), for 4–12 s. Resting is at most about 20 % of the
+  time, never twice running in the same 1.5 m cell.
+- A kinematic safety sphere (r 0.30) carries him and slides along anything the steering missed.
+  His hips and tail are felt every third frame and widen the turn if they touch.
+- Stuck recovery works in layers, each after a 2.5 s progress window of 0.3 m. L1: slow down and
+  scan more. L2: stop, back off up to 0.5 m and turn to the most open of 26 directions. L3: a new
+  destination that way. L4, the last resort: back to his last free breadcrumb, but only at a camera
+  cut or change of view, so it is never seen.
+
+The Gill close-up keeps its camera clear of the terrain, leaves and climbable stems (mask 1|2|8
+and the tank layer). The camera never comes nearer than his length (1.35 m). If its place is
+blocked, it moves round him to the nearest open view.
 
 **Swim Mode's body.** Swim Mode uses a separate body, `Swimmer`, and nothing in the run reacts to it.
 
