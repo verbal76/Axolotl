@@ -1255,7 +1255,7 @@ func _cine_regen() -> void:
 			# The bloom's pulse startles parasites off (Expansion 6): he never re-forms into an
 			# attack he cannot answer.
 			for par in b.parasites:
-				if par.is_alive() and par.global_position.distance_to(dest_pos) < 6.0:
+				if par.is_alive() and par.global_position.distance_to(dest_pos) < Parasite.STARTLE_R:
 					par.startle(dest_pos)
 		audio.set_ball(b.index, true)
 		Sfx.play("reform", dest_pos)

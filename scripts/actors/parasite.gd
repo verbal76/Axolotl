@@ -1123,10 +1123,23 @@ func hit(stages: int, from_pos: Vector3, knock := 1.0) -> bool:
 	return true
 
 
+## Within this of the bloom's pulse a parasite is knocked back; within STARTLE_R only shaken.
+const STARTLE_KNOCK_R := 6.0
+## (Past every size's notice range, 6.5 to 9 m.)
+const STARTLE_R := 10.0
+
+
 ## Startled back from `from_pos` (the bloom's pulse when the axolotl re-forms there), unhurt: it
 ## scuttles a few metres off, then carries on.
 func startle(from_pos: Vector3) -> void:
 	if not state in ["graze", "chase", "windup", "attack", "recover"]:
+		return
+	if global_position.distance_to(from_pos) > STARTLE_KNOCK_R:
+		# Further off (but within reach of noticing him), it is only shaken: it holds off attacking
+		# for a while (Open Issue #3's re-seeded grazing put one just outside the knock radius,
+		# and it struck as the re-formed axolotl's grace ran out).
+		if state in ["graze", "chase"]:
+			_shaken = 3.5
 		return
 	var away := global_position - from_pos
 	away -= up * away.dot(up)
