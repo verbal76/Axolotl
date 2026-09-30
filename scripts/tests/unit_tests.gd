@@ -5227,7 +5227,7 @@ func _test_aquarium_polish() -> void:
 	t.check("title_settings_open_and_back", st_ok and not pm.visible and g.title.visible and g.state == "title"
 			and FileAccess.get_file_as_string(RunSave.PATH) == run_file0 and is_equal_approx(g.clock.run_s, run0),
 			"opened %s diag %s resume '%s'" % [st_ok, diag_btn != null, resume.text])
-	# --- Gill's colours: controls left, Gill right, always visible, turned by dragging him ---
+	# --- The colours page: controls left, Gill right, always visible, turned by dragging him ---
 	g.title._on_colours()
 	await t.frames(4)
 	var page: GillPage = pm.gill_page

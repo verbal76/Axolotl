@@ -107,7 +107,7 @@ func _layout() -> void:
 
 ## The Live Tank view's name, for its button.
 func view_name() -> String:
-	return {"tank": "Whole tank", "left": "Left side", "right": "Right side", "gill": "Gill close-up"}.get(Presentation.LIVE_VIEWS[p.live_view][0], "View") + "  ›"
+	return {"tank": "Whole tank", "left": "Left side", "right": "Right side", "gill": "%s close-up" % GameVersion.CHARACTER_NAME}.get(Presentation.LIVE_VIEWS[p.live_view][0], "View") + "  ›"
 
 
 func set_mode(m: String) -> void:
@@ -126,7 +126,7 @@ func set_mode(m: String) -> void:
 		"live":
 			_hint.text = ""
 		"swim":
-			_hint.text = "Aim Gill with the stick · hold Swim to swim"
+			_hint.text = "Aim %s with the stick · hold Swim to swim" % GameVersion.CHARACTER_NAME
 	_release()
 	_hint.modulate.a = 1.0
 	var tw := create_tween()

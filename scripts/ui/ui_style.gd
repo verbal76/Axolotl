@@ -3,7 +3,7 @@ class_name UiStyle
 
 
 ## Mote's visual language (owner, 2026-09-30; the Treasure Hunt panel is the reference): deep
-## aquarium-teal rounded panels with a soft shadow, mint edges, warm gold for focus and press, Gill's
+## aquarium-teal rounded panels with a soft shadow, mint edges, warm gold for focus and press, the axolotl's
 ## pink for the one main action on a screen, and a heavier, friendlier weight of the type.
 const INK := Color(0.95, 1.0, 0.97)
 const MINT := Color(0.5, 0.97, 0.84)
@@ -47,7 +47,7 @@ static func theme() -> Theme:
 		t.set_color("font_disabled_color", cls, Color(INK, 0.4))
 		t.set_color("font_outline_color", cls, Color(0.0, 0.08, 0.07, 0.6))
 		t.set_constant("outline_size", cls, 4)
-	# The one main action on a screen (Play / Continue): Gill's pink.
+	# The one main action on a screen (Play / Continue): axolotl pink.
 	t.set_type_variation("PrimaryButton", "Button")
 	t.set_stylebox("normal", "PrimaryButton", _box(PINK, Color(1.0, 0.86, 0.9, 0.9), 2, Color(0.35, 0.05, 0.12, 0.45)))
 	t.set_stylebox("hover", "PrimaryButton", _box(PINK.lightened(0.1), GOLD, 3, Color(0.35, 0.05, 0.12, 0.45)))
