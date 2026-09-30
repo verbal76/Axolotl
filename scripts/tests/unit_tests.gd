@@ -14,7 +14,7 @@ func run(runner) -> void:
 	p.use_bot_input = true
 	await t.seconds(0.5)
 	var only: String = Settings.test_args.get("only", "")
-	for name_ in ["_test_startup", "_test_ota_and_version", "_test_mesh_winding", "_test_terrain", "_test_ravines", "_test_terrain_grounded", "_test_no_floating_platforms", "_test_parasite_locomotion", "_test_parasite_body_and_death", "_test_parasite_combat", "_test_gill_look", "_test_gill_idles", "_test_gill_colours", "_test_gill_patterns", "_test_tail_whip", "_test_gill_traction", "_test_traction_no_shortcuts", "_test_gill_body_follow", "_test_swim_body_follow", "_test_ambient_sway", "_test_placements", "_test_tutorial_route", "_test_sphere_walk", "_test_jump_and_burst", "_test_coyote_and_buffer", "_test_swipe_direction_and_stages", "_test_hard_landing", "_test_food", "_test_food_reach", "_test_darter_and_burrower", "_test_food_repopulates", "_test_motes", "_test_checkpoint_and_regen", "_test_crumble", "_test_restoration_gates", "_test_bubble_columns", "_test_restoration_continuity", "_test_health_map", "_test_vortex", "_test_current", "_test_canopy", "_test_canopy_plain_jumps", "_test_climbs_physical", "_test_jungle_ladders_physical", "_test_leaf_geometry", "_test_leaf_footing", "_test_caves", "_test_mounds", "_test_vegetation", "_test_vortex_mouths_clear", "_test_route_audit", "_test_new_areas", "_test_ecosystem", "_test_music", "_test_run_clock", "_test_completion_catalog", "_test_completion_frozen", "_test_run_save_file", "_test_run_timer_live", "_test_run_continue", "_test_timer_integrity", "_test_resume_points_safe", "_phase_continue_write", "_phase_continue_read", "_test_upgrades", "_test_ui", "_test_menu_scrollbar", "_test_tier2_rules", "_test_tier2_world", "_test_ambient_fish", "_test_parasite_never_buried", "_test_tier2_loadout", "_test_aquarium_experiences", "_test_aquarium_polish", "_test_all_clear", "_test_treasure_unlock", "_test_treasure_generation", "_test_treasure_play", "_phase_treasure_stress", "_phase_live_fish_diag", "_phase_cpu_probe"]:
+	for name_ in ["_test_startup", "_test_ota_and_version", "_test_mesh_winding", "_test_terrain", "_test_ravines", "_test_terrain_grounded", "_test_no_floating_platforms", "_test_parasite_locomotion", "_test_parasite_body_and_death", "_test_parasite_combat", "_test_gill_look", "_test_gill_idles", "_test_gill_colours", "_test_gill_patterns", "_test_tail_whip", "_test_gill_traction", "_test_gill_incline_transitions", "_test_traction_no_shortcuts", "_test_gill_body_follow", "_test_swim_body_follow", "_test_ambient_sway", "_test_placements", "_test_tutorial_route", "_test_sphere_walk", "_test_jump_and_burst", "_test_coyote_and_buffer", "_test_swipe_direction_and_stages", "_test_hard_landing", "_test_food", "_test_food_reach", "_test_darter_and_burrower", "_test_food_repopulates", "_test_motes", "_test_checkpoint_and_regen", "_test_crumble", "_test_restoration_gates", "_test_bubble_columns", "_test_restoration_continuity", "_test_health_map", "_test_vortex", "_test_current", "_test_canopy", "_test_canopy_plain_jumps", "_test_climbs_physical", "_test_jungle_ladders_physical", "_test_leaf_geometry", "_test_leaf_footing", "_test_caves", "_test_mounds", "_test_vegetation", "_test_vortex_mouths_clear", "_test_route_audit", "_test_new_areas", "_test_ecosystem", "_test_music", "_test_run_clock", "_test_completion_catalog", "_test_completion_frozen", "_test_run_save_file", "_test_run_timer_live", "_test_run_continue", "_test_timer_integrity", "_test_resume_points_safe", "_phase_continue_write", "_phase_continue_read", "_test_upgrades", "_test_ui", "_test_menu_scrollbar", "_test_tier2_rules", "_test_tier2_world", "_test_ambient_fish", "_test_parasite_never_buried", "_test_tier2_loadout", "_test_aquarium_experiences", "_test_aquarium_polish", "_test_all_clear", "_test_treasure_unlock", "_test_treasure_generation", "_test_treasure_play", "_phase_treasure_stress", "_phase_live_fish_diag", "_phase_cpu_probe", "_phase_incline_survey", "_phase_loco_diag", "_phase_crawl_trace"]:
 		# "_phase_*" tests are halves of a relaunch test: they run only when asked for by name
 		# (in a child process started by _test_run_continue).
 		if name_.begins_with("_phase") and not only.split(",", false).has(name_):
@@ -6466,6 +6466,28 @@ func _phase_cpu_probe() -> void:
 	mt.sort()
 	pt.sort()
 	t.log_line("CPUPROBE2 model median %.0f us p90 %.0f us | body median %.0f us p90 %.0f us" % [mt[200], mt[360], pt[200], pt[360]])
+	# Pressed against a tall face (the controller reads the ground ahead while blocked).
+	var up2 := b.up_at(p.global_position)
+	var fwd2 := -MossBall.frame_at(up2, 0.0).z
+	var root := Node3D.new()
+	g.add_child(root)
+	var frame := Transform3D(Basis(fwd2.cross(up2), up2, -fwd2), b.surface_point(up2))
+	_rig_lip(root, frame, 1.0, 1.2, 3.0)
+	await t.frames(2)
+	place_at(0, b.surface_point(up2, 0.05), fwd2)
+	await t.seconds(0.3)
+	var wt: Array[float] = []
+	for i in 300:
+		stick_toward(fwd2)
+		var t0 := Time.get_ticks_usec()
+		p._physics_process(1.0 / 60.0)
+		wt.append(float(Time.get_ticks_usec() - t0))
+		if i % 20 == 0:
+			await t.frames(1)
+	p.bot_input = Vector2.ZERO
+	wt.sort()
+	t.log_line("CPUPROBE3 against a wall: body median %.0f us p90 %.0f us" % [wt[150], wt[270]])
+	root.queue_free()
 
 
 ## position) and then skipped so the rest of the hunt is still tried.
@@ -6849,7 +6871,7 @@ func _rig_h(frame: Transform3D) -> float:
 
 
 ## Distributed traction: a short steep lip is pulled over once his front has purchase above it; a
-## lip above LIP_MAX still needs a jump; a long steep face (over 52 degrees, metres high) loses him
+## lip above CRAWL_MAX still needs a jump; a long steep face (over 52 degrees, metres high) loses him
 ## his traction and he slides back down: no wall adhesion, no ratcheting over repeated attempts;
 ## walkable slopes are walked as before.
 func _test_gill_traction() -> void:
@@ -6880,7 +6902,7 @@ func _test_gill_traction() -> void:
 		lip.free()
 	var m_now: int = p.get("mantles") if "mantles" in p else 0
 	t.check("traction_short_lip_pulled_over", lips_ok and m_now >= m0 + 2, ", ".join(lips) + "; %d pulls" % (m_now - m0))
-	# A lip taller than LIP_MAX: no pull (a jump is needed, and still works).
+	# A lip taller than Axolotl.CRAWL_MAX: no crawl (a jump is needed, and still works).
 	var tall := _rig_lip(root, frame, 1.3, 0.62, 8.0)
 	await t.frames(2)
 	await start.call()
@@ -7201,11 +7223,11 @@ func _test_swim_body_follow() -> void:
 
 
 
-## The pull over a lip opens no shortcut up designed elevated content: walking straight at every
-## elevated platform, mound, mesa, shelf, terrace, stone column and rising stone from the open
-## ground round it (six sides, no jumping), a pull never gets him onto its top. (Pulls over lips on
-## a walkable flank and walks up designed ramps are logged, not failed.) A pull is also, by
-## construction, less than a plain jump from where he stands.
+## Crawling opens no shortcut up designed elevated content: walking at every elevated platform,
+## mound, mesa, shelf, terrace, stone column and rising stone from the open ground round it (twelve
+## sides, every other one met at an angle, no jumping), a crawl never gets him onto its top.
+## (Crawls over a band on the way up a walkable flank, and walks up designed ramps, are logged, not
+## failed.) A crawl is also, by construction, less than a plain jump from where he stands.
 func _test_traction_no_shortcuts() -> void:
 	var space := g.get_world_3d().direct_space_state
 	p.invuln_t = 99999
@@ -7233,8 +7255,8 @@ func _test_traction_no_shortcuts() -> void:
 				continue
 			bodies += 1
 			var fr := MossBall.frame_at(u, 0.0)
-			for k in 6:
-				var dir: Vector3 = fr.z.rotated(u, TAU * k / 6.0)
+			for k in 12:
+				var dir: Vector3 = fr.z.rotated(u, TAU * k / 12.0)
 				# Out from under the top until open, gentle ground, then 1.2 m further.
 				var start := Vector3.INF
 				for s in range(4, 40):
@@ -7256,13 +7278,17 @@ func _test_traction_no_shortcuts() -> void:
 					continue
 				probes += 1
 				var to := tp - start
-				place_at(b.index, start, to - d0 * to.dot(d0))
+				# (Every other side is met at an angle, 30 degrees off the top, alternately left and
+				# right: a side can read differently met obliquely.)
+				var skew := 0.0 if k % 2 == 0 else (0.52 if k % 4 == 1 else -0.52)
+				var aim := (to - d0 * to.dot(d0)).normalized().rotated(d0, skew)
+				place_at(b.index, start, aim)
 				await t.frames(8)
 				var h0 := b.altitude(p.global_position)
 				var m0: int = p.mantles
 				var hi := h0
 				for f in 100:
-					stick_toward(tp - p.global_position)
+					stick_toward(aim if skew != 0.0 else tp - p.global_position)
 					await t.frames(1)
 					if p.grounded:
 						hi = maxf(hi, b.altitude(p.global_position))
@@ -7296,3 +7322,470 @@ func _test_traction_no_shortcuts() -> void:
 		t.log_line("SHORTCUT: " + x)
 	t.check("traction_opens_no_shortcuts", shortcuts.is_empty() and bodies > 40 and probes > 150,
 			"%d elevated bodies, %d approaches, %d pulls over lips on the way; %d walk-ups by design ramps; shortcuts: %s" % [bodies, probes, pulls, walked.size(), str(shortcuts)])
+
+
+
+## A solid whose top follows a profile of (ahead, height) points from `frame` (x right, -z ahead),
+## `width` across: a convex outline (its slopes only ever ease off going up). Drawn too.
+func _rig_profile(root: Node3D, frame: Transform3D, prof: Array, width := 4.0) -> StaticBody3D:
+	var pts := PackedVector3Array()
+	var z0: float = (prof[0] as Vector2).x
+	var z1: float = (prof[prof.size() - 1] as Vector2).x
+	for x in [-width * 0.5, width * 0.5]:
+		pts.append(Vector3(x, -0.4, -z0))
+		for v in prof:
+			pts.append(Vector3(x, (v as Vector2).y, -(v as Vector2).x))
+		pts.append(Vector3(x, -0.4, -z1))
+	var sh := ConvexPolygonShape3D.new()
+	sh.points = pts
+	var st := SurfaceTool.new()
+	st.begin(Mesh.PRIMITIVE_TRIANGLES)
+	var m := prof.size() + 2
+	for k in m:
+		var k1 := (k + 1) % m
+		for idx in [k, m + k1, m + k, k, k1, m + k1]:
+			st.add_vertex(pts[idx])
+	for side in [0, m]:
+		for k in range(1, m - 1):
+			for idx in ([side, side + k, side + k + 1] if side == 0 else [side, side + k + 1, side + k]):
+				st.add_vertex(pts[idx])
+	st.generate_normals()
+	return _rig_body(root, frame, sh, st.commit())
+
+
+## The profile of an ordinary incline with a steep foot: flat ground to `ahead`, a band `band` m
+## high at `band_deg`, then an incline at `inc_deg` rising `inc_rise` m, then a flat top 2 m deep.
+func _incline_prof(ahead: float, band: float, band_deg: float, inc_deg: float, inc_rise: float) -> Array:
+	var z := ahead
+	var out := [Vector2(z - 0.3, -0.4), Vector2(z, 0.0)]
+	z += band / tan(deg_to_rad(band_deg))
+	out.append(Vector2(z, band))
+	z += inc_rise / tan(deg_to_rad(inc_deg))
+	out.append(Vector2(z, band + inc_rise))
+	out.append(Vector2(z + 2.0, band + inc_rise))
+	return out
+
+
+## Owner's phone playtest of dev-000033: an ordinary mossy incline whose foot is a short steep band
+## (the head met it, he face-planted, got no purchase, and slid sideways along its foot). Now:
+## straight at it or met at an angle, just holding the stick (no jump, no burst), he crawls up the
+## band and walks on up the incline to the top; while a tall band (a cushion's wall, a designed
+## jump) or a steep band with no purchase beyond it still stops him: no crawl, and he rests back
+## at its foot every time (no adhesion, no ratchet).
+func _test_gill_incline_transitions() -> void:
+	var b := g.balls[0]
+	var release := _hold_threats(b)
+	p.invuln_t = 999
+	var spot := _quiet_spot(0)
+	var up := b.up_at(spot)
+	var root := Node3D.new()
+	g.add_child(root)
+	var crawl_cases := [
+		["0.25 m band at 70, 30 deg incline", _incline_prof(1.4, 0.25, 70.0, 30.0, 0.9), 0.0],
+		["0.45 m band at 62, 35 deg incline", _incline_prof(1.4, 0.45, 62.0, 35.0, 0.8), 0.0],
+		["0.55 m band at 75, 20 deg incline", _incline_prof(1.4, 0.55, 75.0, 20.0, 0.5), 0.0],
+		["0.3 m band at 80, 40 deg incline", _incline_prof(1.4, 0.3, 80.0, 40.0, 0.8), 0.0],
+		["0.25 m band at 70, met at 35 deg", _incline_prof(1.4, 0.25, 70.0, 30.0, 0.9), 35.0],
+		["0.45 m band at 62, met at 50 deg", _incline_prof(1.4, 0.45, 62.0, 35.0, 0.8), 50.0],
+		["0.3 m band at 80, met at 25 deg", _incline_prof(1.4, 0.3, 80.0, 40.0, 0.8), -25.0],
+	]
+	var res := []
+	var all_ok := true
+	for cc in crawl_cases:
+		var fwd0 := -MossBall.frame_at(up, 0.0).z
+		var fwd := fwd0.rotated(up, deg_to_rad(float(cc[2])))
+		# (The rig faces its own way; he comes at it from `fwd`, at an angle to it.)
+		var frame := Transform3D(Basis(fwd0.cross(up), up, -fwd0), b.surface_point(up))
+		var prof: Array = cc[1]
+		var top: float = (prof[prof.size() - 1] as Vector2).y
+		var body := _rig_profile(root, frame, prof, 8.0)
+		await t.frames(2)
+		var start := b.surface_point(up, 0.05) - fwd * 0.2
+		place_at(0, start, fwd)
+		await t.seconds(0.4)
+		var m0: int = p.mantles
+		var t_top := -1.0
+		for f in 60 * 5:
+			stick_toward(fwd)
+			await t.frames(1)
+			if t_top < 0.0 and p.grounded and _rig_h(frame) > top - 0.1:
+				t_top = f / 60.0
+		p.bot_input = Vector2.ZERO
+		var why := "" if t_top > 0.0 else " (" + str((p.call("crawl_probe", fwd) as Dictionary).get("why", "crawlable") if p.has_method("crawl_probe") else "-") + ")"
+		var ok := t_top > 0.0 and p.mantles > m0
+		all_ok = all_ok and ok
+		res.append("%s: %s, %d crawls" % [cc[0], ("on top in %.2f s" % t_top) if t_top > 0.0 else "NOT up (at %.2f m of %.2f)%s" % [_rig_h(frame), top, why], p.mantles - m0])
+		body.free()
+		await t.frames(2)
+	t.check("incline_with_steep_foot_crawled", all_ok, "; ".join(res))
+	# Barriers: a cushion-like wall (0.85 m at 75 degrees, then its rounded rim), a steep band with
+	# nowhere to plant beyond it (on up at 58 degrees), and a sheer 1.2 m face.
+	var bars := [
+		["cushion wall 0.85 m at 75", [Vector2(1.1, -0.4), Vector2(1.4, 0.0), Vector2(1.4 + 0.85 / tan(deg_to_rad(75.0)), 0.85), Vector2(1.9 + 0.85 / tan(deg_to_rad(75.0)), 1.1), Vector2(4.0, 1.1)]],
+		["band then 58 deg on up", [Vector2(1.1, -0.4), Vector2(1.4, 0.0), Vector2(1.4 + 0.3 / tan(deg_to_rad(70.0)), 0.3), Vector2(1.4 + 0.3 / tan(deg_to_rad(70.0)) + 2.0 / tan(deg_to_rad(58.0)), 2.3), Vector2(6.0, 2.3)]],
+		["sheer 1.2 m face", [Vector2(1.1, -0.4), Vector2(1.4, 0.0), Vector2(1.45, 1.2), Vector2(4.0, 1.2)]],
+	]
+	var bres := []
+	var bars_ok := true
+	for bc in bars:
+		var fwd := -MossBall.frame_at(up, 0.0).z
+		var frame := Transform3D(Basis(fwd.cross(up), up, -fwd), b.surface_point(up))
+		var body := _rig_profile(root, frame, bc[1], 8.0)
+		await t.frames(2)
+		for ang in [0.0, 40.0]:
+			var d := fwd.rotated(up, deg_to_rad(ang))
+			place_at(0, b.surface_point(up, 0.05), d)
+			await t.seconds(0.3)
+			var m0: int = p.mantles
+			var highs := []
+			var rests := []
+			for k in 3:
+				var hi := -INF
+				for f in 70:
+					stick_toward(d)
+					await t.frames(1)
+					hi = maxf(hi, height())
+				p.bot_input = Vector2.ZERO
+				await t.seconds(0.5)
+				highs.append(snappedf(hi, 0.01))
+				rests.append(snappedf(height(), 0.01))
+			var ok: bool = p.mantles == m0 and highs.max() < 0.25 and rests.max() < 0.1 and highs[2] <= highs[0] + 0.05
+			bars_ok = bars_ok and ok
+			bres.append("%s at %d deg: pushes reach %s m, rests at %s, %d crawls" % [bc[0], int(ang), str(highs), str(rests), p.mantles - m0])
+		body.free()
+		await t.frames(2)
+	t.check("incline_barriers_still_stop_him", bars_ok, "; ".join(bres))
+	root.queue_free()
+	release.call()
+	# Real authored ground (found by _phase_incline_survey, where dev-000033 stopped dead): an
+	# arch's end on Canopy Spire's ball rising out of the moss with a steep lip at its foot, and a
+	# ridge's flank on the first ball with a steep kink low on it. Holding forward, he gets up.
+	var real := [[2, -63.4, -119.9, 146.0, 0.8, "arch end, ball 3"], [0, -63.5, 174.3, 101.0, 0.35, "ridge flank, ball 1"]]
+	var rres := []
+	var real_ok := true
+	for rc in real:
+		var bb := g.balls[int(rc[0])]
+		var rel2 := _hold_threats(bb)
+		var d := MossBall.dir_ll(float(rc[1]), float(rc[2]))
+		var fr := MossBall.frame_at(d, 0.0)
+		var hdg := deg_to_rad(float(rc[3]))
+		var fw: Vector3 = fr.x * sin(hdg) - fr.z * cos(hdg)
+		place_at(bb.index, bb.surface_point(d, 0.04), fw)
+		await t.seconds(0.2)
+		var m0: int = p.mantles
+		var hi := 0.0
+		for f in 150:
+			stick_toward(fw)
+			await t.frames(1)
+			if p.grounded:
+				hi = maxf(hi, height())
+		p.bot_input = Vector2.ZERO
+		var ok: bool = p.mantles > m0 and hi >= float(rc[4])
+		real_ok = real_ok and ok
+		rres.append("%s: up %.2f m, %d crawls" % [rc[5], hi, p.mantles - m0])
+		rel2.call()
+	t.check("incline_real_terrain_crawled", real_ok, "; ".join(rres))
+	p.invuln_t = 0.0
+
+
+# --- Incline survey (diagnostic, run by name) ------------------------------------------------
+
+## The ground straight ahead of `start` along `fwd`: [[s, h, collider, normal·up], ...] every `step`
+## metres up to `reach` (h above `start`'s own distance from the ball's centre), or short over a gap.
+func _scan_ahead(b: MossBall, space: PhysicsDirectSpaceState3D, start: Vector3, fwd: Vector3, reach := 2.6, step := 0.08) -> Array:
+	var c := b.global_position
+	var r0 := (start - c).length()
+	var out := []
+	var q := PhysicsRayQueryParameters3D.new()
+	q.collision_mask = 1 | 2
+	q.hit_back_faces = false
+	var q2 := PhysicsRayQueryParameters3D.new()
+	q2.collision_mask = 1 | 2
+	var top_prev := c + b.up_at(start) * (r0 + 2.0)
+	for k in int(reach / step) + 1:
+		var s := k * step
+		var dir := b.up_at(start + fwd * s)
+		q.from = c + dir * (r0 + 2.0)
+		q.to = c + dir * (r0 - 1.0)
+		# (Something rising through 2 m between the columns: a tall wall, the profile ends there.)
+		q2.from = top_prev
+		q2.to = q.from
+		top_prev = q.from
+		if k > 0 and not space.intersect_ray(q2).is_empty():
+			return out
+		var hit := space.intersect_ray(q)
+		if hit.is_empty():
+			return out
+		out.append([s, ((hit["position"] as Vector3) - c).length() - r0, hit["collider"], (hit["normal"] as Vector3).dot(dir)])
+	return out
+
+
+## A steep band in a profile from _scan_ahead: {i0, i1, s0, s1, rise, steepest (deg), beyond (deg over
+## the next 0.5 m), beyond_ok (walkable ground goes on past it), before_ok}, or {} when there is none.
+func _steep_band(prof: Array, step := 0.08) -> Dictionary:
+	var steep := tan(deg_to_rad(48.0))
+	var i0 := -1
+	for i in range(1, prof.size()):
+		if (prof[i][1] - prof[i - 1][1]) / step > tan(deg_to_rad(52.0)):
+			i0 = i - 1
+			break
+	if i0 < 0:
+		return {}
+	# (Back to where it starts to be steep.)
+	while i0 > 0 and (prof[i0][1] - prof[i0 - 1][1]) / step > steep:
+		i0 -= 1
+	var i1 := i0 + 1
+	var hi := 0.0
+	while i1 < prof.size() and (prof[i1][1] - prof[i1 - 1][1]) / step > steep:
+		hi = maxf(hi, (prof[i1][1] - prof[i1 - 1][1]) / step)
+		i1 += 1
+	i1 -= 1
+	var before_ok := true
+	for i in range(1, i0 + 1):
+		if absf(prof[i][1] - prof[i - 1][1]) / step > tan(deg_to_rad(35.0)):
+			before_ok = false
+	var n_b := int(0.5 / step)
+	var beyond_ok := i1 + n_b < prof.size()
+	if beyond_ok:
+		for i in range(i1 + 1, i1 + n_b + 1):
+			if (prof[i][1] - prof[i - 1][1]) / step > tan(deg_to_rad(52.0)) or absf(prof[i][1] - prof[i - 1][1]) > 0.5:
+				beyond_ok = false
+	var beyond := NAN
+	if i1 + n_b < prof.size():
+		beyond = rad_to_deg(atan((prof[i1 + n_b][1] - prof[i1][1]) / (n_b * step)))
+	return {"i0": i0, "i1": i1, "s0": prof[i0][0], "s1": prof[i1][0], "rise": prof[i1][1] - prof[i0][1], "steepest": rad_to_deg(atan(hi)),
+			"beyond": beyond, "beyond_ok": beyond_ok, "before_ok": before_ok, "h_top": prof[i1][1]}
+
+
+func _collider_kind(b: MossBall, col: Object) -> String:
+	if col == b.static_body:
+		return "ground"
+	if col is Node:
+		var nd := col as Node
+		return str(nd.get_meta("terrain_kind", nd.get_meta("grounded", nd.get_class()))) + ":" + str(nd.name)
+	return "?"
+
+
+## Diagnostic: every place on every ball where, walking straight in from open, gentle ground, the
+## ground ahead rises through a steep band (over 52 degrees, what the body treats as wall): he is
+## driven straight at it (just the stick, no jump) and whether he gets up onto the ground beyond is
+## logged, with the band's height, its steepest part, what lies beyond it and what it is.
+## --sball=<i> one ball; --scap=<n> pushes per ball; --sstep=<m> start spacing.
+func _phase_incline_survey() -> void:
+	var space := g.get_world_3d().direct_space_state
+	p.invuln_t = 99999
+	var only_ball := int(Settings.test_args.get("sball", "-1"))
+	var cap := int(Settings.test_args.get("scap", "90"))
+	var spacing := float(Settings.test_args.get("sstep", "2.0"))
+	var totals := {}
+	var json_rows := []
+	for b in g.balls:
+		if only_ball >= 0 and b.index != only_ball:
+			continue
+		var release := _hold_threats(b)
+		var n := int(4.0 * PI * b.radius * b.radius / (spacing * spacing))
+		var seen := {}
+		var cands := []
+		var sq := PhysicsShapeQueryParameters3D.new()
+		var sph := SphereShape3D.new()
+		sph.radius = 0.3
+		sq.shape = sph
+		sq.collision_mask = 1 | 2 | LevelBuilder.CLIMB_LAYER
+		for i in n:
+			# (A Fibonacci lattice over the ball.)
+			var yy := 1.0 - 2.0 * (i + 0.5) / n
+			var rr := sqrt(1.0 - yy * yy)
+			var th := PI * (3.0 - sqrt(5.0)) * i
+			var d := Vector3(cos(th) * rr, yy, sin(th) * rr)
+			if b.ravine_carve(d) > 0.02:
+				continue
+			var gp := b.surface_point(d)
+			var hit := space.intersect_ray(PhysicsRayQueryParameters3D.create(gp + d * 3.0, gp - d * 0.5, 1 | 2))
+			if hit.is_empty() or (hit["normal"] as Vector3).dot(d) < 0.9 or absf(b.altitude(hit["position"])) > 0.08:
+				continue
+			var start: Vector3 = hit["position"]
+			sq.transform = Transform3D(Basis(), start + d * 0.36)
+			if not space.intersect_shape(sq, 1).is_empty():
+				continue
+			var fr := MossBall.frame_at(d, 0.0)
+			for k in 8:
+				var fwd: Vector3 = (-fr.z).rotated(d, TAU * (k + 0.37 * (i % 3)) / 8.0)
+				var prof := _scan_ahead(b, space, start, fwd)
+				if prof.size() < 20:
+					continue
+				var band := _steep_band(prof)
+				if band.is_empty() or not band["before_ok"] or band["s0"] < 0.5 or band["rise"] < 0.08 or band["rise"] > 1.6:
+					continue
+				var foot: Vector3 = start + fwd * float(band["s0"])
+				var key := str((foot - b.global_position).snapped(Vector3.ONE * 1.5)) + ":" + str(k % 4)
+				if seen.has(key):
+					continue
+				seen[key] = true
+				band["start"] = start
+				band["fwd"] = fwd
+				band["kind"] = _collider_kind(b, prof[band["i1"]][2])
+				cands.append(band)
+		# Crawlable-looking first (a short band with walkable ground on beyond it), then the rest.
+		cands.sort_custom(func(x, y): return (10.0 if x["beyond_ok"] else 0.0) - x["rise"] > (10.0 if y["beyond_ok"] else 0.0) - y["rise"])
+		var stride := maxi(1, int(ceil(cands.size() / float(cap))))
+		t.log_line("SURVEY ball %d: %d starts, %d candidate bands, pushing every %d" % [b.index + 1, n, cands.size(), stride])
+		for ci in range(0, cands.size(), stride):
+			var band: Dictionary = cands[ci]
+			var start: Vector3 = band["start"]
+			var fwd: Vector3 = band["fwd"]
+			var u0 := b.up_at(start)
+			# (What the controller itself reads there, from just short of the band.)
+			var verdict := "-"
+			if p.has_method("crawl_probe"):
+				var near: Vector3 = start + fwd * maxf(0.0, float(band["s0"]) - 0.5)
+				var nu := b.up_at(near)
+				var nh := space.intersect_ray(PhysicsRayQueryParameters3D.create(near + nu * 0.5, near - nu * 0.5, 1 | 2))
+				if not nh.is_empty():
+					place_at(b.index, nh["position"] + nu * 0.02, fwd)
+					await t.frames(3)
+					var pr: Dictionary = p.call("crawl_probe", fwd)
+					verdict = ("crawl %.2f" % float(pr["rise"])) if pr.get("crawl", false) else (str(pr.get("why", "?")) + (" %.2f" % float(pr["rise"]) if pr.has("rise") else ""))
+			place_at(b.index, start + u0 * 0.04, fwd)
+			await t.frames(6)
+			var m0: int = p.mantles
+			var r0 := (start - b.global_position).length()
+			var best_h := -INF
+			var best_s := -INF
+			var blocked := 0
+			for f in 150:
+				stick_toward(fwd)
+				await t.frames(1)
+				if g.cinematic != "":
+					break
+				var off := p.global_position - start
+				best_s = maxf(best_s, off.dot(fwd))
+				if p.grounded:
+					best_h = maxf(best_h, (p.global_position - b.global_position).length() - r0)
+				blocked += 1 if p._blocked else 0
+			p.bot_input = Vector2.ZERO
+			var off2 := p.global_position - start
+			var side := absf(off2.dot(fwd.cross(u0)))
+			var over: bool = best_h >= float(band["h_top"]) - 0.12 and best_s >= float(band["s1"]) - 0.05
+			var lat := rad_to_deg(asin(clampf(u0.y, -1.0, 1.0)))
+			var lon := rad_to_deg(atan2(u0.x, u0.z))
+			var f0 := MossBall.frame_at(u0, 0.0)
+			var hd := int(rad_to_deg(atan2(fwd.dot(f0.x), -fwd.dot(f0.z))))
+			var row := "ball %d (%.1f, %.1f) hd %d: band at %.2f m, rise %.2f m, steepest %.0f deg, beyond %s deg (%s), %s -> %s: up %.2f m, along %.2f m, side %.2f m, blocked %d f, pulls %d, probe: %s" % [
+					b.index + 1, lat, lon, hd, band["s0"], band["rise"], band["steepest"],
+					"-" if is_nan(band["beyond"]) else str(snappedf(band["beyond"], 1.0)), "walkable" if band["beyond_ok"] else "no purchase", band["kind"],
+					"OVER" if over else "STUCK", best_h, best_s, side, blocked, p.mantles - m0, verdict]
+			t.log_line("SURVEY " + row)
+			var cls: String = ("crawlable" if band["beyond_ok"] and band["rise"] <= 0.7 else ("tall" if band["beyond_ok"] else "nopurchase")) + ("_over" if over else "_stuck")
+			totals[cls] = int(totals.get(cls, 0)) + 1
+			json_rows.append({"ball": b.index, "lat": lat, "lon": lon, "hd": hd, "fwd": [fwd.x, fwd.y, fwd.z], "start": [start.x, start.y, start.z], "s0": band["s0"], "s1": band["s1"],
+					"rise": band["rise"], "steepest": band["steepest"], "beyond": 0.0 if is_nan(band["beyond"]) else band["beyond"], "beyond_ok": band["beyond_ok"],
+					"kind": band["kind"], "over": over, "up": best_h, "along": best_s, "side": side, "pulls": p.mantles - m0, "probe": verdict})
+			for f in 60 * 5:
+				if g.cinematic == "" and p.state == "normal":
+					break
+				await t.frames(1)
+			p.restore_full()
+		release.call()
+	t.log_line("SURVEY TOTALS " + str(totals))
+	var fo := FileAccess.open(t.out_dir.path_join("incline_survey.json"), FileAccess.WRITE)
+	if fo:
+		fo.store_string(JSON.stringify(json_rows))
+	t.check("incline_survey_ran", not json_rows.is_empty(), str(totals))
+
+
+
+## Diagnostic (run by name): how much his body visibly bends in ordinary play, from the gameplay
+## camera. Each scenario is driven with the stick exactly as a player would (camera-relative, the
+## camera assisting behind him) with the follow-through on and off; logged per scenario: whether
+## the follow runs (follow, conform), the head-to-tail bend (mean |signed|, peak), and how far the
+## tail tip and the hips sit on screen from where a rigid body would put them (pixels at the
+## viewport's size), plus the gameplay body's own turn (so responsiveness can be compared).
+func _phase_loco_diag() -> void:
+	var b := g.balls[0]
+	var release := _hold_threats(b)
+	p.invuln_t = 99999
+	var spot := _quiet_spot(0)
+	var up := b.up_at(spot)
+	var fwd := -MossBall.frame_at(up, 0.0).z
+	var m := p.model
+	var vp := g.get_viewport().get_visible_rect().size
+	var n := AxolotlModel.BONE_Z.size()
+	var scen := {
+		"straight": func(f: int) -> Vector2: return Vector2(0, 1),
+		"broad_turn": func(f: int) -> Vector2: return Vector2(0, 1) if f < 30 else Vector2(0.45, 0.9).normalized(),
+		"sharp_turn": func(f: int) -> Vector2: return Vector2(0, 1) if f < 30 else Vector2(1, 0.1).normalized(),
+		"reverse": func(f: int) -> Vector2: return Vector2(0, 1) if f < 40 else Vector2(0.15, -1).normalized(),
+		"zigzag": func(f: int) -> Vector2: return Vector2(0.8 * (1.0 if (f / 25) % 2 == 0 else -1.0), 0.8).normalized(),
+		"turn_in_place": func(f: int) -> Vector2: return Vector2(1, 0) if f < 10 else Vector2.ZERO,
+	}
+	for follow_on in [false, true]:
+		m.follow = follow_on
+		for name_ in scen:
+			place_at(0, b.surface_point(up, 0.05), fwd)
+			await t.seconds(0.6)
+			var fn: Callable = scen[name_]
+			var bend_sum := 0.0
+			var bend_pk := 0.0
+			var tail_px: Array[float] = []
+			var hip_px: Array[float] = []
+			var flags := {}
+			var yaw_turned := 0.0
+			var prev_f := p.facing
+			for f in 100:
+				p.bot_input = fn.call(f)
+				await t.frames(1)
+				flags["%s/%s" % [m.follow, m.conform]] = int(flags.get("%s/%s" % [m.follow, m.conform], 0)) + 1
+				yaw_turned += absf(prev_f.signed_angle_to(p.facing, p.up))
+				prev_f = p.facing
+				var sb := _spine_yaw_signed(m, p.up)
+				bend_sum += absf(sb)
+				bend_pk = maxf(bend_pk, absf(sb))
+				var sk := m.skeleton
+				var cam: Camera3D = g.cam
+				for pair in [[n - 1, tail_px], [5, hip_px]]:
+					var bi: int = pair[0]
+					var actual: Vector3 = sk.global_transform * sk.get_bone_global_pose(bi).origin
+					var rigid: Vector3 = sk.global_transform * sk.get_bone_global_rest(bi).origin
+					if not cam.is_position_behind(actual):
+						(pair[1] as Array[float]).append(cam.unproject_position(actual).distance_to(cam.unproject_position(rigid)))
+			p.bot_input = Vector2.ZERO
+			tail_px.sort()
+			hip_px.sort()
+			var med := func(a: Array[float]) -> float: return a[a.size() / 2] if not a.is_empty() else -1.0
+			var p90 := func(a: Array[float]) -> float: return a[int(a.size() * 0.9)] if not a.is_empty() else -1.0
+			t.log_line("LOCODIAG follow=%s %-13s flags %s | bend mean %.0f deg peak %.0f deg | tail px med %.0f p90 %.0f max %.0f | hips px med %.0f p90 %.0f | body turned %.0f deg (viewport %dx%d)" % [
+					str(follow_on), name_, str(flags), rad_to_deg(bend_sum / 100.0), rad_to_deg(bend_pk), med.call(tail_px), p90.call(tail_px), tail_px[-1] if not tail_px.is_empty() else -1.0,
+					med.call(hip_px), p90.call(hip_px), rad_to_deg(yaw_turned), vp.x, vp.y])
+	m.follow = true
+	p.invuln_t = 0.0
+	release.call()
+	t.check("loco_diag_ran", true, "")
+
+
+
+## Diagnostic (run by name): pushes him from `--at=ball:lat:lon:heading[;...]` for 3 s and logs,
+## frame by frame around each crawl, where he is, what he stands on and what the crawl read.
+func _phase_crawl_trace() -> void:
+	p.invuln_t = 99999
+	for spec in str(Settings.test_args.get("at", "")).split(";", false):
+		var f := spec.split(":")
+		var b := g.balls[int(f[0])]
+		var release := _hold_threats(b)
+		var d := MossBall.dir_ll(float(f[1]), float(f[2]))
+		var fr := MossBall.frame_at(d, 0.0)
+		var hdg := deg_to_rad(float(f[3]))
+		var fw: Vector3 = fr.x * sin(hdg) - fr.z * cos(hdg)
+		place_at(b.index, b.surface_point(d, 0.04), fw)
+		await t.frames(6)
+		var m0: int = p.mantles
+		for k in 180:
+			stick_toward(fw)
+			await t.frames(1)
+			var fc := p._floor_collider()
+			if k % 10 == 0 or p.mantles != m0:
+				t.log_line("TRACE %s f%d alt %.2f grounded %s blocked %s crawl_t %.2f mantles %d floor %s %s" % [spec, k, height(), p.grounded, p._blocked, p._mantle_t, p.mantles,
+						_collider_kind(b, fc) if fc else "-", str(p._crawl.get("rise", "")) if p.mantles != m0 else ""])
+				m0 = p.mantles
+		p.bot_input = Vector2.ZERO
+		release.call()
+	t.check("crawl_trace_ran", true, "")
