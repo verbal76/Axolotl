@@ -896,6 +896,20 @@ repository. Do not name, open or use any other game repository in Mote developme
      8 waiters built up on 2 test runs (5 on one, 3 on the other). Keep foreground checks short (one
      look at the log or `ps`), and after a timeout, look at the log instead of waiting again.
 
+5. **OTA release names** (owner, 2026-09-30). Every published OTA is named by its sequence plus a SHORT
+   description of the release's primary purpose: `00033-locomotion`, `00034-locomotion-fix`,
+   `00035-enemy-movement`, `00036-skill-tree`. Do not list every minor fix in the name; the name is for
+   reading the OTA history at a glance.
+   - **Where the name appears:** the ledger, this handoff, release reports and the phone checklist
+     (and the GitHub release title, once `ota-publish.yml` carries it; see below).
+   - **What does NOT change:** the machine OTA id stays `dev-NNNNNN` (`printf "%s-%06d"` in
+     `ota-publish.yml`). It is inside the signed manifest, the channel pointer and the release tag, and
+     the phone's OTA client reads it, so renaming it would be a signed-format change. The readable
+     name sits beside it: "00034-locomotion-fix (dev-000034)".
+   - **Pending seam:** putting the name in the release title needs a small workflow change: read a
+     one-line purpose from the publishing commit and fall back to today's title. Make it in a
+     publishing commit, never in a docs-only one.
+
 ### Work queue (owner order, 2026-09-29)
 
 1. ~~dev-000031 (Treasure Hunt fix)~~: published and verified.
