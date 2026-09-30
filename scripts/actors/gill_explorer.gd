@@ -878,10 +878,21 @@ func _rest_pose_ok(spot: Vector3, n: Vector3, f: Vector3) -> bool:
 		var h: float = (xf.affine_inverse() * (hit["position"] as Vector3)).y
 		if absf(h) > 0.02:
 			return false
+	# (His idles move him a little while he rests (a scoot to each side, a stretch forward): the
+	# ground round the front of him is felt too, and must be as flat and as clear.)
+	for o in [Vector3(-0.2, 0, -0.3), Vector3(0.2, 0, -0.3), Vector3(-0.2, 0, 0.2), Vector3(0.2, 0, 0.2), Vector3(0, 0, -0.45)]:
+		var hit := _ray_hit(xf * (o + Vector3(0, 0.45, 0)), xf * (o + Vector3(0, -0.35, 0)))
+		if hit.is_empty():
+			return false
+		var h: float = (xf.affine_inverse() * (hit["position"] as Vector3)).y
+		if absf(h) > 0.03:
+			return false
 	for s in [[-0.18, 0.135], [0.0, 0.16], [0.25, 0.15], [0.5, 0.095], [0.8, 0.045]]:
 		var z: float = s[0]
 		var at := xf * Vector3(0, SPINE_Y - 0.03 * maxf(0.0, z - 0.35), z)
 		if not _clear(at, float(s[1]) * 0.9):
+			return false
+		if z < 0.3 and not _clear(at + n * 0.13, float(s[1]) + 0.1):
 			return false
 		if not _clear(at + n * 0.35, float(s[1])):
 			return false
