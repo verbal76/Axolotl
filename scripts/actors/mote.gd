@@ -25,6 +25,12 @@ var _bell: MeshInstance3D
 var _limbs: MeshInstance3D
 var _swim := 0.0
 var _dir := Vector3.UP
+## Mote Magnet (skill tree): seconds it ignores the pull after a missed lunge startled it, whether it
+## is being drawn now, and its line of sight to him (re-read a few times a second).
+var startle_t := 0.0
+var magnet_on := false
+var _los := false
+var _los_t := 0.0
 
 
 func setup(p_ball: MossBall, p_zone: String, dir: Vector3, h := 0.0, p_wander := 2.2) -> void:
@@ -220,11 +226,18 @@ func _update_wander(dt: float) -> void:
 	vel += WaterFX.inst.push_at(global_position) * 3.5 * dt
 	vel += ball.current_at(global_position) * 0.08 * dt
 	vel += Vector3(sin(_t * 1.7), sin(_t * 2.3 + 1.0), cos(_t * 1.3)) * 0.25 * dt
+	# Mote Magnet: drawn gently toward him (never into his mouth: only a lunge captures).
+	var leash := wander * 1.6
+	var pl: Axolotl = Game.inst.player
+	if pl.magnet_range > 0.0:
+		_magnet(dt, pl)
+		if magnet_on:
+			leash += pl.magnet_leash
 	# Leash to its patch; keep hovering above the moss.
 	var from_anchor := global_position - anchor
 	var lateral := from_anchor - anchor_up * from_anchor.dot(anchor_up)
-	if lateral.length() > wander * 1.6:
-		vel -= lateral.normalized() * (lateral.length() - wander * 1.6) * 3.0 * dt
+	if lateral.length() > leash:
+		vel -= lateral.normalized() * (lateral.length() - leash) * 3.0 * dt
 	var height := from_anchor.dot(anchor_up)
 	if height < 0.3:
 		vel += anchor_up * (0.3 - height) * 6.0 * dt
@@ -233,6 +246,41 @@ func _update_wander(dt: float) -> void:
 	vel = vel.limit_length(3.5)
 	vel *= 1.0 - 0.9 * dt
 	global_position += vel * dt
+
+
+## Mote Magnet: within range and in plain sight of him (nothing solid between), on his ball, not over
+## a ravine and not while startled, it drifts toward his head. No randomness is drawn (the seeded
+## playthroughs stay identical), and with no Magnet this is never called.
+func _magnet(dt: float, pl: Axolotl) -> void:
+	magnet_on = false
+	if startle_t > 0.0:
+		startle_t -= dt
+		return
+	if pl.state != "normal" or pl.ball != ball:
+		return
+	var to := pl.head_position() - global_position
+	var d := to.length()
+	if d > pl.magnet_range or d < 0.45:
+		return
+	if ball.ravine_carve(ball.up_at(global_position)) > 0.15 or ball.ravine_carve(pl.up) > 0.15:
+		return
+	_los_t -= dt
+	if _los_t <= 0.0:
+		_los_t = 0.2
+		var q := PhysicsRayQueryParameters3D.create(global_position, pl.body_center(), 1 | 2 | LevelBuilder.CLIMB_LAYER)
+		_los = get_world_3d().direct_space_state.intersect_ray(q).is_empty()
+	if not _los:
+		return
+	magnet_on = true
+	# (Stronger the nearer he is inside the range, easing off right by his mouth.)
+	var k := clampf(1.0 - d / pl.magnet_range, 0.0, 1.0) * 0.6 + 0.4
+	vel += to / d * pl.magnet_accel * k * dt
+
+
+## A missed lunge startles it out of the Magnet's pull for a moment.
+func startle(seconds: float) -> void:
+	startle_t = maxf(startle_t, seconds)
+	magnet_on = false
 
 
 ## Water pressure from a near-miss lunge: pushed like a floating object in a pool.

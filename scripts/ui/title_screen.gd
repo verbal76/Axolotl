@@ -11,6 +11,7 @@ var _treasure: Button
 var _run_info: Label
 var _column: VBoxContainer
 var _colours: Button
+var _skills: Button
 var _aquarium: Button
 var gear: Button
 var version_label: Label
@@ -63,6 +64,10 @@ func _ready() -> void:
 	_colours = UiStyle.button("%s's colours" % GameVersion.CHARACTER_NAME, _on_colours)
 	_colours.name = "GillColours"
 	_column.add_child(_colours)
+	# The skill tree (docs/SKILL_TREE.md): permanent, so it is here before Play too.
+	_skills = UiStyle.button("Skills", _on_skills)
+	_skills.name = "Skills"
+	_column.add_child(_skills)
 	# Treasure Hunt: shown only once the run is complete (100%); never a teaser before.
 	_treasure = UiStyle.button("Treasure Hunt", _on_treasure)
 	_treasure.name = "TreasureHunt"
@@ -121,7 +126,7 @@ func _layout() -> void:
 	var sep := 14.0 * s
 	var h := clampf((room - sep * (n - 1)) / maxf(1, n), 50.0 * s, 70.0 * s)
 	_column.add_theme_constant_override("separation", int(sep))
-	for b in [_play, _colours, _treasure, _aquarium, _new_run.get_node("Ask")]:
+	for b in [_play, _colours, _skills, _treasure, _aquarium, _new_run.get_node("Ask")]:
 		(b as Button).custom_minimum_size = Vector2(380 * s, h)
 		(b as Button).add_theme_font_size_override("font_size", int(clampf(h * 0.44, 22, 34)))
 	_column.position = Vector2(left, top)
@@ -146,6 +151,9 @@ func show_title() -> void:
 		lines.append(g.run_line())
 	if g.best_line() != "":
 		lines.append(g.best_line())
+	# (Only once there is any: a first launch stays as clean as before.)
+	if g.gill != null and (g.gill.stars() > 0 or g.gill.skills() > 0):
+		lines.append(g.progress_line())
 	_run_info.text = "\n".join(lines)
 	_run_info.visible = not lines.is_empty()
 	_treasure.visible = g.treasure != null and g.treasure.eligible()
@@ -185,6 +193,13 @@ func _on_treasure() -> void:
 func _on_aquarium() -> void:
 	Sfx.play("ui_tap", null, -6.0)
 	Game.inst.presentation.enter("title")
+
+
+## Straight to the skill tree (the pause menu's page, opened from here).
+func _on_skills() -> void:
+	Sfx.play("ui_tap", null, -6.0)
+	Game.inst.pause_menu.open(true)
+	Game.inst.pause_menu._open_skills(true)
 
 
 func _on_settings() -> void:

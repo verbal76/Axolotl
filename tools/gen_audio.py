@@ -520,13 +520,48 @@ def parasites():
 
 def main():
     os.makedirs(OUT, exist_ok=True)
-    sfx()
-    ambience()
-    outside()
-    creatures()
-    parasites()
-    gill()
+    # (--only=skills writes just the skill-tree sounds, leaving every other file untouched.)
+    import sys
+    if "--only=skills" not in sys.argv:
+        sfx()
+        ambience()
+        outside()
+        creatures()
+        parasites()
+        gill()
+    skills()
     print("audio written to", os.path.abspath(OUT))
+
+
+def skills():
+    """The red starfish pickup and the skill-tree unlock (docs/SKILL_TREE.md). No shared random
+    generator is drawn from, so every sound above stays byte-identical.
+
+    Starfish: a quick rising "bloop" (a bubble's upward glide, the transient that carries off-centre)
+    straight into two bright kalimba plucks a fifth apart (E6 then B6) with a soft sparkle on top:
+    plucked, not the Motes' bell (sfx_mote_capture) nor the cave rewards' bell run (sfx_upgrade).
+    Unlock: a warm marimba run up a major chord with a low pluck under it and a small swell: a
+    satisfying 'yes' for the menu, unlike either."""
+    n = lambda d: int(d * SR)
+    s = np.zeros(n(0.95))
+    tt = t_axis(0.075)
+    f = 520 + 1100 * (tt / 0.075) ** 0.6
+    bloop = np.sin(2 * np.pi * np.cumsum(f) / SR) * env_adsr(len(tt), 0.003, 0.02, 0.8, 0.03)
+    place(s, 0.0, bloop, 0.55, wrap=False)
+    place(s, 0.05, kalimba(note_f(88), 0.7), 0.8, wrap=False)
+    place(s, 0.13, kalimba(note_f(95), 0.75), 0.7, wrap=False)
+    shimmer = t_axis(0.5)
+    sh = (np.sin(2 * np.pi * 3950 * shimmer) + 0.6 * np.sin(2 * np.pi * 5270 * shimmer)) * expdecay(len(shimmer), 0.09)
+    sh *= 0.5 + 0.5 * np.sin(2 * np.pi * 22 * shimmer)
+    place(s, 0.14, sh, 0.12, wrap=False)
+    write_wav("sfx_starfish", reverb(s, 0.28), peak=0.8)
+    s = np.zeros(n(1.5))
+    for k, m in enumerate([60, 64, 67, 72, 76]):
+        place(s, k * 0.055, marimba(note_f(m), 1.0), 0.45 + 0.05 * k, wrap=False)
+    place(s, 0.0, pluck_bass(note_f(48), 0.9), 0.5, wrap=False)
+    sw = pad([note_f(72), note_f(76), note_f(79)], 1.2, 0.35, 0.25)
+    place(s, 0.2, sw * env_adsr(len(sw), 0.25, 0.3, 0.5, 0.5), 0.35, wrap=False)
+    write_wav("sfx_skill_unlock", reverb(s, 0.35), peak=0.8)
 
 
 def gill():

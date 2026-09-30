@@ -35,6 +35,11 @@ var quality: QualityScaler
 var presentation: Presentation
 ## Treasure Hunt, the postgame search (docs/TREASURE_HUNT.md).
 var treasure: TreasurePlay
+## Permanent progression (docs/SKILL_TREE.md): red starfish collected and skills bought. Survives New
+## Run (its own file); not in the completion catalog.
+var gill: GillProgress
+## The red starfish still in the world.
+var starfish: StarfishField
 
 var state := "title"          # title | play | aquarium (the experiences; the clock never counts)
 var cinematic := ""
@@ -258,6 +263,9 @@ func _build_world() -> void:
 	treasure = TreasurePlay.new()
 	treasure.g = self
 	add_child(treasure)
+	starfish = StarfishField.new()
+	starfish.g = self
+	add_child(starfish)
 	# Android's back gesture is handled (the aquarium steps back out, play opens the menu).
 	get_tree().quit_on_go_back = false
 
@@ -363,8 +371,56 @@ func _open_run() -> void:
 	run_save = RunSave.open(path)
 	clock = RunClock.from_dict(run_save.run()["clock"])
 	tier2 = Tier2.from_dict(run_save.run().get("tier2", {}))
+	_open_gill()
 	_apply_run()
 	StartupTrace.mark("run save opened (%s)" % run_save.origin.get_slice(" (", 0))
+
+
+static func gill_progress_path() -> String:
+	if Settings.test_args.has("gill-save"):
+		return Settings.test_args["gill-save"]
+	# Automated runs never touch the player's progress.
+	return "user://test_gill_progress.json" if Settings.test_mode != "" else GillProgress.PATH
+
+
+## Opens the permanent progression and gives him its skills. Tests start from none unless given a
+## file, and may grant skills with --skills=all or --skills=<id>,<id> (every starfish collected too).
+func _open_gill() -> void:
+	var path := gill_progress_path()
+	if Settings.test_mode != "" and not Settings.test_args.has("gill-save"):
+		GillProgress.erase(path)
+	gill = GillProgress.open(path)
+	var grant := str(Settings.test_args.get("skills", "")) if Settings.test_mode != "" else ""
+	if grant != "":
+		grant_skills(SkillTree.ids() if grant == "all" else Array(grant.split(",", false)))
+	player.apply_skills(gill.tiers())
+	StartupTrace.mark("progress opened (%s)" % gill.origin.get_slice(";", 0))
+
+
+## Tests and renders only: every starfish collected and these nodes bought (prerequisites ignored).
+func grant_skills(ids: Array) -> void:
+	for sid in StarfishTable.ids():
+		gill.collected[sid] = {"t": 0, "v": "test"}
+	for id in ids:
+		if SkillTree.has(str(id)):
+			gill.purchased[str(id)] = {"cost": SkillTree.cost(str(id)), "t": 0, "n": gill.purchased.size() + 1}
+	gill.save()
+	player.apply_skills(gill.tiers())
+
+
+## Buys a skill-tree node (the page calls this): "" when bought, else why not. Applies at once.
+func buy_skill(id: String) -> String:
+	var why := gill.buy(id)
+	if why == "":
+		player.apply_skills(gill.tiers())
+	return why
+
+
+## "Red Starfish 12/30  ·  Skills 4/15" (pause menu, title, records).
+func progress_line() -> String:
+	if gill == null:
+		return ""
+	return "Red Starfish %d/%d  ·  Skills %d/%d" % [gill.stars(), StarfishTable.COUNT, gill.skills(), SkillTree.COUNT]
 
 
 ## True when there is a run to continue (the title then offers Continue and New Run).
@@ -489,7 +545,7 @@ func _finish_run() -> void:
 	if not clock.finish():
 		return
 	_earn(Completion.ENDING_ID)
-	run_save.record_finish(clock.finish_s, completion.percent(run_save.earned()), Completion.CATALOG_VERSION, Boot.identity())
+	run_save.record_finish(clock.finish_s, completion.percent(run_save.earned()), Completion.CATALOG_VERSION, Boot.identity(), gill.skills() if gill else 0)
 	save_run()
 
 
@@ -501,8 +557,16 @@ func completion_percent() -> float:
 func run_line() -> String:
 	var pct := completion.percent_display(run_save.earned())
 	if clock.is_finished():
-		return "Finished in %s  ·  %d%% complete" % [RunClock.format(clock.finish_s), pct]
+		return "Finished in %s  ·  %d%% complete  ·  Skills %d/%d" % [RunClock.format(clock.finish_s), pct, finish_skills(), SkillTree.COUNT]
 	return "Run time %s  ·  %d%% complete" % [RunClock.format(clock.run_s), pct]
+
+
+## Skills owned when this run finished (its record), or now for an older record without it.
+func finish_skills() -> int:
+	var f: Dictionary = run_save.run().get("finish", {})
+	if f.has("skills"):
+		return int(f["skills"])
+	return gill.skills() if gill else 0
 
 
 func best_line() -> String:
@@ -561,6 +625,10 @@ func run_diagnostics_text() -> String:
 			int(run_save.run()["catalog_version_at_start"]), Completion.CATALOG_VERSION])
 	L.append("  Run save: %s, format %d, timer model %d; %s" % [run_save.path, RunSave.FORMAT, RunClock.TIMER_MODEL, run_save.origin])
 	L.append("  Last save: %s" % run_save.last_save_result)
+	if gill != null:
+		L.append(gill.diagnostics_text())
+		if starfish != null:
+			L.append(starfish.diagnostics_text())
 	return "\n".join(L)
 
 
@@ -657,8 +725,8 @@ func _update_all_clear(dt: float) -> void:
 		# A quiet period to notice the restored aquarium before the message.
 		if _all_clear_wait > 12.0:
 			all_clear_done = true
-			hud.show_all_clear("Finished in %s  ·  %d%% complete" % [RunClock.format(clock.finish_s), completion.percent_display(run_save.earned())]
-					if clock.is_finished() else "")
+			hud.show_all_clear("Finished in %s  ·  %d%% complete  ·  Skills %d/%d" % [RunClock.format(clock.finish_s), completion.percent_display(run_save.earned()),
+					finish_skills(), SkillTree.COUNT] if clock.is_finished() else "")
 			save_run()
 			Sfx.play("all_clear", null, -6.0)
 			all_clear.emit()
@@ -807,11 +875,11 @@ func lunge_contact(p: Axolotl) -> bool:
 	for f in p.ball.foods.duplicate():
 		if not is_instance_valid(f) or not f.is_catchable():
 			continue
-		if _seg_dist(f.catch_point(), chest, tip) < LUNGE_CATCH_RADIUS:
+		if _seg_dist(f.catch_point(), chest, tip) < LUNGE_CATCH_RADIUS + p.catch_bonus:
 			_eat(p, f)
 			return true
 	for m in p.ball.motes:
-		if m.is_available() and _seg_dist(m.global_position, chest, tip) < 0.9:
+		if m.is_available() and _seg_dist(m.global_position, chest, tip) < 0.9 + p.catch_bonus:
 			m.capture()
 			Settings.haptic("mote")
 			Sfx.play("mote_capture", m.global_position)
@@ -837,6 +905,9 @@ func lunge_miss(p: Axolotl) -> void:
 		if dist < 3.0:
 			var dir := (d + p.facing * 0.6).normalized()
 			m.push(dir * 5.5 / (1.0 + dist * 0.6))
+		# (Mote Magnet: a miss startles those it was drawing out of its pull for a moment.)
+		if p.magnet_range > 0.0 and dist < p.magnet_range + 1.0:
+			m.startle(p.magnet_startle)
 	Sfx.play("lunge", p.global_position, -4.0)
 
 

@@ -116,6 +116,62 @@ var _probe_at := Vector3.INF
 var crawl_amount := 0.0            # 0..1, how far into the crawl's reach-and-pull (the model reads it)
 var _guard_pushed := false
 
+## Skill tree (docs/SKILL_TREE.md): each family's tier, applied by apply_skills. With no skills every
+## value below is exactly the base constant, so a player without skills moves exactly as before.
+var skill_tiers := {"lunge": 0, "quick": 0, "burst": 0, "magnet": 0, "glide": 0}
+var _run_scale := 1.0              # Quick Gill: the GROUND run target only
+var _lunge_time := LUNGE_TIME
+var _lunge_steer := 0.0            # Lunge II: rad/s the stick turns a lunge
+var catch_bonus := 0.0             # Lunge III: added to food and Mote catch radii (Game.lunge_contact)
+var _lunge_aimed := false          # this lunge was aimed by Treasure Hunt (never steered)
+var _burst_h := BURST_H
+var _burst_up := BURST_UP
+var _burst_up_only := BURST_UP_ONLY
+var _carry_len := 0.0              # Water Burst II: how long the burst's push carries
+var _carry_k := 1.0
+var _burst_steer := 0.0            # Water Burst III: rad/s the stick bends the burst's path
+var _carry_t := 0.0
+var magnet_range := 0.0            # Mote Magnet (read by Mote)
+var magnet_accel := 0.0
+var magnet_leash := 0.0
+var magnet_startle := 0.0
+var _glide := {}                   # Glide tier values ({} = no glide)
+## Glide: held Jump in the air near the top of a jump (docs/SKILL_TREE.md, "tiring wing").
+var gliding := false
+var glide_amount := 0.0            # 0..1 eased, for the model's posture
+var glide_t := -1.0                # the tiring clock: since the glide first opened this air (-1 none)
+var glides := 0                    # glides opened (tests and diagnostics)
+var glide_sink := 0.0              # this frame's sink target (diagnostics)
+
+
+## Applies the skill tree's tiers ({family: 0..3}) to his movement and actions.
+func apply_skills(tiers: Dictionary) -> void:
+	for f in skill_tiers:
+		skill_tiers[f] = clampi(int(tiers.get(f, 0)), 0, 3)
+	var T: Dictionary = SkillTree.TIERS
+	var q: int = skill_tiers["quick"]
+	var l: int = skill_tiers["lunge"]
+	var b: int = skill_tiers["burst"]
+	var m: int = skill_tiers["magnet"]
+	var gl: int = skill_tiers["glide"]
+	_run_scale = T["quick"]["run_scale"][q]
+	_lunge_time = T["lunge"]["time"][l] if l > 0 else LUNGE_TIME
+	_lunge_steer = T["lunge"]["steer"][l]
+	catch_bonus = T["lunge"]["catch"][l]
+	_burst_h = T["burst"]["h"][b] if b > 0 else BURST_H
+	_burst_up = T["burst"]["up"][b] if b > 0 else BURST_UP
+	_burst_up_only = T["burst"]["up_only"][b] if b > 0 else BURST_UP_ONLY
+	_carry_len = T["burst"]["carry"][b]
+	_carry_k = T["burst"]["carry_k"][b]
+	_burst_steer = T["burst"]["steer"][b]
+	magnet_range = T["magnet"]["range"][m]
+	magnet_accel = T["magnet"]["accel"][m]
+	magnet_leash = T["magnet"]["leash"][m]
+	magnet_startle = T["magnet"]["startle"][m]
+	_glide = {} if gl == 0 else {"s0": T["glide"]["s0"][gl], "tau": T["glide"]["tau"][gl], "v": T["glide"]["v"][gl]}
+	if gl == 0:
+		gliding = false
+
 var model: AxolotlModel
 var blob_shadow: MeshInstance3D
 
@@ -170,6 +226,9 @@ func place(p_ball: MossBall, pos: Vector3, face_dir := Vector3.ZERO) -> void:
 	_lip_armed = true
 	_blocked = false
 	crawl_amount = 0.0
+	gliding = false
+	glide_t = -1.0
+	_carry_t = 0.0
 	# (No smear of his body from where he was.)
 	model.reset_follow()
 
@@ -252,6 +311,9 @@ func _physics_process(dt: float) -> void:
 		model.conform = false
 		model.crawl = 0.0
 		model.turn_gap = 0.0
+		gliding = false
+		glide_amount = 0.0
+		model.glide = 0.0
 		_update_shadow()
 		return
 	_jumped_this_frame = false
@@ -288,10 +350,26 @@ func _physics_process(dt: float) -> void:
 
 	var vup := velocity.dot(up)
 	var vh := velocity - up * vup
+	# (A current stream carries him along and holds him at its height; read here, applied below.)
+	var stream := ball.stream_at(global_position) if ball != null and not ball.streams.is_empty() else Vector3.ZERO
+
+	# Glide (skill tree): Jump held in the air, near the top of a jump or once falling. Releasing it,
+	# landing, a column, a current, a lunge, a crawl, a hit or a Tier-2 move ends it. A tap of Jump in a
+	# glide is the water burst (once per air, as always); holding on, he glides again after it.
+	var hold := controls_enabled and not t2_busy and Input.is_action_pressed("jump")
+	gliding = not _glide.is_empty() and hold and not grounded and vup <= SkillTree.GLIDE_ENTER and not _in_column \
+			and stream == Vector3.ZERO and lunge_t < 0.0 and _mantle_t < 0.0 and hurt_lock <= 0.0
+	if gliding and glide_t < 0.0:
+		glide_t = 0.0
+		glides += 1
+	var g_e := exp(-maxf(glide_t, 0.0) / float(_glide.get("tau", 1.0)))
+	var g_sink := SkillTree.GLIDE_S_END - (SkillTree.GLIDE_S_END - float(_glide.get("s0", 0.0))) * g_e
+	var g_v := SkillTree.GLIDE_V_END + (float(_glide.get("v", 0.0)) - SkillTree.GLIDE_V_END) * g_e
+	glide_sink = g_sink if gliding else 0.0
 
 	# Facing follows intended direction (not during a lunge).
 	if wish.length() > 0.08 and lunge_t < 0.0:
-		var turn := 14.0 if grounded else 7.0
+		var turn := 14.0 if grounded else (4.5 if gliding else 7.0)
 		facing = _slerp_tangent(facing, wish.normalized(), minf(1.0, turn * dt))
 	facing = (facing - up * facing.dot(up)).normalized()
 	# (The turn still to come: his head leads it, AxolotlModel.turn_gap.)
@@ -303,7 +381,9 @@ func _physics_process(dt: float) -> void:
 		control = 0.35
 	if land_lock > 0.0:
 		control = 0.5
-	var target := wish * RUN_SPEED * control
+	# (Quick Gill scales the run on the ground only: in the air the target is the base run, so every
+	# jump's reach is unchanged.)
+	var target := wish * (RUN_SPEED * _run_scale if grounded else RUN_SPEED) * control
 	# Turning to aim on the ground (Expansion 6, owner phone report): from a standstill he turns on
 	# the spot until he faces (within about 25 degrees) where the stick points, then sets off; so
 	# landing, turning and lining up the next jump on a leaf does not walk him off it. Running, a
@@ -315,13 +395,21 @@ func _physics_process(dt: float) -> void:
 		else:
 			target *= lerpf(0.15, 1.0, smoothstep(-0.2, 0.75, align))
 	var accel := (ACCEL if wish.length() > 0.05 else DECEL) if grounded else AIR_ACCEL
+	# (Water Burst II: the burst's push carries on, the water's drag on it eased for a moment.)
+	if _carry_t > 0.0:
+		_carry_t = maxf(0.0, _carry_t - dt)
+		if not grounded:
+			accel *= _carry_k
 	if lunge_t >= 0.0:
-		lunge_t += dt / LUNGE_TIME
+		lunge_t += dt / _lunge_time
 		if _lunge_target_valid():
 			var flat := _lunge_food.catch_point() - global_position
 			flat -= up * flat.dot(up)
 			if flat.length() > 0.2:
 				facing = _slerp_tangent(facing, flat.normalized(), minf(1.0, 25.0 * dt))
+		elif _lunge_steer > 0.0 and not _lunge_aimed and wish.length() > 0.2:
+			# Lunge II: the stick steers a lunge that is not homing on anything.
+			facing = _slerp_tangent(facing, wish.normalized(), minf(1.0, _lunge_steer * dt))
 		vh = facing * LUNGE_SPEED * (1.0 - lunge_t * 0.5)
 		if not lunge_hit:
 			lunge_hit = Game.inst.lunge_contact(self)
@@ -330,13 +418,29 @@ func _physics_process(dt: float) -> void:
 			_lunge_food = null
 			if not lunge_hit:
 				Game.inst.lunge_miss(self)
+	elif gliding:
+		# Gliding: the forward speed the (tiring) glide carries, along the stick.
+		vh = vh.move_toward(wish * g_v, SkillTree.GLIDE_ACCEL * (_carry_k if _carry_t > 0.0 else 1.0) * dt)
 	else:
 		vh = vh.move_toward(target, accel * dt)
+	# Water Burst III: during the carry the stick bends the burst's path (its speed unchanged).
+	if _carry_t > 0.0 and _burst_steer > 0.0 and not grounded and wish.length() > 0.2 and lunge_t < 0.0:
+		var sp := vh.length()
+		if sp > 0.5:
+			vh = _slerp_tangent(vh / sp, wish.normalized(), minf(1.0, _burst_steer * dt)) * sp
 
 	# Gravity.
 	if not grounded:
-		vup = maxf(vup - GRAVITY * dt, -TERMINAL)
+		if gliding:
+			# The glide holds his descent to its sink: under it he falls as ever; over it (opening
+			# the glide from a fall) the spread body brakes him.
+			vup = maxf(vup - GRAVITY * dt, -g_sink) if vup > -g_sink else move_toward(vup, -g_sink, SkillTree.GLIDE_BRAKE * dt)
+		else:
+			vup = maxf(vup - GRAVITY * dt, -TERMINAL)
 		air_time += dt
+		# (The tiring clock runs on through bursts and releases until he lands.)
+		if glide_t >= 0.0:
+			glide_t += dt
 	else:
 		air_time = 0.0
 		vup = minf(vup, 0.0) - 1.5
@@ -345,6 +449,9 @@ func _physics_process(dt: float) -> void:
 	var lift := ball.lift_at(global_position) if ball != null and not ball.columns.is_empty() else 0.0
 	# (A glide shaft is a column with a gentle down-draft: he sinks slowly, steering as he likes.)
 	_in_column = lift != 0.0
+	if _in_column:
+		# (A column rests him: a glide after it starts fresh.)
+		glide_t = -1.0
 	if _in_column and lift > 0.0:
 		vup = maxf(lift, 2.5) if grounded else move_toward(vup, lift, LIFT_ACCEL * dt)
 		grounded = false
@@ -399,7 +506,8 @@ func _physics_process(dt: float) -> void:
 	if want_lunge and lunge_cd <= 0.0 and lunge_t < 0.0:
 		lunge_t = 0.0
 		lunge_hit = false
-		lunge_cd = LUNGE_TIME + 0.15
+		lunge_cd = _lunge_time + 0.15
+		_lunge_aimed = false
 		lunged.emit()
 		if wish.length() > 0.2:
 			facing = wish.normalized()
@@ -412,6 +520,7 @@ func _physics_process(dt: float) -> void:
 				tc = Vector3.INF
 			if tc != Vector3.INF:
 				_lunge_food = null
+				_lunge_aimed = true
 				var flat := tc - global_position
 				flat -= up * flat.dot(up)
 				if flat.length() > 0.2:
@@ -427,7 +536,6 @@ func _physics_process(dt: float) -> void:
 		if not is_nan(float(drive[1])):
 			vup = drive[1]
 	# (A current stream carries him along and holds him at its height.)
-	var stream := ball.stream_at(global_position) if ball != null and not ball.streams.is_empty() else Vector3.ZERO
 	if stream != Vector3.ZERO and not grounded:
 		vup = move_toward(vup, 0.0, 30.0 * dt)
 	# Traction: crawling over a steep transition he has purchase beyond (see CRAWL_MAX).
@@ -516,6 +624,11 @@ func _physics_process(dt: float) -> void:
 		if was_grounded and not _jumped_this_frame:
 			coyote_t = COYOTE
 		apex_r = maxf(apex_r, r)
+		if gliding:
+			# (A glide lands as gently as its descent: the fall counts as the height a free fall
+			# would need to come down this fast, so a held glide lands soft and letting go falls on.)
+			var vd := maxf(0.0, -velocity.dot(up))
+			apex_r = minf(apex_r, r + vd * vd / (2.0 * GRAVITY))
 
 	# Dangerous-fall telegraph: body language only, no UI.
 	var fall := apex_r - r
@@ -721,13 +834,14 @@ func _do_burst(wish: Vector3) -> Array:
 	var vh: Vector3
 	var vup: float
 	if wish.length() > 0.2:
-		vh = wish.normalized() * BURST_H
-		vup = BURST_UP
+		vh = wish.normalized() * _burst_h
+		vup = _burst_up
 		facing = wish.normalized()
 	else:
 		vh = facing * 1.5
-		vup = BURST_UP_ONLY
+		vup = _burst_up_only
 	apex_r = _r()   # a burst "saves" the fall: distance is measured from here
+	_carry_t = _carry_len
 	model.burst_t = 0.0
 	burst_used.emit()
 	WaterFX.inst.impulse(global_position - facing * 0.4, 2.2, 0.6)
@@ -738,6 +852,8 @@ func _do_burst(wish: Vector3) -> Array:
 
 func _on_land(impact: float, r: float) -> void:
 	burst_available = true
+	glide_t = -1.0
+	_carry_t = 0.0
 	# (A ravine floor is its own penalty, one frond, handled by Game.ravine_fall.)
 	if on_ravine_floor():
 		return
@@ -877,7 +993,7 @@ func _apply_orientation(t: float) -> void:
 	global_basis = global_basis.orthonormalized().slerp(target, t) if t < 1.0 else target
 
 
-func _update_model(_dt: float) -> void:
+func _update_model(dt: float) -> void:
 	var vh := velocity - up * velocity.dot(up)
 	model.speed = vh.length() / RUN_SPEED
 	# (Pulling himself over a lip he is on the ground, as far as his body is concerned.)
@@ -887,6 +1003,8 @@ func _update_model(_dt: float) -> void:
 	model.crawl = crawl_amount
 	model.turn_gap = _turn_gap if grounded else _turn_gap * 0.5
 	model.vup = velocity.dot(up)
+	glide_amount = move_toward(glide_amount, 1.0 if gliding else 0.0, dt * (5.0 if gliding else 4.0))
+	model.glide = glide_amount
 	model.swipe_t = swipe_t
 	model.lunge_t = lunge_t
 	model.brace = move_toward(model.brace, 1.0 if fall_danger else 0.0, 0.1)

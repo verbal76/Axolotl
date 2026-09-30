@@ -172,6 +172,9 @@ var turn_gap := 0.0
 ## 0..1 while he crawls over a steep transition (set by the controller): the front reaches up for the
 ## purchase, the front feet reach and grip, the rear pushes.
 var crawl := 0.0
+## 0..1: the glide posture (skill tree): body flat and a little arched, legs spread wide, gills
+## fanned, a slow ripple, banking into turns. The body's follow-through is unchanged underneath it.
+var glide := 0.0
 var _prev_basis := Basis()
 var _turn_rate := 0.0
 var _seg_w: Array[Vector3] = []          # world direction of each segment, toward the tail
@@ -927,7 +930,7 @@ func _process(dt: float) -> void:
 	elif grounded:
 		_wave += dt * (1.2 + maxf(s, _idle_stride) * 10.5)
 	else:
-		_wave += dt * 7.0
+		_wave += dt * lerpf(7.0, 2.4, glide)
 	_advance_timers(dt)
 	_update_idle(dt)
 	_update_follow(dt)
@@ -1175,6 +1178,19 @@ func _animate(dt: float) -> void:
 		arch = clampf(-vup * 0.02, -0.12, 0.12)
 		wave_amp = 0.2
 		gill_back = maxf(gill_back, 0.6)
+		if glide > 0.01 and swim <= 0.0:
+			# Gliding: flat and spread like a leaf on the water, nose just below level, banking into
+			# the turn he is making; a slow small ripple down the body and tail.
+			var gw := glide
+			if gw > 0.35:
+				leg_mode = 4
+			rig_rot.x = lerpf(rig_rot.x, 0.06, gw)
+			rig_rot.z = clampf(-_turn_rate * 0.08, -0.4, 0.4) * gw
+			arch = lerpf(arch, 0.08, gw)
+			wave_amp = lerpf(wave_amp, 0.07, gw)
+			gill_back = lerpf(gill_back, 0.1, gw)
+			gill_flare = maxf(gill_flare, 0.8 * gw)
+			rig_scale = Vector3(1.0 + 0.12 * gw, 1.0 - 0.12 * gw, 1.0)
 	if swim > 0.0:
 		var e := clampf(swim / 2.0, 0.0, 1.0)
 		# Lateral undulation drives him: gentle when hovering, strong and quick when fast.
@@ -1404,6 +1420,13 @@ func _animate_legs(dt: float, s: float, mode: int) -> void:
 				yaw = side * (-0.35 if front else 0.35)
 				roll = side * (0.55 + sin(_t * 8.0 + i) * 0.08)
 				bend = -side * 0.2
+			4:
+				# Glide: all four spread wide and flat, the front ones reaching a little forward, the
+				# back ones a little back, fingers and toes fanned, with a slow flutter.
+				var fl := sin(_t * 3.2 + i * 1.3) * 0.07
+				yaw = side * (-0.3 if front else 0.5)
+				roll = side * ((1.05 if front else 0.95) + fl)
+				bend = side * 0.08
 			3:
 				# Crawl: front feet reach forward and up for the purchase and paw at it in turn; the
 				# back feet plant and push, swept back.

@@ -23,6 +23,10 @@ var _session_rows: Array[Control] = []
 var _from_title := false
 var gill_page: GillPage
 var _gill_direct := false        # opened straight from the title screen
+## The skill tree (docs/SKILL_TREE.md): a page of its own beside the colours page.
+var skill_page: SkillTreePage
+var _skills_direct := false
+var _skills_button: Button
 
 
 func _ready() -> void:
@@ -88,6 +92,9 @@ func _ready() -> void:
 	var colours := UiStyle.button("%s's colours" % GameVersion.CHARACTER_NAME, _open_gill)
 	colours.name = "GillColours"
 	v.add_child(colours)
+	_skills_button = UiStyle.button("Skills", _open_skills)
+	_skills_button.name = "Skills"
+	v.add_child(_skills_button)
 	_music = _slider(v, "Music")
 	_music.value_changed.connect(_on_music)
 	_sfx = _slider(v, "Sound")
@@ -123,6 +130,10 @@ func _ready() -> void:
 	gill_page.visible = false
 	_root.add_child(gill_page)
 	gill_page.done.connect(_close_gill)
+	skill_page = SkillTreePage.new()
+	skill_page.visible = false
+	_root.add_child(skill_page)
+	skill_page.done.connect(_close_skills)
 	resume.name = "Resume"
 	visible = false
 	Settings.settings_changed.connect(_refresh)
@@ -135,6 +146,24 @@ func _open_gill(direct := false) -> void:
 	gill_page.refresh()
 	gill_page.visible = true
 	(gill_page.find_child("Morph_" + Settings.gill_morph, true, false) as Button).grab_focus.call_deferred()
+
+
+func _open_skills(direct := false) -> void:
+	_skills_direct = direct
+	_panel.visible = false
+	skill_page.open()
+
+
+func _close_skills() -> void:
+	skill_page.visible = false
+	_panel.visible = true
+	Sfx.play("ui_tap", null, -8.0)
+	if _skills_direct:
+		_skills_direct = false
+		close()
+		return
+	_refresh()
+	(_panel.find_child("Skills", true, false) as Button).grab_focus.call_deferred()
 
 
 func _close_gill() -> void:
@@ -204,6 +233,8 @@ func _toggle_treasure() -> void:
 func _open_aquarium() -> void:
 	if gill_page.visible:
 		_close_gill()
+	if skill_page.visible:
+		_close_skills()
 	visible = false
 	get_tree().paused = false
 	Sfx.play("ui_tap", null, -8.0)
@@ -226,6 +257,10 @@ func open(from_title := false) -> void:
 func close() -> void:
 	if gill_page.visible:
 		_close_gill()
+	if skill_page.visible:
+		skill_page.visible = false
+		_panel.visible = true
+		_skills_direct = false
 	visible = false
 	get_tree().paused = false
 	Sfx.play("ui_tap", null, -8.0)
@@ -249,9 +284,13 @@ func _refresh() -> void:
 		var lines: Array[String] = []
 		lines.append("Game finished: " + ("yes" if g.clock.is_finished() else "not yet"))
 		lines.append_array(g.completion.summary_lines(g.run_save.earned()))
+		# (Permanent, separate from the run's completion: not in the catalog.)
+		lines.append(g.progress_line())
 		if g.best_line() != "":
 			lines.append(g.best_line())
 		_run_detail.text = "\n".join(lines)
+	if g != null and g.gill != null:
+		_skills_button.text = "Skills  (%d to spend)" % g.gill.balance() if g.gill.balance() > 0 else "Skills"
 	_haptics.set_pressed_no_signal(Settings.haptics)
 	_swim_invert.set_pressed_no_signal(Settings.swim_invert_y)
 	# (From the title it is Settings: back to the title, not "resume" a run that is not running.)
@@ -263,6 +302,8 @@ func _refresh() -> void:
 
 
 func _unhandled_input(event: InputEvent) -> void:
+	if visible and skill_page.visible:
+		return
 	if visible and event.is_action_pressed("pause"):
 		close()
 		get_viewport().set_input_as_handled()

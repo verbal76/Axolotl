@@ -39,6 +39,8 @@ var _special_shown := false
 var _special_reveal := 0.0      # fades the button in when first revealed
 var _special_ready_flash := 0.0
 var _special_was_ready := true
+## The red starfish chip (docs/SKILL_TREE.md): small, top left, only for a moment after a pickup.
+var star_chip: StarChip
 
 
 func _ready() -> void:
@@ -97,6 +99,10 @@ func _ready() -> void:
 	timer_label.add_theme_constant_override("outline_size", 3)
 	timer_label.visible = false
 	root.add_child(timer_label)
+	star_chip = StarChip.new()
+	star_chip.name = "StarChip"
+	star_chip.mouse_filter = Control.MOUSE_FILTER_IGNORE
+	root.add_child(star_chip)
 	get_viewport().size_changed.connect(_layout)
 	Settings.input_mode_changed.connect(func(_m): _update_alpha())
 	Settings.settings_changed.connect(_update_alpha)
@@ -140,6 +146,9 @@ func _layout() -> void:
 	_pause_rect = Rect2(Vector2(_safe.end.x - 64 * s, _safe.position.y + 6), Vector2(56, 56) * s)
 	if timer_label:
 		timer_label.position = _safe.position + Vector2(6, 4)
+	if star_chip:
+		star_chip.k = s
+		star_chip.position = _safe.position + Vector2(6, 40 * s)
 	canvas.scale_k = s
 	canvas.queue_redraw()
 
@@ -350,6 +359,12 @@ func special_alpha() -> float:
 func reveal_special() -> void:
 	_special_shown = true
 	_special_ready_flash = 1.0
+
+
+## A red starfish collected: the star chip shows the count (and what there is to spend) for a
+## few seconds, then fades.
+func star_collected(n: int, total: int, balance: int) -> void:
+	star_chip.show_count(n, total, balance)
 
 
 func stick_info() -> Array:

@@ -567,6 +567,14 @@ func run(runner) -> void:
 		await _gill_anim(g)
 	if only == "loco":
 		await _loco_shots(g)
+	if only == "skilltree":
+		await _skilltree_shots(g)
+	if only == "starfish":
+		await _starfish_shots(g)
+	if only == "glide":
+		await _glide_shots(g)
+	if only == "perfstar":
+		await _perf_starfish(g)
 	if only == "loco2":
 		await _loco2_shots(g)
 	if only == "spots":
@@ -2337,3 +2345,258 @@ func _camera_audit(g: Game) -> void:
 			_look(g, bi, b.surface_point(rim, 0.2), b.surface_point(mid) - b.surface_point(rim))
 			await t.seconds(1.2)
 			await t.shot("cam_b%d_%s" % [bi + 1, str(rv["id"]).replace(".", "_")])
+
+
+# --- Skill tree, red starfish, Glide (docs/SKILL_TREE.md) ------------------------------------------
+
+func _set_progress(g: Game, stars: int, ids: Array) -> void:
+	var gp := g.gill
+	gp.collected.clear()
+	gp.purchased.clear()
+	for sid in StarfishTable.ids().slice(0, stars):
+		gp.collected[sid] = {"t": 0}
+	for id in ids:
+		gp.purchased[id] = {"cost": SkillTree.cost(id), "t": 0, "n": gp.purchased.size() + 1}
+	gp.save()
+	g.player.apply_skills(gp.tiers())
+
+
+func _page_shot(g: Game, name_: String, select := "") -> void:
+	var page: SkillTreePage = g.pause_menu.skill_page
+	page.refresh()
+	if select != "":
+		page.select(select, false)
+		(page.buttons[select] as Button).grab_focus()
+	await t.seconds(0.4)
+	await t.shot(name_)
+
+
+## The skill tree page: empty, partial and full; the locked, unaffordable and available cards; the
+## unlock's frames; the pause menu's line; at 1280x720 and at a narrow 19.5:9 phone shape.
+func _skilltree_shots(g: Game) -> void:
+	var b0 := g.balls[0]
+	_look(g, 0, b0.surface_point(MossBall.dir_ll(12, 30), 0.1), Vector3.FORWARD)
+	await t.seconds(1.5)
+	var sizes := [["", Vector2i(0, 0)], ["_phone", Vector2i(1560, 720)]]
+	for sz in sizes:
+		if sz[0] != "":
+			DisplayServer.window_set_size(sz[1])
+			await t.seconds(0.5)
+		_set_progress(g, 0, [])
+		g.pause_menu.open()
+		await t.seconds(0.3)
+		g.pause_menu._open_skills()
+		await _page_shot(g, "skilltree_empty" + sz[0], "lunge.1")
+		_set_progress(g, 12, ["lunge.1", "quick.1", "burst.1", "glide.1", "burst.2"])
+		await _page_shot(g, "skilltree_partial_locked" + sz[0], "lunge.3")
+		_set_progress(g, 7, ["lunge.1", "quick.1", "burst.1", "glide.1", "burst.2"])
+		await _page_shot(g, "skilltree_partial_unaffordable" + sz[0], "glide.2")
+		_set_progress(g, 12, ["lunge.1", "quick.1", "burst.1", "glide.1", "burst.2"])
+		await _page_shot(g, "skilltree_partial_available" + sz[0], "glide.2")
+		var page: SkillTreePage = g.pause_menu.skill_page
+		page.buy("glide.2")
+		for k in 3:
+			await t.seconds([0.06, 0.15, 0.3][k])
+			await t.shot("skilltree_unlock_%d%s" % [k + 1, sz[0]])
+		_set_progress(g, 30, SkillTree.ids())
+		await _page_shot(g, "skilltree_full" + sz[0], "glide.3")
+		page.done.emit()
+		await t.seconds(0.4)
+		await t.shot("skilltree_pause_menu" + sz[0])
+		g.pause_menu.close()
+	DisplayServer.window_set_size(Vector2i(1280, 720))
+	await t.seconds(0.5)
+	g._enter_title()
+	await t.seconds(1.0)
+	await t.shot("skilltree_title_menu")
+	g.title._on_skills()
+	await _page_shot(g, "skilltree_from_title", "quick.3")
+	g.pause_menu.skill_page.done.emit()
+	g.start_play(true)
+	_set_progress(g, 0, [])
+
+
+## A starfish from the gameplay camera: `dist` m back from it, facing it.
+func _star_view(g: Game, s: Starfish, dist: float, heading := 0.0) -> void:
+	var b := s.ball
+	var up := b.up_at(s.rest)
+	var fr := MossBall.frame_at(up, heading)
+	var at := b.surface_point(b.up_at(s.rest + fr.z * dist), 0.1)
+	# (For a perch or a leaf: from the same height, standing on it where possible.)
+	var hit := Starfish.probe(b, b.up_at(s.rest + fr.z * dist), b.altitude(s.rest))
+	if not hit.is_empty() and absf(b.altitude(hit[0]) - b.altitude(s.rest)) < 0.8:
+		at = hit[0] + b.up_at(hit[0]) * 0.1
+	_look(g, b.index, at, s.rest - at, 0.28)
+	await t.seconds(1.2)
+
+
+## Several starfish (ground, rock, leaf, cave, the gravel's edge) close and at a distance, murky and
+## restored; then a pickup's frames and the HUD chip.
+func _starfish_shots(g: Game) -> void:
+	await t.seconds(1.0)
+	var picks := [["star.b1.00", "moss"], ["star.b1.01", "rock"], ["star.b3.01", "leaf"], ["star.b1.05", "cave"], ["star.b2.03", "tower"], ["star.b6.02", "sky_leaf"], ["star.b5.01", "clearing"]]
+	for state in ["murky", "restored"]:
+		if state == "restored":
+			for b in g.balls:
+				b.add_heal(Vector3.UP, 340.0, 0.0)
+			g.g_disp = 1.0
+			g.aquarium.apply(1.0)
+			await t.seconds(1.0)
+		for pk in picks:
+			var s: Starfish = g.starfish.find(pk[0])
+			if s == null:
+				continue
+			await _star_view(g, s, 2.6 if pk[1] != "cave" else 2.0, 30.0)
+			await t.shot("starfish_%s_close_%s" % [pk[1], state])
+			if pk[1] != "cave":
+				await _star_view(g, s, 11.0, 30.0)
+				await t.shot("starfish_%s_far_%s" % [pk[1], state])
+	# A pickup: walk into it, frames just after.
+	var s: Starfish = g.starfish.find("star.b1.00")
+	var p := g.player
+	p.use_bot_input = true
+	await _star_view(g, s, 2.2, 10.0)
+	for i in 120:
+		var off := s.pick_point() - p.global_position
+		var cf: Vector3 = -g.cam.global_basis.z
+		cf = (cf - p.up * cf.dot(p.up)).normalized()
+		var d := (off - p.up * off.dot(p.up)).normalized()
+		p.bot_input = Vector2(d.dot(cf.cross(p.up)), d.dot(cf))
+		await t.frames(1)
+		if g.gill.has_star(s.id):
+			break
+	p.bot_input = Vector2.ZERO
+	Engine.time_scale = 0.2
+	for k in 3:
+		await t.frames([1, 4, 10][k])
+		await t.shot("starfish_pickup_%d" % (k + 1))
+	Engine.time_scale = 1.0
+	p.use_bot_input = false
+
+
+## Glide: the posture from behind (the gameplay camera), from the side and in a turn, a plain fall
+## for comparison, and a representative transfer (the Undercut bridges) before (no Glide: short) and
+## after (Glide II: across).
+func _glide_shots(g: Game) -> void:
+	var p := g.player
+	p.use_bot_input = true
+	p.invuln_t = 9999
+	var b0 := g.balls[0]
+	var at := MossBall.dir_ll(12, 30)
+	var hold := func(dir: Vector3) -> void:
+		var cf: Vector3 = -g.cam.global_basis.z
+		cf = (cf - p.up * cf.dot(p.up)).normalized()
+		var d := (dir - p.up * dir.dot(p.up)).normalized()
+		p.bot_input = Vector2(d.dot(cf.cross(p.up)), d.dot(cf))
+	for gt in [0, 3]:
+		p.apply_skills({"glide": gt})
+		var up := b0.up_at(b0.surface_point(at))
+		var fwd := -MossBall.frame_at(up, 0.0).z
+		p.place(b0, b0.surface_point(at, 9.0), fwd)
+		g.cam.snap_behind()
+		Input.action_press("jump")
+		for f in 50:
+			hold.call(fwd)
+			await t.frames(1)
+		await t.shot("glide_behind" if gt == 3 else "fall_behind_no_glide")
+		if gt == 3:
+			var c := p.global_position + p.up * 0.2
+			var right := p.facing.cross(p.up)
+			_close(g, c + right * 3.0 + p.up * 0.5 - p.facing * 0.4, c, p.up)
+			await t.frames(1)
+			Engine.time_scale = 0.05
+			await t.frames(2)
+			await t.shot("glide_side")
+			Engine.time_scale = 1.0
+			_open(g)
+			# A turn, from the gameplay camera.
+			var dir := p.facing
+			for f in 30:
+				dir = dir.rotated(p.up, -0.06)
+				hold.call(dir)
+				await t.frames(1)
+			await t.shot("glide_turn")
+		Input.action_release("jump")
+		p.bot_input = Vector2.ZERO
+		for i in 300:
+			await t.frames(1)
+			if p.grounded:
+				break
+		await t.seconds(0.5)
+	# The Undercut bridges (ball 7): from the crown of one toward the other.
+	var b := g.balls[6]
+	var from: Vector3 = Starfish.probe(b, MossBall.dir_ll(-32.9, 93.1), 3.9)[0]
+	var to: Vector3 = Starfish.probe(b, MossBall.dir_ll(-29.3, 109.7), 1.2)[0]
+	for gt in [0, 2]:
+		p.apply_skills({"glide": gt, "burst": 3 if gt > 0 else 0})
+		p.place(b, from + b.up_at(from) * 0.2, to - from)
+		g.cam.snap_behind()
+		g.audio.set_ball(6, false)
+		await t.seconds(1.0)
+		if gt == 0:
+			await t.shot("transfer_takeoff")
+		var start := p.global_position
+		for i in 120:
+			hold.call(to - p.global_position)
+			await t.frames(1)
+			var ahead := p.global_position + (to - p.global_position).normalized() * 0.55
+			var hit := g.get_world_3d().direct_space_state.intersect_ray(PhysicsRayQueryParameters3D.create(ahead + p.up * 0.6, ahead - p.up * 0.9, 1 | 2 | 8))
+			if not p.grounded or hit.is_empty() or (p.global_position - (hit["position"] as Vector3)).dot(p.up) > 0.35 or p.global_position.distance_to(start) > 5.0:
+				break
+		Input.action_press("jump")
+		var air := 0
+		var shot_mid := false
+		for i in 400:
+			hold.call(to - p.global_position)
+			await t.frames(1)
+			air += 1
+			if air == 39:
+				Input.action_release("jump")
+				await t.frames(1)
+				Input.action_press("jump")
+				if gt == 0:
+					await t.frames(1)
+					Input.action_release("jump")
+			if air == 70 and not shot_mid:
+				shot_mid = true
+				await t.shot("transfer_mid_%s" % ("glide2" if gt > 0 else "no_glide"))
+			if p.grounded and air > 6:
+				break
+		Input.action_release("jump")
+		p.bot_input = Vector2.ZERO
+		await t.seconds(0.6)
+		await t.shot("transfer_landed_%s" % ("glide2" if gt > 0 else "no_glide"))
+	p.apply_skills({})
+	p.use_bot_input = false
+
+
+func _pipelines() -> int:
+	var n := 0
+	for k in ["PIPELINE_COMPILATIONS_CANVAS", "PIPELINE_COMPILATIONS_MESH", "PIPELINE_COMPILATIONS_SURFACE", "PIPELINE_COMPILATIONS_DRAW", "PIPELINE_COMPILATIONS_SPECIALIZATION"]:
+		if ClassDB.class_has_integer_constant("Performance", k):
+			n += int(Performance.get_monitor(ClassDB.class_get_integer_constant("Performance", k)))
+	return n
+
+
+## Performance with starfish in view (docs/SKILL_TREE.md): each view with every starfish hidden,
+## then shown (the same frames otherwise), and the GPU pipelines the first starfish in view
+## compiled (none expected: they reuse the Mote core's material features and its glow shader).
+func _perf_starfish(g: Game) -> void:
+	var first := true
+	for sid in ["star.b1.00", "star.b1.01", "star.b3.01", "star.b2.02", "star.b7.03"]:
+		var s: Starfish = g.starfish.find(sid)
+		if s == null:
+			continue
+		for st in g.starfish.stars:
+			st.visible = false
+		await _star_view(g, s, 4.0, 30.0)
+		await _perf_view("%s_hidden" % sid)
+		var pc0 := _pipelines()
+		for st in g.starfish.stars:
+			st.visible = true
+		await RenderingServer.frame_post_draw
+		await RenderingServer.frame_post_draw
+		var pc1 := _pipelines()
+		t.log_line("PIPELINES %s first frames with starfish shown: +%d compilations%s" % [sid, pc1 - pc0, " (the first starfish ever drawn)" if first else ""])
+		first = false
+		await _perf_view("%s_shown" % sid)

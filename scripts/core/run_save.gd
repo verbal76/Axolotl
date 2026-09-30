@@ -129,14 +129,16 @@ func start_new_run() -> void:
 
 
 ## Records a finish (called once per run, when its clock finishes).
-func record_finish(finish_s: float, pct: float, catalog_version: int, identity: Dictionary) -> void:
+## `skills`: skill-tree nodes owned at the finish (shown with it as "Skills n/15"; there is no
+## skills-off mode). Older records without it read as the current count.
+func record_finish(finish_s: float, pct: float, catalog_version: int, identity: Dictionary, skills := 0) -> void:
 	var r := run()
 	r["finish"] = {"finish_s": finish_s, "percent": pct, "catalog_version": catalog_version,
 			"game_version": GameVersion.GAME_VERSION, "ota_id": identity.get("ota_id", "none"),
-			"timer_model": RunClock.TIMER_MODEL}
+			"timer_model": RunClock.TIMER_MODEL, "skills": skills}
 	var rec := records()
 	(rec["finishes"] as Array).append({"run_id": r["id"], "finish_s": finish_s, "percent": pct,
-			"catalog_version": catalog_version, "game_version": GameVersion.GAME_VERSION})
+			"catalog_version": catalog_version, "game_version": GameVersion.GAME_VERSION, "skills": skills})
 	if rec["best_finish_s"] < 0.0 or finish_s < rec["best_finish_s"]:
 		rec["best_finish_s"] = finish_s
 		rec["best_run_id"] = r["id"]
