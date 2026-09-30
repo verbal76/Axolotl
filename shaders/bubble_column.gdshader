@@ -20,7 +20,7 @@ void vertex() {
 	float a = seed.z * 6.2832 + TIME * (0.8 + seed.y);
 	float r = radius * sqrt(fract(seed.y * 7.13)) * (0.7 + 0.3 * sin(TIME * 2.0 + seed.x * 11.0));
 	vec3 wp = base_pos + u * (t * height) + s * cos(a) * r + f * sin(a) * r;
-	float sz = (0.05 + seed.z * 0.12) * (1.0 + t * 0.5);
+	float sz = (0.08 + seed.z * 0.16) * (1.0 + t * 0.5);
 	vec4 vp = VIEW_MATRIX * vec4(wp, 1.0);
 	vp.xy += VERTEX.xy * sz;
 	POSITION = PROJECTION_MATRIX * vp;
@@ -31,6 +31,6 @@ void fragment() {
 	float d = length(UV - vec2(0.5)) * 2.0;
 	float rim = smoothstep(0.6, 0.9, d) * (1.0 - smoothstep(0.9, 1.0, d));
 	float hi = 1.0 - smoothstep(0.0, 0.25, length(UV - vec2(0.35, 0.35)) * 2.0);
-	ALBEDO = vec3(0.85, 0.96, 1.0);
-	ALPHA = (rim * 0.8 + hi * 0.9 + 0.08 * step(d, 1.0)) * v_a;
+	ALBEDO = vec3(0.78, 0.95, 1.0);
+	ALPHA = (rim * 0.9 + hi * 0.95 + 0.16 * step(d, 1.0)) * v_a;
 }

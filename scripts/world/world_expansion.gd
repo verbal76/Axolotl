@@ -754,10 +754,11 @@ static func hollow_grotto(lb: LevelBuilder) -> void:
 	lb.mote_xf("undercut", uxf.call(-2, 9), 1.0)
 	lb.mote_xf("undercut", uxf.call(-13, 0), 1.0)
 	lb.bloom_xf(uxf.call(8, -10))
-	# The Shaft: a tall basalt chimney; a bubble column rises beside it to its ledge.
+	# The Shaft: a tall basalt chimney; a bubble column rises right beside its cap (Open Issue #2:
+	# 3.7 m from its axis, just clear of the 2.8 m rim, so the column reads as the way up it).
 	var shaft := lb.shelf(shz.x, shz.y, 6.0, 2.4, 1.3)
 	var sfr := MossBall.frame_at(b.up_at(shaft.global_position), 0.0)
-	var scol := b.up_at(shaft.global_position + sfr.x * 5.2)
+	var scol := b.up_at(shaft.global_position + sfr.x * 3.7)
 	lb.bubble_column(scol, 0.9, 7.4, 5.5)
 	var stop := shaft.global_position + b.up_at(shaft.global_position) * 6.0
 	var sedge := shaft.global_position + sfr.x * 1.8 + b.up_at(shaft.global_position) * 6.0

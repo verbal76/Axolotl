@@ -542,10 +542,11 @@ static func _ball1(lb: LevelBuilder) -> void:
 	lb.parasite(Parasite.Kind.SMALL, "west", 18, -122, 5.0)
 
 	# ---- The Fern Grove and its bubble columns ---------------------------------------------------
-	# [vent lat, lon, shelf lat, lon, shelf top]: each shelf 4 m from its column (clear of him
-	# as he rises; he swims across from the top).
-	for c in [[-33.0, -70.0, -33.0, -70.0 + lb.m2deg(4.0) / cos(deg_to_rad(33.0)), 5.0],
-			[-42.0, -86.0, -42.0, -86.0 + lb.m2deg(4.0) / cos(deg_to_rad(42.0)), 4.2]]:
+	# [vent lat, lon, shelf lat, lon, shelf top]: each shelf 3 m from its column, right beside the
+	# cap's 2 m rim (Open Issue #2: close enough to read as the way up, clear of him as he rises;
+	# he swims across from the top).
+	for c in [[-33.0, -70.0, -33.0, -70.0 + lb.m2deg(3.0) / cos(deg_to_rad(33.0)), 5.0],
+			[-42.0, -86.0, -42.0, -86.0 + lb.m2deg(3.0) / cos(deg_to_rad(42.0)), 4.2]]:
 		var cdir := MossBall.dir_ll(c[0], c[1])
 		lb.bubble_column(cdir, 0.9, float(c[4]) + 1.4)
 		var sh := lb.shelf(c[2], c[3], c[4], 1.7, 0.9)
@@ -769,7 +770,7 @@ static func _ball2(lb: LevelBuilder) -> void:
 	for hi in [0, 2]:
 		var hs2: Array = hshelves[hi]
 		lb.mote("hollows", hs2[0], hs2[1], hs2[2], 0.5)
-	var hc := MossBall.dir_ll(12.0, 30.0 - lb.m2deg(4.6) / cos(deg_to_rad(12.0)))
+	var hc := MossBall.dir_ll(12.0, 30.0 - lb.m2deg(4.2) / cos(deg_to_rad(12.0)))
 	lb.bubble_column(hc, 0.9, 4.8)
 	var htop := b.surface_point(MossBall.dir_ll(12.0, 30.0), 3.4)
 	lb.bot_hints.append({"route": "hollows column", "lift": true, "start": b.surface_point(hc),

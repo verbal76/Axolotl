@@ -649,6 +649,10 @@ func root_curtain(zone_id: String, xf: Transform3D, width: float, height: float,
 
 ## A bubble column rising `height` m from the ground at `dir`, `radius` m across: he is carried up
 ## it and hangs near the top (MossBall.lift_at). A ring of stones marks its vent.
+## The soft pulsing glow under a flowing bubble column (unshaded, additive).
+const VENT_GLOW := preload("res://shaders/vent_glow.gdshader")
+
+
 func bubble_column(dir: Vector3, radius: float, height: float, speed := 5.0, zone_id := "") -> void:
 	var base := ball.surface_point(dir, 0.0)
 	var up := ball.up_at(base)
@@ -665,7 +669,8 @@ func bubble_column(dir: Vector3, radius: float, height: float, speed := 5.0, zon
 	var mm := MultiMesh.new()
 	mm.transform_format = MultiMesh.TRANSFORM_3D
 	mm.mesh = QuadMesh.new()
-	mm.instance_count = 70
+	# (Enough bubbles, large enough, to read as a lift even in the dimmest world: Open Issue #2.)
+	mm.instance_count = 120
 	var rng := RandomNumberGenerator.new()
 	rng.seed = hash(base.snapped(Vector3.ONE * 0.1))
 	for i in mm.instance_count:
@@ -685,6 +690,19 @@ func bubble_column(dir: Vector3, radius: float, height: float, speed := 5.0, zon
 	mmi.top_level = true
 	mmi.visibility_range_end = 90.0
 	holder.add_child(mmi)
+	# A soft glow round the vent while it flows (with the bubbles, so a dormant column shows none).
+	var glow := MeshInstance3D.new()
+	var gq := QuadMesh.new()
+	gq.size = Vector2.ONE * radius * 3.2
+	gq.orientation = PlaneMesh.FACE_Y
+	glow.mesh = gq
+	var gm := ShaderMaterial.new()
+	gm.shader = VENT_GLOW
+	glow.material_override = gm
+	glow.cast_shadow = GeometryInstance3D.SHADOW_CASTING_SETTING_OFF
+	glow.visibility_range_end = 90.0
+	holder.add_child(glow)
+	glow.global_transform = Transform3D(MossBall.frame_at(up, 0.0), base + up * 0.08)
 	# The vent: a low ring of pebbles (decoration; no collision to trip on).
 	var ring := MeshInstance3D.new()
 	var st := SurfaceTool.new()

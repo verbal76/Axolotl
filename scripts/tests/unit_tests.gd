@@ -587,6 +587,15 @@ func _floor_probe(space: PhysicsDirectSpaceState3D, at: Vector3, up: Vector3) ->
 ## Reachability audit (geometric): every registered climb (terraces, arch, ridge, bridge, spire,
 ## shelves) steps only between real standable surfaces, each within a plain jump (or jump + water
 ## burst) of the last, with headroom above; its elevated motes are within reach of its top.
+## Whether the bubble column at `at` only flows once its zone heals.
+func _column_gated(b: MossBall, at: Vector3) -> bool:
+	for c in b.columns:
+		var off: Vector3 = at - (c[0] as Vector3)
+		if (off - (c[1] as Vector3) * off.dot(c[1])).length() <= float(c[2]) + 0.5:
+			return c.size() > 5 and c[5] != null
+	return false
+
+
 func _test_route_audit() -> void:
 	var space := g.get_world_3d().direct_space_state
 	var n := 0
@@ -742,6 +751,24 @@ func _test_route_audit() -> void:
 			if not served:
 				orphans.append("ball %d %s" % [b.index + 1, m.zone_id])
 	t.check("elevated_motes_have_routes", orphans.is_empty(), ", ".join(orphans))
+	# Open Issue #2: a bubble column that is a platform's way up stands right beside it (its axis
+	# within the cap's rim + 1.5 m of the platform's middle), so it reads as the way up. (A column
+	# that only flows once its zone heals is a shortcut beside a route that is always there.)
+	var far_cols: Array[String] = []
+	var lifts := 0
+	for b in g.balls:
+		for h in (b.get_meta("builder") as LevelBuilder).bot_hints:
+			if not (h.has("route") and h.get("lift", false)) or not b.in_column(h["start"]) or _column_gated(b, h["start"]):
+				continue
+			lifts += 1
+			var tops: Array = h["tops"]
+			var goal: Vector3 = tops[tops.size() - 1]
+			var up := b.up_at(goal)
+			var off: Vector3 = (h["start"] as Vector3) - goal
+			var flat := (off - up * off.dot(up)).length()
+			if flat > 4.3:
+				far_cols.append("ball %d %s %.1f m" % [b.index + 1, h["route"], flat])
+	t.check("lift_columns_beside_their_platforms", lifts >= 3 and far_cols.is_empty(), "%d lifts; too far: %s" % [lifts, ", ".join(far_cols)])
 
 
 # --- Expansion 5: ecosystem -----------------------------------------------------------------
