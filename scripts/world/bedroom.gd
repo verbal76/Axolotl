@@ -66,13 +66,27 @@ uniform float spec = 0.35;
 uniform vec3 amb_up : source_color = vec3(0.60, 0.50, 0.42);
 uniform vec3 amb_down : source_color = vec3(0.28, 0.21, 0.17);
 uniform float amb = 1.0;
+// The room's own lamps (desk, bedside, TV), lit here rather than as scene lights: a scene light's
+// layer mask is only tested per pixel on the Mobile renderer, so real lights this size would be
+// evaluated over the whole tank too.
+uniform vec3 lamp_pos[3];
+uniform vec3 lamp_col[3];
+uniform float lamp_range[3];
 void fragment() {
 	vec3 a = texture(tex, UV).rgb * COLOR.rgb;
 	ALBEDO = a;
 	ROUGHNESS = rough;
 	SPECULAR = spec;
-	float up = (INV_VIEW_MATRIX * vec4(NORMAL, 0.0)).y;
-	EMISSION = a * mix(amb_down, amb_up, up * 0.5 + 0.5) * amb;
+	vec3 wn = (INV_VIEW_MATRIX * vec4(NORMAL, 0.0)).xyz;
+	vec3 wp = (INV_VIEW_MATRIX * vec4(VERTEX, 1.0)).xyz;
+	vec3 lit = mix(amb_down, amb_up, wn.y * 0.5 + 0.5) * amb;
+	for (int k = 0; k < 3; k++) {
+		vec3 l = lamp_pos[k] - wp;
+		float d = length(l);
+		float att = pow(clamp(1.0 - d / max(lamp_range[k], 1.0), 0.0, 1.0), 1.2);
+		lit += lamp_col[k] * att * max(dot(wn, l / max(d, 0.001)), 0.0);
+	}
+	EMISSION = a * lit;
 }
 """
 ## Lamps, screens, the window's dusk view and indicator lights: their own colour, unlit.
@@ -130,6 +144,7 @@ func build(p_floor_y: float, layer: int, tank_min: Vector3, tank_max: Vector3) -
 	_lights()
 	_generate()
 	_commit()
+	_apply_lamps()
 
 
 ## All the geometry (pure data: no nodes).
@@ -1834,17 +1849,32 @@ func _shell() -> void:
 	_ao_mode = 0
 
 
-func _lamp_light(pos: Vector3, col: Color, energy: float, rng: float) -> OmniLight3D:
-	var l := OmniLight3D.new()
-	l.position = pos
-	l.light_color = col
-	l.light_energy = energy
-	l.omni_range = rng
-	l.omni_attenuation = 1.2
-	l.shadow_enabled = false
-	l.light_cull_mask = 1 << (_layer - 1)
-	add_child(l)
-	return l
+## A lamp for the room's shader (LIT_SHADER): position (room space), colour times energy, range.
+var _lamps: Array = []
+func _lamp_light(pos: Vector3, col: Color, energy: float, rng: float) -> void:
+	_lamps.append([pos, Vector3(col.r, col.g, col.b) * energy * LAMP_GAIN, rng])
+
+
+## Converts a lamp's energy to the shader's units (matched by eye against the scene lights it
+## replaced).
+const LAMP_GAIN := 1.0
+
+
+## Hands the lamps to every lit room material, in world space.
+func _apply_lamps() -> void:
+	var pos := PackedVector3Array()
+	var col := PackedVector3Array()
+	var rng := PackedFloat32Array()
+	for l in _lamps:
+		pos.append(global_transform * (l[0] as Vector3) if is_inside_tree() else l[0])
+		col.append(l[1])
+		rng.append(l[2])
+	for key in _mats:
+		var m: ShaderMaterial = _mats[key]
+		if key != "glow":
+			m.set_shader_parameter("lamp_pos", pos)
+			m.set_shader_parameter("lamp_col", col)
+			m.set_shader_parameter("lamp_range", rng)
 
 
 ## The room's own lamps (the ceiling light and the window's dusk are in Aquarium._build_light):
@@ -1854,9 +1884,6 @@ func _lights() -> void:
 	# The desk lamp's bulb (see _desk: the lamp's base at (X0 + 110, top, 820), its shade's joint
 	# 330..420 above it, the bulb 90 along the shade's axis).
 	var dl := Vector3(X0 + 110, fy + 740.0, 820.0) + Vector3(210, 420, 150) + Vector3(0.5, -1.0, 0.35).normalized() * 90.0
-	var desk := _lamp_light(dl, Color(1.0, 0.78, 0.5), 2.2, 1900.0)
-	desk.name = "DeskLamp"
-	var bed_lamp := _lamp_light(Vector3(790, fy + 1250, Z0 + 140), Color(1.0, 0.72, 0.45), 1.8, 1700.0)
-	bed_lamp.name = "BedsideLamp"
-	var tv := _lamp_light(Vector3(-600, fy + 800, 350), Color(0.55, 0.7, 1.0), 0.7, 1300.0)
-	tv.name = "TVGlow"
+	_lamp_light(dl, Color(1.0, 0.78, 0.5), 2.2, 1900.0)
+	_lamp_light(Vector3(790, fy + 1250, Z0 + 140), Color(1.0, 0.72, 0.45), 1.8, 1700.0)
+	_lamp_light(Vector3(-600, fy + 800, 350), Color(0.55, 0.7, 1.0), 0.7, 1300.0)
