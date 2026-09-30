@@ -317,6 +317,10 @@ func chase_run(b: MossBall, centre: Vector3, par: Parasite, bearing: float, time
 # --- Checks --------------------------------------------------------------------------------
 
 func run_checks() -> void:
+	for kind in [Parasite.Kind.SMALL, Parasite.Kind.MEDIUM, Parasite.Kind.LARGE]:
+		if subjects(kind, "", 2).size() < 2 or _first(ReedStalker) == null:
+			t.check("organic_subjects", false, "needs living grazing parasites of each size and a stalker (run it before the all-clear tests)")
+			return
 	var release := hold_everything()
 	var was_on := organic_on()
 	set_organic(true)
