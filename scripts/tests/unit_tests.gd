@@ -6691,7 +6691,7 @@ func _test_treasure_play() -> void:
 
 
 
-# --- Gill's body and traction (Mote Open Issue #1) ----------------------------------------
+# --- His body and traction (Mote Open Issue #1) --------------------------------------------
 
 ## Test ground for the traction tests: bodies on the terrain layer, in the frame of a quiet, flat
 ## spot (x right, y up, -z ahead).
