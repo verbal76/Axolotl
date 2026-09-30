@@ -460,6 +460,22 @@ func _complete(id: String) -> void:
 			if c is CrabGuardian and (c as CrabGuardian).threat_id == id:
 				await goto(c.global_position, 3.0, 30.0)
 				await fight_crab(c as CrabGuardian, 25.0)
+	elif id.contains(".mote."):
+		# A Mote the main pass missed (the mesa's, on its living platforms, can be knocked off): up
+		# its world's climb (the mesa by its own routine), then take it.
+		for m in b.motes:
+			if str(m.get_meta("completion_id", "")) != id or not m.is_available():
+				continue
+			for attempt in 3:
+				if g.run_save.earned().has(id):
+					break
+				if m.zone_id == "mesa":
+					for h in (b.get_meta("builder") as LevelBuilder).bot_hints:
+						if h.has("mesa"):
+							await mesa(b, h)
+				else:
+					await _reach(b, m.global_position)
+					await goto(m.global_position, 0.4, 8.0)
 	else:
 		t.log_line("100%%: no play handler for %s" % id)
 
@@ -1599,7 +1615,8 @@ func _collect_tasks(b: MossBall, lb: LevelBuilder, skip_zones: Array, done: Dict
 		for hh in lb.bot_hints:
 			if str(hh.get("route", "")) == "mesa column" and b.lift_at((hh["start"] as Vector3) + b.up_at(hh["start"]) * 0.5) <= 0.0:
 				col_waiting = true
-		if h.has("mesa") and not col_waiting and (not done.has("mesa") or done.has("retry_mesa")):
+		# (--skip_mesa=1, debug: leave the mesa to the 100% pass, to prove its Mote handler.)
+		if h.has("mesa") and not col_waiting and (not done.has("mesa") or done.has("retry_mesa")) and Settings.test_args.get("skip_mesa", "0") != "1":
 			tasks.append({"kind": "mesa", "hint": h, "pos": func(): return b.surface_point(MossBall.dir_ll(h["site"][0], h["site"][1]))})
 		if h.has("canopy") and (not done.has("canopy") or done.has("retry_canopy")):
 			tasks.append({"kind": "canopy", "hint": h, "pos": func(): return (h["spiral"][0] as Transform3D).origin})
