@@ -222,3 +222,93 @@ Base: `claude/mote-game-continuation-bov2x9` @ `77c776b`. Work branch: `mote-iss
 - The owner's specific "mossy slope" spot was not located. Open Issue #2 (elevated content) was
   audited separately and fixed in level design (bubble columns beside the platforms they serve,
   readable as lifts; ledger, Mote Open Issues); the traction work does not change reachability.
+
+## 6. Second pass: the phone playtest of dev-000033
+
+dev-000033 passed its tests, but on the phone the owner found two things. Gill still looked
+rigid in ordinary play. And on an ordinary mossy incline with a short steep foot, he face-planted
+into the edge and slid sideways along its bottom.
+
+### Root causes (measured in the real game path)
+
+| # | Finding | Class |
+|---|---|---|
+| 1 | The follow runs in play: `follow` and `conform` are on for every grounded frame, the bones are written once, after the idles, and nothing writes them later. | not A/B |
+| 2 | From the gameplay camera, in an ordinary turn the dev-000033 follow did not add to what the S-wave already bent. The tail sat 28 px from a rigid body with the follow on, and 29 px with it off (median, 1280 px viewport). The lag was exactly the path (0.12 m per segment): at a run, each segment trailed by 20 ms, and a gentle curve has little curvature to show. Only reversals, zigzags and turns on the spot bent visibly. | C (too weak) |
+| 3 | `_lip_ahead` accepted only a flat top straight ahead. It rejected every lip that led onto an incline: the "top goes on" probe required the same height 0.3 m further, and two rays at the lip's height had to find nothing rising beyond it. It also needed the stick within 45 degrees of facing, and a gentle floor (under 40 degrees). | D (traction rarely activates) |
+| 4 | The per-frame sequence at such an incline: the body walks in, and the head sphere touches the >52 degree band. `_guard_head` pushes the whole body back about 0.57 m short of the face (the face-plant). The traction gates fail (3). `move_and_slide` treats the band as a wall while he is on the floor, so it slides him horizontally along it (the sideways slide). The guard and the wall slide win every frame. | E (collision architecture defeats it) |
+
+### Real authored terrain (`_phase_incline_survey`)
+
+The survey reads the ground ahead along 8 headings from a Fibonacci lattice of starts every
+1.6 m on all 7 balls (about 78,000 starts). Wherever the ground rises through a band over
+52 degrees, it drives him straight in with the stick for 2.5 s, 392 approaches in all.
+
+- On dev-000033:
+  - 32 of 55 short bands (up to 0.6 m) with walkable ground beyond were STUCK;
+  - all 133 tall bands were stuck.
+- The short bands were on:
+  - arch ends (ball 3, ball 4);
+  - ridge flanks (balls 1, 5, 7);
+  - the lumpy lower flanks of cave domes (balls 1, 2, 4, 5, 7);
+  - cushion and terrace sides met at an angle.
+- The analytic terrain (hills, plateaus) never has a band. Every one is a mesh body.
+
+### The fix
+
+- **Controller (`axolotl.gd`, `crawl_probe`).** When he is blocked, he reads the ground's shape
+  along his heading, and up the face if a face turned him aside. It is read out to 1.6 m, in
+  0.1 m steps, from 1.15 m above his feet down. A wall through that ceiling ends the profile.
+  - A crawlable transition is a steep band (over 50 degrees, by the hit normal or the rise) whose
+    foot is within 0.95 m. Its first walkable sample must be at most 0.6 m above his feet.
+  - It then needs at least 0.35 m of walkable purchase beyond. The purchase must be still, not a
+    leaf, crumble, moving body or ravine, and not a designed jump. The band must rise from the
+    ground, with headroom, and with room for his body on the purchase.
+  - The crawl is one bounded move: up at up to 2.6 m/s while below the band's top, on at 1.6 m/s
+    over the edge until his body is 0.12 m onto the purchase. It is cancelled by letting go,
+    jumping, a lunge, Tier 2, a hit, or its time limit. Then he walks on up whatever incline
+    follows.
+  - Anything else steep is exactly as before: the head guard, the 52 degree wall, and no adhesion.
+- **Designed jumps stay jumps.** Cushions, terrace tiers, stone columns and rising stones carry
+  `jump_only`, and are never crawled. Without it, ball 4's terraces (the "three steps, each one
+  plain jump") were crawled tier by tier from oblique headings: `_phase_crawl_trace` at
+  ball 4 (48.0, -71.4), heading 146, reached 2.38 m. Neither the old six-side no-shortcut probe
+  nor its twelve-side successor caught this.
+- **Head guard.** It ignores contacts under 0.12 m above his feet (a bump at his chin that the
+  body steps). The probe is re-read at most every 0.12 s while he is pressed against a barrier.
+- **Model (`axolotl_model.gd`).**
+  - The lag is time based: about 0.035 s per segment at a run, about a third of a second head to
+    tail.
+  - While he keeps turning, the body holds a curve (0.055 s per joint per rad/s, up to
+    0.11 rad).
+  - The head leads the turn still to come (`turn_gap`) and the turning rate.
+  - In the air the pitch follows at 9/s, however fast he flies.
+  - Six ground rays instead of four; the head lifts up to 0.55 m while crawling.
+  - A crawl pose: chin up, front feet reaching and pawing, rear feet planted and pushing.
+
+### Evidence
+
+- **Loco diag** (median tail offset from a rigid body, gameplay camera, 1280 px): broad turn
+  28 px on dev-000033, 46 px now; sharp circle 29 px, now 62 px; zigzag 63 px, now 120 px;
+  straight running unchanged at 31 px. Mean head-to-tail bend in a broad turn: 16 degrees,
+  now 30 degrees. The gameplay body still faces round in 2 frames.
+- **`_test_gill_incline_transitions` on dev-000033:**
+  - the 7 steep-footed inclines, straight and met at 25 to 50 degrees: 0 of 7 (slid 5 to 8 m
+    sideways when met at an angle);
+  - real arch end (ball 3) 0.02 m;
+  - ridge flank (ball 1) 0.31 m.
+- **Now:**
+  - all 7 on top in 1.1 to 1.5 s;
+  - arch end 1.11 m, ridge flank 0.92 m;
+  - barriers: the cushion wall, the band with no purchase and the 1.2 m face still stop him at
+    0 and 40 degrees, with no crawl, rests at the foot, and no ratchet.
+- **`_test_traction_no_shortcuts`**: 172 elevated bodies and 1,928 approaches (12 sides, half of
+  them oblique). No shortcuts.
+
+### Limits
+
+- He does not roll to a slope running across his path (lateral traversal looks as before).
+- Cave domes: the lumpy lower flank is crawled up to about 0.5 to 0.9 m, and the dome above it
+  stays a wall.
+- Ridge flanks: a low steep kink is crawled, but the upper sides (over 52 degrees, under the rim)
+  stay walls. The crest is still reached by its end ramps.
