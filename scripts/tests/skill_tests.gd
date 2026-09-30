@@ -476,7 +476,10 @@ func pickup() -> void:
 	# Its own sound: present, and not the Mote capture or the reward chime.
 	var files := {}
 	for nm in ["starfish", "skill_unlock", "mote_capture", "upgrade"]:
-		files[nm] = FileAccess.get_file_as_bytes("res://assets/audio/sfx_%s.wav" % nm).size() if FileAccess.file_exists("res://assets/audio/sfx_%s.wav" % nm) else 0
+		# (The loaded sound, not the source file: an exported pack carries only the imported sample.)
+		var path := "res://assets/audio/sfx_%s.wav" % nm
+		var snd: AudioStreamWAV = load(path) as AudioStreamWAV if ResourceLoader.exists(path) else null
+		files[nm] = snd.data.size() if snd != null else 0
 	var st: AudioStream = Sfx.inst.stream("starfish")
 	var su: AudioStream = Sfx.inst.stream("skill_unlock")
 	t.check("starfish_and_unlock_sounds_distinct", st != null and su != null and st != Sfx.inst.stream("mote_capture") and st != Sfx.inst.stream("upgrade") and files["starfish"] > 0 and files["starfish"] != files["mote_capture"],
