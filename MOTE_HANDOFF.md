@@ -814,6 +814,38 @@ repository. Do not name, open or use any other game repository in Mote developme
   - Per the brief: STOP after it; start nothing new unless the owner asks.
 - **After that:** continue from the owner's feedback. Game-layer changes reach b22 by OTA on push
   (that push is also the first OTA a b22 phone downloads). Native changes need `--bump` and a new APK.
+- **Treasure Hunt (ledger TH):** the postgame search, **dev-000030** (source `9547061`). Its
+  published-pack check found hunts that could not be finished (objects on tower tops with no room
+  beside them); fixed in **dev-000031** (source to be recorded at release, ledger TH-B3). The owner's phone ran
+  dev-000030 healthily (diagnostics 2026-09-29).
+
+### Standing working rules (owner, 2026-09-29) — these replace every earlier "STOP after it"
+
+1. **Physical playtesting is continuous feedback, not a gate.** Never wait for a playtest before
+   continuing. "Requires physical playtest" names an evidence boundary only. Record every phone
+   finding at once, triage it by what it is (defect, regression, polish, design change, old issue newly
+   noticed, new request) and by its real origin (not the OTA the owner happened to be on), and queue it.
+   Fold it into work in progress only if that does not destabilise a release already in final
+   qualification, publishing or verification. Stop only for: a genuine product decision the
+   requirements cannot settle, a destructive or irreversible action, information only on the owner's
+   phone, contradictory requirements, or an explicit stop.
+2. **Qualification depth follows the risk surface of the change.** Correctness and artifact checks
+   always run: focused tests, unit suite, both canonical playthroughs, OTA end-to-end, CI, public
+   manifest/signature/hash/pack checks, published-pack tests, b22 staging. Expensive measurements the
+   change cannot plausibly affect (for example repeated A-B-A-B performance passes for a change outside
+   gameplay loops, rendering, startup and world building) are cut to a sanity check. Document what was
+   reduced and why; do not ask each time. Keep removing unnecessary serial duplication between local
+   qualification and CI (see the pipeline audit's recommendations).
+
+### Work queue (owner order, 2026-09-29)
+
+1. dev-000031 (Treasure Hunt fix): publish and verify.
+2. **Aquarium / UI / Bedroom / exterior / fish / Swim package** (one OTA), including the owner's
+   **Settings gear** (the supplied transparent PNG, added to `assets/ui/` in that package, used as supplied) and **direct Settings
+   access from the title screen** with the build/OTA diagnostics before Start or Continue. Owner-locked:
+   keep the restoration-driven murk; fix the presentation around it.
+3. **Mote Open Issue #1: Gill fluid body locomotion and terrain traversal** (ledger), straight after,
+   with no playtest wait.
 
 ---
 
