@@ -14,7 +14,7 @@ func run(runner) -> void:
 	p.use_bot_input = true
 	await t.seconds(0.5)
 	var only: String = Settings.test_args.get("only", "")
-	for name_ in ["_test_startup", "_test_ota_and_version", "_test_mesh_winding", "_test_terrain", "_test_ravines", "_test_terrain_grounded", "_test_no_floating_platforms", "_test_parasite_locomotion", "_test_parasite_body_and_death", "_test_parasite_combat", "_test_gill_look", "_test_gill_idles", "_test_gill_colours", "_test_gill_patterns", "_test_tail_whip", "_test_gill_body_follow", "_test_swim_body_follow", "_test_ambient_sway", "_test_placements", "_test_tutorial_route", "_test_sphere_walk", "_test_jump_and_burst", "_test_coyote_and_buffer", "_test_swipe_direction_and_stages", "_test_hard_landing", "_test_food", "_test_food_reach", "_test_darter_and_burrower", "_test_food_repopulates", "_test_motes", "_test_checkpoint_and_regen", "_test_crumble", "_test_restoration_gates", "_test_bubble_columns", "_test_restoration_continuity", "_test_health_map", "_test_vortex", "_test_current", "_test_canopy", "_test_canopy_plain_jumps", "_test_climbs_physical", "_test_jungle_ladders_physical", "_test_leaf_geometry", "_test_leaf_footing", "_test_caves", "_test_mounds", "_test_vegetation", "_test_vortex_mouths_clear", "_test_route_audit", "_test_new_areas", "_test_ecosystem", "_test_music", "_test_run_clock", "_test_completion_catalog", "_test_completion_frozen", "_test_run_save_file", "_test_run_timer_live", "_test_run_continue", "_test_timer_integrity", "_test_resume_points_safe", "_phase_continue_write", "_phase_continue_read", "_test_upgrades", "_test_ui", "_test_menu_scrollbar", "_test_tier2_rules", "_test_tier2_world", "_test_ambient_fish", "_test_parasite_never_buried", "_test_tier2_loadout", "_test_aquarium_experiences", "_test_aquarium_polish", "_test_all_clear", "_test_treasure_unlock", "_test_treasure_generation", "_test_treasure_play", "_phase_treasure_stress", "_phase_live_fish_diag"]:
+	for name_ in ["_test_startup", "_test_ota_and_version", "_test_mesh_winding", "_test_terrain", "_test_ravines", "_test_terrain_grounded", "_test_no_floating_platforms", "_test_parasite_locomotion", "_test_parasite_body_and_death", "_test_parasite_combat", "_test_gill_look", "_test_gill_idles", "_test_gill_colours", "_test_gill_patterns", "_test_tail_whip", "_test_gill_traction", "_test_traction_no_shortcuts", "_test_gill_body_follow", "_test_swim_body_follow", "_test_ambient_sway", "_test_placements", "_test_tutorial_route", "_test_sphere_walk", "_test_jump_and_burst", "_test_coyote_and_buffer", "_test_swipe_direction_and_stages", "_test_hard_landing", "_test_food", "_test_food_reach", "_test_darter_and_burrower", "_test_food_repopulates", "_test_motes", "_test_checkpoint_and_regen", "_test_crumble", "_test_restoration_gates", "_test_bubble_columns", "_test_restoration_continuity", "_test_health_map", "_test_vortex", "_test_current", "_test_canopy", "_test_canopy_plain_jumps", "_test_climbs_physical", "_test_jungle_ladders_physical", "_test_leaf_geometry", "_test_leaf_footing", "_test_caves", "_test_mounds", "_test_vegetation", "_test_vortex_mouths_clear", "_test_route_audit", "_test_new_areas", "_test_ecosystem", "_test_music", "_test_run_clock", "_test_completion_catalog", "_test_completion_frozen", "_test_run_save_file", "_test_run_timer_live", "_test_run_continue", "_test_timer_integrity", "_test_resume_points_safe", "_phase_continue_write", "_phase_continue_read", "_test_upgrades", "_test_ui", "_test_menu_scrollbar", "_test_tier2_rules", "_test_tier2_world", "_test_ambient_fish", "_test_parasite_never_buried", "_test_tier2_loadout", "_test_aquarium_experiences", "_test_aquarium_polish", "_test_all_clear", "_test_treasure_unlock", "_test_treasure_generation", "_test_treasure_play", "_phase_treasure_stress", "_phase_live_fish_diag"]:
 		# "_phase_*" tests are halves of a relaunch test: they run only when asked for by name
 		# (in a child process started by _test_run_continue).
 		if name_.begins_with("_phase") and not only.split(",", false).has(name_):
@@ -6759,6 +6759,163 @@ func _rig_h(frame: Transform3D) -> float:
 	return (p.global_position - frame.origin).dot(frame.basis.y)
 
 
+## Distributed traction: a short steep lip is pulled over once his front has purchase above it; a
+## lip above LIP_MAX still needs a jump; a long steep face (over 52 degrees, metres high) loses him
+## his traction and he slides back down: no wall adhesion, no ratcheting over repeated attempts;
+## walkable slopes are walked as before.
+func _test_gill_traction() -> void:
+	var b := g.balls[0]
+	var release := _hold_threats(b)
+	p.invuln_t = 999
+	var spot := _quiet_spot(0)
+	var up := b.up_at(spot)
+	var fwd := -MossBall.frame_at(up, 0.0).z
+	var frame := Transform3D(Basis(fwd.cross(up), up, -fwd), b.surface_point(up))
+	var root := Node3D.new()
+	g.add_child(root)
+	var start := func() -> void:
+		place_at(0, b.surface_point(up, 0.05), fwd)
+		await t.seconds(0.4)
+	var m0: int = p.get("mantles") if "mantles" in p else 0
+	# Short lips: pulled over.
+	var lips := []
+	var lips_ok := true
+	for h in [0.22, 0.3, 0.4]:
+		var lip := _rig_lip(root, frame, 1.3, h, 8.0)
+		await t.frames(2)
+		await start.call()
+		var r: Array = await _push_ahead(frame, 1.5)
+		var on_top: bool = r[1] > h - 0.06 and p.grounded and (p.global_position - frame.origin).dot(fwd) > 1.6
+		lips_ok = lips_ok and on_top
+		lips.append("%.2f m: %s (at %.2f m)" % [h, "over" if on_top else "NOT over", r[1]])
+		lip.free()
+	var m_now: int = p.get("mantles") if "mantles" in p else 0
+	t.check("traction_short_lip_pulled_over", lips_ok and m_now >= m0 + 2, ", ".join(lips) + "; %d pulls" % (m_now - m0))
+	# A lip taller than LIP_MAX: no pull (a jump is needed, and still works).
+	var tall := _rig_lip(root, frame, 1.3, 0.62, 8.0)
+	await t.frames(2)
+	await start.call()
+	var m1: int = p.get("mantles") if "mantles" in p else 0
+	var rt: Array = await _push_ahead(frame, 2.0)
+	var m1b: int = p.get("mantles") if "mantles" in p else 0
+	var stayed: bool = rt[0] < 0.2 and m1b == m1
+	stick_toward(fwd)
+	await press("jump")
+	await _push_ahead(frame, 0.6)
+	await wait_grounded()
+	t.check("traction_tall_lip_needs_a_jump", stayed and _rig_h(frame) > 0.55, "pushing: highest %.2f m, %d pulls; after a jump %.2f m up" % [rt[0], m1b - m1, _rig_h(frame)])
+	tall.free()
+	# Long steep faces: he never gets up them by pushing, and after each push slides back to the
+	# bottom (no adhesion); repeated pushes get no higher (no ratchet).
+	var faces := []
+	var faces_ok := true
+	for deg in [56.0, 62.0, 75.0]:
+		var face := _rig_face(root, frame, 1.2, deg, 3.0)
+		await t.frames(2)
+		await start.call()
+		var highs := []
+		var m2: int = p.get("mantles") if "mantles" in p else 0
+		var rests := []
+		for k in 4:
+			var r2: Array = await _push_ahead(frame, 1.1)
+			highs.append(r2[0])
+			await t.seconds(0.5)
+			rests.append(_rig_h(frame))
+		# Jumping into it: up with the jump, then down again.
+		stick_toward(fwd)
+		await press("jump")
+		await _push_ahead(frame, 0.4)
+		await t.seconds(1.2)
+		var after_jump := _rig_h(frame)
+		var m2b: int = p.get("mantles") if "mantles" in p else 0
+		var ok: bool = highs.max() < 0.45 and highs[3] <= highs[0] + 0.05 and rests.max() < 0.12 and after_jump < 0.12 and m2b == m2 and p.grounded
+		faces_ok = faces_ok and ok
+		faces.append("%.0f deg: pushes reach %s m, rests at %s, after a jump %.2f, %d pulls" % [deg, str(highs.map(func(x): return snappedf(x, 0.01))),
+				str(rests.map(func(x): return snappedf(x, 0.01))), after_jump, m2b - m2])
+		face.free()
+	# A steep face of narrow ledges (0.35 m risers, 0.2 m treads: 60 degrees overall): each ledge is
+	# no top to pull onto, so pushing never ratchets him up it.
+	var steps := []
+	for k in 7:
+		steps.append(_rig_lip(root, frame, 1.3 + 0.2 * k, 0.35 * (k + 1), 3.0))
+	await t.frames(2)
+	await start.call()
+	var m4: int = p.mantles
+	var st_hi := []
+	for k in 4:
+		var r4: Array = await _push_ahead(frame, 1.1)
+		st_hi.append(snappedf(r4[0], 0.01))
+		await t.seconds(0.4)
+	faces_ok = faces_ok and st_hi.max() < 0.8 and st_hi[3] <= st_hi[0] + 0.05
+	faces.append("ledged face: pushes reach %s m, %d pulls" % [str(st_hi), p.mantles - m4])
+	for s_ in steps:
+		s_.free()
+	t.check("traction_long_steep_face_slides_no_ratchet", faces_ok, "; ".join(faces))
+	# Walkable slopes: walked up as before.
+	var walks := []
+	var walk_ok := true
+	for deg in [30.0, 45.0]:
+		var ramp := _rig_face(root, frame, 1.2, deg, 1.2, 8.0)
+		await t.frames(2)
+		await start.call()
+		var r3: Array = await _push_ahead(frame, 1.5)
+		walk_ok = walk_ok and r3[0] > 1.1
+		walks.append("%.0f deg: %.2f m up" % [deg, r3[0]])
+		ramp.free()
+	t.check("traction_walkable_slopes_walked", walk_ok, ", ".join(walks))
+	root.queue_free()
+	await t.frames(2)
+	# Ravine walls stay unscalable: from low and halfway up a ravine's wall, pushing up it, he
+	# never pulls himself out; he slides to the floor and is put back at the rim as always.
+	var at := MossBall.dir_ll(-10, -40)
+	var fr := MossBall.frame_at(at, 0.0)
+	var n_hills := b.hills.size()
+	var n_carves := b.carves.size()
+	var m2a := func(m: float) -> float: return m / b.radius
+	b.add_plateau(at, m2a.call(14.0), 3.0, 2.5)
+	b.add_ravine([at.rotated(fr.z, m2a.call(10.0)), at, at.rotated(fr.z, -m2a.call(10.0))], 3.2, 3.0, 1.4, "test.traction")
+	b.finalize_terrain()
+	await t.frames(2)
+	var rav := []
+	var rav_ok := true
+	for frac in [0.25, 0.5]:
+		# The point on the wall at that height (walking out from the middle of the floor).
+		var wd := at
+		for k in 80:
+			wd = at.rotated(fr.x, m2a.call(1.6 + k * 0.03))
+			if b.terrain_height(wd) >= 3.0 * frac:
+				break
+		var out := (b.surface_point(at.rotated(fr.x, m2a.call(5.0))) - b.surface_point(wd)).normalized()
+		place_at(0, b.surface_point(wd, 0.35), out)
+		p.health = p.max_health
+		var m3: int = p.mantles
+		var start_h := (p.global_position - b.global_position).length() - b.radius
+		var top := 0.0
+		for f in 90:
+			stick_toward(out)
+			await t.frames(1)
+			if g.cinematic != "":
+				break
+			top = maxf(top, (p.global_position - b.global_position).length() - b.radius)
+		p.bot_input = Vector2.ZERO
+		var got_out := b.ravine_carve(p.up) < 0.15 and g.cinematic == ""
+		rav_ok = rav_ok and not got_out and p.mantles == m3 and top <= start_h + 0.05
+		rav.append("placed %.2f m up the wall: highest %.2f m of 3, pulls %d, %s" % [start_h, top, p.mantles - m3, "OUT" if got_out else "slid back down"])
+		for f in 60 * 6:
+			if g.cinematic == "" and p.state == "normal":
+				break
+			await t.frames(1)
+		p.restore_full()
+	t.check("traction_ravine_walls_unscalable", rav_ok, "; ".join(rav))
+	b.hills.resize(n_hills)
+	b.carves.resize(n_carves)
+	b._cells_dirty = true
+	b.finalize_terrain()
+	await t.frames(2)
+	p.invuln_t = 0.0
+	release.call()
+
+
 ## The segments of his spine in the world (bone i to bone i + 1, pointing toward the tail).
 func _spine_dirs(m: AxolotlModel) -> Array[Vector3]:
 	var sk := m.skeleton
@@ -6952,3 +7109,101 @@ func _test_swim_body_follow() -> void:
 	pr.exit()
 	await t.frames(2)
 	release.call()
+
+
+
+## The pull over a lip opens no shortcut up designed elevated content: walking straight at every
+## elevated platform, mound, mesa, shelf, terrace, stone column and rising stone from the open
+## ground round it (six sides, no jumping), a pull never gets him onto its top. (Pulls over lips on
+## a walkable flank and walks up designed ramps are logged, not failed.) A pull is also, by
+## construction, less than a plain jump from where he stands.
+func _test_traction_no_shortcuts() -> void:
+	var space := g.get_world_3d().direct_space_state
+	p.invuln_t = 99999
+	var probes := 0
+	var bodies := 0
+	var pulls := 0
+	var shortcuts: Array[String] = []
+	var walked: Array[String] = []
+	var pulled: Array[String] = []
+	for b in g.balls:
+		var release := _hold_threats(b)
+		var lb: LevelBuilder = b.get_meta("builder")
+		for node in lb.root.get_children():
+			if not (node is StaticBody3D or node is AnimatableBody3D) or node.has_meta("decor_leaf"):
+				continue
+			var tp := Vector3.INF
+			if node.has_meta("top_point"):
+				tp = node.get_meta("top_point")
+			elif node.has_meta("top"):
+				tp = (node as Node3D).global_transform * Vector3(0, float(node.get_meta("top")), 0)
+			if tp == Vector3.INF:
+				continue
+			var u := b.up_at(tp)
+			if b.altitude(tp) < 0.6 or b.ravine_carve(u) > 0.05:
+				continue
+			bodies += 1
+			var fr := MossBall.frame_at(u, 0.0)
+			for k in 6:
+				var dir: Vector3 = fr.z.rotated(u, TAU * k / 6.0)
+				# Out from under the top until open, gentle ground, then 1.2 m further.
+				var start := Vector3.INF
+				for s in range(4, 40):
+					var d := b.up_at(tp + dir * (s * 0.25))
+					var gp := b.surface_point(d)
+					var hit := space.intersect_ray(PhysicsRayQueryParameters3D.create(gp + d * 3.5, gp - d * 0.5, 1 | 2 | 8))
+					# (The ground itself, not the foot of the body or anything else on it.)
+					if hit.is_empty() or absf(b.altitude(hit["position"])) > 0.06 or (hit["normal"] as Vector3).dot(d) < 0.9:
+						continue
+					var d2 := b.up_at(tp + dir * (s * 0.25 + 1.2))
+					if b.ravine_carve(d2) > 0.05:
+						break
+					start = b.surface_point(d2, 0.05)
+					break
+				if start == Vector3.INF:
+					continue
+				var d0 := b.up_at(start)
+				if not space.intersect_ray(PhysicsRayQueryParameters3D.create(start + d0 * 0.2, start + d0 * 2.5, 1 | 2 | 8)).is_empty():
+					continue
+				probes += 1
+				var to := tp - start
+				place_at(b.index, start, to - d0 * to.dot(d0))
+				await t.frames(8)
+				var h0 := b.altitude(p.global_position)
+				var m0: int = p.mantles
+				var hi := h0
+				for f in 100:
+					stick_toward(tp - p.global_position)
+					await t.frames(1)
+					if p.grounded:
+						hi = maxf(hi, b.altitude(p.global_position))
+					if g.cinematic != "":
+						break
+				p.bot_input = Vector2.ZERO
+				var np: int = p.mantles - m0
+				pulls += np
+				var what := "ball %d %s %s (top %.1f m up) from the %d side: up to %.2f m, %d pulls" % [b.index + 1, node.get_meta("terrain_kind", node.get_meta("grounded", node.get_class())),
+						node.name, b.altitude(tp), k, hi - h0, np]
+				# (A shortcut is getting onto the elevated top with a pull; a pull over a lip on the
+				# way up a walkable flank, or a walk up a designed ramp, is not.)
+				if np > 0:
+					pulled.append(what)
+					if hi >= b.altitude(tp) - 0.45:
+						shortcuts.append(what)
+				elif hi - h0 > 0.6:
+					walked.append(what)
+				for f in 60 * 5:
+					if g.cinematic == "" and p.state == "normal":
+						break
+					await t.frames(1)
+		release.call()
+	p.invuln_t = 0.0
+	p.restore_full()
+	for x in walked:
+		t.log_line("walked up (no pull): " + x)
+	for x in pulled:
+		t.log_line("pulled over a lip: " + x)
+	for x in shortcuts:
+		t.log_line("SHORTCUT: " + x)
+	t.check("traction_opens_no_shortcuts", shortcuts.is_empty() and bodies > 40 and probes > 150,
+			"%d elevated bodies, %d approaches, %d pulls over lips on the way; %d walk-ups by design ramps; shortcuts: %s" % [bodies, probes, pulls, walked.size(), str(shortcuts)])
