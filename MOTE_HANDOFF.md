@@ -816,7 +816,7 @@ repository. Do not name, open or use any other game repository in Mote developme
   (that push is also the first OTA a b22 phone downloads). Native changes need `--bump` and a new APK.
 - **Treasure Hunt (ledger TH):** the postgame search, **dev-000030** (source `9547061`). Its
   published-pack check found hunts that could not be finished (objects on tower tops with no room
-  beside them); fixed in **dev-000031** (source to be recorded at release, ledger TH-B3). The owner's phone ran
+  beside them); fixed in **dev-000031** (source `c2f3126`, PCK `8dc85f64…c8623`; published, verified from the public URLs and staged by a b22 client; ledger TH-B3). The owner's phone ran
   dev-000030 healthily (diagnostics 2026-09-29).
 
 ### Standing working rules (owner, 2026-09-29) — these replace every earlier "STOP after it"
@@ -866,13 +866,13 @@ repository. Do not name, open or use any other game repository in Mote developme
 
 ### Work queue (owner order, 2026-09-29)
 
-1. dev-000031 (Treasure Hunt fix): publish and verify.
+1. ~~dev-000031 (Treasure Hunt fix)~~: published and verified.
 2. **Aquarium / UI / Bedroom / exterior / fish / Swim package** (one OTA), including the owner's
    **Settings gear** (the supplied transparent PNG, added to `assets/ui/` in that package, used as supplied) and **direct Settings
    access from the title screen** with the build/OTA diagnostics before Start or Continue. Owner-locked:
    keep the restoration-driven murk; fix the presentation around it.
 3. **Mote Open Issue #1: Gill fluid body locomotion and terrain traversal** (ledger), straight after,
-   with no playtest wait.
+   with no playtest wait. Mote Open Issue #2 (elevated content reachability) is investigated alongside it.
 
 ---
 
