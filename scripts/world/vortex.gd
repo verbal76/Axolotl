@@ -20,9 +20,9 @@ const POOL_R := 5.2
 ## Each connection's faint hue (owner, 2026-09-30: nearby vortices were mistaken for one another), by
 ## its index in Levels.LINKS: the same at both ends, stable, and chosen so no two connections that
 ## share a ball look alike. Mostly in the bright water (TINT_AMT), so they stay water.
-const TINTS := [Color(1.0, 0.62, 0.78), Color(0.62, 1.0, 0.6), Color(1.0, 0.8, 0.45), Color(0.8, 0.66, 1.0),
-		Color(1.0, 0.58, 0.5), Color(0.55, 0.72, 1.0)]
-const TINT_AMT := 0.38
+const TINTS := [Color(1.0, 0.36, 0.62), Color(0.36, 1.0, 0.42), Color(1.0, 0.72, 0.22), Color(0.7, 0.46, 1.0),
+		Color(1.0, 0.42, 0.3), Color(0.32, 0.52, 1.0)]
+const TINT_AMT := 0.5
 
 var ball_a: MossBall
 var ball_b: MossBall
