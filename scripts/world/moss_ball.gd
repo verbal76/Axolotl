@@ -1045,21 +1045,36 @@ func set_far_view(on: bool, keep := 5, grow := 1.7) -> void:
 		return
 	if _far_veg != null:
 		return
-	# Every kept plant of the same mesh and material goes into one MultiMesh.
+	# Every kept plant of the same mesh and material goes into one MultiMesh. Plants too small to
+	# read from the room are left out, and the rest are thinned evenly to FAR_TRIS per world.
 	var groups := {}
+	var tris := {}
+	var total := 0.0
 	for c in _veg_parent.get_children():
 		if not (c is MultiMeshInstance3D and c.has_meta("veg_transforms")):
 			continue
 		var src: MultiMeshInstance3D = c
-		var key := [src.multimesh.mesh, src.material_override]
+		var mesh: Mesh = src.multimesh.mesh
+		if mesh == null or mesh.get_aabb().get_longest_axis_size() < FAR_MIN_SIZE:
+			continue
+		var key := [mesh, src.material_override]
 		if not groups.has(key):
 			groups[key] = []
+			tris[key] = _mesh_tris(mesh)
 		var list: Array = src.get_meta("veg_transforms")
 		var into: Array = groups[key]
 		var base := src.transform
 		for j in range(0, list.size(), keep):
 			var x: Transform3D = base * list[j]
 			into.append(Transform3D(x.basis.scaled(Vector3.ONE * grow), x.origin))
+		total += float(tris[key]) * ceilf(list.size() / float(keep))
+	var stride := maxi(1, ceili(total / FAR_TRIS))
+	for key in groups:
+		var all: Array = groups[key]
+		var thin := []
+		for j in range(0, all.size(), stride):
+			thin.append(all[j])
+		groups[key] = thin
 	_far_veg = Node3D.new()
 	_far_veg.name = "FarVegetation"
 	_veg_parent.get_parent().add_child(_far_veg)
@@ -1079,6 +1094,21 @@ func set_far_view(on: bool, keep := 5, grow := 1.7) -> void:
 		far.material_override = key[1]
 		far.cast_shadow = GeometryInstance3D.SHADOW_CASTING_SETTING_OFF
 		_far_veg.add_child(far)
+
+
+## The far view's triangle budget per world, and the smallest plant it keeps (its mesh's longest
+## side, in metres): a whole tank of them costs about what one world's near view does.
+const FAR_TRIS := 30000.0
+const FAR_MIN_SIZE := 0.45
+
+
+static func _mesh_tris(mesh: Mesh) -> int:
+	var n := 0
+	for i in mesh.get_surface_count():
+		var a := mesh.surface_get_arrays(i)
+		var idx = a[Mesh.ARRAY_INDEX]
+		n += (idx.size() if idx != null else (a[Mesh.ARRAY_VERTEX] as PackedVector3Array).size()) / 3
+	return n
 
 
 func far_vegetation() -> Node3D:
