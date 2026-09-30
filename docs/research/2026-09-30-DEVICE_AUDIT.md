@@ -112,7 +112,7 @@ once). Tests: `repop_no_ids_no_restoration_change`, `repop_offscreen_and_far`,
 `repop_not_before_grace`, `repop_caps`, `repop_saved_timers`, `food_local_targets_and_cooldown`,
 `food_rng_isolated`, both playthroughs to 100 %.
 
-## E. Hard Mode (APPROVED / QUEUED LAST / SPECIFICATION COMPLETE except the one blocker at the end / IMPLEMENTATION NOT YET STARTED; builds on D's returners; owner rulings above and §E2 take precedence)
+## E. Hard Mode (APPROVED / QUEUED LAST / SPECIFICATION COMPLETE / IMPLEMENTATION NOT YET STARTED; AUTONOMOUS BUILD READY; builds on D's returners; owner rulings above and §E2 take precedence)
 - **Selection:** `run["mode"] = "hard"` at New Run (two-choice dialog); missing = normal, so every
   existing save and b22 install is Normal; run format stays 1 (additive; `migrate` keeps unknown keys;
   an older build plays a Hard run as Normal and loses nothing). Records carry `mode`;
@@ -130,7 +130,7 @@ once). Tests: `repop_no_ids_no_restoration_change`, `repop_offscreen_and_far`,
   losing at once; no returners into a zone at its floor; return rate halves at Gill health ≤2.
   **Anti-lock:** returners keep coming at the Hard rate (every 180–300 s per zone after a 240 s grace)
   even on completed balls.
-- **Scope** (remote behaviour pending the remaining blocker; see §E2): Gill's current ball runs the full local model; nothing while the app is closed; saved as
+- **Scope:** Gill's current ball runs the full local model; remote spheres get slow incursions (§E2 and the final ruling); nothing while the app is closed; saved as
   `run["world"]["vitality"]` plus repop timers; no returners within 20 m of blooms, and zones with a
   touched bloom get their floor raised by 0.1; vortices, gates and crumbles key off earned restoration
   and zone-completed flags (`game.gd:1025`, `moss_ball.gd:795-815`), so vitality never closes them.
@@ -185,7 +185,7 @@ food RNG; re-baseline) → Hard Mode last.
 - **I. Hard simulation rules** retained: nothing deteriorates while the app is closed; unlocked
   vortices and gates stay unlocked; there is no permanent progression lock; the 0.60 floor and the
   anti-collapse and anti-lock rules stay active. The ruling "only the CURRENT sphere advances
-  pressure" conflicts with J/N/P; see **Remaining blocker** below.
+  pressure" is superseded by the final ruling (slow remote incursions).
 - **J–M. Remote distress through the vortex network (Hard only).** Every connection touching a
   threatened sphere signals on the HALF nearest that sphere (from the midpoint to its mouth). The
   other half stays normal unless its own sphere is threatened, and both halves signal independently
@@ -236,7 +236,7 @@ floor mean; normalised `h_b = (V_b − F_b) / (1 − F_b)`. `A_b` (active pressu
 - S1 → S3 (h 0.90 → 0.35, ΔV 0.22) takes **733 s ≥ 2 × T_resp (700 s)**;
 - S3 → floor takes 467 s, and the sphere then plateaus at the floor. It is never lost.
 
-**Remote pressure model** (recommended option (b) below; waiting for the owner):
+**Remote pressure model** (owner-chosen option (b)):
 - Remote spheres are data-only: no entities, 4 Hz.
 - "Incursions" start aquarium-wide every 15–25 min of play, timing hashed from (run id, n), on a
   sphere with ≥1 restored zone, never the sphere Gill left in the last 10 min.
@@ -338,16 +338,46 @@ starfish pickup sound likely also edits `gen_audio.py`.
 00040-plants → 00041-repopulation → Hard Mode last. Numbers are assigned at publish; order changes
 only for a concrete dependency.
 
-## Remaining blocker (the only player-facing Hard Mode decision)
-Ruling I ("only the CURRENT sphere advances pressure") and rulings J/N/P (remote distress developing
-while Gill is elsewhere, with a travel deadline and remote response in the simulation) cannot both
-hold.
-- **(a) Current sphere only.** Remote spheres freeze when he leaves. The vortices show only spheres
-  he LEFT under pressure ("unfinished business"); no new remote trouble ever starts and there is no
-  deadline. It is simpler and calmer, but the vortex network rarely has anything new to say.
-- **(b) Remote incursions, slow and capped (recommended).** One remote sphere at a time, every
-  15–25 min, at 0.15× the local rate. S1 → S3 takes ≥ 733 s against a measured ≤ 350 s response.
-  Floors and caps apply, and it is paused while the app is closed. This gives the "aquarium calls
-  for help" experience J–P describe.
-- **(c) Carry-over only.** A sphere left under pressure keeps its trend for ≤ 10 min after he leaves,
-  then freezes; no new remote trouble. It sits in between.
+## Final Hard Mode ruling (owner, 2026-09-30): option (b), slow remote incursions
+Ruling I's "only the current sphere advances pressure" is superseded where it conflicts. Remote
+spheres receive slow, capped incursions (§E2): at most ONE remote sphere with a newly developing
+incursion at a time; one starts every ~15–25 min of active play; remote pressure is ~15 % of local
+(0.0003 V/s at the maximum); nothing progresses while the app is closed; floors, caps, and
+progression, vortex and gate protection all stay. These are initial tuned values. Tuning may NEVER
+weaken fairness: the first-visible-warning → urgent time must stay ≥ 2 × T_resp (T_resp ≈ 350 s
+unless implementation measurements justify larger; today 733 s).
+
+**Player freedom.** A remote pulse is information before it is an emergency:
+- **S1** "something is developing over there";
+- **S2** "you should probably head that way";
+- **S3** "that sphere now genuinely needs attention".
+
+The player may finish a fight, collect a nearby item and finish a local activity before responding.
+
+**Chore-loop proof (added to `_phase_hard_sim`, 12 simulated hours, several seeds).** Metrics and
+pass criteria:
+- remote summons (S1 onsets) per hour: median ≤ 3;
+- median time between remote interventions ≥ 15 min;
+- play time spent travelling solely to answer distress ≤ 15 %;
+- consecutive remote interventions without ≥ 10 min of free play between them ≤ 2 (p95);
+- time for ordinary exploration, combat, collection and restoration ≥ 70 % of play;
+- **delay test:** a player who ignores S1 for 10 min, then responds within T_resp, still arrives
+  before the floor plateau (S1 → floor = 1,200 s > 600 + 350 s) and can recover the sphere to S0.
+
+If any criterion fails, REDUCE remote frequency or pressure (lengthen the incursion interval first,
+then lower the 15 % rate). Never accept the chore loop and never shorten the fairness margin.
+
+**Vortex distress** is unchanged from §E2: every connection touching the threatened sphere signals
+toward it on that sphere's half only; the opposite half signals only if its own sphere is
+independently distressed; each connection keeps its own colour; severity is progressive. The vortex
+network is how the aquarium calls Gill for help.
+
+**HARD MODE AUTONOMOUS BUILD: READY.**
+Status: APPROVED / QUEUED LAST / SPECIFICATION COMPLETE / IMPLEMENTATION NOT YET STARTED.
+Trigger: the owner's exact words "Build Hard Mode". Then execute without another research phase:
+1. Implement (§D returners first if not already shipped, then §E and §E2).
+2. Run tests and simulations.
+3. Validate the renders.
+4. Repair and re-test.
+5. Qualify (full suite, both playthroughs in both modes, OTA end-to-end, performance).
+6. Publish `000NN-hard-mode` and verify it.
