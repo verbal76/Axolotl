@@ -129,7 +129,7 @@ func tick(dt: float) -> void:
 		"prowl":
 			org.step(dt, 1.0, 1.0, 1.0)
 		"stalk":
-			org.step(dt, 0.3, 0.35, 0.5)
+			org.step(dt, 0.3, 0.35, 0.5, false, false)
 		"flee":
 			org.step(dt, 0.0, 0.4, 0.0)
 		_:

@@ -275,10 +275,11 @@ func _pose(_dt: float) -> void:
 	if fwd.length() < 0.05:
 		fwd = -global_basis.z
 	fwd = fwd.normalized()
-	global_basis = Basis(fwd.cross(up).normalized(), up, -fwd).orthonormalized()
+	var bs := Basis(fwd.cross(up).normalized(), up, -fwd).orthonormalized()
 	if org != null and (org.look != 0.0 or org.nod != 0.0):
 		# Visual only (its body is a sphere to every test): a lazy roll and pitch, stiller puffed.
-		global_basis = global_basis * Basis.from_euler(Vector3(org.nod, 0.0, org.look) * (1.0 - inflate * 0.7))
+		bs = bs * Basis.from_euler(Vector3(org.nod, 0.0, org.look) * (1.0 - inflate * 0.7))
+	global_basis = bs
 	_mat.set_shader_parameter("inflate", inflate)
 	_body.scale = Vector3.ONE * (1.0 + _flash * 0.12)
 

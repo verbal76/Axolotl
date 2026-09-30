@@ -55,7 +55,7 @@ const PARASITE_SPITTER := {"drift": Vector2(0.42, 0.05), "weave": Vector2(0.12, 
 const STALKER := {"drift": Vector2(0.45, 0.03), "weave": Vector2(0.1, 0.19), "speed": Vector2(0.3, 0.075),
 		"hes": Vector3(0.05, 0.66, 0.9), "lift": Vector2(0.035, 0.45), "look": Vector2(0.2, 0.22), "turn": 0.5}
 ## Pufferfish: floats. A bounded lateral drift (metres), a slow rise and sink, a lazy roll.
-const PUFFER := {"drift": Vector2(0.9, 0.028), "weave": Vector2(0.22, 0.1), "lift": Vector2(0.22, 0.045),
+const PUFFER := {"wander": true, "drift": Vector2(0.9, 0.028), "weave": Vector2(0.22, 0.1), "lift": Vector2(0.22, 0.045),
 		"look": Vector2(0.07, 0.12)}
 ## Crab: guards. Small sidesteps at its post (metres), a slow body turn, arcs walking home.
 const CRAB := {"drift": Vector2(0.3, 0.09), "weave": Vector2(0.08, 0.3), "speed": Vector2(0.15, 0.2),
@@ -103,6 +103,8 @@ var _lw := 0.0
 var _ka := 0.0
 var _kw := 0.0
 var _turn := 1.0
+## Steers by wander2() only (no heading offset to compute).
+var _wander_only := false
 var _mw := 0.0
 # The individual's own time warp (its tempo wanders): angular frequency and depth (seconds).
 var _xw := 0.0
@@ -151,6 +153,7 @@ func set_profile(p: Dictionary) -> void:
 	_ka = v.x
 	_kw = TAU * v.y * _tempo2
 	_turn = float(p.get("turn", 1.0))
+	_wander_only = bool(p.get("wander", false))
 	_mw = TAU * 0.013 * _tempo2
 	# (Its tempo wanders by `x` (a fraction) over minutes: fast rhythms never lock into a loop.)
 	v = p.get("warp", Vector2(0.2, 0.017))
@@ -160,7 +163,8 @@ func set_profile(p: Dictionary) -> void:
 
 ## Advances the clock by `dt` and computes the outputs. `wp`, `ws`, `wl`: the weights this state
 ## allows for path, speed and look (0..1). `cut`: a committed state (path and speed to 0 at once).
-func step(dt: float, wp: float, ws: float, wl: float, cut := false) -> void:
+## `pause`: hesitations may slow it (not while it hunts: spotting prey ends a pause).
+func step(dt: float, wp: float, ws: float, wl: float, cut := false, pause := true) -> void:
 	_t += dt
 	var k := 1.0 - exp(-dt * EASE)
 	if cut:
@@ -196,14 +200,14 @@ func step(dt: float, wp: float, ws: float, wl: float, cut := false) -> void:
 			hes = smoothstep(_hth, _hth + 0.12, h)
 	# Path: slow drift (three sines; its amplitude itself breathing very slowly) plus a weave.
 	yaw = 0.0
-	if w_path > 0.0005:
+	if w_path > 0.0005 and not _wander_only:
 		var m := 0.7 + 0.3 * sin(_mw * t + ph[6])
 		yaw = w_path * (_da * m * (0.45 * sin(_dw * u + ph[0]) + 0.33 * sin(_dw * R_GOLD * u + ph[1]) + 0.22 * sin(_dw * R_SILVER * u + ph[14]))
 				+ _wa * (0.6 * sin(_ww * u + ph[2]) + 0.4 * sin(_ww * R_SILVER * u + ph[3])))
 	turn = lerpf(1.0, _turn, w_path)
 	speed = 1.0
 	if w_speed > 0.0005:
-		speed = 1.0 + w_speed * (_sa * (0.6 * sin(_sw * u + ph[7]) + 0.4 * sin(_sw * R_PLASTIC * u + ph[8])) - _hdep * hes)
+		speed = 1.0 + w_speed * (_sa * (0.6 * sin(_sw * u + ph[7]) + 0.4 * sin(_sw * R_PLASTIC * u + ph[8])) - (_hdep * hes if pause else 0.0))
 	lift = 0.0
 	if _la > 0.0:
 		lift = w_path * _la * (0.6 * sin(_lw * u + ph[9]) + 0.4 * sin(_lw * R_GOLD * u + ph[10]))

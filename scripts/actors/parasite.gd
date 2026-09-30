@@ -623,8 +623,9 @@ func _express(dt: float, pl: Axolotl) -> void:
 		"chase":
 			var d := pl.global_position.distance_to(global_position)
 			var near := smoothstep(attack_reach * 1.2, attack_reach * 2.6, d)
-			var wp := 0.25 if _mode == "circle" else 0.45
-			_org.step(dt, wp * near, 0.5 * near, 0.35 * near)
+			# (Circling for his side is itself the intent's flourish: it keeps its line.)
+			var wp := 0.0 if _mode == "circle" else 0.45
+			_org.step(dt, wp * near, 0.5 * near, 0.35 * near, false, false)
 		"retreat":
 			_org.step(dt, 0.0, 0.5, 0.0)
 		_:
