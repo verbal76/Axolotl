@@ -170,12 +170,26 @@ func try_collect(p: Axolotl, chest: Vector3, tip: Vector3) -> bool:
 	if not hunting() or celebrating or node == null or p.ball != g.balls[node_index_world()]:
 		return false
 	var c := target_center()
-	var d := seg_dist(c, chest, tip)
+	var d := axis_dist(chest, tip)
 	if d > reach():
 		near_miss = minf(near_miss, d - reach())
 		return false
 	_collect(p, c)
 	return true
+
+
+## How close the lunge's sweep (chest to mouth) comes to the object's upright axis, from 15% to 85%
+## of its height: a tall, narrow object (the duck) is as easy to take as a flat one, since the sweep
+## passes low and its middle sits high.
+func axis_dist(chest: Vector3, tip: Vector3) -> float:
+	var t: Dictionary = TreasureHunt.current(st())
+	var h := TreasureModels.height_of(t["kind"], float(t.get("scale", 1.0)))
+	var up := node.global_basis.y.normalized()
+	var best := INF
+	for k in 9:
+		var pt := node.global_position + up * h * lerpf(0.15, 0.85, k / 8.0)
+		best = minf(best, seg_dist(pt, chest, tip))
+	return best
 
 
 static func seg_dist(pt: Vector3, a: Vector3, b: Vector3) -> float:

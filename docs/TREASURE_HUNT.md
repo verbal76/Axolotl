@@ -86,8 +86,10 @@ The objects have no story and no explanation. The joke is that they are there at
 - **Only the current object exists** in the world. Future ones are just saved data, so they
   can't be found early, and there is only ever one extra mesh.
 - **Pickup is the lunge only.** `Game.lunge_contact` asks `TreasurePlay.try_collect`.
-  - The mouth's sweep must pass within the object's size × 0.4 + 0.55 m of its middle. That is
-    forgiving on a phone without being automatic.
+  - The mouth's sweep must pass within the object's size × 0.4 + 0.55 m of its upright axis (15–85%
+    of its height). That is forgiving on a phone without being automatic, and fair to tall, narrow
+    objects: measured to a single middle point, the rubber duck's sat above the lunge's sweep, and a
+    stress run of 672 hiding places missed it three times (2026-09-30).
   - The lunge also aims toward the object when it is near and ahead, as it does for food.
   - Touching, Tail Swipe, Water Cannon, Bubble Blast, Gill Rush, fish and enemies can't collect
     it. It is never in `Game._strikeable`.
