@@ -891,6 +891,10 @@ repository. Do not name, open or use any other game repository in Mote developme
      final `EXIT n` / `exit n` line written by the unit/playthrough wrappers. The state (RUNNING,
      COMPLETED, FAILED, STALLED) should be readable from the process and that marker without
      spawning more watchers. Give each brief to a subagent this rule too.
+   - **Known cause of duplicates** (2026-09-30, 12:26 EDT audit): the agents repeated a long foreground
+     `until grep` wait. Each one hit the Bash timeout, was moved to the background and stayed alive.
+     8 waiters built up on 2 test runs (5 on one, 3 on the other). Keep foreground checks short (one
+     look at the log or `ps`), and after a timeout, look at the log instead of waiting again.
 
 ### Work queue (owner order, 2026-09-29)
 
