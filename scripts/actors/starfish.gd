@@ -10,8 +10,10 @@ extends Node3D
 
 const REACH := 0.9
 const GLOW_SHADER := preload("res://shaders/glow_billboard.gdshader")
-const RED := Color(0.92, 0.1, 0.08)
-const RED_GLOW := Color(1.0, 0.18, 0.12)
+const RED := Color(0.8, 0.04, 0.03)
+const RED_GLOW := Color(1.0, 0.12, 0.08)
+## Its own emission (kept low: AgX rolls a bright red off toward salmon).
+const RED_EMIT := Color(0.75, 0.05, 0.03)
 
 var id := ""
 var ball: MossBall
@@ -44,7 +46,7 @@ func _ready() -> void:
 	add_child(_body)
 	_halo = MeshInstance3D.new()
 	var q := QuadMesh.new()
-	q.size = Vector2(1.25, 1.25)
+	q.size = Vector2(1.0, 1.0)
 	_halo.mesh = q
 	var hm := ShaderMaterial.new()
 	hm.shader = GLOW_SHADER
@@ -52,7 +54,8 @@ func _ready() -> void:
 	hm.set_shader_parameter("strength", 0.42)
 	_halo.material_override = hm
 	_halo.cast_shadow = GeometryInstance3D.SHADOW_CASTING_SETTING_OFF
-	_halo.position = Vector3(0, 0.12, 0)
+	# (High enough that the ground does not cut the glow off in a hard line.)
+	_halo.position = Vector3(0, 0.38, 0)
 	add_child(_halo)
 	for mi in [_body, _halo]:
 		mi.visibility_range_end = 60.0
@@ -71,8 +74,8 @@ static func material() -> StandardMaterial3D:
 		_mat = StandardMaterial3D.new()
 		_mat.albedo_color = RED
 		_mat.emission_enabled = true
-		_mat.emission = RED_GLOW
-		_mat.emission_energy_multiplier = 1.6
+		_mat.emission = RED_EMIT
+		_mat.emission_energy_multiplier = 0.9
 	return _mat
 
 
@@ -107,14 +110,15 @@ static func star_mesh() -> ArrayMesh:
 			var a1 := r * seg + (k + 1) % seg
 			var b0 := (r + 1) * seg + k
 			var b1 := (r + 1) * seg + (k + 1) % seg
-			for i in [a0, b0, a1, a1, b0, b1]:
+			# (Clockwise seen from above: Godot's front faces.)
+			for i in [a0, a1, b0, a1, b1, b0]:
 				var v: Vector3 = verts[i]
 				st.set_uv(Vector2(float(i % seg) / seg, float(i / seg) / rings))
 				st.add_vertex(v)
 	for k in seg:
 		var i0 := rings * seg + k
 		var i1 := rings * seg + (k + 1) % seg
-		for v in [verts[i0], top, verts[i1]]:
+		for v in [verts[i0], verts[i1], top]:
 			st.set_uv(Vector2(0.5, 1.0))
 			st.add_vertex(v)
 	st.generate_normals()

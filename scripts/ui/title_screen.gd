@@ -117,7 +117,10 @@ func _layout() -> void:
 	_run_info.position = Vector2(left, title_label.position.y + 116 * s)
 	_run_info.size = Vector2(minf(760 * s, area.size.x - 200 * s), 60 * s)
 	# The menu column: buttons as tall as fit between the run line and the bottom of the safe area.
-	var top := _run_info.position.y + (58 * s if _run_info.visible else 8 * s)
+	# (Room for every line of the run info: two before the skill tree, three with its progress line.)
+	var info_lines := maxi(2, _run_info.text.count("\n") + 1)
+	_run_info.size.y = 30 * s * info_lines
+	var top := _run_info.position.y + ((29 * info_lines) * s if _run_info.visible else 8 * s)
 	var n := 0
 	for c in _column.get_children():
 		if (c as Control).visible:

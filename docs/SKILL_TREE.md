@@ -276,7 +276,23 @@ bell run, and its transient carries off-centre. It is synthesised by `tools/gen_
 other SFX (`--only=skills` writes just the two new files). The HUD chip (top left, under the run
 timer) shows "12/30" and what there is to spend, for 3.6 s after a pickup.
 
-**The sweep** (`_phase_starfish_sweep`): SWEEP_RESULT
+**The sweep** (`_phase_starfish_sweep`, the physical deadlock proof): with no skill at all, the bot
+collects **30 of 30** by moving to each one: 17 by climbing the authored routes (plain jumps, and a
+jump with a burst where a step needs it, as the audited "burst" routes do), 4 by riding a bubble
+column (Fern, Hollows, Shaft, and the Mesa's), 4 by walking into caves, 5 by walking from a proven
+anchor or jumping up from the ground beside a low mound. Each attempt starts from ground the game
+already proves reachable (a route's start, a cave's entry, a bloom or burrower hole). Restoration
+gates are open, as a healed world has them.
+
+What the first sweeps found, and what changed:
+- The stone bridge, Canopy Spire and Sky Spire starfish were picked up on the way up (fine).
+- Lookout Rock's third tier and the Stalker Hollow mound need a jump with a burst, not a plain jump;
+  the bot's climb now tries that, as a player would.
+- The Mesa top was reached by its bubble column (open once the arrival meadow heals), not by the
+  sway-leaf climb: the bot cannot time the swaying leaves. The research lists both ways; the column
+  is proven.
+- The Undercut bridge's crown is reached by walking up the arch from its end.
+No spot had to move for the sweep.
 
 ## 6. Completion and finishes (rulings 8–10)
 
@@ -306,7 +322,30 @@ title nothing runs.
 
 ## 8. Movement integration (ruling 12)
 
-INTEGRATION
+Built on the final locomotion (dev-000034: `crawl_probe`, time-based body follow). The glide
+posture is a `glide` weight input to the model; `_update_follow` is untouched, so the fluid body
+follows the glide's turns and dives as it follows everything else.
+
+- **Quick Gill III** (`--skills=quick.1,quick.2,quick.3`): `_test_gill_incline_transitions`,
+  `_test_traction_no_shortcuts` (172 bodies, 1,928 approaches, no shortcuts), `_test_gill_traction`,
+  `_test_jump_and_burst`, `_test_sphere_walk` (camera_no_flip: 0 flip frames) and
+  `_test_coyote_and_buffer`: 20/20. Jumps unchanged (`quick_gill_ground_only_jumps_unchanged`:
+  5.63 m at every tier, x1.000–1.009).
+- **Lunge III and Treasure Hunt** (`--skills=lunge.1,lunge.2,lunge.3`): `_phase_treasure_stress`,
+  112 of 112 objects collected. Treasure Hunt's own aim and reach are unchanged.
+- **Water Burst**: the ceiling is unchanged at every tier (section 2); it is still once per air, and
+  a glide never resets it (`burst_once_per_air_in_glide`).
+- **Glide + burst and the barriers**: section 3.
+- **Mote Magnet**: line of sight, no ravine, startled by a miss, never captures
+  (`magnet_*`). It draws no random numbers: with no Magnet it never runs (0 calls in 2 s of play),
+  its code has no random call, and a Mote stepped 240 times from the same seed moves identically
+  with Magnet III (out of reach) and without (`magnet_draws_no_random_numbers`).
+- **Determinism with no skills.** A starfish pickup must not touch a gameplay random sequence. The
+  first playthrough showed that `WaterFX`'s cosmetic generator also decides where his running stirs
+  the water (`WaterFX.trail` -> impulses that push Motes and parasites), so a `sparkle` at a
+  pickup shifted later gameplay. The pickup burst is laid out on a golden spiral instead. The
+  canonical playthroughs are compared by outcome: the shipped baseline is not byte-identical run to
+  run on this machine (`60a24e4` run twice: the logs part at 120 s).
 
 ## 9. Qualification
 

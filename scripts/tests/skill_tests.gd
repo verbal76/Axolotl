@@ -101,7 +101,7 @@ func graph() -> void:
 func _doc(collected: Array, purchased: Array, seq := 1, fmt := 1) -> Dictionary:
 	var c := {}
 	for id in collected:
-		c[id] = {"t": 1, "v": "0.1.0"}
+		c[id] = {"t": 1, "v": GameVersion.GAME_VERSION}
 	var pd := {}
 	for id in purchased:
 		pd[id] = {"cost": SkillTree.cost(id) if SkillTree.has(id) else 2, "t": 1, "n": 1}
@@ -1198,6 +1198,27 @@ func _barrier_strats(glide: bool) -> Array:
 ## Diagnostic (by name only): every intended and impossible transfer at every tier, printed.
 func glide_probe() -> void:
 	var part := str(Settings.test_args.get("part", "all"))
+	if part == "legs":
+		for gt in [0, 3]:
+			tiers({"glide": gt})
+			u.place(0, 12, 30, 9.0)
+			Input.action_press("jump")
+			p.bot_input = Vector2(0, 1)
+			await t.frames(70)
+			var m := p.model
+			var bas := m.global_basis.orthonormalized()
+			var rows := []
+			for i in 4:
+				var hand: Node3D = m._elbows[i].get_child(m._elbows[i].get_child_count() - 1)
+				var local := bas.inverse() * (hand.global_position - m.global_position)
+				rows.append("leg %d hand at x %.2f y %.2f z %.2f" % [i, local.x, local.y, local.z])
+			t.log_line("LEGS glide %d (gliding %s, weight %.2f): %s" % [gt, p.gliding, m.glide, "; ".join(rows)])
+			Input.action_release("jump")
+			p.bot_input = Vector2.ZERO
+			await u.wait_grounded()
+		tiers()
+		t.check("legs", true, "")
+		return
 	if part == "coldbg":
 		var prev0: Array = await _gates(true)
 		tiers({"glide": 3, "burst": 3})
@@ -1618,7 +1639,7 @@ func glide_transfers() -> void:
 			tiers()
 		# (A barrier base movement already gets past is reported, not a skill's doing.)
 		ok_all = ok_all and (crossed[1] == 0 or crossed[0] > 0)
-		rows.append("%s: crossed %d/10 with no skills, %d/10 gliding with Glide III + Water Burst III + Quick Gill III" % [e[0], crossed[0], crossed[1]])
+		rows.append("%s: crossed %d/10 with no skills, %d/10 gliding with every Glide, Burst and Quick tier III" % [e[0], crossed[0], crossed[1]])
 	await _gates_restore(prev)
 	t.check("glide_bypasses_no_barrier", ok_all, "; ".join(rows))
 	p.invuln_t = 0.0

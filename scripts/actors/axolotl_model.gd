@@ -1423,10 +1423,11 @@ func _animate_legs(dt: float, s: float, mode: int) -> void:
 			4:
 				# Glide: all four spread wide and flat, the front ones reaching a little forward, the
 				# back ones a little back, fingers and toes fanned, with a slow flutter.
-				var fl := sin(_t * 3.2 + i * 1.3) * 0.07
-				yaw = side * (-0.3 if front else 0.5)
-				roll = side * ((1.05 if front else 0.95) + fl)
-				bend = side * 0.08
+				# (Upper limbs level, forearms straightened out sideways instead of down to the ground.)
+				var fl := sin(_t * 3.2 + i * 1.3) * 0.08
+				yaw = side * (-0.35 if front else 0.55)
+				roll = side * (0.12 + fl)
+				bend = side * (1.3 if front else 1.15)
 			3:
 				# Crawl: front feet reach forward and up for the purchase and paw at it in turn; the
 				# back feet plant and push, swept back.

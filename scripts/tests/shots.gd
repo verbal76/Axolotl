@@ -2416,6 +2416,22 @@ func _skilltree_shots(g: Game) -> void:
 	_set_progress(g, 0, [])
 
 
+## A starfish framed directly (a still camera `dist` m back and a little above it, Gill set off to
+## one side so he never hides it).
+func _star_frame(g: Game, s: Starfish, dist: float, heading := 30.0) -> void:
+	var b := s.ball
+	var up := b.up_at(s.rest)
+	var fr := MossBall.frame_at(up, heading)
+	var side := b.surface_point(b.up_at(s.rest + fr.x * 2.5), 0.1)
+	var hit := Starfish.probe(b, b.up_at(s.rest + fr.x * 1.6), b.altitude(s.rest))
+	if not hit.is_empty() and absf(b.altitude(hit[0]) - b.altitude(s.rest)) < 0.6:
+		side = hit[0] + b.up_at(hit[0]) * 0.1
+	g.player.place(b, side, s.rest - side)
+	g.audio.set_ball(b.index, false)
+	_close(g, s.rest + up * (0.5 + dist * 0.35) + fr.z * dist, s.rest + up * 0.1, up)
+	await t.seconds(1.2)
+
+
 ## A starfish from the gameplay camera: `dist` m back from it, facing it.
 func _star_view(g: Game, s: Starfish, dist: float, heading := 0.0) -> void:
 	var b := s.ball
@@ -2446,11 +2462,15 @@ func _starfish_shots(g: Game) -> void:
 			var s: Starfish = g.starfish.find(pk[0])
 			if s == null:
 				continue
-			await _star_view(g, s, 2.6 if pk[1] != "cave" else 2.0, 30.0)
+			await _star_frame(g, s, 1.8, 30.0)
 			await t.shot("starfish_%s_close_%s" % [pk[1], state])
 			if pk[1] != "cave":
-				await _star_view(g, s, 11.0, 30.0)
+				await _star_frame(g, s, 10.0, 30.0)
 				await t.shot("starfish_%s_far_%s" % [pk[1], state])
+			else:
+				await _star_frame(g, s, 3.5, 200.0)
+				await t.shot("starfish_%s_far_%s" % [pk[1], state])
+			_open(g)
 	# A pickup: walk into it, frames just after.
 	var s: Starfish = g.starfish.find("star.b1.00")
 	var p := g.player
