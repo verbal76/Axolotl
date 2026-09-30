@@ -384,6 +384,51 @@ func run(runner) -> void:
 		g.aquarium._room_t = 0.0
 		bed.visible = true
 		pr.exit()
+	if only == "vtint":
+		# Each connection's hue (owner, 2026-09-30): every ball's vortex mouths seen together from
+		# above-and-behind the middle of them, murky then restored, and each mouth close up.
+		g.player.invuln_t = 9999
+		for v in g.vortices:
+			v._target = 1.0
+			v.strength = 1.0
+			v.connected = true
+		for state in ["murky", "clean"]:
+			if state == "clean":
+				for b in g.balls:
+					b.add_heal(Vector3.UP, 340.0, 0.0)
+				g.g_disp = 1.0
+				g.aquarium.apply(1.0)
+			await t.seconds(1.5)
+			for b in g.balls:
+				var mouths: Array[Vector3] = []
+				for v in b.vortices:
+					mouths.append((v as Vortex)._mouth_a.global_position if (v as Vortex).ball_a == b else (v as Vortex)._mouth_b.global_position)
+				if mouths.size() < 2:
+					continue
+				var mid := Vector3.ZERO
+				for m in mouths:
+					mid += m
+				mid /= mouths.size()
+				var up := b.up_at(mid)
+				var spread := 0.0
+				for m in mouths:
+					spread = maxf(spread, m.distance_to(mid))
+				g.player.place(b, b.surface_point(up, 0.2), MossBall.frame_at(up, 0.0).z)
+				var side := MossBall.frame_at(up, 0.0).z
+				_close(g, mid + up * (spread * 0.9 + 8.0) + side * (spread * 0.8 + 6.0), mid, up)
+				await t.seconds(1.2)
+				await t.shot("vtint_%s_ball%d_all" % [state, b.index + 1])
+				var k := 0
+				for m in mouths:
+					var mu := b.up_at(m)
+					var toward := (mid - m)
+					toward -= mu * toward.dot(mu)
+					var back := -toward.normalized() if toward.length() > 0.1 else MossBall.frame_at(mu, 0.0).z
+					_close(g, m + mu * 4.5 - back * -9.0, m + mu * 1.5, mu)
+					await t.seconds(0.8)
+					await t.shot("vtint_%s_ball%d_mouth%d" % [state, b.index + 1, k])
+					k += 1
+		_open(g)
 	if only == "b2out":
 		var b := g.balls[1]
 		var v: Vortex = b.vortex_out
@@ -524,6 +569,8 @@ func run(runner) -> void:
 		await _loco_shots(g)
 	if only == "organic":
 		await _organic_shots(g)
+	if only == "loco2":
+		await _loco2_shots(g)
 	if only == "spots":
 		await _spot_shots(g)
 	if only == "report":
@@ -1846,6 +1893,158 @@ func _loco_shots(g: Game) -> void:
 	Engine.time_scale = 1.0
 	_open(g)
 
+
+## Locomotion before/after (second pass, after the phone playtest of dev-000033): each scenario is
+## driven with the stick as a player would, and captured at fixed times from the GAMEPLAY camera
+## (`--view=game`) or from the side (`--view=side`), so the same run on two builds compares frame for
+## frame. `--scen=a,b` picks scenarios; `--rt=ball:lat:lon:heading;...` adds real authored spots.
+func _loco2_shots(g: Game) -> void:
+	var p := g.player
+	for b in g.balls:
+		b.add_heal(Vector3.UP, 340.0, 0.0)
+	g.g_disp = 1.0
+	g.aquarium.apply(1.0)
+	var view: String = Settings.test_args.get("view", "game")
+	var pick: String = Settings.test_args.get("scen", "")
+	var b0 := g.balls[0]
+	var at := MossBall.dir_ll(12, 30)
+	var up0 := b0.up_at(b0.surface_point(at))
+	var fwd0 := -MossBall.frame_at(up0, 0.0).z
+	var right0 := fwd0.cross(up0)
+	var frame := Transform3D(Basis(right0, up0, -fwd0), b0.surface_point(at))
+	p.use_bot_input = true
+	p.invuln_t = 99999
+	var hold := func(dir: Vector3) -> void:
+		var cf: Vector3 = -g.cam.global_basis.z
+		cf = (cf - p.up * cf.dot(p.up)).normalized()
+		var cr := cf.cross(p.up)
+		var d := (dir - p.up * dir.dot(p.up)).normalized()
+		p.bot_input = Vector2(d.dot(cr), d.dot(cf))
+	# Profiles (ahead, height) for rigs, drawn in moss.
+	var band_run := 0.35 / tan(deg_to_rad(70.0))
+	var profs := {
+		"incline": [Vector2(1.3, -0.4), Vector2(1.6, 0.0), Vector2(1.6 + 1.2 / tan(deg_to_rad(30.0)), 1.2), Vector2(9.0, 1.2)],
+		"lip": [Vector2(1.3, -0.4), Vector2(1.6, 0.0), Vector2(1.6 + band_run, 0.35), Vector2(1.6 + band_run + 0.9 / tan(deg_to_rad(30.0)), 1.25), Vector2(9.0, 1.25)],
+		"face": [Vector2(1.3, -0.4), Vector2(1.6, 0.0), Vector2(1.6 + 2.6 / tan(deg_to_rad(66.0)), 2.6), Vector2(9.0, 2.6)],
+	}
+	var scen := []
+	# [name, rig, start offset (right, ahead), heading (deg from fwd0, + to the right), stick script, capture times]
+	scen.append(["flat", "", Vector2(0, 0), 0.0, func(tt: float) -> Vector3: return fwd0, [0.5, 0.7, 0.9, 1.1]])
+	scen.append(["broad_turn", "", Vector2(0, 0), 0.0, func(tt: float) -> Vector3: return fwd0 if tt < 0.5 else fwd0.rotated(up0, -0.5), [0.55, 0.7, 0.85, 1.0, 1.2]])
+	scen.append(["sharp_turn", "", Vector2(0, 0), 0.0, func(tt: float) -> Vector3: return fwd0 if tt < 0.5 else fwd0.rotated(up0, -1.75), [0.55, 0.62, 0.7, 0.8, 0.95]])
+	scen.append(["incline", "incline", Vector2(0, -1.5), 0.0, func(tt: float) -> Vector3: return fwd0, [0.4, 0.55, 0.7, 0.85, 1.0, 1.2]])
+	scen.append(["lip", "lip", Vector2(0, -1.5), 0.0, func(tt: float) -> Vector3: return fwd0, [0.4, 0.5, 0.6, 0.7, 0.8, 0.9, 1.0, 1.15, 1.3, 1.5]])
+	scen.append(["angled", "lip", Vector2(-2.2, -1.0), 40.0, func(tt: float) -> Vector3: return fwd0.rotated(up0, -deg_to_rad(40.0)), [0.4, 0.5, 0.6, 0.7, 0.8, 0.9, 1.0, 1.15, 1.3, 1.5]])
+	scen.append(["face", "face", Vector2(0, -1.5), 0.0, func(tt: float) -> Vector3: return fwd0, [0.4, 0.6, 0.8, 1.0, 1.3, 1.7]])
+	scen.append(["lateral", "incline", Vector2(-2.0, 2.4), 90.0, func(tt: float) -> Vector3: return right0, [0.3, 0.5, 0.7, 0.9]])
+	var rigs := {}
+	var mat: Material = b0.moss_material
+	for k in profs:
+		var prof: Array = profs[k]
+		var pts := PackedVector3Array()
+		var z0: float = (prof[0] as Vector2).x
+		var z1: float = (prof[prof.size() - 1] as Vector2).x
+		for x in [-5.0, 5.0]:
+			pts.append(Vector3(x, -0.4, -z0))
+			for v in prof:
+				pts.append(Vector3(x, (v as Vector2).y, -(v as Vector2).x))
+			pts.append(Vector3(x, -0.4, -z1))
+		var sh := ConvexPolygonShape3D.new()
+		sh.points = pts
+		var st := SurfaceTool.new()
+		st.begin(Mesh.PRIMITIVE_TRIANGLES)
+		var m := prof.size() + 2
+		for i in m:
+			var i1 := (i + 1) % m
+			for idx in [i, m + i1, m + i, i, i1, m + i1]:
+				st.add_vertex(pts[idx])
+		st.generate_normals()
+		var body := StaticBody3D.new()
+		body.collision_layer = 1
+		var cs := CollisionShape3D.new()
+		cs.shape = sh
+		body.add_child(cs)
+		var mi := MeshInstance3D.new()
+		mi.mesh = st.commit()
+		mi.material_override = mat
+		body.add_child(mi)
+		rigs[k] = body
+	# Real authored spots from the incline survey.
+	for spec in str(Settings.test_args.get("rt", "")).split(";", false):
+		var f := spec.split(":")
+		var bi := int(f[0])
+		var bb := g.balls[bi]
+		var d := MossBall.dir_ll(float(f[1]), float(f[2]))
+		var fr := MossBall.frame_at(d, 0.0)
+		var hdg := deg_to_rad(float(f[3]))
+		var fw: Vector3 = fr.x * sin(hdg) - fr.z * cos(hdg)
+		scen.append(["real_b%d_%s_%s" % [bi + 1, f[1], f[2]], "@%d" % bi, bb.surface_point(d, 0.04), fw, func(tt: float) -> Vector3: return fw, [0.3, 0.6, 0.9, 1.2, 1.5, 1.8, 2.2]])
+	for sc in scen:
+		if pick != "" and not pick.split(",").has(sc[0]) and not (pick == "real" and str(sc[0]).begins_with("real")):
+			continue
+		var rig: String = sc[1]
+		var body: StaticBody3D = rigs.get(rig, null)
+		var bb := b0
+		var start: Vector3
+		var face: Vector3
+		if rig.begins_with("@"):
+			bb = g.balls[int(rig.substr(1))]
+			start = sc[2]
+			face = sc[3]
+		else:
+			if body:
+				g.add_child(body)
+				body.global_transform = frame
+			var off: Vector2 = sc[2]
+			start = b0.surface_point(b0.up_at(frame.origin + right0 * off.x + fwd0 * off.y), 0.05)
+			if rig == "incline" and off.y > 1.0:
+				start = frame * Vector3(off.x, 0.95, -(1.6 + 0.95 / tan(deg_to_rad(30.0))))
+			face = fwd0.rotated(up0, -deg_to_rad(float(sc[3])))
+		await t.frames(2)
+		p.place(bb, start, face)
+		g.cam.snap_behind()
+		await t.seconds(0.8)
+		var times: Array = sc[5]
+		var fn: Callable = sc[4]
+		var el := 0.0
+		var ci := 0
+		while ci < times.size():
+			hold.call(fn.call(el))
+			if view == "side":
+				var c := p.global_position + p.up * 0.35
+				var sdir := (fn.call(0.0) as Vector3).cross(p.up).normalized()
+				_close(g, c + sdir * 3.2 + p.up * 0.6 - (fn.call(0.0) as Vector3) * 0.3, c, p.up)
+			await t.frames(1)
+			el += 1.0 / Engine.physics_ticks_per_second
+			if el >= float(times[ci]) - 0.001:
+				await t.shot("%s_%s_%d" % [sc[0], view, ci])
+				var sp := g.get_viewport().get_camera_3d().unproject_position(p.body_center())
+				t.log_line("LOCO2 %s %s %d at %.2f s: crawls %d screen %d %d" % [sc[0], view, ci, el, p.get("mantles") if "mantles" in p else 0, int(sp.x), int(sp.y)])
+				ci += 1
+		p.bot_input = Vector2.ZERO
+		_open(g)
+		if body:
+			g.remove_child(body)
+	# Swimming (Swim Mode): up, down, and turning while climbing.
+	if pick == "" or pick.split(",").has("swim"):
+		var pr: Presentation = g.presentation
+		pr.enter("play")
+		pr.go("swim")
+		await t.seconds(1.0)
+		for sw in [["swim_up", Vector2(0, -1)], ["swim_down", Vector2(0, 1)], ["swim_yawpitch", Vector2(0.8, -0.6)]]:
+			pr.ui.swim_held = true
+			pr.ui.swim_stick = Vector2.ZERO
+			pr.swimmer.pitch = 0.0
+			await t.seconds(1.0)
+			for k in 5:
+				pr.ui.swim_stick = sw[1]
+				await t.seconds(0.18)
+				await t.shot("%s_%s_%d" % [sw[0], view, k])
+				var sp2 := g.get_viewport().get_camera_3d().unproject_position(pr.swimmer.global_position)
+				t.log_line("LOCO2 %s %s %d at 0 s: crawls 0 screen %d %d" % [sw[0], view, k, int(sp2.x), int(sp2.y)])
+			pr.ui.swim_stick = Vector2.ZERO
+		pr.ui.swim_held = false
+		pr.exit()
 
 ## The Settings panel's scrollbar at a phone's landscape size (dev-000025 phone test): the list at
 ## its top, middle and bottom, and a finger swipe on the list itself.

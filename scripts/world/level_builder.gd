@@ -75,6 +75,9 @@ func cushion(lat: float, lon: float, radius: float, height: float, xf_override: 
 	body.set_meta("top", height)
 	body.set_meta("radius", radius)
 	body.set_meta("grounded", "cushion")
+	# (A designed jump: its sides are never crawled over, however they meet the ground; see
+	# Axolotl.CRAWL_MAX.)
+	body.set_meta("jump_only", true)
 	return body
 
 
@@ -245,6 +248,9 @@ func terrace(lat: float, lon: float, tiers: Array) -> Array:
 		body.set_meta("radius", r)
 		# (Where its top is: `top` is measured from the ground, not from the tier's own base.)
 		body.set_meta("top_point", base_xf * Vector3(0, top, 0))
+		# (A designed jump: its sides are never crawled over, however they meet the ground; see
+		# Axolotl.CRAWL_MAX.)
+		body.set_meta("jump_only", true)
 		out.append(body)
 		below = top
 	return out
@@ -513,6 +519,7 @@ func stone_column(dir: Vector3, radius: float, height: float) -> StaticBody3D:
 	body.set_meta("top", height)
 	body.set_meta("radius", radius)
 	body.set_meta("grounded", "stone column")
+	body.set_meta("jump_only", true)
 	body.set_meta("terrain_kind", "stone column")
 	return body
 
@@ -547,6 +554,7 @@ func rising_stone(zone_id: String, dir: Vector3, radius: float, height: float) -
 	gt.set_meta("top", height)
 	gt.set_meta("top_point", open_xf * Vector3(0, height, 0))
 	gt.set_meta("terrain_kind", "rising stone")
+	gt.set_meta("jump_only", true)
 	root.add_child(gt)
 	return gt
 

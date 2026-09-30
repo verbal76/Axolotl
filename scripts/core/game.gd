@@ -191,8 +191,10 @@ func _build_world() -> void:
 		ball_disp.append(0.0)
 		StartupTrace.mark("moss ball %d built" % (i + 1))
 	await _stage("Placing the axolotl and the vortices")
-	for pair in Levels.LINKS:
+	for li in Levels.LINKS.size():
+		var pair: Array = Levels.LINKS[li]
 		var v := Vortex.new()
+		v.tint = Vortex.TINTS[li % Vortex.TINTS.size()]
 		v.setup(balls[pair[0]], balls[pair[1]], Levels._vortex_dir(pair[0], pair[1]), Levels._vortex_dir(pair[1], pair[0]))
 		add_child(v)
 		vortices.append(v)

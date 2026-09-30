@@ -132,18 +132,34 @@ var _leg_swing := 1.0
 # Pitch follows the same way in the air and in the water; on the ground each segment lies along the
 # ground under it (FOLLOW_RAYS rays), so the body drapes over crests and dips and climbs onto a slope
 # front first. All of it is the model: the gameplay body, its collision and its controls are untouched.
-## Per-segment follow rate (1/s): turning on the spot; moving, speed / FOLLOW_SEG (the lag that lays
-## each segment on the path the one ahead of it took).
-const FOLLOW_RATE_MIN := 14.0
-const FOLLOW_SEG := 0.12
+## Per-segment follow rate (1/s): turning on the spot; moving, speed / FOLLOW_SEG. (Second pass,
+## after the phone playtest of dev-000033: with a lag of exactly the path, 0.12 m, the body in
+## ordinary turns bent no more than the gait's own S-wave and read as rigid from the gameplay camera.
+## Now each segment trails its neighbour by about 0.035 s at a run, so the bend travels visibly
+## from the head down to the tail, about a third of a second end to end, and the rear swings out
+## through a turn before it settles.)
+const FOLLOW_RATE_MIN := 8.0
+const FOLLOW_SEG := 0.22
+const FOLLOW_RATE_MAX_SPEED := 6.2
+## Airborne, the body follows the head's rise and fall at this rate (1/s), not with its speed.
+const FOLLOW_AIR_RATE := 9.0
 ## Largest bend between neighbouring segments (radians), sideways and up/down.
-const FOLLOW_MAX_YAW := 0.42
-const FOLLOW_MAX_PITCH := 0.32
+const FOLLOW_MAX_YAW := 0.5
+const FOLLOW_MAX_PITCH := 0.5
+## While he keeps turning (rad/s), each joint holds this much bend (s) into the curve, up to
+## FOLLOW_CURVE_MAX (radians): at a turn of 1 rad/s, about 30 degrees head to tail.
+const FOLLOW_CURVE := 0.055
+const FOLLOW_CURVE_MAX := 0.11
+## The head leads into a turn: it looks round ahead of the body by this much of the turn still to
+## come (turn_gap, radians, set by the controller) and of the rate of turning (rad/s).
+const HEAD_LEAD_GAP := 0.75
+const HEAD_LEAD_RATE := 0.14
+const HEAD_LEAD_MAX := 0.6
 ## How quickly the body settles onto the ground under it (1/s).
 const CONFORM_RATE := 16.0
-## Where the ground is felt, along the body (model z): under the chin, the middle, the hips and the
-## tail tip.
-const FOLLOW_RAYS := [-0.45, 0.0, 0.45, 0.9]
+## Where the ground is felt, along the body (model z): ahead of the chin, under the chin, the
+## shoulders, the middle, the hips and the tail tip.
+const FOLLOW_RAYS := [-0.55, -0.3, -0.05, 0.25, 0.55, 0.9]
 ## On (the player, the swimmer): off, the spine is laid straight along the model as before.
 var follow := true
 ## Lay the body on the ground under it (the player on the ground; set by the controller each frame).
@@ -151,6 +167,13 @@ var conform := false
 var conform_mask := 1 | 2 | 8
 ## Nose up (+) or down while airborne (radians), led by the head (set by the controller).
 var air_pitch := 0.0
+## The turn still to come (radians, + to the left), set by the controller: the head leads it.
+var turn_gap := 0.0
+## 0..1 while he crawls over a steep transition (set by the controller): the front reaches up for the
+## purchase, the front feet reach and grip, the rear pushes.
+var crawl := 0.0
+var _prev_basis := Basis()
+var _turn_rate := 0.0
 var _seg_w: Array[Vector3] = []          # world direction of each segment, toward the tail
 var _f_yaw: Array[float] = []            # this frame's follow yaw / pitch per segment (model space)
 var _f_pitch: Array[float] = []
@@ -947,6 +970,8 @@ func _update_follow(dt: float) -> void:
 		_f_lift = 0.0
 		_conform_w = 0.0
 		_f_prev_pos = pos
+		_prev_basis = bas
+		_turn_rate = 0.0
 		_prof = []
 		return
 	var spd := pos.distance_to(_f_prev_pos) / dt
@@ -956,7 +981,10 @@ func _update_follow(dt: float) -> void:
 	# lunge, a landing, rising onto his back legs) straighten him quickly instead.
 	var stiff := _whip_s >= 0.0 or lunge_t >= 0.0 or land_t >= 0.0 or idle_kind == Idle.DANCE or idle_kind == Idle.LOOKAROUND
 	# (In the water the body is looser: the tail trails further through a turn or a dive.)
-	var a := 1.0 - exp(-maxf(FOLLOW_RATE_MIN, spd / (FOLLOW_SEG * (1.6 if swim > 0.0 else 1.0))) * dt)
+	var a := 1.0 - exp(-maxf(FOLLOW_RATE_MIN, minf(spd, FOLLOW_RATE_MAX_SPEED) / (FOLLOW_SEG * (1.3 if swim > 0.0 else 1.0))) * dt)
+	# (Up and down, off the ground and out of the water, the body follows at a steady rate: it trails
+	# the head's rise and fall however fast he flies.)
+	var a_p := a if grounded or swim > 0.0 else 1.0 - exp(-FOLLOW_AIR_RATE * dt)
 	var a_stiff := 1.0 - exp(-30.0 * dt)
 	var ac := 1.0 - exp(-CONFORM_RATE * dt)
 	# (The ground under him is re-probed every other frame while he moves and every sixth while he
@@ -976,7 +1004,20 @@ func _update_follow(dt: float) -> void:
 	var lift := 0.0
 	if not prof.is_empty():
 		var hl: float = _profile_h(prof, BONE_Z[0])
-		lift = clampf(0.0 if is_nan(hl) else hl, -0.25, 0.3)
+		lift = clampf(0.0 if is_nan(hl) else hl, -0.25, 0.3 + 0.25 * crawl)
+	# The head leads into a turn: round ahead of the body by part of the turn still to come and of
+	# how fast he is turning (none while an authored whole-body move plays).
+	var up_n := bas.y
+	var f_now := -bas.z
+	var f_prev := -_prev_basis.z
+	_prev_basis = bas
+	var w := f_prev.signed_angle_to(f_now, up_n) / dt if f_prev.length() > 0.5 else 0.0
+	_turn_rate = lerpf(_turn_rate, clampf(w, -12.0, 12.0), 1.0 - exp(-20.0 * dt))
+	var head_yaw := 0.0
+	if not stiff and swim <= 0.0:
+		head_yaw = clampf(turn_gap * HEAD_LEAD_GAP + _turn_rate * HEAD_LEAD_RATE, -HEAD_LEAD_MAX, HEAD_LEAD_MAX)
+	elif swim > 0.0:
+		head_yaw = clampf(swim_turn * 0.12, -0.35, 0.35)
 	_f_lift = lerpf(_f_lift, lift * _conform_w, ac)
 	var prev_yaw := 0.0
 	var prev_pitch := 0.0
@@ -992,21 +1033,24 @@ func _update_follow(dt: float) -> void:
 			if not is_nan(h0) and not is_nan(h1):
 				pg = atan2(h0 - h1, BONE_Z[i + 1] - BONE_Z[i])
 		if i == 0:
-			yaw = 0.0
+			yaw = lerpf(_f_yaw[0], head_yaw, 1.0 - exp(-18.0 * dt))
 			# (Off the ground the head segment points where the head does; on it, it eases onto the
 			# ground ahead.)
 			var target := lead if is_nan(pg) else lerpf(lead, pg, _conform_w)
 			pitch = lerpf(pitch, target, lerpf(1.0, ac, _conform_w))
 		else:
 			var rel := wrapf(yaw - prev_yaw, -PI, PI)
-			rel *= 1.0 - (a_stiff if stiff else a)
+			# (Held in a curve while he keeps turning, more toward the tail, so even a broad turn
+			# reads as the whole body bending along it; straight again when he runs straight.)
+			var curve := 0.0 if stiff else clampf(-_turn_rate * FOLLOW_CURVE * lerpf(0.6, 1.4, float(i) / n) * (0.7 if swim > 0.0 else 1.0), -FOLLOW_CURVE_MAX, FOLLOW_CURVE_MAX)
+			rel = curve + (rel - curve) * (1.0 - (a_stiff if stiff else a))
 			yaw = prev_yaw + clampf(rel, -FOLLOW_MAX_YAW, FOLLOW_MAX_YAW)
-			var lagged := pitch + (prev_pitch - pitch) * a
+			var lagged := pitch + (prev_pitch - pitch) * a_p
 			if not is_nan(pg):
 				pitch = lerpf(lagged, lerpf(pitch, pg, ac), _conform_w)
 			else:
 				# Hanging over an edge: it follows the segment ahead, drooping a little.
-				pitch = lagged + (0.06 * _conform_w * a)
+				pitch = lagged + (0.06 * _conform_w * a_p)
 			if stiff and is_nan(pg):
 				pitch = lerpf(pitch, prev_pitch, a_stiff)
 			pitch = prev_pitch + clampf(pitch - prev_pitch, -FOLLOW_MAX_PITCH, FOLLOW_MAX_PITCH)
@@ -1035,7 +1079,7 @@ func _ground_profile() -> Array:
 	for z in FOLLOW_RAYS:
 		# (Ahead from his own footing; behind, each from the ground found just before it, so the
 		# rays start above ground rising behind him and reach ground falling away.)
-		var from_h: float = (0.0 if z < 0.0 else base) + 0.6
+		var from_h: float = (0.0 if z < 0.0 else base) + (0.6 if z >= 0.0 else 0.75 + 0.35 * crawl)
 		_ray_q.from = xf * Vector3(0, from_h, z)
 		_ray_q.to = xf * Vector3(0, from_h - 1.5, z)
 		var hit := space.intersect_ray(_ray_q)
@@ -1144,6 +1188,13 @@ func _animate(dt: float) -> void:
 		# (The follow-through already swings the tail out round a turn: a lighter push here.)
 		tail_base = clampf(-swim_turn * (0.25 if follow else 0.5), -0.8, 0.8)
 		arch = clampf(-swim_pitch * 0.15, -0.12, 0.12)
+	if crawl > 0.05 and swim <= 0.0:
+		# Crawling over a transition: chin up toward the purchase, front feet reaching for it and
+		# gripping, the rear pushing (the body's bend over the edge is the follow-through's).
+		leg_mode = 3
+		head_rot.x -= 0.22 * crawl
+		gill_back = maxf(gill_back, 0.5 * crawl)
+		wave_amp *= 1.0 - 0.6 * crawl
 	if burst_t >= 0.0:
 		var k := sin(burst_t * PI)
 		wave_amp = 0.18 + 0.3 * k
@@ -1353,6 +1404,18 @@ func _animate_legs(dt: float, s: float, mode: int) -> void:
 				yaw = side * (-0.35 if front else 0.35)
 				roll = side * (0.55 + sin(_t * 8.0 + i) * 0.08)
 				bend = -side * 0.2
+			3:
+				# Crawl: front feet reach forward and up for the purchase and paw at it in turn; the
+				# back feet plant and push, swept back.
+				var paw := sin(_t * 11.0 + (0.0 if side < 0.0 else PI))
+				if front:
+					yaw = side * (-0.75 + 0.2 * paw)
+					roll = side * (0.55 + 0.25 * maxf(0.0, paw))
+					bend = side * 0.35
+				else:
+					yaw = side * (0.7 + 0.15 * paw)
+					roll = side * 0.12
+					bend = -side * 0.15
 		if land_t >= 0.0 and land_variant == 0 and i == 1:
 			var fist: Vector3 = _land_pose["fist"]
 			yaw += fist.y
