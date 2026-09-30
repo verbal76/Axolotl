@@ -223,7 +223,6 @@ func _update_wander(dt: float) -> void:
 		var off := (b.x * (randf() * 2.0 - 1.0) + b.z * (randf() * 2.0 - 1.0)) * wander
 		_target = anchor + off + anchor_up * randf_range(0.35, 0.95)
 	var steer := (_target - global_position).limit_length(1.0) * 1.4
-	vel += steer * dt
 	# Tiny currents and axolotl-made water movement push it around.
 	vel += WaterFX.inst.push_at(global_position) * 3.5 * dt
 	vel += ball.current_at(global_position) * 0.08 * dt
@@ -231,10 +230,15 @@ func _update_wander(dt: float) -> void:
 	# Mote Magnet: drawn gently toward him (never into his mouth: only a lunge captures).
 	var leash := wander * 1.6
 	var pl: Axolotl = Game.inst.player
+	var yield_k := 0.0
 	if pl.magnet_range > 0.0:
 		_magnet(dt, pl)
 		if magnet_on:
 			leash += pl.magnet_leash
+			# (Its own wander gives way to the pull, more with each tier, so a drawn Mote visibly
+			# homes in rather than fighting its wander; the pull still never captures.)
+			yield_k = clampf(pl.magnet_accel / 3.75, 0.0, 0.8)
+	vel += steer * (1.0 - yield_k) * dt
 	# Leash to its patch; keep hovering above the moss.
 	var from_anchor := global_position - anchor
 	var lateral := from_anchor - anchor_up * from_anchor.dot(anchor_up)

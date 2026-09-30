@@ -935,8 +935,11 @@ func magnet() -> void:
 	var bi := b.index
 	var up := m.anchor_up
 	var fwd := MossBall.frame_at(up, 0).z
-	var trial := func(tier: int) -> float:
+	var trial := func(tier: int, sd: int) -> float:
 		tiers({"magnet": tier})
+		# (The same wander for both trials: a Mote's wander draws the global random numbers, so the
+		# only difference between them is the Magnet.)
+		seed(sd)
 		m.global_position = m.anchor + up * 0.6
 		m.vel = Vector3.ZERO
 		u.place_at(bi, m.anchor + up * 0.2 + fwd * 3.2, -fwd)
@@ -948,8 +951,13 @@ func magnet() -> void:
 			await t.frames(1)
 			closest = minf(closest, m.global_position.distance_to(p.head_position()))
 		return d0 - closest
-	var gain0: float = await trial.call(0)
-	var gain3: float = await trial.call(3)
+	# (Averaged over a few fixed wanders: how much the Magnet adds depends on which way the Mote was
+	# already drifting, so one trial can't judge it.)
+	var gain0 := 0.0
+	var gain3 := 0.0
+	for sd in [7771, 1009, 4242, 31337]:
+		gain0 += await trial.call(0, sd) / 4.0
+		gain3 += await trial.call(3, sd) / 4.0
 	var still := m.is_available()
 	t.check("magnet_draws_mote_never_captures", gain3 > gain0 + 0.8 and still, "closed in by %.2f m with Magnet III, %.2f m without; still free: %s" % [gain3, gain0, still])
 	# A miss startles it: the pull stops for a moment.
@@ -973,7 +981,7 @@ func magnet() -> void:
 	g.add_child(wall)
 	var mid := m.anchor + up * 1.0 + fwd * 1.6
 	wall.global_transform = Transform3D(MossBall.frame_at(up, 0), mid)
-	var hidden: float = await trial.call(3)
+	var hidden: float = await trial.call(3, 7771)
 	wall.queue_free()
 	t.check("magnet_needs_line_of_sight", hidden < gain3 * 0.5 and m.is_available(), "behind a wall it closed in %.2f m" % hidden)
 	# No randomness: with no Magnet it never runs; its code draws nothing; and a Mote stepped with the
