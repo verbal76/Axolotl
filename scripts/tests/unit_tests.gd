@@ -14,7 +14,7 @@ func run(runner) -> void:
 	p.use_bot_input = true
 	await t.seconds(0.5)
 	var only: String = Settings.test_args.get("only", "")
-	for name_ in ["_test_startup", "_test_ota_and_version", "_test_mesh_winding", "_test_terrain", "_test_ravines", "_test_terrain_grounded", "_test_no_floating_platforms", "_test_parasite_locomotion", "_test_parasite_body_and_death", "_test_parasite_combat", "_test_gill_look", "_test_gill_idles", "_test_gill_colours", "_test_gill_patterns", "_test_tail_whip", "_test_gill_traction", "_test_gill_incline_transitions", "_test_traction_no_shortcuts", "_test_gill_body_follow", "_test_swim_body_follow", "_test_ambient_sway", "_test_placements", "_test_tutorial_route", "_test_sphere_walk", "_test_jump_and_burst", "_test_coyote_and_buffer", "_test_swipe_direction_and_stages", "_test_hard_landing", "_test_food", "_test_food_reach", "_test_darter_and_burrower", "_test_food_repopulates", "_test_motes", "_test_checkpoint_and_regen", "_test_crumble", "_test_restoration_gates", "_test_bubble_columns", "_test_restoration_continuity", "_test_health_map", "_test_vortex", "_test_current", "_test_canopy", "_test_canopy_plain_jumps", "_test_climbs_physical", "_test_jungle_ladders_physical", "_test_leaf_geometry", "_test_leaf_footing", "_test_caves", "_test_mounds", "_test_vegetation", "_test_vortex_mouths_clear", "_test_route_audit", "_test_new_areas", "_test_ecosystem", "_test_music", "_test_run_clock", "_test_completion_catalog", "_test_completion_frozen", "_test_run_save_file", "_test_run_timer_live", "_test_run_continue", "_test_timer_integrity", "_test_resume_points_safe", "_phase_continue_write", "_phase_continue_read", "_test_upgrades", "_test_ui", "_test_menu_scrollbar", "_test_tier2_rules", "_test_tier2_world", "_test_ambient_fish", "_test_parasite_never_buried", "_test_tier2_loadout", "_test_aquarium_experiences", "_test_aquarium_polish", "_test_all_clear", "_test_treasure_unlock", "_test_treasure_generation", "_test_treasure_play", "_phase_treasure_stress", "_phase_live_fish_diag", "_phase_cpu_probe", "_phase_incline_survey", "_phase_loco_diag", "_phase_crawl_trace"]:
+	for name_ in ["_test_startup", "_test_ota_and_version", "_test_mesh_winding", "_test_terrain", "_test_ravines", "_test_terrain_grounded", "_test_no_floating_platforms", "_test_parasite_locomotion", "_test_parasite_body_and_death", "_test_parasite_combat", "_test_gill_look", "_test_gill_idles", "_test_gill_colours", "_test_gill_patterns", "_test_tail_whip", "_test_gill_traction", "_test_gill_incline_transitions", "_test_traction_no_shortcuts", "_test_gill_body_follow", "_test_swim_body_follow", "_test_ambient_sway", "_test_placements", "_test_tutorial_route", "_test_sphere_walk", "_test_jump_and_burst", "_test_coyote_and_buffer", "_test_swipe_direction_and_stages", "_test_hard_landing", "_test_food", "_test_food_reach", "_test_darter_and_burrower", "_test_food_repopulates", "_test_motes", "_test_checkpoint_and_regen", "_test_crumble", "_test_restoration_gates", "_test_bubble_columns", "_test_restoration_continuity", "_test_health_map", "_test_vortex", "_test_current", "_test_canopy", "_test_canopy_plain_jumps", "_test_climbs_physical", "_test_jungle_ladders_physical", "_test_leaf_geometry", "_test_leaf_footing", "_test_caves", "_test_mounds", "_test_vegetation", "_test_vortex_mouths_clear", "_test_route_audit", "_test_new_areas", "_test_ecosystem", "_test_music", "_test_run_clock", "_test_completion_catalog", "_test_completion_frozen", "_test_run_save_file", "_test_run_timer_live", "_test_run_continue", "_test_timer_integrity", "_test_resume_points_safe", "_phase_continue_write", "_phase_continue_read", "_test_upgrades", "_test_ui", "_test_menu_scrollbar", "_test_tier2_rules", "_test_tier2_world", "_test_ambient_fish", "_test_parasite_never_buried", "_test_tier2_loadout", "_test_aquarium_experiences", "_test_aquarium_polish", "_test_all_clear", "_test_treasure_unlock", "_test_treasure_generation", "_test_treasure_play", "_phase_treasure_stress", "_phase_live_fish_diag", "_phase_cpu_probe", "_phase_incline_survey", "_phase_loco_diag", "_phase_crawl_trace", "_phase_mouth_crawls"]:
 		# "_phase_*" tests are halves of a relaunch test: they run only when asked for by name
 		# (in a child process started by _test_run_continue).
 		if name_.begins_with("_phase") and not only.split(",", false).has(name_):
@@ -7789,3 +7789,46 @@ func _phase_crawl_trace() -> void:
 		p.bot_input = Vector2.ZERO
 		release.call()
 	t.check("crawl_trace_ran", true, "")
+
+
+## Diagnostic (run only when named): crawlable transitions around every vortex mouth, and whether a
+## crawl there carries him toward the mouth (into its 2 m entry radius).
+func _phase_mouth_crawls() -> void:
+	p.invuln_t = 99999
+	var total := 0
+	var crawls := 0
+	var toward := 0
+	var inside := 0
+	for v in g.vortices:
+		for at_b in [false, true]:
+			var b: MossBall = v.ball_b if at_b else v.ball_a
+			var m: Vector3 = v.mouth_pos(at_b)
+			var mu := b.up_at(m)
+			var fr := MossBall.frame_at(mu, 0.0)
+			var here := 0
+			for r in [2.2, 2.8, 3.4, 4.0, 4.6, 5.4]:
+				for k in 16:
+					var a := TAU * k / 16.0
+					var off: Vector3 = (fr.x * cos(a) + fr.z * sin(a)) * r
+					var d := b.up_at(m + off)
+					place_at(b.index, b.surface_point(d, 0.04), fr.x)
+					await t.frames(2)
+					for h in 8:
+						var hd := TAU * h / 8.0
+						var dir: Vector3 = fr.x * cos(hd) + fr.z * sin(hd)
+						total += 1
+						var c: Dictionary = p.crawl_probe(dir)
+						if c.get("crawl", false):
+							crawls += 1
+							here += 1
+							var e: Vector3 = c["edge"]
+							var f0 := (p.global_position - m) - p.up * (p.global_position - m).dot(p.up)
+							var f1 := (e - m) - p.up * (e - m).dot(p.up)
+							if f1.length() < f0.length() - 0.1:
+								toward += 1
+							if f1.length() < 2.3:
+								inside += 1
+								t.log_line("MOUTHCRAWL ball %d mouth %s r %.1f az %d hd %d rise %.2f edge_to_mouth %.2f" % [b.index + 1, "b" if at_b else "a", r, k, h, float(c["rise"]), f1.length()])
+			t.log_line("MOUTH ball %d end %s crawls %d" % [b.index + 1, "b" if at_b else "a", here])
+	t.log_line("MOUTHSUM probes %d crawls %d toward_mouth %d edge_within_2.3m %d" % [total, crawls, toward, inside])
+	t.check("mouth_crawls_ran", true, "")
