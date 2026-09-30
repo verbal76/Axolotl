@@ -967,6 +967,12 @@ repository. Do not name, open or use any other game repository in Mote developme
      - 00042 vortex currents: L2, plus all-connection traversal
      - Hard Mode: L4
 
+8. **"Pushed" means downloadable** (owner, 2026-09-30). In conversation with the owner, "pushed" (or
+   "published", "out") means the OTA has cleared all testing, has its OTA number, has gone through
+   GitHub Actions and is live on the channel, so the owner can download and play it on the phone NOW.
+   Never call a git push "pushed" to the owner. Use plain states instead: built (local only), qualifying,
+   publishing (Actions running, not downloadable yet), **downloadable** (live on the channel), verified.
+
 ### Work queue (owner order, 2026-09-29)
 
 1. ~~dev-000031 (Treasure Hunt fix)~~: published and verified.
