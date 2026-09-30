@@ -3,29 +3,35 @@ extends Control
 ## The colours page (owner request after the dev-000024 playtest), opened from the pause menu and
 ## the title: real axolotl morphs as swatches, fine-tuning sliders for his body and his freckles,
 ## patterns. Saved per device (Settings, GillLook).
-## A landscape workspace (owner, 2026-09-30, phone playtest of dev-000031): the controls on the left
-## in a panel that scrolls on its own, and Gill on the right, large, always in view whatever the
-## panel is scrolled to, recolouring live. A finger on him turns him round (front, sides, back);
-## the panel's gestures never turn him and turning him never scrolls the panel.
+## A landscape workspace (owner, 2026-09-30): the controls on the left and Gill on the right, large,
+## always in view, recolouring live. A finger on him turns him round (front, sides, back).
+## Nothing scrolls (phone audit 2026-09-30 §A, owner ruling): every control fits the 720-px design
+## height on any landscape phone, cut-out included. Sliders take hold only on their thumb or track
+## (TouchSlider) and a swipe across the swatches never picks one (UiStyle.swipe_guard).
 
 signal done
 
 var preview: AxolotlModel
 var _swatches := {}
-var _body_hue: HSlider
-var _body_bright: HSlider
-var _dots_hue: HSlider
-var _dots_bright: HSlider
+var _body_hue: TouchSlider
+var _body_bright: TouchSlider
+var _dots_hue: TouchSlider
+var _dots_bright: TouchSlider
 var _turn: Node3D
 var _vp: SubViewport
 var _patterns := {}
 var _full_colour: CheckButton
-var _pattern_size: HSlider
+var _pattern_size: TouchSlider
 var _pattern_note: Label
 var _file_dialog: FileDialog
 ## The controls' panel and the stage he stands on (laid out side by side).
 var controls: PanelContainer
 var stage: SubViewportContainer
+## The controls' column inside the panel.
+var column: VBoxContainer
+## The swatch and pattern cells' heights: roomy, and a compact size for a short safe area.
+const SWATCH_H := [62.0, 58.0]
+const PATTERN_H := [70.0, 64.0]
 ## His turn about his middle (radians), its spin from a flick, and whether he has been touched yet.
 var yaw := PI * 0.8
 var _yaw_v := 0.0
@@ -43,98 +49,134 @@ func _ready() -> void:
 	controls.name = "Controls"
 	# (Solid enough that nothing behind it shows through the controls.)
 	var box := UiStyle._box(Color(UiStyle.PANEL, 0.97), Color(UiStyle.MINT, 0.35))
-	box.set_content_margin_all(22)
+	box.content_margin_left = 16
+	box.content_margin_right = 16
+	box.content_margin_top = 12
+	box.content_margin_bottom = 12
 	controls.add_theme_stylebox_override("panel", box)
+	controls.clip_contents = true
 	add_child(controls)
-	var scroll := ScrollContainer.new()
-	scroll.name = "ControlsScroll"
-	scroll.horizontal_scroll_mode = ScrollContainer.SCROLL_MODE_DISABLED
-	controls.add_child(scroll)
 	var v := VBoxContainer.new()
-	v.add_theme_constant_override("separation", 12)
-	v.size_flags_horizontal = Control.SIZE_EXPAND_FILL
-	scroll.add_child(v)
+	v.name = "Column"
+	v.add_theme_constant_override("separation", 8)
+	column = v
+	controls.add_child(v)
+	# Header: the page's name, Reset and Done.
+	var head := HBoxContainer.new()
+	head.name = "Header"
+	head.add_theme_constant_override("separation", 8)
+	v.add_child(head)
 	var title := Label.new()
 	title.text = "%s's colours" % GameVersion.CHARACTER_NAME
-	title.add_theme_font_size_override("font_size", 32)
+	title.add_theme_font_size_override("font_size", 30)
 	title.add_theme_color_override("font_color", UiStyle.GOLD)
-	v.add_child(title)
-	var grid := GridContainer.new()
-	grid.name = "Morphs"
-	grid.columns = 4
-	grid.add_theme_constant_override("h_separation", 10)
-	grid.add_theme_constant_override("v_separation", 10)
+	title.size_flags_horizontal = Control.SIZE_EXPAND_FILL
+	head.add_child(title)
+	var reset := UiStyle.button("Reset", func() -> void: _pick(Settings.gill_morph))
+	reset.name = "Reset"
+	reset.custom_minimum_size = Vector2(130, 60)
+	reset.add_theme_font_size_override("font_size", 26)
+	head.add_child(reset)
+	var back := UiStyle.button("Done", func() -> void: done.emit())
+	back.name = "Done"
+	back.custom_minimum_size = Vector2(130, 60)
+	back.add_theme_font_size_override("font_size", 26)
+	head.add_child(back)
+	# Real morphs as swatches.
+	v.add_child(_heading("Colour"))
+	var grid := _cells("Morphs")
 	v.add_child(grid)
 	for m in GillLook.MORPHS:
 		var b := Button.new()
 		b.name = "Morph_" + m["id"]
 		b.text = m["name"]
-		b.custom_minimum_size = Vector2(122, 84)
 		b.add_theme_font_size_override("font_size", 20)
 		b.add_theme_color_override("font_color", Color.WHITE)
 		b.add_theme_color_override("font_outline_color", Color(0, 0, 0, 0.8))
 		b.add_theme_constant_override("outline_size", 6)
 		b.focus_mode = Control.FOCUS_ALL
 		var id: String = m["id"]
-		b.pressed.connect(func() -> void: _pick(id))
-		grid.add_child(b)
+		b.pressed.connect(func() -> void:
+			if not UiStyle.swiped(b):
+				_pick(id))
+		_cell(grid, b)
 		_swatches[id] = b
-	v.add_child(UiStyle.note("Fine-tune", 22))
-	_body_hue = _slider(v, "Body colour", -0.5, 0.5)
-	_body_bright = _slider(v, "Body shade", 0.6, 1.4)
-	_dots_hue = _slider(v, "Freckle colour", -0.5, 0.5)
-	_dots_bright = _slider(v, "Freckle shade", 0.4, 1.6)
+	# Fine-tuning: his body and his freckles, each a colour and a shade, side by side.
+	var tune := GridContainer.new()
+	tune.name = "FineTune"
+	tune.columns = 3
+	tune.add_theme_constant_override("h_separation", 10)
+	tune.add_theme_constant_override("v_separation", 8)
+	v.add_child(tune)
+	for h in ["Fine-tune", "Colour", "Shade"]:
+		var l := UiStyle.note(h, 18)
+		l.autowrap_mode = TextServer.AUTOWRAP_OFF
+		if h != "Fine-tune":
+			l.horizontal_alignment = HORIZONTAL_ALIGNMENT_CENTER
+		tune.add_child(l)
+	tune.add_child(_row_label("Body"))
+	_body_hue = _slider(tune, "Body colour", -0.5, 0.5)
+	_body_bright = _slider(tune, "Body shade", 0.6, 1.4)
+	tune.add_child(_row_label("Freckles"))
+	_dots_hue = _slider(tune, "Freckle colour", -0.5, 0.5)
+	_dots_bright = _slider(tune, "Freckle shade", 0.4, 1.6)
 	for s in [_body_hue, _body_bright, _dots_hue, _dots_bright]:
 		s.value_changed.connect(func(_x: float) -> void: _tuned())
-	# Patterns: built-in ones, the player's own picture, as markings or in full colour.
-	v.add_child(UiStyle.note("Pattern", 22))
-	var pgrid := GridContainer.new()
-	pgrid.name = "Patterns"
-	pgrid.columns = 4
-	pgrid.add_theme_constant_override("h_separation", 10)
-	pgrid.add_theme_constant_override("v_separation", 10)
+	# Patterns: built-in ones, the player's own picture ("Mine", once there is one) and Upload.
+	v.add_child(_heading("Pattern"))
+	var pgrid := _cells("Patterns")
 	v.add_child(pgrid)
 	for pat in GillLook.PATTERNS + [[GillLook.UPLOAD, "Mine"]]:
 		var b := Button.new()
 		var id: String = pat[0]
 		b.name = "Pattern_" + id
 		b.text = pat[1]
-		b.custom_minimum_size = Vector2(122, 84)
 		b.add_theme_font_size_override("font_size", 18)
 		b.icon_alignment = HORIZONTAL_ALIGNMENT_CENTER
 		b.vertical_icon_alignment = VERTICAL_ALIGNMENT_TOP
 		b.expand_icon = true
 		b.focus_mode = Control.FOCUS_ALL
-		b.pressed.connect(func() -> void: _pick_pattern(id))
-		pgrid.add_child(b)
+		b.pressed.connect(func() -> void:
+			if not UiStyle.swiped(b):
+				_pick_pattern(id))
+		_cell(pgrid, b)
 		_patterns[id] = b
-	var upload := UiStyle.button("Upload a picture…", _upload)
+	var upload := UiStyle.button("Upload…", Callable())
 	upload.name = "Upload"
-	v.add_child(upload)
-	_pattern_note = UiStyle.note("", 20)
-	_pattern_note.name = "PatternNote"
-	v.add_child(_pattern_note)
+	upload.add_theme_font_size_override("font_size", 20)
+	upload.pressed.connect(func() -> void:
+		if not UiStyle.swiped(upload):
+			_upload())
+	_cell(pgrid, upload)
+	# Markings or full colour, and how many times it repeats round him.
+	var last := HBoxContainer.new()
+	last.name = "PatternRow"
+	last.add_theme_constant_override("separation", 10)
+	v.add_child(last)
 	_full_colour = CheckButton.new()
 	_full_colour.name = "FullColour"
 	_full_colour.text = "Full colour"
 	_full_colour.tooltip_text = "Off: the markings take the freckle colour"
-	_full_colour.toggled.connect(func(_on: bool) -> void: _pattern_tuned())
-	v.add_child(_full_colour)
+	_full_colour.custom_minimum_size = Vector2(200, 58)
+	_full_colour.add_theme_font_size_override("font_size", 22)
+	UiStyle.swipe_guard(_full_colour)
+	_full_colour.toggled.connect(func(on: bool) -> void:
+		if UiStyle.swiped(_full_colour):
+			_full_colour.set_pressed_no_signal(not on)
+			return
+		_pattern_tuned())
+	last.add_child(_full_colour)
+	last.add_child(_row_label("Repeats"))
 	# (How many times it repeats round his body: left, a few big; right, many small.)
-	_pattern_size = _slider(v, "Pattern repeats", 1.0, 8.0)
+	_pattern_size = _slider(last, "Pattern repeats", 1.0, 8.0)
 	_pattern_size.step = 1.0
 	_pattern_size.value_changed.connect(func(_x: float) -> void: _pattern_tuned())
-	var row := HBoxContainer.new()
-	row.add_theme_constant_override("separation", 10)
-	var reset := UiStyle.button("Reset", func() -> void: _pick(Settings.gill_morph))
-	reset.name = "Reset"
-	reset.custom_minimum_size = Vector2(200, 64)
-	row.add_child(reset)
-	var back := UiStyle.button("Done", func() -> void: done.emit())
-	back.name = "Done"
-	back.custom_minimum_size = Vector2(200, 64)
-	row.add_child(back)
-	v.add_child(row)
+	# What became of an uploaded picture: a caption over his stage, not a row in the column.
+	_pattern_note = UiStyle.note("", 20)
+	_pattern_note.name = "PatternNote"
+	_pattern_note.horizontal_alignment = HORIZONTAL_ALIGNMENT_CENTER
+	_pattern_note.mouse_filter = Control.MOUSE_FILTER_IGNORE
+	add_child(_pattern_note)
 	get_viewport().size_changed.connect(_layout)
 	_layout()
 	# The preview costs nothing while the page is closed.
@@ -154,41 +196,71 @@ func _on_visibility() -> void:
 
 ## Controls on the left, his stage filling the rest, inside the display's safe area.
 func _layout() -> void:
-	var vp := get_viewport_rect().size
-	var safe := DisplayServer.get_display_safe_area()
-	var win := DisplayServer.window_get_size()
-	var m := Vector4(18, 14, 18, 14)
-	if win.x > 0 and win.y > 0 and safe.size.x > 0:
-		m.x = maxf(m.x, safe.position.x * vp.x / win.x)
-		m.y = maxf(m.y, safe.position.y * vp.y / win.y)
-		m.z = maxf(m.z, (win.x - safe.end.x) * vp.x / win.x)
-		m.w = maxf(m.w, (win.y - safe.end.y) * vp.y / win.y)
-	layout_in(Rect2(m.x, m.y, vp.x - m.x - m.z, vp.y - m.y - m.w))
+	layout_in(UiStyle.safe_rect(get_viewport(), Vector4(16, 14, 16, 14)))
 
 
-## Lays the page out in `area` (the safe area; tests use it to stand in for a phone's screen).
+## Lays the page out in `area` (the safe area; tests use it to stand in for a phone's screen). The
+## column is 46 % of the width (590..640 px); if the area is too short for the roomy swatches, they
+## step down to the compact size. Nothing scrolls either way.
 func layout_in(area: Rect2) -> void:
-	var w := clampf(area.size.x * 0.48, 440.0, 660.0)
+	var w := clampf(area.size.x * 0.46, 590.0, 640.0)
+	for compact in [0, 1]:
+		_size_cells(compact)
+		if controls.get_combined_minimum_size().y <= area.size.y:
+			break
 	controls.position = area.position
-	controls.size = Vector2(w, area.size.y)
-	controls.clip_contents = true
-	var sc: ScrollContainer = controls.get_node("ControlsScroll")
-	sc.custom_minimum_size = Vector2(0, area.size.y - 56)
-	# (The swatch grids take as many columns as the column has room for, never wider.)
-	for g in [controls.find_child("Morphs", true, false), controls.find_child("Patterns", true, false)]:
-		var grid := g as GridContainer
-		var bw := 122.0
-		for b in grid.get_children():
-			bw = maxf(bw, (b as Control).get_combined_minimum_size().x)
-		grid.columns = clampi(int((w - 70.0 + 10.0) / (bw + 10.0)), 2, 4)
 	controls.size = Vector2(w, area.size.y)
 	stage.position = Vector2(area.position.x + w + 14, area.position.y)
 	stage.size = Vector2(area.end.x - stage.position.x, area.size.y)
+	_pattern_note.position = stage.position + Vector2(16, stage.size.y - 64)
+	_pattern_note.size = Vector2(stage.size.x - 32, 52)
 	# (A narrow stage steps the camera back so all of him fits side on.)
 	var aspect := stage.size.x / maxf(stage.size.y, 1.0)
 	var dist := 3.1 * maxf(1.0, 1.2 / maxf(aspect, 0.3))
 	var cam: Camera3D = _vp.get_node("Cam")
 	cam.look_at_from_position(Vector3(0.0, 0.2, 0.0) + Vector3(0.0, 0.85, 2.9).normalized() * dist, Vector3(0.0, 0.2, 0.0))
+
+
+## The swatch and pattern cells at the roomy (0) or compact (1) height.
+func _size_cells(compact: int) -> void:
+	for b in _swatches.values():
+		(b as Control).custom_minimum_size = Vector2(0, SWATCH_H[compact])
+	for b in controls.find_child("Patterns", true, false).get_children():
+		(b as Control).custom_minimum_size = Vector2(0, PATTERN_H[compact])
+
+
+func _heading(text: String) -> Label:
+	var l := UiStyle.note(text, 20)
+	l.autowrap_mode = TextServer.AUTOWRAP_OFF
+	l.add_theme_color_override("font_color", Color(UiStyle.MINT, 0.9))
+	return l
+
+
+func _row_label(text: String) -> Label:
+	var l := Label.new()
+	l.text = text
+	l.add_theme_font_size_override("font_size", 22)
+	l.custom_minimum_size = Vector2(96, 0)
+	l.vertical_alignment = VERTICAL_ALIGNMENT_CENTER
+	return l
+
+
+## A 4-wide grid of swatch cells sharing the column's width evenly.
+func _cells(grid_name: String) -> GridContainer:
+	var g := GridContainer.new()
+	g.name = grid_name
+	g.columns = 4
+	g.add_theme_constant_override("h_separation", 8)
+	g.add_theme_constant_override("v_separation", 8)
+	return g
+
+
+func _cell(grid: GridContainer, b: Button) -> void:
+	b.size_flags_horizontal = Control.SIZE_EXPAND_FILL
+	b.custom_minimum_size = Vector2(0, SWATCH_H[0])
+	b.clip_text = true
+	UiStyle.swipe_guard(b)
+	grid.add_child(b)
 
 
 ## His stage: neutral studio light (the colour you pick is the colour you see, without the
@@ -309,21 +381,16 @@ func _process(dt: float) -> void:
 	_turn.rotation.y = yaw + (0.0 if _touched else sin(_t * 0.45) * 0.45)
 
 
-func _slider(parent: Control, text: String, lo: float, hi: float) -> HSlider:
-	var row := HBoxContainer.new()
-	var l := Label.new()
-	l.text = text
-	l.custom_minimum_size = Vector2(170, 0)
-	row.add_child(l)
-	var s := HSlider.new()
+func _slider(parent: Control, text: String, lo: float, hi: float) -> TouchSlider:
+	var s := TouchSlider.new()
 	s.name = text.replace(" ", "")
+	s.tooltip_text = text
 	s.min_value = lo
 	s.max_value = hi
 	s.step = 0.01
 	s.size_flags_horizontal = Control.SIZE_EXPAND_FILL
-	s.custom_minimum_size = Vector2(160, 48)
-	row.add_child(s)
-	parent.add_child(row)
+	s.custom_minimum_size = Vector2(150, 56)
+	parent.add_child(s)
 	return s
 
 

@@ -1,7 +1,8 @@
 class_name Tier2Loadout
-extends VBoxContainer
-## The pause menu's Tier-2 row (docs/TIER2.md): the three abilities as glyph buttons. Found ones can
-## be tapped to equip (exactly one is equipped: highlighted); ones not yet found are dim and locked.
+extends HBoxContainer
+## The pause menu's Tier-2 row (docs/TIER2.md): the three abilities as glyph buttons, with what is
+## equipped beside them, all in one row (the landscape Settings panel, 00038). Found ones can be
+## tapped to equip (exactly one is equipped: highlighted); ones not yet found are dim and locked.
 ## Equipping never resets the cooldown.
 
 var _buttons := {}
@@ -10,26 +11,28 @@ var _name: Label
 
 func _init() -> void:
 	name = "Tier2Loadout"
-	add_theme_constant_override("separation", 6)
-	var head := Label.new()
-	head.text = "Tier 2 — tap to equip"
-	head.add_theme_font_size_override("font_size", 22)
-	add_child(head)
-	var row := HBoxContainer.new()
-	row.add_theme_constant_override("separation", 14)
-	add_child(row)
+	add_theme_constant_override("separation", 12)
 	for id in Tier2.ORDER:
 		var b := GlyphButton.new()
 		b.ability = id
 		b.name = "Tier2_" + id
-		b.custom_minimum_size = Vector2(96, 96)
+		b.custom_minimum_size = Vector2(72, 72)
 		b.focus_mode = Control.FOCUS_ALL
 		b.pressed.connect(func(): _equip(id))
-		row.add_child(b)
+		add_child(b)
 		_buttons[id] = b
-	_name = UiStyle.note()
+	var words := VBoxContainer.new()
+	words.size_flags_horizontal = Control.SIZE_EXPAND_FILL
+	words.alignment = BoxContainer.ALIGNMENT_CENTER
+	words.add_theme_constant_override("separation", 0)
+	add_child(words)
+	var head := Label.new()
+	head.text = "Tier 2 — tap to equip"
+	head.add_theme_font_size_override("font_size", 20)
+	words.add_child(head)
+	_name = UiStyle.note("", 18)
 	_name.name = "Tier2Name"
-	add_child(_name)
+	words.add_child(_name)
 
 
 func refresh() -> void:

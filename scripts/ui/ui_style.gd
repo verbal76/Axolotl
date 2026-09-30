@@ -220,6 +220,7 @@ static func confirm_button(text: String, question: String, yes_text: String, cb:
 	row.add_child(yes)
 	var first := button(text, Callable())
 	var no := button("Cancel", func(): ask.visible = false; first.visible = true; first.grab_focus())
+	no.name = "Cancel"
 	no.custom_minimum_size = Vector2(140, 64)
 	row.add_child(no)
 	ask.add_child(row)
@@ -238,3 +239,55 @@ static func note(text := "", size := 22) -> Label:
 	l.add_theme_color_override("font_color", Color(0.85, 0.95, 0.92, 0.8))
 	l.autowrap_mode = TextServer.AUTOWRAP_WORD_SMART
 	return l
+
+
+## A cut-out to stand in for a phone's (left, top, right, bottom, in design px), used by tests and
+## renders: the menus lay themselves out as if the display's safe area excluded it.
+static var test_inset := Vector4.ZERO
+
+
+## The display's safe area in design pixels (the camera cut-out on a landscape phone), with at least
+## `min_m` (left, top, right, bottom) all round.
+static func safe_rect(vp: Viewport, min_m := Vector4(16, 14, 16, 14)) -> Rect2:
+	var size := vp.get_visible_rect().size
+	var m := min_m
+	var safe := DisplayServer.get_display_safe_area()
+	var win := DisplayServer.window_get_size()
+	if win.x > 0 and win.y > 0 and safe.size.x > 0 and safe.size.y > 0:
+		m.x = maxf(m.x, safe.position.x * size.x / win.x)
+		m.y = maxf(m.y, safe.position.y * size.y / win.y)
+		m.z = maxf(m.z, (win.x - safe.end.x) * size.x / win.x)
+		m.w = maxf(m.w, (win.y - safe.end.y) * size.y / win.y)
+	m = Vector4(maxf(m.x, test_inset.x), maxf(m.y, test_inset.y), maxf(m.z, test_inset.z), maxf(m.w, test_inset.w))
+	return Rect2(m.x, m.y, size.x - m.x - m.z, size.y - m.y - m.w)
+
+
+## How far a finger may move on a button and still count as a tap (design px).
+const TAP_SLOP := 16.0
+
+
+## Makes `b` ignore a swipe: once a press has moved more than TAP_SLOP, `swiped(b)` stays true until
+## the next press, and the button's handler does nothing (a finger dragged across the colour swatches
+## never recolours him). The signal comes before the button's own handling, so the flag is set
+## before `pressed`/`toggled` fire on release.
+static func swipe_guard(b: BaseButton) -> void:
+	b.set_meta("swiped", false)
+	b.gui_input.connect(func(e: InputEvent) -> void:
+		if e is InputEventMouseButton and (e as InputEventMouseButton).button_index == MOUSE_BUTTON_LEFT:
+			var mb := e as InputEventMouseButton
+			if mb.pressed:
+				b.set_meta("press_at", mb.position)
+				b.set_meta("swiped", false)
+			elif b.has_meta("press_at") and mb.position.distance_to(b.get_meta("press_at")) > TAP_SLOP:
+				b.set_meta("swiped", true)
+		elif e is InputEventMouseMotion and b.has_meta("press_at") and (e as InputEventMouseMotion).button_mask & MOUSE_BUTTON_MASK_LEFT:
+			if (e as InputEventMouseMotion).position.distance_to(b.get_meta("press_at")) > TAP_SLOP:
+				b.set_meta("swiped", true))
+
+
+## Whether the press that just ended on `b` was a swipe, not a tap (see swipe_guard); asking clears
+## it. Keyboard and controller presses never are.
+static func swiped(b: BaseButton) -> bool:
+	var s := bool(b.get_meta("swiped", false))
+	b.set_meta("swiped", false)
+	return s

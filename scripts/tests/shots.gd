@@ -557,8 +557,8 @@ func run(runner) -> void:
 		g.g_disp = 1.0
 		g.aquarium.apply(1.0)
 		await _gill_shots(g, "gill_restored")
-	if only == "settingsscroll":
-		await _settings_scroll_shots(g)
+	if only == "menus" or only == "settingsscroll":
+		await _menus_shots(g)
 	if only == "colours":
 		await _colour_shots(g)
 	if only == "sway":
@@ -1060,10 +1060,6 @@ func _ui_shots(g: Game) -> void:
 	g.title._on_settings()
 	await t.seconds(0.8)
 	await t.shot("ui_02_settings_from_title")
-	var sc: ScrollContainer = pm._panel.find_children("*", "ScrollContainer", true, false)[0]
-	sc.scroll_vertical = 100000
-	await t.seconds(0.4)
-	await t.shot("ui_03_settings_bottom")
 	pm.close()
 	await t.seconds(0.4)
 	await t.shot("ui_03b_back_to_title")
@@ -1071,11 +1067,6 @@ func _ui_shots(g: Game) -> void:
 	await t.seconds(1.2)
 	var page: GillPage = pm.gill_page
 	await t.shot("ui_04_colours_open")
-	var csc: ScrollContainer = page.controls.get_node("ControlsScroll")
-	csc.scroll_vertical = 100000
-	await t.seconds(0.5)
-	await t.shot("ui_05_colours_scrolled")
-	csc.scroll_vertical = 0
 	for v in [["front", PI], ["side", PI * 0.5], ["rear", 0.0]]:
 		page._touched = true
 		page.yaw = v[1]
@@ -2054,43 +2045,66 @@ func _loco2_shots(g: Game) -> void:
 		pr.ui.swim_held = false
 		pr.exit()
 
-## The Settings panel's scrollbar at a phone's landscape size (dev-000025 phone test): the list at
-## its top, middle and bottom, and a finger swipe on the list itself.
-func _settings_scroll_shots(g: Game) -> void:
-	g.pause_menu.open()
-	await t.seconds(0.4)
-	var sc: ScrollContainer = g.pause_menu._panel.find_children("*", "ScrollContainer", true, false)[0]
-	var bar := sc.get_v_scroll_bar()
-	t.log_line("window %s, viewport %s, scrollbar %s" % [str(DisplayServer.window_get_size()), str(g.get_viewport().get_visible_rect().size), str(bar.get_global_rect())])
-	var max_v := int(bar.max_value - bar.page)
-	for pair in [["top", 0], ["middle", max_v / 2], ["bottom", max_v]]:
-		sc.scroll_vertical = pair[1]
-		await t.seconds(0.3)
-		await t.shot("settings_scroll_%s" % pair[0])
-	# A swipe up on the list (not the scrollbar) with touch events.
-	sc.scroll_vertical = 0
-	await t.seconds(0.2)
-	var to_win := g.get_viewport().get_screen_transform()
-	var at := sc.get_global_rect().get_center() - Vector2(80, 0)
-	var touch := InputEventScreenTouch.new()
-	touch.pressed = true
-	touch.position = to_win * at
-	g.get_viewport().push_input(touch)
-	await t.frames(1)
-	for k in 8:
-		var dr := InputEventScreenDrag.new()
-		dr.position = to_win * (at - Vector2(0, 25.0 * (k + 1)))
-		dr.relative = to_win.basis_xform(Vector2(0, -25.0))
-		dr.velocity = dr.relative * 60.0
-		g.get_viewport().push_input(dr)
-		await t.frames(1)
-	var rel := InputEventScreenTouch.new()
-	rel.pressed = false
-	rel.position = to_win * (at - Vector2(0, 200.0))
-	g.get_viewport().push_input(rel)
-	await t.seconds(0.5)
-	t.log_line("swipe on the list: scrolled to %d" % sc.scroll_vertical)
-	g.pause_menu.close()
+## The landscape menus (00038, phone audit 2026-09-30 §A): Settings and the colours page at this
+## window's size with a 90 px camera cut-out on the left (drawn as a black bar), from the pause menu
+## (as it opens, and at its fullest: Tier 2 row, Treasure Hunt, the New Run question) and from the
+## title. Run it at 1280x720 and 1600x720 (--resolution).
+func _menus_shots(g: Game) -> void:
+	var pm: PauseMenu = g.pause_menu
+	var w := int(g.get_viewport().get_visible_rect().size.x)
+	UiStyle.test_inset = Vector4(90, 0, 0, 0)
+	var cut := CanvasLayer.new()
+	cut.layer = 100
+	var bar := ColorRect.new()
+	bar.color = Color(0, 0, 0, 0.92)
+	bar.position = Vector2.ZERO
+	bar.size = Vector2(90, 720)
+	bar.mouse_filter = Control.MOUSE_FILTER_IGNORE
+	cut.add_child(bar)
+	g.add_child(cut)
+	t.log_line("window %s, viewport %s" % [str(DisplayServer.window_get_size()), str(g.get_viewport().get_visible_rect().size)])
+	pm.open()
+	await t.seconds(0.6)
+	await t.shot("menus_%d_settings_pause" % w)
+	t.log_line("settings panel %s" % str(pm._panel.get_global_rect()))
+	var t2 := g.tier2
+	g.tier2 = Tier2.new()
+	g.tier2.unlock(Tier2.CANNON)
+	g.tier2.unlock(Tier2.BUBBLE)
+	g.tier2.equip(Tier2.BUBBLE)
+	pm._refresh()
+	pm._loadout.visible = true
+	pm._treasure.visible = true
+	pm._treasure.text = "Resume Treasure Hunt"
+	(pm._panel.find_child("Ask", true, false) as Button).pressed.emit()
+	await t.seconds(0.3)
+	pm._layout()
+	await t.seconds(0.3)
+	await t.shot("menus_%d_settings_pause_fullest" % w)
+	t.log_line("settings panel at its fullest %s" % str(pm._panel.get_global_rect()))
+	(pm._panel.find_child("Cancel", true, false) as Button).pressed.emit()
+	g.tier2 = t2
+	pm._open_gill()
+	await t.seconds(1.2)
+	await t.shot("menus_%d_colours_pause" % w)
+	t.log_line("colours column %s stage %s" % [str(pm.gill_page.controls.get_global_rect()), str(pm.gill_page.stage.get_global_rect())])
+	(pm.gill_page.find_child("Done", true, false) as Button).pressed.emit()
+	pm.close()
+	await t.seconds(0.3)
+	g._enter_title()
+	await t.seconds(1.5)
+	g.title._on_settings()
+	await t.seconds(0.6)
+	await t.shot("menus_%d_settings_title" % w)
+	pm.close()
+	await t.seconds(0.3)
+	g.title._on_colours()
+	await t.seconds(1.2)
+	await t.shot("menus_%d_colours_title" % w)
+	(pm.gill_page.find_child("Done", true, false) as Button).pressed.emit()
+	await t.seconds(0.3)
+	UiStyle.test_inset = Vector4.ZERO
+	cut.queue_free()
 
 
 ## The colours page (owner request): each morph on the page, then two of them in the world.
@@ -2147,12 +2161,8 @@ func _colour_shots(g: Game) -> void:
 	await t.seconds(0.5)
 	await t.shot("pattern_page_upload")
 	# The pattern swatches themselves (drawn off the main thread since this package).
-	var psc := g.pause_menu.gill_page.find_child("ControlsScroll", true, false) as ScrollContainer
-	var pb := g.pause_menu.gill_page.find_child("Pattern_spots", true, false) as Control
-	if psc and pb:
-		psc.ensure_control_visible(pb)
-		await t.seconds(0.4)
-		await t.shot("pattern_page_swatches")
+	await t.seconds(0.4)
+	await t.shot("pattern_page_swatches")
 	(g.pause_menu.gill_page.find_child("Done", true, false) as Button).pressed.emit()
 	_close(g, head2 + gf2 * 1.3 + gr2 * 1.2 + gu2 * 0.9, head2 - gf2 * 0.3, gu2)
 	await t.seconds(0.5)

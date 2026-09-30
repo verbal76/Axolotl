@@ -14,7 +14,7 @@ func run(runner) -> void:
 	p.use_bot_input = true
 	await t.seconds(0.5)
 	var only: String = Settings.test_args.get("only", "")
-	for name_ in ["_test_startup", "_test_ota_and_version", "_test_mesh_winding", "_test_terrain", "_test_ravines", "_test_terrain_grounded", "_test_no_floating_platforms", "_test_parasite_locomotion", "_test_parasite_body_and_death", "_test_parasite_combat", "_test_organic_motion", "_test_gill_look", "_test_gill_idles", "_test_gill_colours", "_test_gill_patterns", "_test_tail_whip", "_test_gill_traction", "_test_gill_incline_transitions", "_test_traction_no_shortcuts", "_test_gill_body_follow", "_test_swim_body_follow", "_test_ambient_sway", "_test_placements", "_test_tutorial_route", "_test_sphere_walk", "_test_jump_and_burst", "_test_coyote_and_buffer", "_test_swipe_direction_and_stages", "_test_hard_landing", "_test_food", "_test_food_reach", "_test_darter_and_burrower", "_test_food_repopulates", "_test_motes", "_test_checkpoint_and_regen", "_test_crumble", "_test_restoration_gates", "_test_bubble_columns", "_test_restoration_continuity", "_test_health_map", "_test_vortex", "_test_vortex_tints", "_test_current", "_test_canopy", "_test_canopy_plain_jumps", "_test_climbs_physical", "_test_jungle_ladders_physical", "_test_leaf_geometry", "_test_leaf_footing", "_test_caves", "_test_mounds", "_test_vegetation", "_test_vortex_mouths_clear", "_test_route_audit", "_test_new_areas", "_test_ecosystem", "_test_music", "_test_opening_audio", "_test_run_clock", "_test_completion_catalog", "_test_completion_frozen", "_test_run_save_file", "_test_run_timer_live", "_test_run_continue", "_test_timer_integrity", "_test_resume_points_safe", "_phase_continue_write", "_phase_continue_read", "_test_upgrades", "_test_ui", "_test_menu_scrollbar", "_test_tier2_rules", "_test_tier2_world", "_test_ambient_fish", "_test_parasite_never_buried", "_test_tier2_loadout", "_test_aquarium_experiences", "_test_aquarium_polish", "_test_all_clear", "_test_treasure_unlock", "_test_treasure_generation", "_test_treasure_play", "_phase_treasure_stress", "_phase_live_fish_diag", "_phase_cpu_probe", "_phase_incline_survey", "_phase_loco_diag", "_phase_crawl_trace", "_phase_mouth_crawls", "_phase_organic_trace", "_test_skilltree_graph", "_test_progress_store", "_test_starfish_spots", "_test_starfish_pickup", "_test_skill_ui", "_test_quick_gill", "_test_lunge_skills", "_test_burst_skills", "_test_glide_control", "_test_glide_transfers", "_test_mote_magnet", "_phase_starfish_survey", "_phase_starfish_sweep", "_phase_glide_probe"]:
+	for name_ in ["_test_startup", "_test_ota_and_version", "_test_mesh_winding", "_test_terrain", "_test_ravines", "_test_terrain_grounded", "_test_no_floating_platforms", "_test_parasite_locomotion", "_test_parasite_body_and_death", "_test_parasite_combat", "_test_organic_motion", "_test_gill_look", "_test_gill_idles", "_test_gill_colours", "_test_gill_patterns", "_test_tail_whip", "_test_gill_traction", "_test_gill_incline_transitions", "_test_traction_no_shortcuts", "_test_gill_body_follow", "_test_swim_body_follow", "_test_ambient_sway", "_test_placements", "_test_tutorial_route", "_test_sphere_walk", "_test_jump_and_burst", "_test_coyote_and_buffer", "_test_swipe_direction_and_stages", "_test_hard_landing", "_test_food", "_test_food_reach", "_test_darter_and_burrower", "_test_food_repopulates", "_test_motes", "_test_checkpoint_and_regen", "_test_crumble", "_test_restoration_gates", "_test_bubble_columns", "_test_restoration_continuity", "_test_health_map", "_test_vortex", "_test_vortex_tints", "_test_current", "_test_canopy", "_test_canopy_plain_jumps", "_test_climbs_physical", "_test_jungle_ladders_physical", "_test_leaf_geometry", "_test_leaf_footing", "_test_caves", "_test_mounds", "_test_vegetation", "_test_vortex_mouths_clear", "_test_route_audit", "_test_new_areas", "_test_ecosystem", "_test_music", "_test_opening_audio", "_test_run_clock", "_test_completion_catalog", "_test_completion_frozen", "_test_run_save_file", "_test_run_timer_live", "_test_run_continue", "_test_timer_integrity", "_test_resume_points_safe", "_phase_continue_write", "_phase_continue_read", "_test_upgrades", "_test_ui", "_test_menus_no_scroll", "_test_menu_touch", "_test_tier2_rules", "_test_tier2_world", "_test_ambient_fish", "_test_parasite_never_buried", "_test_tier2_loadout", "_test_aquarium_experiences", "_test_aquarium_polish", "_test_all_clear", "_test_treasure_unlock", "_test_treasure_generation", "_test_treasure_play", "_phase_treasure_stress", "_phase_live_fish_diag", "_phase_cpu_probe", "_phase_incline_survey", "_phase_loco_diag", "_phase_crawl_trace", "_phase_mouth_crawls", "_phase_organic_trace", "_test_skilltree_graph", "_test_progress_store", "_test_starfish_spots", "_test_starfish_pickup", "_test_skill_ui", "_test_quick_gill", "_test_lunge_skills", "_test_burst_skills", "_test_glide_control", "_test_glide_transfers", "_test_mote_magnet", "_phase_starfish_survey", "_phase_starfish_sweep", "_phase_glide_probe"]:
 		# "_phase_*" tests are halves of a relaunch test: they run only when asked for by name
 		# (in a child process started by _test_run_continue).
 		if name_.begins_with("_phase") and not only.split(",", false).has(name_):
@@ -5301,22 +5301,22 @@ func _test_aquarium_polish() -> void:
 	g.title._on_colours()
 	await t.frames(4)
 	var page: GillPage = pm.gill_page
-	# (Laid out as on a 1280 x 720 phone.)
-	page.layout_in(Rect2(18, 14, 1244, 692))
+	# (Laid out as on a 1280 x 720 phone with a 90 px cut-out on the left.)
+	var area := Rect2(90, 14, 1280 - 90 - 16, 692)
+	page.layout_in(area)
 	await t.frames(2)
 	vp = Vector2(1280, 720)
 	var cr := page.controls.get_global_rect()
 	var sr := page.stage.get_global_rect()
-	var screen := Rect2(Vector2.ZERO, vp)
-	var split_ok := cr.end.x <= sr.position.x + 0.5 and screen.encloses(cr.grow(-1)) and screen.encloses(sr.grow(-1)) and sr.size.x >= 300.0 and sr.size.y >= 300.0 \
-			and page.controls.get_combined_minimum_size().x <= cr.size.x + 0.5
+	var split_ok := cr.end.x <= sr.position.x + 0.5 and area.encloses(cr) and area.encloses(sr) and sr.size.x >= 500.0 and sr.size.y >= 600.0 \
+			and page.controls.get_combined_minimum_size().x <= cr.size.x + 0.5 and page.controls.get_combined_minimum_size().y <= cr.size.y + 0.5
 	t.check("colours_split_workspace", split_ok, "controls %s stage %s min %s" % [cr, sr, page.controls.get_combined_minimum_size()])
-	var csc: ScrollContainer = page.controls.get_node("ControlsScroll")
-	csc.scroll_vertical = 100000
-	await t.frames(3)
-	t.check("colours_scroll_keeps_gill", csc.scroll_vertical > 0 and page.stage.get_global_rect() == sr and page.stage.is_visible_in_tree(),
-			"scroll %d" % csc.scroll_vertical)
-	csc.scroll_vertical = 0
+	# No scrolling at all (owner ruling 2026-09-30): no scroll container, and the last control (the
+	# pattern repeats) is on screen beside him, with nothing moved.
+	var scrolls := page.find_children("*", "ScrollContainer", true, false)
+	var last_r := page._pattern_size.get_global_rect()
+	t.check("colours_no_scroll_gill_always_shown", scrolls.is_empty() and area.encloses(last_r) and cr.encloses(last_r) and page.stage.get_global_rect() == sr and page.stage.is_visible_in_tree(),
+			"scroll containers %d, repeats slider %s, stage %s" % [scrolls.size(), last_r, page.stage.get_global_rect()])
 	# A preset recolours him at once; so does a slider.
 	var base0 := page.preview.look_base()
 	(page.find_child("Morph_golden", true, false) as Button).pressed.emit()
@@ -5330,7 +5330,7 @@ func _test_aquarium_polish() -> void:
 	page._touched = true
 	page._yaw_v = 0.0
 	var yaw0 := page.yaw
-	var scroll0 := csc.scroll_vertical
+	var col0 := page.column.get_global_rect()
 	var c := sr.get_center()
 	var to_win := g.get_viewport().get_screen_transform()
 	var ev := InputEventMouseButton.new()
@@ -5354,7 +5354,7 @@ func _test_aquarium_polish() -> void:
 	g.get_viewport().push_input(rel)
 	await t.frames(2)
 	var yaw1 := page.yaw
-	t.check("colours_drag_turns_gill", absf(yaw1 - yaw0) > 0.5 and csc.scroll_vertical == scroll0, "yaw %.2f -> %.2f scroll %d" % [yaw0, yaw1, csc.scroll_vertical])
+	t.check("colours_drag_turns_gill", absf(yaw1 - yaw0) > 0.5 and page.column.get_global_rect() == col0, "yaw %.2f -> %.2f column %s" % [yaw0, yaw1, page.column.get_global_rect()])
 	page._yaw_v = 0.0
 	await t.frames(2)
 	var yaw2 := page.yaw
@@ -5374,63 +5374,252 @@ func _test_aquarium_polish() -> void:
 	await t.seconds(0.5)
 
 
-func _test_menu_scrollbar() -> void:
+## The landscape menus (phone audit 2026-09-30 §A, owner rulings; release 00038): Settings and the
+## colours page fit a phone's 720-px design height with nothing to scroll, at 1280 x 720 (16:9),
+## 1560 x 720 (19.5:9) and 1600 x 720 (20:9), with a 90 px camera cut-out on either side: every control
+## inside the safe area, no two touch targets overlapping, none under 56 px tall. Settings is checked
+## at its fullest (Tier 2 row, Treasure Hunt and the New Run question all showing) and from the title.
+## Pause order: Resume, then Return to Title directly beneath it.
+func _test_menus_no_scroll() -> void:
 	var pm := g.pause_menu
+	var saved_t2 := g.tier2
+	g.tier2 = Tier2.new()
+	g.tier2.unlock(Tier2.CANNON)
+	g.tier2.unlock(Tier2.BUBBLE)
+	g.tier2.equip(Tier2.BUBBLE)
+	var results: Array[String] = []
+	var ok := true
 	pm.open()
 	await t.frames(3)
-	var results := []
-	var ok := true
-	for which in ["settings", "colours"]:
-		if which == "colours":
-			pm._open_gill()
+	# As it opens on this window (its own safe-area layout, wrapped text measured at its width).
+	var screen := pm._root.get_viewport_rect()
+	var pr0 := pm._panel.get_global_rect()
+	t.check("settings_opens_on_screen", screen.encloses(pr0) and pr0.size.y <= 696.0, "panel %s in %s" % [pr0, screen])
+	# Pause order.
+	var acts: Array = pm._left.get_children().filter(func(n: Node) -> bool: return (n as Control).visible)
+	var rr := (pm._panel.find_child("Resume", true, false) as Control).get_global_rect()
+	var tr := (pm._panel.find_child("ReturnToTitle", true, false) as Control).get_global_rect()
+	t.check("pause_order_resume_then_title", acts.size() >= 2 and acts[0].name == "Resume" and acts[1].name == "ReturnToTitle"
+			and is_equal_approx(tr.position.x, rr.position.x) and absf(tr.position.y - rr.end.y - 8.0) < 0.5,
+			"%s; Resume %s, Return to Title %s" % [acts.map(func(n: Node) -> String: return str(n.name)), rr, tr])
+	# At its fullest.
+	pm._treasure.visible = true
+	pm._loadout.visible = true
+	(pm._panel.find_child("Ask", true, false) as Button).pressed.emit()
+	for from_title in [false, true]:
+		if from_title:
+			(pm._panel.find_child("Cancel", true, false) as Button).pressed.emit()
+			pm.close()
+			await t.frames(1)
+			pm.open(true)
 			await t.frames(3)
-			# (Laid out as on a 1280 x 720 phone, where the controls need their scrollbar.)
-			pm.gill_page.layout_in(Rect2(18, 14, 1244, 692))
+		var skills_ok := (pm._panel.find_child("Skills", true, false) as Control).is_visible_in_tree()
+		for w in [1280, 1560, 1600]:
+			for side in ["left", "right"]:
+				var area := Rect2(90 if side == "left" else 12, 12, w - 90 - 12, 720 - 24)
+				pm.layout_in(area)
+				await t.frames(2)
+				var bad := _fit_problems(pm._panel, area, PauseMenu.MIN_TOUCH)
+				if not area.encloses(pm._panel.get_global_rect()):
+					bad += " panel %s" % pm._panel.get_global_rect()
+				if not skills_ok:
+					bad += " no Skills button"
+				ok = ok and bad == ""
+				if bad != "" or side == "left":
+					results.append("settings%s %dx720 %s: panel %s %s" % [" (title)" if from_title else "", w, side, pm._panel.get_global_rect().size, "fits" if bad == "" else bad])
+	pm.close()
+	await t.frames(2)
+	t.check("settings_fits_landscape_no_scroll", ok, "; ".join(results))
+	# The colours page, from the pause menu, with "Mine" showing (the fullest pattern grid).
+	results.clear()
+	ok = true
+	pm.open()
+	await t.frames(2)
+	pm._open_gill()
+	await t.frames(3)
+	var page := pm.gill_page
+	(page._patterns[GillLook.UPLOAD] as Control).visible = true
+	for w in [1280, 1560, 1600]:
+		for side in ["left", "right"]:
+			var area := Rect2(90 if side == "left" else 16, 14, w - 90 - 16, 692)
+			page.layout_in(area)
 			await t.frames(2)
-		var holder: Control = pm._panel if which == "settings" else pm.gill_page.controls
-		var sc: ScrollContainer = holder.find_children("*", "ScrollContainer", true, false)[0]
-		var bar := sc.get_v_scroll_bar()
-		var br := bar.get_global_rect()
-		var panel_r := holder.get_global_rect()
-		var overlaps := []
-		for c in sc.find_children("*", "", true, false):
-			if (c is BaseButton or c is Slider) and (c as Control).is_visible_in_tree() and (c as Control).get_global_rect().intersects(br):
-				overlaps.append(str(c.name))
-		sc.scroll_vertical = 0
-		await t.frames(2)
-		var top := sc.scroll_vertical
-		# Grab it 3 px in from its left edge (the undrawn part of the touch area) and drag down.
-		# (Events go in window coordinates: through the viewport's stretch transform.)
-		var to_win := g.get_viewport().get_screen_transform()
-		var grab := Vector2(br.position.x + 3.0, br.position.y + 20.0)
-		var ev := InputEventMouseButton.new()
-		ev.button_index = MOUSE_BUTTON_LEFT
-		ev.pressed = true
-		ev.position = to_win * grab
-		ev.global_position = ev.position
-		g.get_viewport().push_input(ev)
-		await t.frames(1)
-		for k in 6:
+			var bad := _fit_problems(page, area, 56.0)
+			var cr := page.controls.get_global_rect()
+			var sr := page.stage.get_global_rect()
+			if cr.intersects(sr) or page.controls.get_combined_minimum_size().y > cr.size.y + 0.5 or sr.size.x < 500.0:
+				bad += " controls %s (min %s) stage %s" % [cr, page.controls.get_combined_minimum_size(), sr]
+			ok = ok and bad == ""
+			if bad != "" or side == "left":
+				results.append("colours %dx720 %s: column %.0f, stage %.0f x %.0f, %s" % [w, side, cr.size.x, sr.size.x, sr.size.y, "fits" if bad == "" else bad])
+	page._style_patterns()
+	pm.close()
+	await t.frames(2)
+	t.check("colours_fits_landscape_no_scroll", ok, "; ".join(results))
+	g.tier2 = saved_t2
+	g.get_tree().paused = false
+	await t.frames(2)
+
+
+## Every visible control under `root` inside `area`, no scroll container, no two touch targets
+## overlapping and none under `min_h` tall. "" when it all fits, otherwise what does not.
+func _fit_problems(root: Control, area: Rect2, min_h: float) -> String:
+	var bad: Array[String] = []
+	var targets: Array[Control] = []
+	for n in root.find_children("*", "Control", true, false):
+		var c := n as Control
+		if not c.is_visible_in_tree():
+			continue
+		if c is ScrollContainer:
+			bad.append("scroll container %s" % c.name)
+		if not (c is BaseButton or c is Slider or c is Label or c is RichTextLabel or c is SubViewportContainer):
+			continue
+		var r := c.get_global_rect()
+		if not area.grow(0.5).encloses(r):
+			bad.append("%s outside at %s" % [c.name, r])
+		if c is BaseButton or c is Slider:
+			if r.size.y < min_h - 0.01:
+				bad.append("%s only %.0f px tall" % [c.name, r.size.y])
+			for q in targets:
+				if q.get_global_rect().intersects(r):
+					bad.append("%s overlaps %s" % [c.name, q.name])
+			targets.append(c)
+	return ", ".join(bad)
+
+
+## Fingers on the menus (phone audit 2026-09-30 §A: a swipe from the Body slider recoloured Gill):
+## a drag that starts on any control scrolls nothing and changes nothing: swatches, pattern cells,
+## sliders (on the thumb going up or down, or on the track away from it), toggles. A tap on a
+## slider's track and a sideways drag of its thumb still work, as does a tap on a swatch.
+func _test_menu_touch() -> void:
+	var pm := g.pause_menu
+	var look := func() -> Array:
+		return [Settings.gill_morph, snappedf(Settings.gill_body_hue, 0.0001), snappedf(Settings.gill_body_bright, 0.0001), snappedf(Settings.gill_dots_hue, 0.0001),
+				snappedf(Settings.gill_dots_bright, 0.0001), Settings.gill_pattern, Settings.gill_pattern_mode, Settings.gill_pattern_size]
+	var levels := func() -> Array:
+		return [Settings.show_run_timer, Settings.reduced_hud, Settings.haptics, Settings.swim_invert_y, snappedf(Settings.music_volume, 0.0001), snappedf(Settings.sfx_volume, 0.0001)]
+	var rects := func(root: Control) -> Array:
+		var out := []
+		for n in root.find_children("*", "Control", true, false):
+			if (n as Control).is_visible_in_tree():
+				out.append((n as Control).get_global_rect())
+		return out
+	pm.open()
+	await t.frames(2)
+	pm._open_gill()
+	await t.frames(3)
+	var page := pm.gill_page
+	page.layout_in(Rect2(90, 14, 1280 - 90 - 16, 692))
+	await t.frames(2)
+	Settings.set_gill_look("pink", 0.0, 1.0, 0.0, 1.0)
+	Settings.set_gill_pattern("spots", 0, 3)
+	page.refresh()
+	await t.frames(1)
+	var look0: Array = look.call()
+	var rects0: Array = rects.call(page)
+	var drags := []
+	for id in ["pink", "golden", "melanoid", "gfp"]:
+		drags.append(["swatch " + id, (page._swatches[id] as Control).get_global_rect().get_center(), Vector2(0, -160)])
+	for id in ["none", "hearts", "leopard"]:
+		drags.append(["pattern " + id, (page._patterns[id] as Control).get_global_rect().get_center(), Vector2(0, 160)])
+	drags.append(["Full colour", page._full_colour.get_global_rect().get_center(), Vector2(0, -150)])
+	for s in [page._body_hue, page._body_bright, page._dots_hue, page._dots_bright, page._pattern_size]:
+		var sl := s as TouchSlider
+		var r := sl.get_global_rect()
+		var thumb := Vector2(r.position.x + sl.thumb_x(), r.get_center().y)
+		drags.append(["%s thumb, up" % sl.name, thumb, Vector2(14, -170)])
+		drags.append(["%s thumb, down" % sl.name, thumb, Vector2(-10, 170)])
+		var away := Vector2(r.position.x + (r.size.x * 0.9 if sl.thumb_x() < r.size.x * 0.5 else r.size.x * 0.1), r.get_center().y)
+		drags.append(["%s track, sideways" % sl.name, away, Vector2(-120, 30)])
+		drags.append(["%s track, up" % sl.name, away, Vector2(0, -160)])
+	var changed: Array[String] = []
+	for d in drags:
+		await _drag(d[1], d[2])
+		if look.call() != look0:
+			changed.append("%s recoloured %s" % [d[0], look.call()])
+			Settings.set_gill_look("pink", 0.0, 1.0, 0.0, 1.0)
+			Settings.set_gill_pattern("spots", 0, 3)
+			page.refresh()
+		if rects.call(page) != rects0:
+			changed.append("%s moved the page" % d[0])
+	t.check("colours_drags_neither_scroll_nor_recolour", changed.is_empty() and drags.size() >= 25, "%d drags; %s" % [drags.size(), ", ".join(changed)])
+	# What a finger should still do: tap a swatch, tap the track, slide the thumb sideways.
+	await _drag((page._swatches["golden"] as Control).get_global_rect().get_center(), Vector2(4, 3))
+	var picked := Settings.gill_morph == "golden"
+	var hr := page._body_hue.get_global_rect()
+	await _drag(Vector2(hr.position.x + hr.size.x * 0.85, hr.get_center().y), Vector2.ZERO)
+	var tapped := page._body_hue.value > 0.25
+	var br := page._body_bright.get_global_rect()
+	var b0 := page._body_bright.value
+	await _drag(Vector2(br.position.x + page._body_bright.thumb_x(), br.get_center().y), Vector2(-60, 6))
+	var slid := page._body_bright.value < b0 - 0.1
+	t.check("colours_taps_and_thumb_still_work", picked and tapped and slid, "swatch %s, track tap -> hue %.2f, thumb slide shade %.2f -> %.2f" % [picked, page._body_hue.value, b0, page._body_bright.value])
+	Settings.set_gill_look("pink", 0.0, 1.0, 0.0, 1.0)
+	Settings.set_gill_pattern("none", 0, 3)
+	page.refresh()
+	(page.find_child("Done", true, false) as Button).pressed.emit()
+	await t.frames(2)
+	# Settings: the toggles and the Music / Sound sliders.
+	pm.layout_in(Rect2(90, 12, 1280 - 90 - 12, 696))
+	await t.frames(2)
+	var lv0: Array = levels.call()
+	var srects0: Array = rects.call(pm._panel)
+	var sdrags := []
+	for c in [pm._timer_toggle, pm._reduced, pm._haptics, pm._swim_invert]:
+		sdrags.append([str(c.name), (c as Control).get_global_rect().get_center(), Vector2(0, -150)])
+	for s in [pm._music, pm._sfx]:
+		var sl := s as TouchSlider
+		var r := sl.get_global_rect()
+		var thumb := Vector2(r.position.x + sl.thumb_x(), r.get_center().y)
+		sdrags.append(["%s thumb, up" % sl.name, thumb, Vector2(12, -160)])
+		var away := Vector2(r.position.x + (r.size.x * 0.9 if sl.thumb_x() < r.size.x * 0.5 else r.size.x * 0.1), r.get_center().y)
+		sdrags.append(["%s track, up" % sl.name, away, Vector2(0, 160)])
+	changed.clear()
+	for d in sdrags:
+		await _drag(d[1], d[2])
+		if levels.call() != lv0:
+			changed.append("%s changed %s" % [d[0], levels.call()])
+		if rects.call(pm._panel) != srects0:
+			changed.append("%s moved the panel" % d[0])
+	t.check("settings_drags_neither_scroll_nor_change", changed.is_empty() and sdrags.size() >= 8 and pm._panel.find_children("*", "ScrollContainer", true, false).is_empty(),
+			"%d drags; %s" % [sdrags.size(), ", ".join(changed)])
+	# A tap still flips a toggle (and is saved); flip it back.
+	var h0 := Settings.haptics
+	await _drag(pm._haptics.get_global_rect().get_center(), Vector2.ZERO)
+	var flipped := Settings.haptics != h0
+	await _drag(pm._haptics.get_global_rect().get_center(), Vector2.ZERO)
+	t.check("settings_tap_still_toggles", flipped and Settings.haptics == h0, "")
+	pm.close()
+	await t.frames(2)
+
+
+## A finger's press at `at` (design px), a move by `by` in eight steps, and its release.
+func _drag(at: Vector2, by: Vector2) -> void:
+	var to_win := g.get_viewport().get_screen_transform()
+	var ev := InputEventMouseButton.new()
+	ev.button_index = MOUSE_BUTTON_LEFT
+	ev.button_mask = MOUSE_BUTTON_MASK_LEFT
+	ev.pressed = true
+	ev.position = to_win * at
+	ev.global_position = ev.position
+	g.get_viewport().push_input(ev)
+	await t.frames(1)
+	if by != Vector2.ZERO:
+		for k in 8:
 			var mv := InputEventMouseMotion.new()
 			mv.button_mask = MOUSE_BUTTON_MASK_LEFT
-			mv.position = to_win * (grab + Vector2(0, 30.0 * (k + 1)))
+			mv.position = to_win * (at + by * (k + 1) / 8.0)
 			mv.global_position = mv.position
-			mv.relative = to_win.basis_xform(Vector2(0, 30.0))
+			mv.relative = to_win.basis_xform(by / 8.0)
 			g.get_viewport().push_input(mv)
 			await t.frames(1)
-		var up := ev.duplicate()
-		up.pressed = false
-		up.position = to_win * (grab + Vector2(0, 180.0))
-		up.global_position = up.position
-		g.get_viewport().push_input(up)
-		await t.frames(2)
-		var dragged := sc.scroll_vertical - top
-		var this_ok := bar.visible and br.size.x >= 3.0 * 8.0 and panel_r.encloses(br) and overlaps.is_empty() and dragged > 40
-		ok = ok and this_ok
-		results.append("%s: %.0f px wide (was 8), inside the panel %s, over controls %s, a drag from its edge scrolled %d px" % [which, br.size.x, panel_r.encloses(br), str(overlaps), dragged])
-	pm.close()
-	await t.frames(1)
-	t.check("menu_scrollbar_thumb_sized", ok and UiStyle.SCROLL_TOUCH_W >= 24 and UiStyle.SCROLL_DRAW_W <= 10, "; ".join(results))
+	var up := InputEventMouseButton.new()
+	up.button_index = MOUSE_BUTTON_LEFT
+	up.pressed = false
+	up.position = to_win * (at + by)
+	up.global_position = up.position
+	g.get_viewport().push_input(up)
+	await t.frames(2)
 
 
 func add_child_safe(n: Node) -> void:
