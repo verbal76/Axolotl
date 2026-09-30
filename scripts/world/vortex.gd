@@ -17,6 +17,12 @@ const JETS := 5
 const JET_R := 0.42
 const STREAMS := 3
 const POOL_R := 5.2
+## Each connection's faint hue (owner, 2026-09-30: nearby vortices were mistaken for one another), by
+## its index in Levels.LINKS: the same at both ends, stable, and chosen so no two connections that
+## share a ball look alike. Mostly in the bright water (TINT_AMT), so they stay water.
+const TINTS := [Color(1.0, 0.36, 0.62), Color(0.36, 1.0, 0.42), Color(1.0, 0.72, 0.22), Color(0.7, 0.46, 1.0),
+		Color(1.0, 0.42, 0.3), Color(0.32, 0.52, 1.0)]
+const TINT_AMT := 0.5
 
 var ball_a: MossBall
 var ball_b: MossBall
@@ -42,6 +48,8 @@ var turns := 4.0
 var _rush_a: AudioStreamPlayer3D
 var _rush_b: AudioStreamPlayer3D
 var _length := 1.0
+## This connection's hue (TINTS).
+var tint := Color.WHITE
 
 
 func setup(a: MossBall, b: MossBall, p_dir_a: Vector3, p_dir_b: Vector3) -> void:
@@ -105,7 +113,13 @@ func _make_jet_mat(opacity: float, flow: float) -> ShaderMaterial:
 	m.set_shader_parameter("length_m", _length)
 	m.set_shader_parameter("opacity", opacity)
 	m.set_shader_parameter("flow_speed", flow)
+	_tint(m)
 	return m
+
+
+func _tint(m: ShaderMaterial) -> void:
+	m.set_shader_parameter("tint", tint)
+	m.set_shader_parameter("tint_amt", TINT_AMT if tint != Color.WHITE else 0.0)
 
 
 ## Path point, forward and the (side, up) frame at t (0..1), interpolated.
@@ -190,6 +204,7 @@ func _make_mouth(b: MossBall, d: Vector3) -> Node3D:
 	pool.mesh = _pool_mesh(b, d, root)
 	var pm := ShaderMaterial.new()
 	pm.shader = preload("res://shaders/vortex_pool.gdshader")
+	_tint(pm)
 	pool.material_override = pm
 	pool.cast_shadow = GeometryInstance3D.SHADOW_CASTING_SETTING_OFF
 	pool.name = "Pool"
@@ -254,6 +269,7 @@ func _debris(seed_v: int) -> MultiMeshInstance3D:
 	mi.multimesh = mm
 	var m := ShaderMaterial.new()
 	m.shader = preload("res://shaders/vortex_debris.gdshader")
+	_tint(m)
 	mi.material_override = m
 	mi.cast_shadow = GeometryInstance3D.SHADOW_CASTING_SETTING_OFF
 	mi.custom_aabb = AABB(Vector3(-POOL_R, -1, -POOL_R), Vector3(POOL_R * 2, 9, POOL_R * 2))

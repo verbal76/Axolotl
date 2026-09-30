@@ -8,6 +8,8 @@ render_mode unshaded, blend_mix, depth_draw_never, cull_disabled, shadows_disabl
 uniform float strength = 0.0;
 uniform float spin_phase = 0.0;
 uniform float rise = 6.0;
+uniform vec3 tint : source_color = vec3(1.0);
+uniform float tint_amt = 0.0;
 
 varying float v_life;
 varying vec2 v_uv;
@@ -33,6 +35,6 @@ void fragment() {
 		discard;
 	}
 	float fade = smoothstep(0.0, 0.1, v_life) * (1.0 - smoothstep(0.75, 1.0, v_life));
-	ALBEDO = COLOR.rgb;
+	ALBEDO = mix(COLOR.rgb, COLOR.rgb * tint * 1.2, tint_amt * 0.6);
 	ALPHA = (1.0 - smoothstep(0.5, 1.0, d)) * fade * COLOR.a * strength;
 }

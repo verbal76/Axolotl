@@ -864,6 +864,38 @@ repository. Do not name, open or use any other game repository in Mote developme
    - Small fixes move fast; large changes (the aquarium overhaul, Gill locomotion) get deeper
      qualification.
 
+4. **Background task / waiter hygiene** (owner, 2026-09-30). **One asynchronous job = one
+   authoritative completion watcher.** Do not create several waiter, polling or background shell
+   tasks for the same worker, result file, completion sentinel, test run, render job or agent unless
+   a specific technical reason genuinely needs more than one.
+   - **Before creating a waiter:**
+     1. Check whether an existing waiter already monitors that worker/result/sentinel. If one exists
+        and is healthy, reuse it.
+     2. Never add a waiter just because the worker has been running a long time.
+     3. Check the process, log and progress directly before assuming a stall. A quiet log is not by
+        itself evidence of a stall, especially during known long tests (for example
+        `jungle_ladders_climbed_with_plain_jumps`, or a full unit suite of 27–32 min under load).
+     4. Never start a duplicate test/run because a watcher looks quiet.
+     5. Track which waiter owns which worker/result, so the relationship can be audited.
+   - **Replacing a waiter:** verify the worker first, preserve its work, retire the obsolete waiter
+     cleanly, then create exactly one replacement.
+   - **Accidental duplicates:** do not blindly terminate them if that would report false failures to
+     an active parent agent. First decide whether termination could trigger retries or repeat
+     expensive work. Clean up only if harmless; otherwise let them finish naturally and prevent a
+     recurrence. (2026-09-30 audit: two duplicate waiters on the locomotion agent's full-suite log
+     were left to finish for this reason.)
+   - **The goal is not a tidy Background Tasks screen.** It is to prevent duplicate monitoring,
+     misleading failure notifications, unnecessary agent wake-ups, duplicate test runs, and wasted
+     compute and tokens, and to keep clear which task owns which work.
+   - **Worker design:** prefer workers with one unambiguous status/result/exit marker, for example the
+     final `EXIT n` / `exit n` line written by the unit/playthrough wrappers. The state (RUNNING,
+     COMPLETED, FAILED, STALLED) should be readable from the process and that marker without
+     spawning more watchers. Give each brief to a subagent this rule too.
+   - **Known cause of duplicates** (2026-09-30, 12:26 EDT audit; inferred from the staggered start times): the agents most likely repeated a long foreground
+     `until grep` wait. Each one hit the Bash timeout, was moved to the background and stayed alive.
+     8 waiters built up on 2 test runs (5 on one, 3 on the other). Keep foreground checks short (one
+     look at the log or `ps`), and after a timeout, look at the log instead of waiting again.
+
 ### Work queue (owner order, 2026-09-29)
 
 1. ~~dev-000031 (Treasure Hunt fix)~~: published and verified.
@@ -885,6 +917,14 @@ repository. Do not name, open or use any other game repository in Mote developme
    "their little movements are difficult to consciously predict, yet smooth, purposeful and
    believable."
 5. Then the next authorized work, without waiting for physical playtests.
+
+**Owner's combined morning handoff (2026-09-30), superseding the order above where they differ:**
+(1) root-cause and correct locomotion on the phone (Open Issue #4: Gill not visibly flowing; face-
+planting and sliding sideways at ordinary moss inclines), proven on real authored terrain and against
+dev-000032 from the gameplay camera; (2) subtle per-connection vortex tints (Open Issue #5) riding
+with it if clean; (3) one corrective OTA, verified; (4) then Organic Enemy Movement (its read-only
+research and self-contained work may continue meanwhile, but nothing built on body-follow
+assumptions until locomotion is sound), as its own OTA; (5) continue. No waiting for playtests.
 
 ---
 
@@ -911,6 +951,7 @@ You are continuing an existing game called **Mote** (protagonist **Gill**).
 8. Report the current OTA (the channel pointer; `dev-000025` at this handoff).
 9. Report the physical-device verification state (none unless the owner has supplied evidence).
 10. Continue from the documented stopping point (§18).
+11. Follow the standing working rules in §18, including rule 4 (one async job = one completion watcher).
 
 **Preserve:**
 

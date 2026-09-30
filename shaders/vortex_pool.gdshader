@@ -15,6 +15,9 @@ uniform float arms = 3.0;
 uniform vec3 deep : source_color = vec3(0.05, 0.28, 0.42);
 uniform vec3 water : source_color = vec3(0.2, 0.66, 0.8);
 uniform vec3 foam : source_color = vec3(0.9, 0.98, 1.0);
+// The connection's own faint hue (Vortex.TINTS), strongest in the churning ring round the eye.
+uniform vec3 tint : source_color = vec3(1.0);
+uniform float tint_amt = 0.0;
 
 float hash(vec2 p) {
 	p = fract(p * vec2(123.34, 456.21));
@@ -61,7 +64,10 @@ void fragment() {
 	// Churning white water round the eye, and a lip of foam where the pool meets the moss.
 	float ring = exp(-pow((r - 0.13) / 0.06, 2.0)) * (0.6 + 0.4 * n);
 	float lip = exp(-pow((r - 0.82) / 0.07, 2.0)) * smoothstep(0.35, 0.7, n2 + n * 0.4);
-	col = mix(col, foam, clamp(ring * 0.7 + lip * 0.6, 0.0, 1.0) * strength);
+	vec3 foam_t = mix(foam, tint, tint_amt * 1.2);
+	col = mix(col, foam_t, clamp(ring * 0.7 + lip * 0.6, 0.0, 1.0) * strength);
+	// (A faint glow of the hue in the eye's water too.)
+	col = mix(col, col * tint * 1.25, tint_amt * 0.45 * smoothstep(0.5, 0.0, r));
 	float edge = 1.0 - smoothstep(0.8, 1.0, r);
 	float a = (0.6 + crest * 0.3 + ring * 0.3 + lip * 0.3) * edge * (0.35 + strength * 0.65);
 	ALBEDO = col;

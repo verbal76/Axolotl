@@ -14,7 +14,7 @@ func run(runner) -> void:
 	p.use_bot_input = true
 	await t.seconds(0.5)
 	var only: String = Settings.test_args.get("only", "")
-	for name_ in ["_test_startup", "_test_ota_and_version", "_test_mesh_winding", "_test_terrain", "_test_ravines", "_test_terrain_grounded", "_test_no_floating_platforms", "_test_parasite_locomotion", "_test_parasite_body_and_death", "_test_parasite_combat", "_test_gill_look", "_test_gill_idles", "_test_gill_colours", "_test_gill_patterns", "_test_tail_whip", "_test_gill_traction", "_test_gill_incline_transitions", "_test_traction_no_shortcuts", "_test_gill_body_follow", "_test_swim_body_follow", "_test_ambient_sway", "_test_placements", "_test_tutorial_route", "_test_sphere_walk", "_test_jump_and_burst", "_test_coyote_and_buffer", "_test_swipe_direction_and_stages", "_test_hard_landing", "_test_food", "_test_food_reach", "_test_darter_and_burrower", "_test_food_repopulates", "_test_motes", "_test_checkpoint_and_regen", "_test_crumble", "_test_restoration_gates", "_test_bubble_columns", "_test_restoration_continuity", "_test_health_map", "_test_vortex", "_test_current", "_test_canopy", "_test_canopy_plain_jumps", "_test_climbs_physical", "_test_jungle_ladders_physical", "_test_leaf_geometry", "_test_leaf_footing", "_test_caves", "_test_mounds", "_test_vegetation", "_test_vortex_mouths_clear", "_test_route_audit", "_test_new_areas", "_test_ecosystem", "_test_music", "_test_run_clock", "_test_completion_catalog", "_test_completion_frozen", "_test_run_save_file", "_test_run_timer_live", "_test_run_continue", "_test_timer_integrity", "_test_resume_points_safe", "_phase_continue_write", "_phase_continue_read", "_test_upgrades", "_test_ui", "_test_menu_scrollbar", "_test_tier2_rules", "_test_tier2_world", "_test_ambient_fish", "_test_parasite_never_buried", "_test_tier2_loadout", "_test_aquarium_experiences", "_test_aquarium_polish", "_test_all_clear", "_test_treasure_unlock", "_test_treasure_generation", "_test_treasure_play", "_phase_treasure_stress", "_phase_live_fish_diag", "_phase_cpu_probe", "_phase_incline_survey", "_phase_loco_diag", "_phase_crawl_trace", "_phase_mouth_crawls"]:
+	for name_ in ["_test_startup", "_test_ota_and_version", "_test_mesh_winding", "_test_terrain", "_test_ravines", "_test_terrain_grounded", "_test_no_floating_platforms", "_test_parasite_locomotion", "_test_parasite_body_and_death", "_test_parasite_combat", "_test_gill_look", "_test_gill_idles", "_test_gill_colours", "_test_gill_patterns", "_test_tail_whip", "_test_gill_traction", "_test_gill_incline_transitions", "_test_traction_no_shortcuts", "_test_gill_body_follow", "_test_swim_body_follow", "_test_ambient_sway", "_test_placements", "_test_tutorial_route", "_test_sphere_walk", "_test_jump_and_burst", "_test_coyote_and_buffer", "_test_swipe_direction_and_stages", "_test_hard_landing", "_test_food", "_test_food_reach", "_test_darter_and_burrower", "_test_food_repopulates", "_test_motes", "_test_checkpoint_and_regen", "_test_crumble", "_test_restoration_gates", "_test_bubble_columns", "_test_restoration_continuity", "_test_health_map", "_test_vortex", "_test_vortex_tints", "_test_current", "_test_canopy", "_test_canopy_plain_jumps", "_test_climbs_physical", "_test_jungle_ladders_physical", "_test_leaf_geometry", "_test_leaf_footing", "_test_caves", "_test_mounds", "_test_vegetation", "_test_vortex_mouths_clear", "_test_route_audit", "_test_new_areas", "_test_ecosystem", "_test_music", "_test_run_clock", "_test_completion_catalog", "_test_completion_frozen", "_test_run_save_file", "_test_run_timer_live", "_test_run_continue", "_test_timer_integrity", "_test_resume_points_safe", "_phase_continue_write", "_phase_continue_read", "_test_upgrades", "_test_ui", "_test_menu_scrollbar", "_test_tier2_rules", "_test_tier2_world", "_test_ambient_fish", "_test_parasite_never_buried", "_test_tier2_loadout", "_test_aquarium_experiences", "_test_aquarium_polish", "_test_all_clear", "_test_treasure_unlock", "_test_treasure_generation", "_test_treasure_play", "_phase_treasure_stress", "_phase_live_fish_diag", "_phase_cpu_probe", "_phase_incline_survey", "_phase_loco_diag", "_phase_crawl_trace", "_phase_mouth_crawls"]:
 		# "_phase_*" tests are halves of a relaunch test: they run only when asked for by name
 		# (in a child process started by _test_run_continue).
 		if name_.begins_with("_phase") and not only.split(",", false).has(name_):
@@ -3229,6 +3229,32 @@ func _complete_until(b: MossBall, target: float) -> void:
 		if m.is_available():
 			m.capture()
 			await t.seconds(0.9)
+
+
+## Each vortex connection's faint hue (owner, 2026-09-30): stable by link, the same on its jets and
+## at both ends, and no two connections from the same ball alike; travel itself is untouched.
+func _test_vortex_tints() -> void:
+	var same_ends := true
+	var stable := true
+	for li in g.vortices.size():
+		var v: Vortex = g.vortices[li]
+		stable = stable and v.tint == Vortex.TINTS[li % Vortex.TINTS.size()]
+		var mats: Array = [v._jet_mat, v._stream_mat] + v._pool_mats + v._debris_mats
+		for m in mats:
+			same_ends = same_ends and (m as ShaderMaterial).get_shader_parameter("tint") == v.tint \
+					and is_equal_approx(float((m as ShaderMaterial).get_shader_parameter("tint_amt")), Vortex.TINT_AMT)
+	var distinct := true
+	var worst := INF
+	for b in g.balls:
+		for i in b.vortices.size():
+			for j in range(i + 1, b.vortices.size()):
+				var a: Color = (b.vortices[i] as Vortex).tint
+				var c: Color = (b.vortices[j] as Vortex).tint
+				var d := Vector3(a.r - c.r, a.g - c.g, a.b - c.b).length()
+				worst = minf(worst, d)
+				distinct = distinct and d > 0.3
+	t.check("vortex_tints_per_connection", same_ends and stable and distinct and g.vortices.size() == Levels.LINKS.size(),
+			"%d connections, both ends %s, stable %s, closest pair sharing a ball %.2f apart" % [g.vortices.size(), same_ends, stable, worst])
 
 
 func _test_vortex() -> void:
