@@ -329,11 +329,9 @@ func run(runner) -> void:
 		var pr: Presentation = g.presentation
 		pr.enter("play")
 		var bed: Bedroom = g.aquarium.bedroom
-		for step in ["all", "no_room_lamps", "no_room", "no_far_plants", "no_fish"]:
+		# (The first pass only warms up: the first entry builds the far view and compiles shaders.)
+		for step in ["warmup", "all", "no_room", "no_far_plants", "no_fish"]:
 			match step:
-				"no_room_lamps":
-					for l in bed.find_children("*", "OmniLight3D", true, false):
-						(l as Light3D).visible = false
 				"no_room":
 					bed.visible = false
 				"no_far_plants":
