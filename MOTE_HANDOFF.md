@@ -895,6 +895,10 @@ repository. Do not name, open or use any other game repository in Mote developme
      `until grep` wait. Each one hit the Bash timeout, was moved to the background and stayed alive.
      8 waiters built up on 2 test runs (5 on one, 3 on the other). Keep foreground checks short (one
      look at the log or `ps`), and after a timeout, look at the log instead of waiting again.
+   - **Background waiters default to a 30-minute limit.** A waiter on a job that can run longer (a full
+     suite, a playthrough) must be started with an explicit long timeout (up to 2 h). If one is stopped
+     at the limit, check that the detached worker is still alive and making progress, then create
+     exactly one replacement and record it.
 
 5. **OTA release names** (owner, 2026-09-30). Every published OTA is named by its sequence plus a SHORT
    description of the release's primary purpose: `00033-locomotion`, `00034-locomotion-fix`,
