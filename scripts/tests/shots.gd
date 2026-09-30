@@ -318,6 +318,40 @@ func run(runner) -> void:
 		pr.ui.swim_stick = Vector2.ZERO
 		pr.exit()
 		await _perf_view("aq_back_in_play")
+	if only == "perfaqv":
+		# Where the aquarium views' frame time goes (this package): each view with everything, then
+		# with the room's lamps, the room, the far plants and the fish switched off in turn.
+		for b in g.balls:
+			b.add_heal(Vector3.UP, 340.0, 0.0)
+		g.g_disp = 1.0
+		g.aquarium.apply(1.0)
+		await t.seconds(1.0)
+		var pr: Presentation = g.presentation
+		pr.enter("play")
+		var bed: Bedroom = g.aquarium.bedroom
+		for step in ["all", "no_room_lamps", "no_room", "no_far_plants", "no_fish"]:
+			match step:
+				"no_room_lamps":
+					for l in bed.find_children("*", "OmniLight3D", true, false):
+						(l as Light3D).visible = false
+				"no_room":
+					bed.visible = false
+				"no_far_plants":
+					for b in g.balls:
+						if b.far_vegetation() != null:
+							b.far_vegetation().visible = false
+				"no_fish":
+					g.fish.visible = false
+			pr.go("room")
+			await _perf_view("aq_room %s" % step)
+			pr.go("live")
+			await _perf_view("aq_live %s" % step)
+			pr.go("swim")
+			pr.ui.swim_held = true
+			await _perf_view("aq_swim %s" % step)
+			pr.ui.swim_held = false
+			pr.back()
+			await t.seconds(0.3)
 	if only == "b2out":
 		var b := g.balls[1]
 		var v: Vortex = b.vortex_out
