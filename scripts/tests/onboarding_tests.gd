@@ -721,7 +721,14 @@ func feed_first() -> void:
 	if par == null:
 		par = a_parasite(1)
 	if par == null:
-		t.log_line("feed_first: no parasite left in the shared process; skipped")
+		# (In the full suite, earlier tests have cleared these balls: check it in a fresh process.)
+		if Settings.test_args.has("onb-fresh"):
+			t.check("feed_first_has_a_parasite", false, "none in a fresh world")
+			return
+		var tag := str(Time.get_ticks_usec())
+		var code := _child("_test_onb_feed_first", ["--onb-fresh=1", "--onboarding=fresh", "--run-save=" + ProjectSettings.globalize_path("user://onb_ff_run_%s.json" % tag),
+				"--gill-save=" + ProjectSettings.globalize_path("user://onb_ff_gill_%s.json" % tag)])
+		t.check("feed_first_fresh_world", code == 0, "fresh process exited %d" % code)
 		return
 	p.invuln_t = 999.0
 	await face(par, 9.0)
