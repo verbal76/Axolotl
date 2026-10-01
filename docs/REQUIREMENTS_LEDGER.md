@@ -549,6 +549,7 @@ Game 0.1.0, save schema 1, catalog v4 (348), runtime r5. No APK.
 
 Standing working rules (continuous playtest feedback; risk-proportionate qualification):
 `MOTE_HANDOFF.md` §18.
+| 20 | **Onboarding: intro screen + three first-discovery lessons** (owner, 2026-10-01; scope CLOSED after this). Intro screen on a new run ("THIS IS GILL'S HOME." + one Begin), shown on every new run until all three lessons are done (owner ruling). Lessons, once each: (1) first food heals an empty frond with the camera close to Gill; (2) first parasite kill: the same legitimate restoration staged slowly with the camera pulled up and out, then "DID YOU SEE THAT?"; (3) first Red Starfish: Skills from the Main Menu or Settings. Presentation only: no change to restoration, completion, rewards or progression. Shared persistence (in the profile, surviving New Run), migration of existing players, soft-lock exits. Full design: `docs/ONBOARDING.md`. | Owner reorder 2026-10-01: its own OTA (`onboarding`), second in the train, right after the Skills-page fix; everything else moves back one. The earlier first-discovery infrastructure spec never reached the build session; the owner chose to build it from this brief. |
 
 ## Precedence notes
 

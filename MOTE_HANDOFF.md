@@ -975,7 +975,7 @@ repository. Do not name, open or use any other game repository in Mote developme
    completed and the dev channel serves it so the b22 client can discover and download it. Use plain states instead: built (local only), qualifying,
    publishing (Actions running, not downloadable yet), **downloadable** (live on the channel), verified.
 
-**Owner reorder (2026-10-01):** after the Skills-page fix, publish Plants (rows 10, 15, 18), then Repopulation (row 11), THEN Aquarium Gill (row 9), then Vortex currents, current brace, starfish redesign, Hard Mode. Aquarium Gill is built and qualified and waits its turn.
+**Owner reorder (2026-10-01, later):** Onboarding (row 20, `docs/ONBOARDING.md`) is SECOND, right after the Skills-page fix; everything below moves back one. **Owner reorder (2026-10-01):** after the Skills-page fix, publish Plants (rows 10, 15, 18), then Repopulation (row 11), THEN Aquarium Gill (row 9), then Vortex currents, current brace, starfish redesign, Hard Mode. Aquarium Gill is built and qualified and waits its turn.
 
 ### Work queue (owner order, 2026-09-29)
 
