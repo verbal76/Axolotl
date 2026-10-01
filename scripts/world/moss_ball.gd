@@ -257,7 +257,27 @@ func _build_cells() -> void:
 					cs.append(k)
 			if not hs.is_empty() or not cs.is_empty():
 				_cells[i * n_lon + j] = [hs, cs]
+	# Typed copies of the hills for terrain_height (startup: ~1 M calls; same values, same arithmetic).
+	_hc.resize(hills.size())
+	_hcos.resize(hills.size())
+	_hang.resize(hills.size())
+	_hh.resize(hills.size())
+	_hedge.resize(hills.size())
+	for k in hills.size():
+		var hl: Array = hills[k]
+		_hc[k] = hl[0]
+		_hang[k] = float(hl[1])
+		_hcos[k] = cos(float(hl[1]))
+		_hh[k] = float(hl[2])
+		_hedge[k] = float(hl[4]) if hl.size() > 3 and hl[3] == "plateau" else -1.0
 	_cells_dirty = false
+
+
+var _hc := PackedVector3Array()
+var _hcos := PackedFloat64Array()
+var _hang := PackedFloat64Array()
+var _hh := PackedFloat64Array()
+var _hedge := PackedFloat64Array()
 
 
 ## Smallest angle from `d` to a polyline of directions (great-circle segments).
@@ -291,18 +311,18 @@ func terrain_height(dir: Vector3) -> float:
 	if cell == null:
 		return 0.0
 	var h := 0.0
-	for k in cell[0]:
-		var hl: Array = hills[k]
-		var c: float = (hl[0] as Vector3).dot(dir)
-		var ang: float = hl[1]
-		if c <= cos(ang):
+	var hs: Array[int] = cell[0]
+	for k in hs:
+		var c: float = _hc[k].dot(dir)
+		if c <= _hcos[k]:
 			continue
+		var ang: float = _hang[k]
 		var a := acos(minf(c, 1.0))
-		if hl.size() > 3 and hl[3] == "plateau":
-			var edge: float = hl[4]
-			h += float(hl[2]) * (1.0 - smoothstep(ang - edge, ang, a))
+		var edge: float = _hedge[k]
+		if edge >= 0.0:
+			h += _hh[k] * (1.0 - smoothstep(ang - edge, ang, a))
 		else:
-			h += float(hl[2]) * (0.5 + 0.5 * cos(PI * a / ang))
+			h += _hh[k] * (0.5 + 0.5 * cos(PI * a / ang))
 	var carve := 0.0
 	for k in cell[1]:
 		var cv: Array = carves[k]
@@ -416,6 +436,22 @@ func finalize_terrain() -> void:
 	_terrain_shapes.clear()
 	terrain_tile_count = 0
 	terrain_collision_tiles = 0
+	# Startup (2026-10-01): every tile's height samples are computed first, in parallel on worker
+	# threads (terrain_height is a pure read of the hills, ravines and cells, all built above); the
+	# meshes and collision are then built here on the main thread, in the same order, from those
+	# exact values, so the ground is bit-identical to computing them one by one.
+	var jobs: Array = []
+	for f in FACES.size():
+		for cx in CHUNKS_PER_EDGE:
+			for cy in CHUNKS_PER_EDGE:
+				for tx in range(cx * per, (cx + 1) * per):
+					for ty in range(cy * per, (cy + 1) * per):
+						jobs.append(TileHeights.new(f, tx, ty))
+	var task := WorkerThreadPool.add_group_task(func(k: int) -> void:
+		var jb: TileHeights = jobs[k]
+		jb.h = _tile_heights(FACES[jb.f], jb.tx, jb.ty, tiles), jobs.size(), -1, true, "terrain heights")
+	WorkerThreadPool.wait_for_group_task_completion(task)
+	var next := 0
 	for f in FACES.size():
 		for cx in CHUNKS_PER_EDGE:
 			for cy in CHUNKS_PER_EDGE:
@@ -424,7 +460,8 @@ func finalize_terrain() -> void:
 				var st_i := PackedInt32Array()
 				for tx in range(cx * per, (cx + 1) * per):
 					for ty in range(cy * per, (cy + 1) * per):
-						_build_tile(FACES[f], tx, ty, tiles, st_v, st_n, st_i)
+						_build_tile(FACES[f], tx, ty, tiles, st_v, st_n, st_i, (jobs[next] as TileHeights).h)
+						next += 1
 				var arr := []
 				arr.resize(Mesh.ARRAY_MAX)
 				arr[Mesh.ARRAY_VERTEX] = st_v
@@ -452,7 +489,33 @@ func finalize_terrain() -> void:
 
 
 ## One tile's quads into a chunk's arrays; collision for it when it has raised ground.
-func _build_tile(face: Array, tx: int, ty: int, tiles: int, verts: PackedVector3Array, norms: PackedVector3Array, idx: PackedInt32Array) -> void:
+## One tile's job for the parallel height pass (finalize_terrain).
+class TileHeights extends RefCounted:
+	var f: int
+	var tx: int
+	var ty: int
+	var h: PackedFloat64Array
+	func _init(p_f: int, p_tx: int, p_ty: int) -> void:
+		f = p_f
+		tx = p_tx
+		ty = p_ty
+
+
+## A tile's height samples, in _build_tile's order (safe on a worker thread: reads only).
+func _tile_heights(face: Array, tx: int, ty: int, tiles: int) -> PackedFloat64Array:
+	var q := TILE_Q
+	var n := q + 3
+	var out := PackedFloat64Array()
+	out.resize(n * n)
+	for j in n:
+		for i in n:
+			var u := -1.0 + 2.0 * (tx + float(i - 1) / q) / tiles
+			var v := -1.0 + 2.0 * (ty + float(j - 1) / q) / tiles
+			out[j * n + i] = terrain_height(_cube_dir(face, u, v))
+	return out
+
+
+func _build_tile(face: Array, tx: int, ty: int, tiles: int, verts: PackedVector3Array, norms: PackedVector3Array, idx: PackedInt32Array, heights := PackedFloat64Array()) -> void:
 	var q := TILE_Q
 	var n := q + 3   # one sample of border each side, for the normals
 	var pos := PackedVector3Array()
@@ -463,7 +526,7 @@ func _build_tile(face: Array, tx: int, ty: int, tiles: int, verts: PackedVector3
 			var u := -1.0 + 2.0 * (tx + float(i - 1) / q) / tiles
 			var v := -1.0 + 2.0 * (ty + float(j - 1) / q) / tiles
 			var d := _cube_dir(face, u, v)
-			var h := terrain_height(d)
+			var h := heights[j * n + i] if not heights.is_empty() else terrain_height(d)
 			terrain_max_h = maxf(terrain_max_h, h)
 			if h > 0.01 and i > 0 and j > 0 and i < n - 1 and j < n - 1:
 				raised = true
