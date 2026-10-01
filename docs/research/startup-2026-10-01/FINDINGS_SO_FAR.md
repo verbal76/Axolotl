@@ -202,3 +202,12 @@ a progressed run being continued. Working hypothesis: restoring a progressed run
 zones' health paint, repopulation, Hard Mode vitality paint, food for restored zones) costs ~2+ s on the
 phone. Needed: one full timeline from a slow launch (Continue on a progressed run) to split that window.
 Also: the launch OTA check was still running after 8.3 s (it never blocks the title).
+
+## 14. Phone, dev-000059, continuing a progressed run (2.6 %, 9 ids), 2026-10-01 — title usable 9 925 ms
+
+balls done 8 447 ms; vortices… 277; creatures 508; HUD/menus 225; food 115; open 4 ms; launch gate waited
+251 ms (its 8 s cap); first frame 87 ms. So restoring a (lightly) progressed run is NOT what made the
+12.8–13.4 s launches slow: two dev-000059 launches (fresh and continued) are 9.9–10.4 s, the two
+dev-000058 launches 12.8–13.4 s. Next: compare dev-000058 vs dev-000059 in the balls→food window
+(Hard Mode build in 058 and 059 alike; 059 added the Diagnostics page, frame stats came later) and the
+progress level of the 058 run; a slow launch's full timeline is still the missing piece.
