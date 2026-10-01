@@ -520,11 +520,15 @@ func phase_toggle() -> void:
 
 func _child(phase: String, extra: Array) -> int:
 	var base: Array = ["--headless", "--fixed-fps", "60", "--max-fps", "0", "--path", ProjectSettings.globalize_path("res://")]
-	# (Run from a published pack, the child must load the same pack: there is no project folder.)
+	# (Run from a published pack, the child must load the same pack: there is no project folder. The
+	# engine consumes --main-pack, so the pack tests also pass it as --pack=<path>.)
+	var pack: String = Settings.test_args.get("pack", "")
 	var args := OS.get_cmdline_args()
 	var mp := args.find("--main-pack")
-	if mp >= 0 and mp + 1 < args.size():
-		base = ["--headless", "--fixed-fps", "60", "--max-fps", "0", "--main-pack", args[mp + 1]]
+	if pack == "" and mp >= 0 and mp + 1 < args.size():
+		pack = args[mp + 1]
+	if pack != "":
+		base = ["--headless", "--fixed-fps", "60", "--max-fps", "0", "--main-pack", pack]
 	var out := []
 	var cmd: Array = base + ["--", "--test=unit", "--only=" + phase, "--out=" + ProjectSettings.globalize_path("user://onb_child_out")] + extra
 	var code := OS.execute(OS.get_executable_path(), cmd, out, true)
