@@ -194,6 +194,7 @@ static func _materials(lb: LevelBuilder, stem_a: Color, stem_b: Color, leaf_a: C
 	# and collision unchanged.)
 	lb.leaf_mat = b.make_plant_material(leaf_a, leaf_b, {"vein": 0.0, "pothos": 1.0,
 			"flutter": LEAF_FLUTTER, "flutter_speed": 1.1, "leaf_data": true})
+	b.leaf_mat = lb.leaf_mat
 	lb.shell_mat = b.make_moss_material({"fuzz": 0.0})
 	lb.strand_mat = b.make_veg_material(b.palette["moss_healthy_a"], b.palette["moss_healthy_b"], {"sway": 0.08, "impulse_gain": 2.2, "cam_fade": 1.2,
 			"wake_gain": 1.0, "plant_height": 2.4})

@@ -78,6 +78,8 @@ var loading: LoadingScreen
 var auto_update: AutoUpdate
 ## The everyday About / Diagnostics page (the native recovery panel sits behind its Advanced).
 var diagnostics: DiagnosticsPage
+## Platform leaves' landing give and current sway (visual only).
+var leaf_motion: LeafMotion
 ## True once the whole world is built and the first usable frame has been handed over.
 var ready_done := false
 ## The stages the loading screen showed this launch.
@@ -429,6 +431,10 @@ func _open_run() -> void:
 	for b in balls:
 		food.initial(b)
 	StartupTrace.mark("food placed")
+	if leaf_motion == null:
+		leaf_motion = LeafMotion.new()
+		add_child(leaf_motion)
+		leaf_motion.setup(self)
 	# (Automated runs: --mode=hard makes the fresh test run a Hard Mode run.)
 	if Settings.test_mode != "" and str(Settings.test_args.get("mode", "")) == HardMode.MODE and not has_run_in_progress():
 		run_save.run()["mode"] = HardMode.MODE
