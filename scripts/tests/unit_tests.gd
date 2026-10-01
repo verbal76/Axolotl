@@ -6949,6 +6949,8 @@ func _test_treasure_play() -> void:
 	# (A random hunt may already have moved this object once, e.g. off a top with no room: count the
 	# recovery, not the total.)
 	var rec0 := int(cur.get("recovered", 0))
+	# (The new spot is judged by its kind, as the game judges it: a leaf, rock or cave perch is not a
+	# ground spot.)
 	# (Deep in the world's core, not 3 m under the spot: from a leaf, rock or cave perch 3 m down is
 	# often open ground, a good spot, so nothing was recovered.)
 	var buried := cw.global_position.lerp(TreasureHunt.target_pos(cur), 0.3)
@@ -6958,7 +6960,7 @@ func _test_treasure_play() -> void:
 	await t.frames(3)
 	var fixed := TreasureHunt.current(st)
 	t.check("treasure_bad_spot_recovered", fixed["kind"] == cur["kind"] and int(fixed["world"]) == int(cur["world"]) and int(st["index"]) == 1
-			and TreasureHunt.spot_ok(cw, TreasureHunt.target_pos(fixed), float(fixed["scale"])) and int(fixed.get("recovered", 0)) == rec0 + 1,
+			and TreasureHunt.target_ok(cw, fixed) and int(fixed.get("recovered", 0)) == rec0 + 1,
 			"kind %s world %d index %d recovered %d -> %d" % [fixed["kind"], int(fixed["world"]), int(st["index"]), rec0, int(fixed.get("recovered", 0))])
 	# dev-000030 (2026-09-29): tower and shelf tops with no room beside the object could hold it, so a
 	# hunt could not be finished. Those tops are no longer hiding places, and a saved hunt whose
