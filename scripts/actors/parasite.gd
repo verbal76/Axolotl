@@ -114,8 +114,8 @@ var _wave_phase := 0.0
 var _wave_amp := 0.0
 var _last_head := Vector3.ZERO
 ## Leech gait (owner 2026-10-01: "slides and stays stiff"): a stretch-and-gather cycle whose phase
-## advances with the distance crawled; the body bunches with a hump, then reaches forward, and the
-## crawl surges with it (average speed unchanged).
+## advances with the distance crawled; the body bunches with a hump, then reaches forward (body
+## only: where it goes, and how fast, are unchanged).
 var _crawl := 0.0
 var _gait := 0.0
 ## Expression layer (Open Issue #3): drift, weave, pace and look on top of its intent; seeded from
@@ -600,8 +600,6 @@ func _move(dir: Vector3, spd: float, dt: float) -> void:
 			dn = heading.rotated(up, _turn_side * 2.0)
 		# (Expression: heavier ones turn with more momentum.)
 		_face(dn, dt * 5.0 * lerpf(1.0, _org.turn, _edge))
-	if state in ["graze", "chase", "retreat"]:
-		spd *= 1.0 + 0.35 * _gait * sin(_crawl)
 	var step := heading * spd * dt + _pushed * dt
 	_pushed = _pushed.move_toward(Vector3.ZERO, dt * 6.0)
 	# Parasites grip the moss: they never crawl off a ledge on their own, and never into a wall
