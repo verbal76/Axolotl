@@ -41,9 +41,9 @@ uniform float flutter_reach = 5.0;
 // places and a soft sheen; every leaf its own (its CUSTOM0 phase and where it stands). Surface only:
 // the shape, thickness and collision are untouched (shaders/variegation.gdshaderinc, pothos_leaf).
 uniform float pothos = 0.0;
-uniform vec3 pothos_green : source_color = vec3(0.25, 0.53, 0.13);
+uniform vec3 pothos_green : source_color = vec3(0.29, 0.56, 0.13);
 uniform vec3 pothos_cream : source_color = vec3(0.94, 0.92, 0.7);
-uniform vec3 pothos_yellow : source_color = vec3(0.9, 0.86, 0.42);
+uniform vec3 pothos_yellow : source_color = vec3(0.86, 0.85, 0.38);
 
 varying float v_health;
 varying float v_leaf;

@@ -478,8 +478,10 @@ func _test_sea_fan_depth() -> void:
 	var width := aabb.size.x
 	t.check("sea_fan_has_depth", width > 6.0 and depth >= 0.08 * width and aabb.size.y > 6.0,
 			"%.2f m wide, %.2f m tall, %.2f m deep (%.0f%% of its width)" % [width, aabb.size.y, depth, depth / width * 100.0])
-	t.check("sea_fan_branches_are_tubes", float(st.get("min_radius", 0.0)) > 0.005 and int(st.get("branches", 0)) > 30,
+	t.check("sea_fan_branches_are_tubes", float(st.get("min_radius", 0.0)) >= 0.025 and int(st.get("branches", 0)) > 30,
 			"%d branches, %d cross-links, %d tips; thinnest radius %.3f m" % [st.get("branches", 0), st.get("links", 0), st.get("tips", 0), st.get("min_radius", 0.0)])
+	# Every branch grows out of another's tube and every cross-link ends inside one: no floating twig.
+	t.check("sea_fan_no_detached_twigs", st.has("detached") and int(st["detached"]) == 0, "%s detached" % str(st.get("detached", "?")))
 	var wrong := _front_faces_out_normals(mi.mesh as ArrayMesh)
 	var tris := MossBall._mesh_tris(mi.mesh)
 	t.check("sea_fan_faces_outward", wrong == 0, "%d of %d faces inward" % [wrong, tris])

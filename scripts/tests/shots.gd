@@ -680,6 +680,13 @@ func run(runner) -> void:
 		_heal_all(g)
 		await t.seconds(1.0)
 		await _sea_fan_shots(g, "restored")
+	if only == "touchup":
+		# (Leaves and the sea fan only: quick review of surface and twig changes.)
+		await _leaf_views(g, "murky")
+		_heal_all(g)
+		await t.seconds(1.0)
+		await _leaf_views(g, "restored")
+		await _sea_fan_shots(g, "restored")
 	if only == "plantperf":
 		await _plant_perf(g)
 	if only == "" or only == "moments":

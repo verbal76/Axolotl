@@ -381,7 +381,7 @@ static func sea_fan_mesh(height: float, width: float, color: Color, seed_v: int)
 		p.z = cup * sx * sx * s + 0.28 * sin(p.x * 0.75 + p.y * 0.35 + zph[0]) * s + 0.18 * sin(th * 3.0 + zph[1]) * s * s
 		return p
 	var r_of := func(sector: float, s: float) -> float:
-		return maxf(0.03, 0.17 * sqrt(sector / PI) * (1.0 - 0.35 * s))
+		return maxf(0.035, 0.17 * sqrt(sector / PI) * (1.0 - 0.35 * s))
 	# Branches as polylines of [point, radius, s]; terminal ones kept in angular order for links.
 	var branches := []
 	var tips := []
@@ -426,7 +426,7 @@ static func sea_fan_mesh(height: float, width: float, color: Color, seed_v: int)
 			th = clampf(th + (lerpf(lo, hi, 0.5) - th) * 0.3 + rng.randf_range(-0.035, 0.035), lo + sector * 0.12, hi - sector * 0.12)
 			var r: float = r_of.call(sector, s)
 			if s >= limit:
-				pts.append([at.call(th, limit), r * 0.6, limit])
+				pts.append([at.call(th, limit), maxf(r * 0.7, 0.028), limit])
 				break
 			var p: Vector3 = at.call(th, s)
 			# (The first stretch eases from the shared junction radius to its own.)
@@ -439,7 +439,7 @@ static func sea_fan_mesh(height: float, width: float, color: Color, seed_v: int)
 				stack.append([lo, mid, s, back, r, level + 1])
 				stack.append([mid, hi, s, back, r, level + 1])
 				# This branch ends just past the fork, closing over the junction.
-				pts.append([p + (p - pts[pts.size() - 2][0]).normalized() * r * 0.8, r * 0.35, s])
+				pts.append([p + (p - pts[pts.size() - 2][0]).normalized() * r * 0.8, maxf(r * 0.5, 0.028), s])
 				forked = true
 				break
 		branches.append(pts)
@@ -448,6 +448,7 @@ static func sea_fan_mesh(height: float, width: float, color: Color, seed_v: int)
 	# Cross-links between angular neighbours among the twigs, in the outer fan.
 	tips.sort_custom(func(a, b2): return a[0] < b2[0])
 	var links := 0
+	var link_ids := []
 	for kk in (tips.size() - 1) * 2:
 		var k := kk / 2
 		if rng.randf() < 0.35:
@@ -466,9 +467,10 @@ static func sea_fan_mesh(height: float, width: float, color: Color, seed_v: int)
 		var d: float = (best_a[0] as Vector3).distance_to(best_b[0])
 		if d < 0.15 or d > 1.1 or float(best_a[2]) < 0.4 or float(best_b[2]) < 0.4:
 			continue
-		var r := minf(float(best_a[1]), float(best_b[1])) * 0.75
+		var r := maxf(minf(float(best_a[1]), float(best_b[1])) * 0.8, 0.03)
 		var m: Vector3 = (best_a[0] as Vector3).lerp(best_b[0], 0.5) + Vector3(0, rng.randf_range(-0.06, 0.06), 0)
-		branches.append([[best_a[0], r, best_a[2]], [m, r * 0.85, best_a[2]], [best_b[0], r, best_b[2]]])
+		branches.append([[best_a[0], r, best_a[2]], [m, r * 0.9, best_a[2]], [best_b[0], r, best_b[2]]])
+		link_ids.append(branches.size() - 1)
 		links += 1
 	# The tubes.
 	var st := SurfaceTool.new()
@@ -480,7 +482,7 @@ static func sea_fan_mesh(height: float, width: float, color: Color, seed_v: int)
 	var tip_col := color.lerp(Color(1.0, 0.8, 0.7), 0.28)
 	var base_col := color.darkened(0.18)
 	for pts in branches:
-		var sides: int = 6 if float(pts[0][1]) >= 0.1 else (5 if float(pts[0][1]) >= 0.05 else (4 if float(pts[0][1]) >= 0.03 else 3))
+		var sides: int = 6 if float(pts[0][1]) >= 0.1 else (5 if float(pts[0][1]) >= 0.05 else 4)
 		var rings := []
 		var prev_x := Vector3.ZERO
 		for j in pts.size():
@@ -538,10 +540,33 @@ static func sea_fan_mesh(height: float, width: float, color: Color, seed_v: int)
 				st.set_normal(v[1])
 				st.add_vertex(v[0])
 				faces.append(v[0])
+	# Connectivity: every branch but the trunk starts inside another branch's tube, and every
+	# cross-link ends inside one too (nothing floats).
+	var detached := 0
+	for bi in range(1, branches.size()):
+		var ends := [branches[bi][0][0]]
+		if bi in link_ids:
+			ends.append(branches[bi][branches[bi].size() - 1][0])
+		for e in ends:
+			var inside := false
+			for bj in branches.size():
+				if bj == bi or inside:
+					continue
+				var q: Array = branches[bj]
+				for j in q.size() - 1:
+					var a0: Vector3 = q[j][0]
+					var a1: Vector3 = q[j + 1][0]
+					var seg := a1 - a0
+					var f := clampf((e - a0).dot(seg) / maxf(seg.length_squared(), 1e-9), 0.0, 1.0)
+					if (a0 + seg * f).distance_to(e) <= lerpf(float(q[j][1]), float(q[j + 1][1]), f) + 0.002:
+						inside = true
+						break
+			if not inside:
+				detached += 1
 	var mesh := st.commit()
 	mesh.resource_name = "sea_fan"
 	return [mesh, faces, {"tris": faces.size() / 3, "depth": hi_z - lo_z, "width": mesh.get_aabb().size.x, "min_radius": min_r,
-			"branches": branches.size(), "links": links, "tips": tips.size()}]
+			"branches": branches.size(), "links": links, "tips": tips.size(), "detached": detached}]
 
 
 ## One rosette leaf pointing out along the basis' +Z: `rise` radians up from level at the base,
