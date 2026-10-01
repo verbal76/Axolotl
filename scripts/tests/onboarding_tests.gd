@@ -300,6 +300,11 @@ func phase_owner() -> void:
 
 func _child(phase: String, extra: Array) -> int:
 	var base: Array = ["--headless", "--fixed-fps", "60", "--max-fps", "0", "--path", ProjectSettings.globalize_path("res://")]
+	# (Run from a published pack, the child must load the same pack: there is no project folder.)
+	var args := OS.get_cmdline_args()
+	var mp := args.find("--main-pack")
+	if mp >= 0 and mp + 1 < args.size():
+		base = ["--headless", "--fixed-fps", "60", "--max-fps", "0", "--main-pack", args[mp + 1]]
 	var out := []
 	var cmd: Array = base + ["--", "--test=unit", "--only=" + phase, "--out=" + ProjectSettings.globalize_path("user://onb_child_out")] + extra
 	var code := OS.execute(OS.get_executable_path(), cmd, out, true)
