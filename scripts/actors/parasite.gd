@@ -127,6 +127,16 @@ var _turn_side := 1.0
 var _edge := 1.0
 
 
+## The middle of the visible body (all segments), for markers that should sit on the whole leech.
+func body_center() -> Vector3:
+	if _segs.is_empty():
+		return global_position
+	var c := Vector3.ZERO
+	for sg in _segs:
+		c += sg.global_position
+	return c / _segs.size()
+
+
 ## `register`: counts toward its zone's restoration (false only for test stand-ins never killed).
 func setup(p_ball: MossBall, p_kind: int, p_zone: String, dir: Vector3, home_deg := 9.0, h := 0.0, register := true) -> void:
 	ball = p_ball

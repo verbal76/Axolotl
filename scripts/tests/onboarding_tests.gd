@@ -761,6 +761,10 @@ func parasite() -> void:
 			and o._marker_pos() != Vector3.INF, "objective '%s'; state %s, cinematic '%s', player %s, controls %s, parasite at %.1f m, seen %s"
 			% [o.objective, g.state, g.cinematic, p.state, p.controls_enabled, par.global_position.distance_to(p.global_position),
 			o.visible_to_player(par.global_position + par.ball.up_at(par.global_position) * 0.3, Onboarding.PARASITE_SEE_M, par)])
+	# Owner, 2026-10-01: the parasite's ring is red and sits on the middle of its body.
+	await t.frames(2)
+	t.check("parasite_ring_red_and_centred", o.ui._marker.color == UiStyle.DANGER
+			and o._marker_pos().distance_to(par.body_center()) < 0.001, "colour %s" % o.ui._marker.color)
 	t.check("parasite_gill_never_frozen", p.controls_enabled and g.cinematic == "", "")
 	# The tutorial's own swipe prompt does not show as well.
 	t.check("parasite_no_duplicate_prompt", not g.prompts_active.has("swipe"), str(g.prompts_active))

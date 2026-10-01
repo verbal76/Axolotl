@@ -206,7 +206,7 @@ func _process(dt: float) -> void:
 	if _scan <= 0.0:
 		_scan = SCAN_S
 		_update_objective()
-	ui.update_marker(_marker_pos())
+	ui.update_marker(_marker_pos(), UiStyle.DANGER if objective == "parasite" else UiStyle.GOLD)
 
 
 ## The app went to the background (or lost focus): a staged moment ends cleanly.
@@ -335,7 +335,7 @@ func _find_parasite() -> bool:
 ## Where the objective's marker is drawn (the target), or INF for none.
 func _marker_pos() -> Vector3:
 	if objective == "parasite" and is_instance_valid(parasite_target) and parasite_target.is_alive():
-		return parasite_target.global_position + g.player.ball.up_at(parasite_target.global_position) * 0.5
+		return parasite_target.body_center()
 	if objective == "feeding" and is_instance_valid(food_target):
 		return food_target.global_position
 	return Vector3.INF

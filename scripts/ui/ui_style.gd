@@ -8,6 +8,7 @@ class_name UiStyle
 const INK := Color(0.95, 1.0, 0.97)
 const MINT := Color(0.5, 0.97, 0.84)
 const GOLD := Color(1.0, 0.84, 0.45)
+const DANGER := Color(1.0, 0.32, 0.28)   # threat markers (the parasite to defeat)
 const PINK := Color(0.95, 0.56, 0.64)
 const PANEL := Color(0.03, 0.13, 0.13, 0.9)
 const GEAR := preload("res://assets/ui/settings_gear.png")

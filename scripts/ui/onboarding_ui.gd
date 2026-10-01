@@ -181,8 +181,9 @@ func objective_panel() -> PanelContainer:
 	return _obj
 
 
-func update_marker(world_pos: Vector3) -> void:
+func update_marker(world_pos: Vector3, color := UiStyle.GOLD) -> void:
 	_marker.world_pos = world_pos
+	_marker.color = color
 	_marker.queue_redraw()
 
 
@@ -225,9 +226,10 @@ func layout_in(area: Rect2, s: float) -> void:
 	_panel.position = area.get_center() - pm * 0.5
 
 
-## The soft ring round the objective's target.
+## The soft ring round the objective's target (centred on it).
 class Marker extends Control:
 	var world_pos := Vector3.INF
+	var color := UiStyle.GOLD    # gold for food, red for the parasite to defeat
 	var _t := 0.0
 
 	func _process(dt: float) -> void:
@@ -244,5 +246,5 @@ class Marker extends Control:
 		var d := maxf(1.0, g.cam.global_position.distance_to(world_pos))
 		var r := clampf(260.0 / d, 26.0, 90.0) * k
 		var pulse := 0.5 + 0.5 * sin(_t * 4.0)
-		draw_arc(c, r * (1.0 + pulse * 0.12), 0, TAU, 48, Color(UiStyle.GOLD, 0.45 + 0.4 * pulse), 3.0 * k, true)
-		draw_arc(c, r * 1.35, 0, TAU, 48, Color(UiStyle.GOLD, 0.18 * (1.0 - pulse)), 2.0 * k, true)
+		draw_arc(c, r * (1.0 + pulse * 0.12), 0, TAU, 48, Color(color, 0.45 + 0.4 * pulse), 3.0 * k, true)
+		draw_arc(c, r * 1.35, 0, TAU, 48, Color(color, 0.18 * (1.0 - pulse)), 2.0 * k, true)
