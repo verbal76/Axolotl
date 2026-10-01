@@ -6121,6 +6121,14 @@ func _test_polish_a() -> void:
 	var open_after_1s := au._resume_left > 0.0
 	au._process(AutoUpdate.RESUME_WINDOW_S)
 	t.check("auto_update_resume_window", open_after_1s and au._resume_left == 0.0, "window %.0f s" % AutoUpdate.RESUME_WINDOW_S)
+	# Title pacing: the phone video's mix (17 ms with 50-67 ms frames) caps the title at an even 30;
+	# a steady 60 does not.
+	var phone: Array[float] = []
+	var steady: Array[float] = []
+	for i in 90:
+		phone.append(0.017 if i % 3 != 0 else 0.066)
+		steady.append(0.0167)
+	t.check("title_pacing_caps_only_uneven", Game.title_should_cap(phone) and not Game.title_should_cap(steady) and not g.title_capped, "")
 	t.check("hud_thumb_targets_separated", worst >= 20.0 and outside.is_empty() and wrong == 0,
 			"min dead space %.1f px, outside safe %s, edge misroutes %d" % [worst, str(outside), wrong])
 

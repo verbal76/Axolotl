@@ -828,7 +828,51 @@ func near_player(pos: Vector3) -> bool:
 	return pos.distance_squared_to(player.global_position) < ACTIVE_RADIUS * ACTIVE_RADIUS
 
 
+## Title pacing (owner phone video, 2026-10-01): the orbit round him on the title showed uneven frames
+## (17 ms and 50-67 ms mixed, 31-41 fps), which a continuous camera turn makes plain judder. When the
+## title cannot hold 60, it runs at an even 30 instead; play and every other screen keep the
+## project's rate. Measured from the frames themselves, so a phone that holds 60 is never capped.
+const TITLE_PACE_SETTLE_S := 1.5
+const TITLE_PACE_WINDOW := 90
+var _pace_frames: Array[float] = []
+var _pace_t := 0.0
+var title_capped := false
+var _fps0 := -1
+
+
+func _title_pacing(dt: float) -> void:
+	if _fps0 < 0:
+		_fps0 = Engine.max_fps
+	if state != "title" or (title != null and not title.visible) or Settings.test_mode != "":
+		if title_capped:
+			Engine.max_fps = _fps0
+			title_capped = false
+		_pace_frames.clear()
+		_pace_t = 0.0
+		return
+	_pace_t += dt
+	if title_capped or _pace_t < TITLE_PACE_SETTLE_S:
+		return
+	_pace_frames.append(dt)
+	if _pace_frames.size() < TITLE_PACE_WINDOW:
+		return
+	if title_should_cap(_pace_frames):
+		Engine.max_fps = 30
+		title_capped = true
+	_pace_frames.clear()
+
+
+## Uneven or slow: more than 10 % of the frames over 25 ms (60 is not being held).
+static func title_should_cap(frames: Array[float]) -> bool:
+	var slow := 0
+	for f in frames:
+		if f > 0.025:
+			slow += 1
+	return slow > frames.size() / 10
+
+
 func _process(dt: float) -> void:
+	_title_pacing(dt)
 	_region_t -= dt
 	if _region_t <= 0.0 and cam != null:
 		# Four times a second: each ball draws only what can be above the camera's horizon.
