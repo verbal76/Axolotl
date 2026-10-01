@@ -1,108 +1,251 @@
-# Onboarding: context, three first-discovery lessons, then trust the player
+# Onboarding: authoritative design (owner, 2026-10-01)
 
-Owner brief, 2026-10-01 (ledger row 20). **Scope is CLOSED**: no further tutorial systems or onboarding
-popups without a newly identified player-understanding problem.
+Ledger row 20. The owner's design text is reproduced VERBATIM below and is authoritative. It replaces
+an interim draft the build session wrote before this text arrived (that draft is void).
 
-Philosophy:
+Onboarding scope is CLOSED: nothing beyond the four items below without a newly identified
+player-understanding problem.
 
-- **Context:** this is Gill's home. Parasites damaged it. Help restore it.
-- **Survival:** eat food to heal Gill.
-- **Restoration:** defeat parasites to bring the environment back to life.
-- **Progression:** collect Red Starfish to develop Gill's abilities.
+Owner rulings with it:
 
-Then trust the player. Teach only the things a new player cannot reasonably understand just by
-looking. Vortices, Motes, caves, food varieties, health upgrades, Treasure Hunt, later abilities and
-completion systems are learned through play and are never explained here.
+- The intro shows on the FIRST NEW RUN EVER only, and stays seen across New Run.
+- Do not redesign this spec. Record it durably.
+- Implement it at its queued position: second in the train, right after the Skills-page fix.
 
-The existing Ball 1 control prompts (Move, Jump, Water Burst, Tail Swipe, Lunge) stay as they are.
-Onboarding adds what follows and nothing else.
+## Owner text (verbatim)
 
-## 0. Intro screen (a new run)
+```
+==================================================
+ONBOARDING PHILOSOPHY
+==================================================
 
-When the player starts a genuinely NEW run (Play with no saved run, or New Run), one short screen
-appears before play begins. It uses the Mote visual language, is landscape-safe, has no scrolling and
-has one large action:
+Mote teaches only the three things a new player cannot reasonably understand just by looking, then trusts the player.
 
-> **THIS IS GILL'S HOME.**
->
-> Parasites have infested the aquarium and damaged the moss balls he lives among.
->
-> Help Gill clear them out and bring his home back to life.
->
-> **[ Begin ]**
+CONTEXT:
+This is Gill's home. Parasites damaged it. Help restore it.
 
-It is not a lore scene, cinematic, quest briefing or tutorial page.
+SURVIVAL:
+Eat food to heal Gill.
 
-- **When it shows (owner ruling, 2026-10-01):** on every new run until the player has completed all
-  three lessons below. After that it never shows again, for any later run.
-- Continue (resuming a saved run) never shows it.
+RESTORATION:
+Defeat parasites to bring the environment back to life.
 
-## The three first-discovery lessons
+PROGRESSION:
+Collect Red Starfish to develop Gill's abilities.
 
-Each lesson happens once: the first time its trigger occurs on a profile whose lesson is not yet
-done. After that, the same event plays at normal gameplay speed, with no camera move and no popup.
+No broader tutorial system is authorized.
 
-### 1. First food or jellyfish: health fronds
+==================================================
+FIRST-EVER INTRO
+==================================================
 
-- **Trigger:** the first food catch while at least one unlocked health frond is empty.
-- **Fallback:** if Gill is at full health, the lesson waits for the first catch that heals.
-- The player learns feeding by doing it (the existing Lunge prompt).
-- **Staging:** the camera moves close to Gill, and the player watches one empty, unlocked frond
-  restore from grey/dim to healthy colour and light.
-- **Message (one line):** Gill's glowing fronds are his health. Food restores them. **[ Got it ]**
-- **Teaches:** the visible fronds are his health.
+On the player's first genuinely new run only:
 
-### 2. First parasite: restoration
+THIS IS GILL'S HOME.
 
-The player is introduced to the parasite, taught the real Tail Swipe control (the existing "swipe"
-prompt), and must defeat it.
+Parasites have infested the aquarium and damaged the moss balls he lives among.
 
-When that first parasite dies:
+Help Gill clear them out and bring his home back to life.
 
-1. The kill registers normally.
-2. The exact restoration amount and state this kill legitimately produces are preserved.
-3. Instead of the normal fast restoration visual, the same result is staged slowly. The camera pulls
-   up and out from Gill, keeping him visible while framing enough of the damaged area that the change
-   can be seen clearly.
-4. The restoration propagates outward through that area slowly enough to follow. Grey/dead turns to
-   healthy green, and the player sees the vegetation respond and return as the restored area reaches
-   it.
-5. When it finishes: **DID YOU SEE THAT?** Removing parasites lets the moss recover. **[ Got it ]**
-6. The camera returns smoothly to normal play.
+[ Begin ]
 
-This is **presentation only**. There is no extra restoration, no change to completion math, parasite
-rewards, restoration radius or progression, no permanent slowdown, and no special larger event. The
-health state changes exactly as it would without the lesson; only its first visual presentation is
-paced.
+Short Mote-styled screen. No lore dump, scrolling, quest briefing or cinematic.
 
-### 3. First Red Starfish: skills
+Do not explain vortices, Motes, caves, food varieties, health upgrades, Treasure Hunt, later abilities, completion systems, etc.
 
-- **Trigger:** the first starfish pickup. This lesson is informational only, with no camera staging.
-- **Message:** Red Starfish buy new abilities for Gill. Spend them in Skills, from the Main Menu or
-  Settings. **[ Got it ]**
+Once seen, it stays seen across New Run.
 
-## Shared infrastructure
+Existing experienced saves should be migrated sensibly as already-seen.
 
-- **Persistence:** one "done" flag per lesson, plus the intro rule above. The flags live in the
-  profile store that survives New Run (with the skills and starfish, `gill_progress`), not in the run
-  save, so a lesson is never repeated on a later run.
-- **Migration:** an existing profile with progress counts the matching lessons as done:
-  - any starfish collected or skill bought: lesson 3;
-  - a saved or finished run that is past the Ball 1 tutorial: lessons 1 and 2.
+==================================================
+FIRST FOOD / JELLYFISH — INTERACTIVE
+==================================================
 
-  Experienced players are not re-taught. A brand-new profile starts with nothing done.
-- **Soft-lock protection:**
-  - A staged moment never takes control indefinitely: each has a hard time cap and ends cleanly if the
-    run is paused, Gill dies, the player leaves the ball, or the app is backgrounded.
-  - Input is restored on every exit path.
-  - A lesson interrupted before its message is marked done once the underlying event has happened.
-    The game state is already correct, so it is never replayed and never blocks.
-  - Pause works throughout. The **Got it** card is a single large touch target.
-- **Determinism:** the staging draws no gameplay random numbers and changes no simulation timing
-  (the parasite kill, health and completion are applied immediately and identically). Recordings,
-  bots and playthroughs see the same state.
-- **Bots and tests:** the playthrough bots dismiss cards like a player would. A test switch can mark
-  every lesson as done.
+Trigger when the intended first little food/jellyfish is genuinely visible, not merely spawned somewhere.
+
+A new player begins this tutorial with ONE CURRENTLY UNLOCKED health frond intentionally empty/gray.
+
+Do not confuse this with Gill's genuinely dormant/locked health fronds.
+
+Briefly teach the REAL current feeding/lunge control.
+
+Objective:
+EAT THE JELLYFISH
+
+The player must actually catch/eat it before the lesson completes.
+
+Do not immobilize Gill. Allow movement, camera, aiming, misses, repositioning and retries.
+
+Prevent bypassing the lesson, and make the target recoverable so it cannot wander, despawn, clip or otherwise soft-lock the tutorial.
+
+On successful eating:
+
+- register feeding normally;
+- defer the visible health-frond restoration momentarily;
+- smoothly move the camera into a close view of Gill;
+- clearly frame the health fronds;
+- THEN visibly restore the gray/dim unlocked frond to healthy color/light while the player is watching;
+- briefly explain that food heals Gill and these visible fronds represent his health;
+- smoothly return the camera;
+- resume normal gameplay.
+
+The player should learn by WATCHING the health indicator change.
+
+After this lesson has been completed once, feeding behaves normally forever. Do not remove health at the start of later runs merely to replay it.
+
+==================================================
+FIRST PARASITE — INTERACTIVE
+==================================================
+
+When the intended first parasite is genuinely visible, briefly identify it and teach the REAL current Tail Swipe control.
+
+Objective:
+DEFEAT THE PARASITE
+
+Require the player to actually attack and kill it.
+
+Allow movement, camera, positioning, attacks, misses and retries. Prevent bypassing the lesson and make the encounter impossible to soft-lock.
+
+On the tutorial parasite's death:
+
+- register the legitimate kill/restoration normally;
+- preserve EXACTLY the restoration amount/state the kill should produce;
+- do not immediately show the normal fast restoration;
+- smoothly move the camera upward/outward while keeping Gill visible;
+- frame the surrounding damaged area;
+- slowly PRESENT the legitimate restoration spreading through that area;
+- let the player visibly watch gray/dead moss become healthy/green;
+- visibly show affected vegetation/plants return as restoration reaches them.
+
+Then briefly:
+
+DID YOU SEE THAT?
+
+Removing parasites lets the moss recover.
+
+[ Got it ]
+
+Return camera and normal gameplay.
+
+This is presentation only. Do NOT award extra restoration, change completion math, increase radius, change rewards or permanently slow restoration.
+
+Every later parasite uses normal gameplay presentation.
+
+==================================================
+FIRST RED STARFISH — INFORMATIONAL
+==================================================
+
+First-ever Red Starfish collection:
+
+RED STARFISH FOUND!
+
+Gill found a Red Starfish!
+
+Spend Red Starfish on new abilities in the Skills tab, available from the Main Menu or Settings.
+
+[ Got it ]
+
+Informational only. No mandatory gameplay demonstration.
+
+==================================================
+PERSISTENCE / MIGRATION
+==================================================
+
+Use lightweight reusable first-discovery infrastructure, not three unrelated hacks and not a giant tutorial framework.
+
+Persist independent seen/completed state for:
+- intro;
+- feeding/health lesson;
+- parasite/restoration lesson;
+- Red Starfish discovery.
+
+Once genuinely learned, these should not become mandatory again on every New Run.
+
+Existing saves must migrate safely. Infer already-completed lessons where existing progression clearly proves the player has done them.
+
+Never reset or damage:
+- run progress;
+- completion;
+- skills;
+- starfish;
+- permanent progression;
+- saves.
+
+==================================================
+SOFT-LOCK PROTECTION
+==================================================
+
+Interactive lessons must remain completable through:
+- repeated misses;
+- unexpected movement;
+- target movement;
+- awkward geometry;
+- damage;
+- allowed UI;
+- background/resume;
+- close/reopen;
+- save/load;
+- normal despawn/repopulation conditions.
+
+There must always be a valid route to completion.
+
+Do not make Gill feel frozen. Lock the tutorial objective, not ordinary control needed to perform it.
+
+==================================================
+PRESENTATION
+==================================================
+
+Use established Mote styling:
+- rounded shaded panels;
+- landscape-phone safe;
+- no scrolling;
+- world dimmed behind explanatory panels;
+- large touch targets;
+- no gameplay input leaking through UI.
+
+During interactive portions, remove the large panel and use only a small objective/prompt so gameplay remains visible.
+
+==================================================
+SCOPE CLOSED
+==================================================
+
+Only these are authorized onboarding:
+- first-ever home/context intro;
+- first feeding + health-frond visual lesson;
+- first parasite + restoration visual lesson;
+- first Red Starfish explanation.
+
+Do not add tutorials for every mechanic.
+
+Integrate cleanly with Ball 1's EXISTING Move / Jump / Water Burst / Tail Swipe / parasite healing / bloom tutorial rather than stacking duplicate or contradictory teaching. Audit that existing sequence and consolidate where necessary.
+
+Record this authoritative design durably so it cannot disappear between sessions again.
+
+Then implement it at its queued position without disturbing anything already publishing, using Rule 7 minimum-sufficient evidence.
+
+Continue the autonomous train afterward.
+```
+
+## Implementation notes (build session; must stay consistent with the text above)
+
+- **Persistence:** four independent flags (`intro`, `feeding`, `parasite`, `starfish`) in the profile
+  store that survives New Run (`gill_progress`), saved with its existing backup and recovery. New Run
+  never clears them.
+- **Migration:** existing saves infer completed lessons only where progress proves them:
+  - any saved or finished run, or any Ball 1 progress past the tutorial parasite: `intro`, `feeding`,
+    `parasite`;
+  - any starfish collected or skill bought: `starfish` (and `intro`).
+
+  Nothing else in any save is touched.
+- **The empty frond:** only while `feeding` is not done, at the start of the first-ever run.
+  - One currently UNLOCKED frond starts empty, never a dormant/locked frond.
+  - Later runs never remove health to replay it.
+- **The existing Ball 1 tutorial:** audited and consolidated so that its Tail Swipe and Lunge prompts
+  become the lessons' objective prompts, not duplicates.
+  - Move, Jump and Water Burst stay.
+  - Its parasite healing / bloom step is the parasite lesson's restoration.
+- **Determinism:** presentation draws no gameplay random numbers and changes no simulation result. A
+  test switch marks every lesson done for tests and bots that are about something else.
 
 ## Qualification (rule 7)
 
