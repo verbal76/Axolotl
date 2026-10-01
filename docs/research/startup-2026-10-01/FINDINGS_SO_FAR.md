@@ -154,3 +154,25 @@ Godot docs "Reducing stutter from shader (pipeline) compilations" and "Thread-sa
 release notes (https://godotengine.org/releases/4.4/); godot issue #69076 (`create_trimesh_shape` on
 a worker thread); GDScript static typing benchmarks (https://www.beep.blog/2024-02-14-gdscript-typing/);
 godot-docs issue #10300 (packed vs typed arrays).
+
+## 12. Owner phone evidence after the pause (2026-10-01) — hypothesis in §5 CONTRADICTED; startup stays OPEN
+
+Two consecutive restarts on the SAME dev-000058 (58806d2), i.e. not a first launch after an update:
+
+| | restart A | restart B (immediately after) |
+|---|---|---|
+| all 7 balls built | 8 519.9 ms | 8 840.1 ms |
+| food finished | 12 293.6 ms | 12 644.0 ms |
+| world ready | 12 316.0 ms | 12 664.0 ms |
+| title usable | 12 830.7 ms | 13 398.1 ms |
+
+- The ~13 s is steady state on the phone, not a one-time shader/update event (§5's prediction failed).
+- The launch OTA check does not block the title (still running at 10 759 ms; the gate waited 0 ms).
+- New lead: **~3.8 s between "balls built" and "food finished"** (dev-000041 phone: vortices/axolotl/
+  lights + food + creatures + HUD + pause + title + "Preparing graphics" + `_open_run` ≈ 1.6 s). On
+  dev-000044 the "Preparing graphics"/open block alone was 1.57 s and HUD + pause 0.73 s: those
+  increases look persistent, not first-launch-only. Next step: the full per-phase timeline from one
+  of these launches, then probe that window (pipeline warm-up frame, HUD/menu text, creatures,
+  `_open_run`/food) on desktop with the probe patch.
+- Balls 8.5–8.8 s vs 6.1 s on dev-000041 (+2.4–2.7 s): content added since 041 (plants, sea fan,
+  vortex currents, drag marks, Hard Mode build) needs a per-ball comparison too.
