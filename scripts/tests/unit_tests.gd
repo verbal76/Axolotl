@@ -60,7 +60,9 @@ func _test_startup() -> void:
 	t.check("startup_stages_named_no_percentages", honest, ", ".join(ls))
 	t.check("startup_hands_over_to_game", g.ready_done and (not is_instance_valid(g.loading) or g.loading._fade >= 0.0), "")
 	# The native bootstrap did no network work before the game was usable: its only startup work
-	# is choosing a stored package, and an automatic check needs boot health first.
+	# is choosing a stored package, and an automatic check needs boot health first. (The game
+	# layer's own launch check, AutoUpdate, is capped at AutoUpdate.LAUNCH_CAP_MS and never runs
+	# in test runs; the OTA tests cover its policy.)
 	var net_before := false
 	# (boot_marks exists from runtime r5 on; the game layer also runs on r4 bootstraps.)
 	for m in StartupTrace.timeline(Boot.get("boot_marks") if "boot_marks" in Boot else []):
