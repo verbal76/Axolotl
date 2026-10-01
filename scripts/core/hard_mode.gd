@@ -19,7 +19,7 @@ extends RefCounted
 ##   10 min; its abstract load ramps to the zone caps and decays at 15 % of the local rate, to the
 ##   floor plateau. When he arrives the abstract load is handed to Repopulation as owed returners.
 ## - Distress (derived, never saved): per sphere h = (V - F) / (1 - F); active pressure A = load >= 2
-##   and V fell in the last 20 s (or a plateaued incursion still waits for him); S1 h < 0.90, S2 < 0.65,
+##   and V fell in the last 20 s; S1 h < 0.90, S2 < 0.65,
 ##   S3 < 0.35, each left 0.05 above its entry; without pressure one level down per 8 s. Every
 ##   connection's half at a remote threatened sphere signals its level (Vortex.set_distress).
 ## - Time is the run's play clock only (nothing while closed, paused, on the title or in the aquarium);
@@ -76,7 +76,7 @@ class HardRules extends Repopulation.Rules:
 		every_max_s = 300.0
 		cap_frac = 0.5
 		ball_cap = HardMode.BALL_CAP
-		bloom_clear_m = 20.0
+		bloom_clear_m = 11.0    # (owner ruling 2026-10-01: the same proven buffer as Normal)
 
 	func cap_for(authored: int) -> int:
 		return 0 if authored <= 0 else ceili(cap_frac * authored)
@@ -477,8 +477,8 @@ func _remote(cur: int, dt: float, now: float, lost: Dictionary) -> void:
 
 
 ## The floor plateau: once fully ramped, none of its zones can lose any more (each at its floor, or the
-## restored ball's 0.65 mean holding them). The incursion ends there; the sphere keeps signalling until
-## he comes (its load waits for him).
+## restored ball's 0.65 mean holding them). The incursion ends there and its signal settles; its load
+## waits for him.
 func _check_plateau(now: float, before: Dictionary) -> void:
 	if incursion.is_empty() or now - float(incursion["start"]) < INCURSION_RAMP_S:
 		return
@@ -641,7 +641,10 @@ func _distress(now: float, dt: float) -> void:
 		while hist.size() > 2 and now - float(hist[0][0]) > FALL_WINDOW_S:
 			hist.pop_front()
 		var falling: bool = vb < float(hist[0][1]) - 1e-7
-		var active := (ball_load(bi) >= ACTIVE_LOAD and falling) or pending.has(bi)
+		# (Owner ruling 2026-10-01: a warning shows the sphere's current condition, not that he has not
+		# come yet. A plateaued incursion no longer pushes, so its signal settles; its load still waits
+		# there and arrives as returners when he does, so staying away gains nothing.)
+		var active := ball_load(bi) >= ACTIVE_LOAD and falling
 		var lv := levels[bi]
 		if active:
 			var h := ball_h(bi)

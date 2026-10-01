@@ -144,9 +144,12 @@ func _layout() -> void:
 	var jump_c := Vector2(_safe.end.x - 105 * s, _safe.end.y - 105 * s)
 	_buttons = {
 		BTN_JUMP: {"c": jump_c, "r": 64.0 * s},
-		BTN_SWIPE: {"c": jump_c + Vector2(-150, 18) * s, "r": 48.0 * s},
-		BTN_LUNGE: {"c": jump_c + Vector2(-32, -145) * s, "r": 48.0 * s},
-		BTN_SPECIAL: {"c": jump_c + Vector2(-172, -122) * s, "r": 46.0 * s},
+		# (Right-thumb cluster for a two-handed landscape grip, owner playtest 2026-10-01: tail swipe
+		# further left and larger, lunge higher and larger, so the three are told apart by position.
+		# Touch areas (1.25 r) keep >= 25 px of dead space between neighbours at s = 1.)
+		BTN_SWIPE: {"c": jump_c + Vector2(-178, 10) * s, "r": 54.0 * s},
+		BTN_LUNGE: {"c": jump_c + Vector2(-40, -170) * s, "r": 54.0 * s},
+		BTN_SPECIAL: {"c": jump_c + Vector2(-200, -150) * s, "r": 46.0 * s},
 	}
 	_stick_rest = Vector2(_safe.position.x + 165 * s, _safe.end.y - 150 * s)
 	if _stick_touch < 0:
@@ -182,6 +185,23 @@ func _update_bar() -> void:
 		vitality_bar.want = _vitality_on and _controls_visible and not _cinematic
 
 
+## The action button a touch at `pos` presses: the nearest one (relative to its size) whose touch
+## area (1.25 x its radius) holds the point, or "" (so an edge touch never favours whichever button
+## happens to be checked first).
+func button_at(pos: Vector2) -> String:
+	var best := ""
+	var best_k := INF
+	for action in _buttons:
+		if action == BTN_SPECIAL and not _special_shown:
+			continue
+		var b: Dictionary = _buttons[action]
+		var k: float = pos.distance_to(b["c"]) / float(b["r"])
+		if k <= 1.25 and k < best_k:
+			best = action
+			best_k = k
+	return best
+
+
 func stick_radius() -> float:
 	return 90.0 * canvas.scale_k
 
@@ -215,8 +235,11 @@ func alpha() -> float:
 
 
 ## Prompts belong to play: never on the title or when the controls are hidden.
+## Prompt hints draw only while the player has the controls: during a cinematic (camera or control
+## taken away) the buttons fade out, and their hint ring was left pulsing round an empty space. The
+## prompts stay registered and come back with the controls.
 func prompts_shown() -> bool:
-	return _controls_visible
+	return _controls_visible and not _cinematic
 
 
 func _process(dt: float) -> void:
@@ -260,16 +283,13 @@ func _touch_down(idx: int, pos: Vector2) -> void:
 		Game.inst.pause_menu.open()
 		get_viewport().set_input_as_handled()
 		return
-	for action in _buttons:
-		var b: Dictionary = _buttons[action]
-		if action == BTN_SPECIAL and not _special_shown:
-			continue
-		if pos.distance_to(b["c"]) <= b["r"] * 1.25:
-			_btn_touch[idx] = action
-			Input.action_press(action)
-			_pressed[action] = 0.25
-			get_viewport().set_input_as_handled()
-			return
+	var action := button_at(pos)
+	if action != "":
+		_btn_touch[idx] = action
+		Input.action_press(action)
+		_pressed[action] = 0.25
+		get_viewport().set_input_as_handled()
+		return
 	var vp := root.get_viewport_rect().size
 	if pos.x < vp.x * 0.45 and _stick_touch < 0:
 		_stick_touch = idx

@@ -16,6 +16,15 @@ func run(runner) -> void:
 		await t.seconds(2.0)
 		await t.shot("02_title")
 		g.start_play(true)
+	if only == "diag":
+		g._enter_title()
+		await t.seconds(1.0)
+		g.pause_menu.open(true)
+		g.diagnostics.open()
+		await t.seconds(0.5)
+		await t.shot("diag_page")
+		g.diagnostics.close()
+		g.pause_menu.close()
 	if only == "" or only == "under":
 		# Walk the camera underneath moss ball #1 to look at gravel overhead.
 		var b := g.balls[0]

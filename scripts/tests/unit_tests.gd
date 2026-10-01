@@ -18,7 +18,7 @@ func run(runner) -> void:
 		g.repop.enabled = false
 	await t.seconds(0.5)
 	var only: String = Settings.test_args.get("only", "")
-	for name_ in ["_test_startup", "_test_ota_and_version", "_test_mesh_winding", "_test_terrain", "_test_ravines", "_test_terrain_grounded", "_test_no_floating_platforms", "_test_parasite_locomotion", "_test_parasite_body_and_death", "_test_parasite_combat", "_test_organic_motion", "_test_gill_look", "_test_gill_idles", "_test_gill_colours", "_test_gill_patterns", "_test_tail_whip", "_test_gill_traction", "_test_gill_incline_transitions", "_test_traction_no_shortcuts", "_test_gill_body_follow", "_test_swim_body_follow", "_test_ambient_sway", "_test_placements", "_test_tutorial_route", "_test_sphere_walk", "_test_jump_and_burst", "_test_coyote_and_buffer", "_test_swipe_direction_and_stages", "_test_hard_landing", "_test_food", "_test_food_reach", "_test_darter_and_burrower", "_test_food_repopulates", "_test_motes", "_test_checkpoint_and_regen", "_test_crumble", "_test_restoration_gates", "_test_bubble_columns", "_test_restoration_continuity", "_test_health_map", "_test_vortex", "_test_vortex_tints", "_test_vortex_currents", "_test_vortex_currents_travel", "_test_current", "_test_current_brace", "_test_canopy", "_test_canopy_plain_jumps", "_test_climbs_physical", "_test_jungle_ladders_physical", "_test_leaf_geometry", "_test_leaf_footing", "_test_caves", "_test_mounds", "_test_vegetation", "_test_vortex_mouths_clear", "_test_route_audit", "_test_new_areas", "_test_ecosystem", "_test_music", "_test_opening_audio", "_test_run_clock", "_test_completion_catalog", "_test_completion_frozen", "_test_run_save_file", "_test_run_timer_live", "_test_run_continue", "_test_timer_integrity", "_test_resume_points_safe", "_phase_continue_write", "_phase_continue_read", "_test_upgrades", "_test_ui", "_test_menus_no_scroll", "_test_menu_touch", "_test_tier2_rules", "_test_tier2_world", "_test_ambient_fish", "_test_parasite_never_buried", "_test_tier2_loadout", "_test_aquarium_experiences", "_test_aquarium_polish", "_test_all_clear", "_test_treasure_unlock", "_test_treasure_generation", "_test_treasure_play", "_phase_treasure_stress", "_phase_live_fish_diag", "_phase_cpu_probe", "_phase_incline_survey", "_phase_loco_diag", "_phase_crawl_trace", "_phase_mouth_crawls", "_phase_organic_trace", "_test_skilltree_graph", "_test_progress_store", "_test_starfish_spots", "_test_starfish_pickup", "_test_skill_ui", "_test_quick_gill", "_test_lunge_skills", "_test_burst_skills", "_test_glide_control", "_test_glide_transfers", "_test_mote_magnet", "_phase_starfish_survey", "_phase_starfish_sweep", "_phase_glide_probe", "_test_plants_terminal_growth", "_test_sea_fan_depth", "_test_repopulation", "_phase_repop_survey", "_phase_repop_sim", "_test_aquarium_gill", "_phase_aq_nav", "_test_tutorials_and_title", "_test_onb_progress", "_test_onb_owner_save", "_test_onb_per_run", "_test_onb_toggle", "_test_onb_intro", "_test_onb_feeding", "_test_onb_parasite", "_test_onb_starfish", "_test_onb_softlock", "_test_onb_relaunch", "_test_onb_restoration_equal", "_test_hard_mode", "_test_hard_mode_save", "_phase_hard_write", "_phase_hard_read", "_phase_hard_newrun", "_phase_hard_finish", "_phase_hard_sim", "_phase_hard_intervals", "_phase_onb_owner", "_phase_onb_write", "_phase_onb_read", "_phase_onb_kill", "_phase_onb_toggle"]:
+	for name_ in ["_test_startup", "_test_ota_and_version", "_test_mesh_winding", "_test_terrain", "_test_ravines", "_test_terrain_grounded", "_test_no_floating_platforms", "_test_parasite_locomotion", "_test_parasite_body_and_death", "_test_parasite_combat", "_test_organic_motion", "_test_gill_look", "_test_gill_idles", "_test_gill_colours", "_test_gill_patterns", "_test_tail_whip", "_test_gill_traction", "_test_gill_incline_transitions", "_test_traction_no_shortcuts", "_test_gill_body_follow", "_test_swim_body_follow", "_test_ambient_sway", "_test_placements", "_test_tutorial_route", "_test_sphere_walk", "_test_jump_and_burst", "_test_coyote_and_buffer", "_test_swipe_direction_and_stages", "_test_hard_landing", "_test_food", "_test_food_reach", "_test_darter_and_burrower", "_test_food_repopulates", "_test_motes", "_test_checkpoint_and_regen", "_test_crumble", "_test_restoration_gates", "_test_bubble_columns", "_test_restoration_continuity", "_test_health_map", "_test_vortex", "_test_vortex_tints", "_test_vortex_currents", "_test_vortex_currents_travel", "_test_current", "_test_current_brace", "_test_canopy", "_test_canopy_plain_jumps", "_test_climbs_physical", "_test_jungle_ladders_physical", "_test_leaf_geometry", "_test_leaf_footing", "_test_caves", "_test_mounds", "_test_vegetation", "_test_vortex_mouths_clear", "_test_route_audit", "_test_new_areas", "_test_ecosystem", "_test_music", "_test_opening_audio", "_test_run_clock", "_test_completion_catalog", "_test_completion_frozen", "_test_run_save_file", "_test_run_timer_live", "_test_run_continue", "_test_timer_integrity", "_test_resume_points_safe", "_phase_continue_write", "_phase_continue_read", "_test_upgrades", "_test_ui", "_test_menus_no_scroll", "_test_menu_touch", "_test_tier2_rules", "_test_tier2_world", "_test_ambient_fish", "_test_parasite_never_buried", "_test_tier2_loadout", "_test_aquarium_experiences", "_test_aquarium_polish", "_test_all_clear", "_test_treasure_unlock", "_test_treasure_generation", "_test_treasure_play", "_phase_treasure_stress", "_phase_live_fish_diag", "_phase_cpu_probe", "_phase_incline_survey", "_phase_loco_diag", "_phase_crawl_trace", "_phase_mouth_crawls", "_phase_organic_trace", "_test_skilltree_graph", "_test_progress_store", "_test_starfish_spots", "_test_starfish_pickup", "_test_skill_ui", "_test_quick_gill", "_test_lunge_skills", "_test_burst_skills", "_test_glide_control", "_test_glide_transfers", "_test_mote_magnet", "_phase_starfish_survey", "_phase_starfish_sweep", "_phase_glide_probe", "_test_plants_terminal_growth", "_test_sea_fan_depth", "_test_repopulation", "_phase_repop_survey", "_phase_repop_sim", "_test_aquarium_gill", "_phase_aq_nav", "_test_tutorials_and_title", "_test_onb_progress", "_test_onb_owner_save", "_test_onb_per_run", "_test_onb_toggle", "_test_onb_intro", "_test_onb_feeding", "_test_onb_parasite", "_test_onb_starfish", "_test_onb_softlock", "_test_onb_relaunch", "_test_onb_restoration_equal", "_test_hard_mode", "_test_hard_mode_save", "_test_polish_a", "_phase_hard_write", "_phase_hard_read", "_phase_hard_newrun", "_phase_hard_finish", "_phase_hard_sim", "_phase_hard_intervals", "_phase_onb_owner", "_phase_onb_write", "_phase_onb_read", "_phase_onb_kill", "_phase_onb_toggle"]:
 		# "_phase_*" tests are halves of a relaunch test: they run only when asked for by name
 		# (in a child process started by _test_run_continue).
 		if name_.begins_with("_phase") and not only.split(",", false).has(name_):
@@ -5992,6 +5992,95 @@ func _test_aquarium_polish() -> void:
 ## in Settings from the title and in-run; the title menu with the New Run question open keeps every
 ## control on screen (owner phone screenshot, 2026-10-01: the question pushed the last buttons off
 ## the bottom). (The toggle's behaviour: _test_onb_toggle and _test_onb_per_run.)
+## Polish pass A (owner brief 2026-10-01): mobile ergonomics and small QOL.
+func _test_polish_a() -> void:
+	# Right-thumb cluster: no touch areas overlap, >= 20 px dead space between neighbours, every
+	# button inside the safe area, on several landscape shapes; edge touches go to the nearest button.
+	var hud: Hud = g.hud
+	var win := g.get_tree().root
+	var size0 := win.size
+	var worst := INF
+	var outside := []
+	var wrong := 0
+	for sz in [Vector2i(1280, 720), Vector2i(2400, 1080), Vector2i(1600, 720), Vector2i(1334, 750), Vector2i(960, 540)]:
+		win.size = sz
+		await t.frames(2)
+		hud._layout()
+		var bi: Dictionary = hud._buttons
+		var keys := bi.keys()
+		for i in keys.size():
+			var a: Dictionary = bi[keys[i]]
+			var reach := Rect2(a["c"] - Vector2.ONE * a["r"], Vector2.ONE * a["r"] * 2.0)
+			if not hud._safe.encloses(reach):
+				outside.append("%s@%s" % [keys[i], str(sz)])
+			for j in range(i + 1, keys.size()):
+				var b: Dictionary = bi[keys[j]]
+				worst = minf(worst, a["c"].distance_to(b["c"]) - 1.25 * (a["r"] + b["r"]))
+		# A touch just inside swipe's area on the side facing jump presses swipe, not jump.
+		var j: Dictionary = bi[Hud.BTN_JUMP]
+		var sw: Dictionary = bi[Hud.BTN_SWIPE]
+		var edge: Vector2 = sw["c"] + (j["c"] - sw["c"]).normalized() * sw["r"] * 1.2
+		if hud.button_at(edge) != Hud.BTN_SWIPE:
+			wrong += 1
+	win.size = size0
+	await t.frames(2)
+	hud._layout()
+	# No empty hint ring during a cinematic; the hint comes back with the controls (and a pause/resume
+	# during the shot leaves it right).
+	hud.show_prompt("swipe")
+	var shown0 := hud.prompts_shown()
+	hud.set_cinematic(true)
+	var during := hud.prompts_shown()
+	g.pause_menu.open()
+	await t.frames(2)
+	g.pause_menu.close()
+	await t.frames(2)
+	var after_pause := hud.prompts_shown()
+	hud.set_cinematic(false)
+	await t.frames(2)
+	var back := hud.prompts_shown() and hud.prompts.has("swipe")
+	hud.hide_prompt("swipe")
+	t.check("prompt_ring_hidden_in_cinematics", shown0 and not during and not after_pause and back,
+			"before %s, during %s, after pause %s, back %s" % [shown0, during, after_pause, back])
+	# Diagnostics: the game-layer page opens from Settings, shows a status headline and the full
+	# text, fits the screen, offers Install only while an update waits, and closes with Back.
+	g.pause_menu.open(true)
+	await t.frames(2)
+	(g.pause_menu._panel.find_child("AboutDiagnostics", true, false) as Button).pressed.emit()
+	await t.frames(3)
+	var dp: DiagnosticsPage = g.diagnostics
+	var screen := dp._root.get_viewport_rect()
+	var fits := screen.encloses(dp._panel.get_global_rect())
+	var diag_ok: bool = dp.visible and dp._status.text != "" and dp._text.text.contains("DIAGNOSTICS") and not dp._install.visible and fits
+	g._go_back()
+	await t.frames(2)
+	diag_ok = diag_ok and not dp.visible and g.pause_menu.visible
+	g.pause_menu.close()
+	t.check("diagnostics_page_simple", diag_ok, "status '%s', fits %s (%s in %s)" % [dp._status.text, fits, str(dp._panel.get_global_rect()), str(screen)])
+	# Exit on the title: present, inside the screen, apart from the menu column, behind a question.
+	g._enter_title()
+	await t.frames(4)
+	var ts := g.title
+	var ex: Button = ts.exit_box.get_node("Ask")
+	var exr := ex.get_global_rect()
+	var gap := INF
+	for c in ts._column.get_children():
+		if (c as Control).is_visible_in_tree():
+			var cr := (c as Control).get_global_rect()
+			gap = minf(gap, exr.position.x - cr.end.x)
+	ex.pressed.emit()
+	await t.frames(2)
+	var asks: bool = (ts.exit_box.get_node("Confirm") as Control).visible and ts.get_viewport().get_visible_rect().encloses(ts.exit_box.get_global_rect())
+	ts.show_title()
+	await t.frames(2)
+	var reset: bool = not (ts.exit_box.get_node("Confirm") as Control).visible
+	t.check("title_exit_safe", gap > 200.0 and asks and reset and exr.size.y >= 44.0, "gap to menu %.0f px, question on screen %s, reset %s, height %.0f" % [gap, asks, reset, exr.size.y])
+	g.start_play(true)
+	await t.frames(3)
+	t.check("hud_thumb_targets_separated", worst >= 20.0 and outside.is_empty() and wrong == 0,
+			"min dead space %.1f px, outside safe %s, edge misroutes %d" % [worst, str(outside), wrong])
+
+
 func _test_tutorials_and_title() -> void:
 	# The title with the New Run question open.
 	var ts := g.title
