@@ -8,6 +8,10 @@ render_mode unshaded, blend_mix, depth_draw_never, cull_back, shadows_disabled;
 // and the path's direction there (CUSTOM1.xyz) by `spin_phase`, which the script advances so it knows
 // where the jets are (Gill rides beside one). UV.x = round the jet, UV.y = t along the path (0 at A).
 // Water rushes along each jet: bright foam streaks over a glassy aqua body, lighter at the edges.
+// Vortex currents (ledger row 14): after the spin, the whole spiral is carried by the meandering
+// centreline offset D(u) (vortex_current.gdshaderinc), u = UV.y = CUSTOM0.w (0 at A, 0.5 mid, 1 at B).
+
+#include "res://shaders/vortex_current.gdshaderinc"
 
 uniform float grow = 0.0;          // visible fraction of the path (the spiral reaches out as it grows)
 uniform float strength = 0.0;      // 0 a faint stir .. 1 a full hurricane
@@ -22,7 +26,7 @@ uniform vec3 foam : source_color = vec3(0.9, 0.98, 1.0);
 uniform vec3 tint : source_color = vec3(1.0);
 uniform float tint_amt = 0.0;
 
-varying float v_t;
+varying float v_t;   // u along the connection (0 = ball A, 0.5 = midpoint, 1 = ball B)
 varying float v_jet;
 
 vec3 turn(vec3 v, vec3 k, float a) {
@@ -55,7 +59,13 @@ void vertex() {
 	float surge = 1.0 + 0.06 * sin(UV.y * length_m * 0.9 - TIME * 5.0 + v_jet * 1.7);
 	rel *= surge;
 	VERTEX = a + turn(rel, k, spin_phase);
-	NORMAL = turn(NORMAL, k, spin_phase);
+	vec3 nrm = turn(NORMAL, k, spin_phase);
+	// The current: the ring moves with the centreline; its normal tilts with the bend (first order).
+	float u = UV.y;
+	vec3 d = current_offset(u);
+	vec3 slope = (current_offset(min(u + 0.01, 1.0)) - current_offset(max(u - 0.01, 0.0))) / max(0.02 * length_m, 0.001);
+	VERTEX += d;
+	NORMAL = normalize(nrm - k * dot(nrm, slope));
 }
 
 void fragment() {
