@@ -6009,13 +6009,14 @@ func _test_leaf_motion() -> void:
 		if sg != last_sign:
 			flips += 1
 			last_sign = sg
-		if settle < 0.0 and i > 10 and not lm._active:
+		var target := LeafMotion.STAND if LeafMotion.leaf_under(g.player) != null else 0.0
+		if settle < 0.0 and i > 10 and absf(lm.y - target) < 0.002 and absf(lm.v) < 0.01:
 			settle = i / 60.0
 	var cur_set := 0
 	for bb in g.balls:
 		if (bb as MossBall).current_strength > 0.0 and (bb as MossBall).leaf_mat != null and float((bb as MossBall).leaf_mat.get_shader_parameter("cur_strength")) > 0.0:
 			cur_set += 1
-	var cleared: bool = b.leaf_mat == null or (b.leaf_mat.get_shader_parameter("press") as Vector4) == Vector4.ZERO
+	var cleared: bool = LeafMotion.leaf_under(g.player) != null or b.leaf_mat == null or (b.leaf_mat.get_shader_parameter("press") as Vector4) == Vector4.ZERO
 	t.check("leaf_landing_give", peak >= 0.02 and peak <= LeafMotion.MAX_DIP and flips <= 3 and settle > 0.0 and settle <= 1.6 and cleared,
 			"peak %.3f m, %d direction changes, settled after %.2f s, cleared %s" % [peak, flips, settle, cleared])
 	t.check("leaf_current_sway_set", cur_set >= 1, "%d ball(s) with a current drive their leaves" % cur_set)
@@ -6779,10 +6780,8 @@ func _test_leaf_geometry() -> void:
 				if not hit.is_empty() and hit["collider"] == body:
 					beside.append("b%d t%.2f: solid beyond the drawn edge" % [b.index + 1, tt])
 		# Its stalk's root, inside the stem it grows from (flex leaves are on their own thin stem).
-		# (Stem leaves stand 0.3 m further out since the pothos reshape, with a longer stalk:
-		# LevelBuilder.STEM_STALK.)
 		var rooted := false
-		for back in [0.45, LevelBuilder.STEM_STALK - 0.1]:
+		for back in [0.45]:
 			var pq := PhysicsPointQueryParameters3D.new()
 			pq.position = xf * Vector3(0, 0.3, back)
 			pq.collision_mask = 1
@@ -6869,8 +6868,7 @@ func _leaf_angle_gap(b: MossBall, la: Array, lb_: Array) -> float:
 	var xb: Transform3D = lb_[0]
 	var up := b.up_at(xa.origin)
 	# The stem axis: back along each leaf from its base, where the two base directions meet.
-	# (Stem leaves stand LevelBuilder.LEAF_CLEAR off the stem: 0.3 m more since the pothos reshape.)
-	var centre := (xa.origin + xa.basis.z.normalized() * 0.9 + xb.origin + xb.basis.z.normalized() * 0.9) * 0.5
+	var centre := (xa.origin + xa.basis.z.normalized() * 0.6 + xb.origin + xb.basis.z.normalized() * 0.6) * 0.5
 	var spans := []
 	for e in [la, lb_]:
 		var xf: Transform3D = e[0]

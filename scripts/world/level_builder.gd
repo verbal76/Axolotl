@@ -18,11 +18,7 @@ var crossings: Array = []
 ## rays of creatures walking under them (parasites, food, motes) ignore them.
 const CLIMB_LAYER := 8
 ## How far a climb leaf's base stands out from its stem's surface (its stalk bridges the gap).
-## (0.45 since the pothos reshape, owner 2026-10-01: the broad heart-shaped base needs room beside
-## the stem, and a longer stalk spans the gap.)
-const LEAF_CLEAR := 0.45
-## How far a stem leaf's stalk reaches back into the stem (MeshLib._leaf_into).
-const STEM_STALK := 0.85
+const LEAF_CLEAR := 0.15
 
 
 func _init(p_ball: MossBall, p_game: Node) -> void:
@@ -273,7 +269,7 @@ func canopy_spiral(xf: Transform3D, count: int, start: float, rise: float, turn_
 		var r := lerpf(stem_r, stem_r * 0.7, clampf(h / stem_h, 0.0, 1.0))
 		var lx := Transform3D(Basis(Vector3.UP, atan2(dir.x, dir.z) + PI), Vector3(dir.x * (r + LEAF_CLEAR), h, dir.z * (r + LEAF_CLEAR)))
 		var world := xf * lx
-		leaf_xf(world, leaf_len, leaf_w, true, true, STEM_STALK)
+		leaf_xf(world, leaf_len, leaf_w)
 		leaves.append(world)
 	return leaves
 
@@ -309,7 +305,7 @@ func ladder_stem(stem_xf_: Transform3D, stem_h: float, r0: float, r1: float, ben
 		var r := lerpf(r0, r1, clampf(y / stem_h, 0.0, 1.0))
 		# The leaf's base stands just clear of the stem; its stalk reaches back into it.
 		var local := Transform3D(Basis(Vector3.UP, atan2(dir.x, dir.z) + PI), axis + dir * (r + LEAF_CLEAR))
-		nv = MeshLib._leaf_into(st, local, len, w, true, nv, STEM_STALK)
+		nv = MeshLib._leaf_into(st, local, len, w, true, nv)
 		for shape in MeshLib.leaf_collision_shapes(len, w):
 			var cs := CollisionShape3D.new()
 			cs.shape = shape
