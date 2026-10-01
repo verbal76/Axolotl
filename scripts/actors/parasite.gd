@@ -996,7 +996,8 @@ func _update_segments(dt: float) -> void:
 	_crawl = fmod(_crawl + moved / maxf(body_len * 0.85, 0.05) * TAU, TAU * 64.0)
 	_gait = lerpf(_gait, clampf(pace, 0.0, 1.0) if crawling else 0.0, 1.0 - exp(-dt * 5.0))
 	var stretch_now := _stretch_v * (1.0 + 0.13 * _gait * sin(_crawl))
-	var hump := seg_radius * 1.4 * _gait * maxf(0.0, -sin(_crawl))
+	# (Kept below 0.6 of the spacing so neighbouring segments stay evenly apart on short bodies.)
+	var hump := minf(seg_radius * 1.4, spacing * 0.6) * _gait * maxf(0.0, -sin(_crawl))
 	var base: Array[Vector3] = []
 	var ups: Array[Vector3] = []
 	for i in seg_count:

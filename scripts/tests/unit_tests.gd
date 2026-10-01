@@ -2626,7 +2626,7 @@ func _body_bend(par: Parasite) -> float:
 func _par_snapshot(par: Parasite) -> Dictionary:
 	return {"pos": par.global_position, "heading": par.heading, "up": par.up, "trail": par._trail.duplicate(),
 			"trail_up": par._trail_up.duplicate(), "state": par.state, "clock": par._clock, "phase": par._wave_phase,
-			"amp": par._wave_amp, "last": par._last_head}
+			"amp": par._wave_amp, "last": par._last_head, "crawl": par._crawl, "gait": par._gait, "stretch": par._stretch_v}
 
 
 func _par_restore(par: Parasite, s: Dictionary) -> void:
@@ -2640,6 +2640,9 @@ func _par_restore(par: Parasite, s: Dictionary) -> void:
 	par._wave_phase = s["phase"]
 	par._wave_amp = s["amp"]
 	par._last_head = s["last"]
+	par._crawl = s["crawl"]
+	par._gait = s["gait"]
+	par._stretch_v = s["stretch"]
 	par._update_segments(0.0)
 
 
