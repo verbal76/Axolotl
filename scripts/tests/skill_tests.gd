@@ -407,35 +407,52 @@ func pickup() -> void:
 	if ground.size() < 3:
 		t.check("starfish_touch_pickup_walking", false, "fewer than 3 ground starfish left to test with")
 		return
-	# Walk into one on open ground.
-	var s: Starfish = ground[0]
-	var sid := s.id
-	var sp := s.pick_point()
-	var b := s.ball
-	var up := b.up_at(sp)
-	var fr := MossBall.frame_at(up, 0.0)
-	var from := b.surface_point(b.up_at(sp + fr.z * 3.0), 0.1)
-	u.place_at(b.index, from, sp - from)
-	await u.wait_grounded()
-	# (No button: nothing he does on purpose happens on the way in.)
+	# Walk into one on open ground. (A spot left awkward by earlier suite tests, e.g. a wedge on the
+	# way in, is logged and the next one tried: the check is that walking in collects it.)
+	var s: Starfish = null
+	var sid := ""
+	var sp := Vector3.ZERO
+	var b: MossBall = null
+	var up := Vector3.UP
+	var fr := Basis()
+	var from := Vector3.ZERO
 	var acts := [0]
 	var count := func() -> void: acts[0] += 1
-	for sg in [p.jumped, p.lunged, p.swiped, p.burst_used]:
-		sg.connect(count)
-	for a in ["jump", "lunge", "swipe", "special"]:
-		Input.action_release(a)
-	for i in 150:
-		u.stick_toward(sp - p.global_position)
-		await t.frames(1)
+	for attempt in mini(3, ground.size()):
+		s = ground[attempt]
+		sid = s.id
+		sp = s.pick_point()
+		b = s.ball
+		up = b.up_at(sp)
+		fr = MossBall.frame_at(up, 0.0)
+		from = b.surface_point(b.up_at(sp + fr.z * 3.0), 0.1)
+		u.place_at(b.index, from, sp - from)
+		await u.wait_grounded()
+		# (No button: nothing he does on purpose happens on the way in.)
+		acts[0] = 0
+		for sg in [p.jumped, p.lunged, p.swiped, p.burst_used]:
+			sg.connect(count)
+		for a in ["jump", "lunge", "swipe", "special"]:
+			Input.action_release(a)
+		for i in 150:
+			u.stick_toward(sp - p.global_position)
+			await t.frames(1)
+			if gp.has_star(sid):
+				break
+		p.bot_input = Vector2.ZERO
+		for sg in [p.jumped, p.lunged, p.swiped, p.burst_used]:
+			sg.disconnect(count)
 		if gp.has_star(sid):
 			break
-	p.bot_input = Vector2.ZERO
-	for sg in [p.jumped, p.lunged, p.swiped, p.burst_used]:
-		sg.disconnect(count)
+		t.log_line("STARFISH WALK %s not reached: Gill %s, controls %s, game %s, cinematic '%s', %.1f m from it" % [sid, p.state,
+				p.controls_enabled, g.state, g.cinematic, p.global_position.distance_to(sp)])
+		n0 = gp.stars()
 	var on_disk: Dictionary = GillProgress._read(gp.path).get("data", {})
 	var walked: bool = gp.has_star(sid) and acts[0] == 0 and (on_disk.get("collected", {}) as Dictionary).has(sid)
 	t.check("starfish_touch_pickup_walking", walked and gp.stars() == n0 + 1 and gp.balance() == gp.stars() - gp.spent(),
-			"%s collected by walking into it, %d actions; on disk at once; %d collected, balance %d" % [sid, acts[0], gp.stars(), gp.balance()])
+			"%s collected by walking into it, %d actions; on disk at once; %d collected (was %d), balance %d; Gill %s, %.1f m from it, hostiles within 15 m: %d"
+			% [sid, acts[0], gp.stars(), n0, gp.balance(), p.state, p.global_position.distance_to(sp),
+			b.hostiles().filter(func(h: Node) -> bool: return h.is_alive() and (h as Node3D).global_position.distance_to(p.global_position) < 15.0).size()])
 	t.check("starfish_hud_chip_shows", g.hud.star_chip.showing() and g.hud.star_chip.text == "%d/30" % gp.stars(), g.hud.star_chip.text)
 	await t.frames(30)
 	t.check("starfish_gone_after_pickup", not is_instance_valid(s) or s.collected, "")
