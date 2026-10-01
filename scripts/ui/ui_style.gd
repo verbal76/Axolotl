@@ -205,6 +205,7 @@ static func confirm_button(text: String, question: String, yes_text: String, cb:
 	var box := VBoxContainer.new()
 	box.add_theme_constant_override("separation", 10)
 	var ask := VBoxContainer.new()
+	ask.name = "Confirm"
 	ask.visible = false
 	var q := Label.new()
 	q.text = question

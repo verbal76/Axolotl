@@ -8,6 +8,7 @@ var _root: Control
 var _play: Button
 var _new_run: VBoxContainer
 var _treasure: Button
+var _treasure_ok := false
 var _run_info: Label
 var _column: VBoxContainer
 var _colours: Button
@@ -61,6 +62,9 @@ func _ready() -> void:
 	_new_run = UiStyle.confirm_button("New Run", "Start a new run? This run's progress and time are replaced (your best finish is kept).",
 			"Start over", _on_new_run)
 	_column.add_child(_new_run)
+	# (While its question is open, the other buttons step aside: the question and its two answers
+	# need the column's room, and squeezed in they pushed the last buttons off the screen.)
+	(_new_run.get_node("Confirm") as Control).visibility_changed.connect(_on_new_run_asking)
 	_colours = UiStyle.button("%s's colours" % GameVersion.CHARACTER_NAME, _on_colours)
 	_colours.name = "GillColours"
 	_column.add_child(_colours)
@@ -162,10 +166,23 @@ func show_title() -> void:
 		lines.append(g.progress_line())
 	_run_info.text = "\n".join(lines)
 	_run_info.visible = not lines.is_empty()
-	_treasure.visible = g.treasure != null and g.treasure.eligible()
+	_treasure_ok = g.treasure != null and g.treasure.eligible()
+	# (The New Run question starts closed each time the title shows.)
+	(_new_run.get_node("Confirm") as Control).visible = false
+	(_new_run.get_node("Ask") as Control).visible = true
+	_on_new_run_asking()
 	visible = true
 	_layout()
 	_play.grab_focus.call_deferred()
+
+
+func _on_new_run_asking() -> void:
+	var asking: bool = (_new_run.get_node("Confirm") as Control).visible
+	for b in [_colours, _skills, _aquarium]:
+		(b as Control).visible = not asking
+	_treasure.visible = _treasure_ok and not asking
+	if visible:
+		_layout()
 
 
 func hide_title() -> void:

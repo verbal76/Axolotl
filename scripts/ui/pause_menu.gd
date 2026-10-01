@@ -27,6 +27,7 @@ var _run_detail: RichTextLabel
 var _haptics: CheckButton
 var _swim_invert: CheckButton
 var _resume: Button
+var _replay: Button
 var _music: TouchSlider
 var _sfx: TouchSlider
 var _left: VBoxContainer
@@ -98,6 +99,12 @@ func _ready() -> void:
 	# The skill tree (00036).
 	_skills_button = _action("Skills", _open_skills)
 	_skills_button.name = "Skills"
+	# Replay tutorial (owner, 2026-10-01): the intro and the three lessons again from the next New
+	# Run. From the title only (where a New Run starts; there is room there). Two taps, so a stray
+	# touch never resets it; nothing else in the profile changes.
+	_replay = _action("Replay tutorial", Callable())
+	_replay.name = "ReplayTutorial"
+	_replay.pressed.connect(_on_replay)
 	# --- Right: this run, then the settings ---
 	_right = VBoxContainer.new()
 	_right.name = "Details"
@@ -279,6 +286,18 @@ func _slider(parent: Control, text: String) -> TouchSlider:
 
 
 ## A left-column action: the column's width, 64 px tall.
+func _on_replay() -> void:
+	if _replay.text == "Tap again to replay":
+		Game.inst.gill.reset_onboarding()
+		_replay.text = "Replays on New Run"
+		_replay.disabled = true
+		return
+	_replay.text = "Tap again to replay"
+	get_tree().create_timer(3.0).timeout.connect(func() -> void:
+		if is_instance_valid(_replay) and _replay.text == "Tap again to replay":
+			_replay.text = "Replay tutorial")
+
+
 func _action(text: String, cb: Callable) -> Button:
 	var b := UiStyle.button(text, cb)
 	b.custom_minimum_size = Vector2(LEFT_W, 64)
@@ -361,6 +380,12 @@ func open(from_title := false) -> void:
 		Game.inst.save_run()
 	for r in _session_rows:
 		r.visible = not from_title
+	if _replay != null:
+		_replay.visible = from_title
+		if Game.inst != null and Game.inst.gill != null:
+			var pending: bool = Game.inst.gill.onboarding.is_empty()
+			_replay.text = "Replays on New Run" if pending else "Replay tutorial"
+			_replay.disabled = pending
 	_refresh()
 	visible = true
 	if not from_title:

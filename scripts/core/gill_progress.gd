@@ -51,6 +51,9 @@ var onboarding := {}
 ## Whether any copy read had the onboarding record (else the profile predates it and is migrated
 ## once, Game._setup_onboarding). Until then nothing about onboarding is written.
 var onb_known := false
+## Bumped by Replay tutorial: only copies written at the newest epoch contribute lesson flags (the
+## copies otherwise merge as a union, so a cleared flag would come back from .bak).
+var onb_epoch := 0
 
 
 # --- Opening ------------------------------------------------------------------------------------
@@ -95,6 +98,8 @@ func _load() -> void:
 		return
 	var used: Array[String] = []
 	for f in found:
+		onb_epoch = maxi(onb_epoch, int((f[1] as Dictionary).get("onboarding_epoch", 0)))
+	for f in found:
 		var d: Dictionary = f[1]
 		if int(d.get("format", 0)) > FORMAT:
 			read_only = true
@@ -137,6 +142,8 @@ func _merge(d: Dictionary) -> void:
 	var o: Variant = d.get("onboarding", null)
 	if o is Dictionary:
 		onb_known = true
+		if int(d.get("onboarding_epoch", 0)) != onb_epoch:
+			o = {}
 		for k in o:
 			if bool(o[k]):
 				onboarding[str(k)] = true
@@ -286,6 +293,8 @@ func to_dict() -> Dictionary:
 			"written_by": {"game_version": GameVersion.GAME_VERSION, "ota_id": str(id.get("ota_id", "none"))}}
 	if onb_known:
 		d["onboarding"] = onboarding.duplicate()
+		if onb_epoch > 0:
+			d["onboarding_epoch"] = onb_epoch
 	return d
 
 
@@ -303,6 +312,16 @@ func mark_onb(flag: String) -> bool:
 	onb_known = true
 	save()
 	return true
+
+
+## Replay tutorial (Settings): every lesson and the intro are to be seen again, from the next New
+## Run. Nothing else in the profile changes.
+func reset_onboarding() -> void:
+	onb_epoch += 1
+	onboarding = {}
+	onb_known = true
+	notes.append("onboarding reset (replay tutorial), epoch %d" % onb_epoch)
+	save()
 
 
 ## Once, for a profile from before onboarding existed: what the player has already done counts
