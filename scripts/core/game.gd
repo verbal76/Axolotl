@@ -1543,7 +1543,7 @@ func _cine_ravine() -> void:
 		player.model.position.y = -OOZE_SINK_M * k * k * (3.0 - 2.0 * k)
 		player.model.dissolve = smoothstep(0.65, 1.0, k)
 		if int(cine_t * 30.0) % 4 == 0:
-			WaterFX.inst.sparkle(player.global_position + player.up * RavineOoze.LEVEL, Color(0.5, 1.0, 0.25, 0.9), 2, 0.6, 0.08, 0.7)
+			WaterFX.inst.sparkle(player.global_position + player.up * RavineOoze.LEVEL, RavineOoze.BUBBLE_COLS[int(cine_t * 7.0) % 2], 2, 0.6, 0.08, 0.7)
 	elif not cine_data.has("placed"):
 		cine_data["placed"] = true
 		var to: Array = cine_data["to"]

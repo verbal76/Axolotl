@@ -38,12 +38,29 @@ func run(runner) -> void:
 		g.cam.pitch = -0.45
 		await t.seconds(3.0)
 		var oz := b.get_node("RavineOoze") as RavineOoze
+		if Settings.test_args.has("ooze-red"):
+			var rm := StandardMaterial3D.new()
+			rm.albedo_color = Color(1, 0, 0)
+			rm.shading_mode = BaseMaterial3D.SHADING_MODE_UNSHADED
+			rm.cull_mode = BaseMaterial3D.CULL_DISABLED
+			oz.material_override = rm
+			oz.visibility_range_end = 0.0
+			t.log_line("ooze aabb %s, surfaces %d, verts %d" % [oz.get_aabb(), oz.mesh.get_surface_count(), oz.mesh.surface_get_array_len(0)])
 		t.log_line("ooze: bubbles spawned %d" % oz.spawned)
 		await t.seconds(0.1)
 		await t.seconds(0.1)
 		await t.shot("ooze_ball1")
 		await t.seconds(0.6)
+		# From above, looking straight down at the middle of the first ravine.
+		var top := Camera3D.new()
+		g.add_child(top)
+		var mid_w := b.global_position + mid * b.radius
+		top.global_position = b.global_position + mid * (b.radius + 7.0) + mid.cross(along) * 3.0
+		top.look_at(mid_w, along)
+		top.make_current()
+		await t.seconds(0.5)
 		await t.shot("ooze_ball1_b")
+		top.queue_free()
 	if only == "hud":
 		# Touch controls over bright moss: idle, then the stick pushed and lunge held.
 		Settings.input_mode = Settings.InputMode.TOUCH

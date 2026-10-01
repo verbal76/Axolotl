@@ -1,14 +1,14 @@
 class_name RavineOoze
 extends MeshInstance3D
-## Owner, 2026-10-01: a pool of glowing, bubbling green ooze on every ravine floor, so a fall into a
+## Owner, 2026-10-01: a pool of bubbling, tie-dyed orange-and-purple ooze on every ravine floor, so a fall into a
 ## valley (one frond, put back on the rim: Game.ravine_fall) reads as landing in something bad.
 ## Purely visual: no collision, the floor and the fall rule are unchanged. One opaque mesh per ball:
 ## a ribbon along each ravine just above its floor (wherever that floor is), wide enough to meet the walls,
 ## its edges cut where the ravine's carve fades (vertex alpha; see ravine_ooze.gdshader).
 
 const LEVEL := 0.3      # m above the floor: he lands on it, then sinks in (Game._cine_ravine)
-const STEP_M := 0.8     # sample spacing along a ravine
-const ACROSS := 6       # columns across
+const STEP_M := 0.45    # sample spacing along a ravine (fine: the edge is a smooth curve)
+const ACROSS := 18      # columns across
 
 static var _mat: ShaderMaterial
 
@@ -61,9 +61,12 @@ static func build(b: MossBall) -> RavineOoze:
 				var u := float(i) / ACROSS
 				var dd := d.rotated(t, (u * 2.0 - 1.0) * w / b.radius).normalized()
 				var cut := clampf(b.ravine_carve(dd) / maxf(depth, 0.01), 0.0, 1.0)
-				# (Only where the floor really is low enough for the ooze to show.)
-				var a := smoothstep(0.55, 0.85, cut) if b.terrain_height(dd) < floor_h + LEVEL + 0.6 else 0.0
-				if a > 0.3 and b.terrain_height(dd) < floor_h + LEVEL - 0.08:
+				# The pool stops just short of where the wall rises through it, on a smooth curve from
+				# the terrain's own (analytic) height, so its edge never follows the wall's triangles
+				# (owner, 2026-10-01: "it's fluid, it should be smooth").
+				var th := b.terrain_height(dd)
+				var a := (1.0 - smoothstep(floor_h + LEVEL - 0.2, floor_h + LEVEL - 0.06, th)) * smoothstep(0.3, 0.5, cut)
+				if a > 0.6:
 					spots.append(dd * (r + 0.02))
 				st_v.append(dd * r)
 				st_n.append(dd)
@@ -101,16 +104,18 @@ static func build(b: MossBall) -> RavineOoze:
 # --- Bubbles (owner, 2026-10-01): little green bubbles rise out of the ooze now and then and pop a
 # little above it. Only near Gill (the pool he can see), through WaterFX's pooled puffs.
 
-const BUBBLE_EVERY_S := 0.07
+const BUBBLE_EVERY_S := 0.03   # lots of them
 const BUBBLE_NEAR_M := 16.0
 const BUBBLE_RISE_S := 1.1
-const BUBBLE_COL := Color(0.9, 1.0, 0.72, 1.0)
+const BUBBLE_COLS: Array[Color] = [Color(1.0, 0.9, 0.3, 1.0), Color(0.78, 0.45, 1.0, 1.0)]   # yellow, purple
+## They pop low, well inside the valley (never up past its rim).
+const BUBBLE_TOP_M := 0.55
 
 var ball: MossBall
 var spots := PackedVector3Array()
 var _rng := RandomNumberGenerator.new()
 var _next := 0.0
-var _pops: Array = []   # [time left, world position]
+var _pops: Array = []   # [time left, world position, colour]
 var spawned := 0
 
 
@@ -120,7 +125,7 @@ func _process(dt: float) -> void:
 	for k in range(_pops.size() - 1, -1, -1):
 		_pops[k][0] -= dt
 		if _pops[k][0] <= 0.0:
-			WaterFX.inst.sparkle(_pops[k][1], BUBBLE_COL, 5, 0.6, 0.05, 0.3)
+			WaterFX.inst.sparkle(_pops[k][1], _pops[k][2], 5, 0.6, 0.05, 0.3)
 			_pops.remove_at(k)
 	var pl = Game.inst.player
 	if pl.ball != ball:
@@ -142,8 +147,10 @@ func _process(dt: float) -> void:
 		if cam != null and not cam.is_position_in_frustum(from):
 			continue
 		var up := global_basis * p.normalized()
-		var speed := _rng.randf_range(0.35, 0.55)
-		WaterFX.inst._spawn_puff(from, up * speed, BUBBLE_RISE_S, _rng.randf_range(0.11, 0.17), BUBBLE_COL, 0.2)
+		var life := _rng.randf_range(0.6, BUBBLE_RISE_S)
+		var speed := _rng.randf_range(0.6, 1.0) * BUBBLE_TOP_M / life
+		var col: Color = BUBBLE_COLS[_rng.randi() % BUBBLE_COLS.size()]
+		WaterFX.inst._spawn_puff(from, up * speed, life, _rng.randf_range(0.08, 0.15), col, 0.0)
 		spawned += 1
-		_pops.append([BUBBLE_RISE_S * 0.95, from + up * speed * BUBBLE_RISE_S * 0.85])
+		_pops.append([life * 0.95, from + up * speed * life * 0.95, col])
 		break
