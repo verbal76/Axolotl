@@ -11,8 +11,8 @@ extends RefCounted
 ##
 ## Per zone with authored parasites: the first return comes at least `grace_s` of play after the zone
 ## was cleared (its last authored parasite killed), then one every `every_min_s`..`every_max_s`,
-## hashed from (run key, ball, zone, n) with no global random draws. At most `ceil(cap_frac x
-## authored)` alive per zone and `ball_cap` per ball. Each return copies an authored parasite of the
+## hashed from (run key, ball, zone, n) with no global random draws. At most `Rules.cap_for(authored)`
+## alive per zone (Normal: about a third, never below one: 3 originals give 1) and `ball_cap` per ball. Each return copies an authored parasite of the
 ## zone (its species, spitter variant, spawn direction and home), so the zone's species mix is kept.
 ## Arrivals happen only on Gill's ball, at least `min_gill_m` from him and off camera, and never at an
 ## authored spot within `bloom_clear_m` of a bloom or `vortex_clear_m` of a vortex mouth.
@@ -29,13 +29,27 @@ class Rules:
 	var grace_s := 300.0
 	var every_min_s := 240.0
 	var every_max_s := 420.0
-	var cap_frac := 0.34
+	## Zone cap = max(1, round(cap_frac x authored)) (owner, 2026-10-01: a 3-parasite zone returns
+	## one; rounding never turns 3 into 2). Sizes in the game: 1-4 give 1, 5-7 give 2, 8 gives 3.
+	var cap_frac := 1.0 / 3.0
 	var ball_cap := 6
 	var min_gill_m := 35.0
-	var bloom_clear_m := 20.0
+	## No returner spot this near a checkpoint bloom (owner, 2026-10-01: the smallest safe value, not
+	## 20 m). From the parasites' own numbers: Gill re-forms 0.9 m from the bloom
+	## (Bloom.respawn_point), so a spot 11 m from the bloom is at least 10.1 m from him there. That is
+	## past every notice range (spitter 9 m, large 7.5 m, others 6.5 m), so none notices him on
+	## arrival or at rest, and past the bloom pulse's Parasite.STARTLE_R (10 m), so it never needs
+	## startling; the 1.1 m beyond the widest notice range is a further 0.4 s of the fastest crawl
+	## (2.6 m/s) before one could start toward him, inside his 1.2-1.5 s re-form invulnerability.
+	## 10 m would leave a spitter 0.1 m outside its range of him: too thin. (Measured at build from
+	## the bloom's authored spot; repop_bloom_buffer checks the settled blooms and respawn points.)
+	var bloom_clear_m := 11.0
 	var vortex_clear_m := 12.0
 	## Seconds between two arrivals on one ball (several zones due at once never arrive together).
 	var spacing_s := 8.0
+
+	func cap_for(authored: int) -> int:
+		return 0 if authored <= 0 else maxi(1, roundi(cap_frac * authored))
 
 
 static func normal_rules() -> Rules:
@@ -90,18 +104,11 @@ static func on_camera(cam: Camera3D, pos: Vector3, up: Vector3, spread := 1.5, h
 
 ## Reads the world: each zone's authored parasites, which of their spots may ever take a returner,
 ## and the zone caps.
-func build(p_balls: Array, vortices: Array) -> void:
+func build(p_balls: Array, p_vortices: Array) -> void:
 	balls = p_balls
+	_vortices = p_vortices
 	zones.clear()
 	for b: MossBall in balls:
-		var keep_out := []
-		for v in vortices:
-			if v.ball_a == b:
-				keep_out.append([b.surface_point(v.dir_a), rules.vortex_clear_m])
-			if v.ball_b == b:
-				keep_out.append([b.surface_point(v.dir_b), rules.vortex_clear_m])
-		for bl in b.blooms:
-			keep_out.append([b.surface_point(bl.dir, bl.h_hint), rules.bloom_clear_m])
 		var by_zone := {}
 		for par in b.parasites:
 			if not by_zone.has(par.zone_id):
@@ -109,16 +116,47 @@ func build(p_balls: Array, vortices: Array) -> void:
 			by_zone[par.zone_id].append(par)
 		for zid in by_zone:
 			var authored: Array = by_zone[zid]
+			zones[zone_key(b.index, zid)] = {"ball": b.index, "zone": zid, "authored": authored, "eligible": [],
+					"cap": rules.cap_for(authored.size()), "cleared": -1.0, "next": -1.0, "n": 0}
+	_find_spots()
+
+
+var _vortices: Array = []
+## True once every bloom has settled where it rests (blooms settle on their first frame, after the
+## world is built): the spots are then measured from where the blooms and their re-form points are.
+var blooms_settled := false
+
+
+## Which authored spots may take a returner: clear of every vortex mouth and every checkpoint bloom
+## (its authored spot and, once it has settled, where it rests and where Gill re-forms beside it).
+func _find_spots() -> void:
+	blooms_settled = true
+	for b: MossBall in balls:
+		var keep_out := []
+		for v in _vortices:
+			if v.ball_a == b:
+				keep_out.append([b.surface_point(v.dir_a), rules.vortex_clear_m])
+			if v.ball_b == b:
+				keep_out.append([b.surface_point(v.dir_b), rules.vortex_clear_m])
+		for bl in b.blooms:
+			keep_out.append([b.surface_point(bl.dir, bl.h_hint), rules.bloom_clear_m])
+			if bl.is_placed():
+				keep_out.append([bl.global_position, rules.bloom_clear_m])
+				keep_out.append([bl.respawn_point(), rules.bloom_clear_m])
+			else:
+				blooms_settled = false
+		for z in zones.values():
+			if int(z["ball"]) != b.index:
+				continue
 			var eligible := []
-			for par in authored:
+			for par in z["authored"]:
 				var at := spot_of(b, par)
 				var ok := true
 				for k in keep_out:
 					ok = ok and at.distance_to(k[0]) >= k[1]
 				if ok:
 					eligible.append(par)
-			zones[zone_key(b.index, zid)] = {"ball": b.index, "zone": zid, "authored": authored, "eligible": eligible,
-					"cap": ceili(rules.cap_frac * authored.size()), "cleared": -1.0, "next": -1.0, "n": 0}
+			z["eligible"] = eligible
 
 
 ## Where a returner copying `par` arrives.
@@ -166,6 +204,15 @@ func update(now: float, ball: MossBall, gill_pos: Vector3, cam: Camera3D) -> Par
 			z["next"] = now + rules.grace_s
 	for b: MossBall in balls:
 		_tidy(b)
+	if not blooms_settled:
+		# (Nobody arrives until the spots are measured from where the blooms really rest.)
+		var all_placed := true
+		for b: MossBall in balls:
+			for bl in b.blooms:
+				all_placed = all_placed and bl.is_placed()
+		if not all_placed:
+			return null
+		_find_spots()
 	if ball == null:
 		return null
 	if now - float(_last_arrival.get(ball.index, -INF)) < rules.spacing_s or alive_on_ball(ball) >= rules.ball_cap:

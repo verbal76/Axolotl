@@ -109,6 +109,32 @@ func survey() -> void:
 			if is_instance_valid(f) and f.type != Food.Type.BURROWER:
 				off = maxf(off, absf(b.altitude(f.global_position)))
 		t.log_line("  foods now %d, highest non-burrower altitude %.1f m" % [b.foods.size(), off])
+	t.log_line("SURVEY cap table (n: zones, cap, share): " + _cap_table(r))
+	for radius in [20.0, 11.0]:
+		var rr := Repopulation.new(Repopulation.normal_rules())
+		rr.rules.bloom_clear_m = radius
+		rr.key = "survey"
+		rr.build(g.balls, g.vortices)
+		var per: Array[String] = []
+		var tot := 0
+		var excl := 0
+		var bloom_excl := 0
+		for b in g.balls:
+			var ok := 0
+			var zs := _zones_of(rr, b.index)
+			for z in zs:
+				if not (z["eligible"] as Array).is_empty():
+					ok += 1
+				excl += (z["authored"] as Array).size() - (z["eligible"] as Array).size()
+				for q in z["authored"]:
+					var at := Repopulation.spot_of(b, q)
+					for bl in b.blooms:
+						if at.distance_to(b.surface_point(bl.dir, bl.h_hint)) < radius:
+							bloom_excl += 1
+							break
+			tot += ok
+			per.append("b%d %d/%d" % [b.index + 1, ok, zs.size()])
+		t.log_line("SURVEY bloom %.0f m: eligible zones %s = %d of %d; spots excluded %d (by a bloom %d)" % [radius, ", ".join(per), tot, rr.zones.size(), excl, bloom_excl])
 	t.check("repop_survey", true, "")
 
 
@@ -121,6 +147,7 @@ func run_checks() -> void:
 	await _not_before_grace()
 	await _caps()
 	await _offscreen_and_far()
+	_bloom_buffer()
 	await _saved_timers()
 	await _food_local_targets_and_cooldown()
 	await _food_rng_isolated()
@@ -218,7 +245,9 @@ func _caps() -> void:
 	r.rules.spacing_s = 0.0
 	var formula := true
 	for z in r.zones.values():
-		formula = formula and int(z["cap"]) == ceili(0.34 * (z["authored"] as Array).size())
+		var n := (z["authored"] as Array).size()
+		# max(1, round(n / 3)), and never far over a third except where it can only be one.
+		formula = formula and int(z["cap"]) == maxi(1, roundi(n / 3.0)) and (n <= 2 or float(z["cap"]) / n <= 0.4) and int(z["cap"]) >= 1
 	var worst_zone := 0
 	var worst_ball := 0
 	var report: Array[String] = []
@@ -287,7 +316,7 @@ func _caps() -> void:
 				missing.append("%s %d%s" % [k, q.kind, q.variant])
 	mix_ok = mix_ok and missing.is_empty()
 	t.check("repop_caps", formula and worst_zone <= 0 and worst_ball <= r.rules.ball_cap and mix_ok and gaps_ok,
-			"zone cap ceil(0.34 x authored) %s; never over a zone cap (worst %+d) or %d per ball; authored species only; min gap %.0f s; %s" % [formula, worst_zone,
+			"zone cap max(1, round(n/3)) on every real size, <= 40%% above n=2: %s; sizes %s; never over a zone cap (worst %+d) or %d per ball; authored species only; min gap %.0f s; %s" % [formula, _cap_table(r), worst_zone,
 			r.rules.ball_cap, min_gap, ", ".join(report)])
 
 
@@ -302,7 +331,7 @@ func _offscreen_and_far() -> void:
 		for q in z["eligible"]:
 			var at := Repopulation.spot_of(b, q)
 			for bl in b.blooms:
-				if at.distance_to(b.surface_point(bl.dir, bl.h_hint)) < 20.0:
+				if at.distance_to(b.surface_point(bl.dir, bl.h_hint)) < r.rules.bloom_clear_m:
 					near.append("%s bloom" % z["zone"])
 			for v in g.vortices:
 				for m in ([b.surface_point(v.dir_a)] if v.ball_a == b else []) + ([b.surface_point(v.dir_b)] if v.ball_b == b else []):
@@ -339,8 +368,8 @@ func _offscreen_and_far() -> void:
 		_clear_returners()
 	ut.place(0, -12, -130, 0.1, 90)
 	t.check("repop_offscreen_and_far", arrivals > 20 and bad.is_empty() and near.is_empty(),
-			"%d arrivals with Gill at 6 spots on each of 7 balls, nearest %.1f m, none on camera; %d authored spots excluded (bloom 20 m / vortex 12 m) %s %s" % [arrivals, min_d,
-			excluded, ", ".join(bad), ", ".join(near)])
+			"%d arrivals with Gill at 6 spots on each of 7 balls, nearest %.1f m, none on camera; %d authored spots excluded (bloom %.0f m / vortex 12 m) %s %s" % [arrivals, min_d,
+			excluded, r.rules.bloom_clear_m, ", ".join(bad), ", ".join(near)])
 
 
 func _saved_timers() -> void:
@@ -718,3 +747,45 @@ static func _median(a: Array[float]) -> float:
 	var c := a.duplicate()
 	c.sort()
 	return c[c.size() / 2]
+
+
+## "n=1: 30 zones -> 1 (100%), ..." over the real authored zone sizes.
+func _cap_table(r: Repopulation) -> String:
+	var by := {}
+	for z in r.zones.values():
+		var n := (z["authored"] as Array).size()
+		by[n] = int(by.get(n, 0)) + 1
+	var ns := by.keys()
+	ns.sort()
+	var out: Array[String] = []
+	for n in ns:
+		var c := r.rules.cap_for(n)
+		out.append("n=%d: %d zones -> %d (%.0f%%)" % [n, by[n], c, 100.0 * c / n])
+	return ", ".join(out)
+
+
+## Every spot a returner may use is clear of every checkpoint bloom as it settled, and of the point
+## Gill re-forms at: past every notice range and the bloom's startle radius.
+func _bloom_buffer() -> void:
+	var r := _fresh()
+	var worst := INF
+	var worst_rp := INF
+	var bad: Array[String] = []
+	var checked := 0
+	for z in r.zones.values():
+		var b := g.balls[z["ball"]]
+		for q in z["eligible"]:
+			var at := Repopulation.spot_of(b, q)
+			for bl in b.blooms:
+				var bp: Vector3 = bl.global_position if bl.is_placed() else b.surface_point(bl.dir, bl.h_hint)
+				var d_auth := at.distance_to(b.surface_point(bl.dir, bl.h_hint))
+				var d_bl := at.distance_to(bp)
+				var d_rp := at.distance_to(bl.respawn_point()) if bl.is_placed() else d_bl - 0.9
+				checked += 1
+				worst = minf(worst, d_bl)
+				worst_rp = minf(worst_rp, d_rp)
+				if d_auth < r.rules.bloom_clear_m or d_bl < r.rules.bloom_clear_m or d_rp < r.rules.bloom_clear_m or not bl.is_placed():
+					bad.append("b%d %s %.1f m (re-form point %.1f m)" % [b.index + 1, z["zone"], d_bl, d_rp])
+	t.check("repop_bloom_buffer", r.blooms_settled and r.rules.bloom_clear_m >= 11.0 and bad.is_empty() and checked > 0,
+			"%d spot-bloom pairs: every spot >= %.0f m from every bloom as authored and as settled (nearest %.1f m), and from where he re-forms (nearest %.1f m) (startle radius %.0f m, widest notice 9 m) %s" % [checked,
+			r.rules.bloom_clear_m, worst, worst_rp, Parasite.STARTLE_R, ", ".join(bad)])
