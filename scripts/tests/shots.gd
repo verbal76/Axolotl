@@ -25,6 +25,21 @@ func run(runner) -> void:
 		await t.shot("diag_page")
 		g.diagnostics.close()
 		g.pause_menu.close()
+	if only == "hud":
+		# Touch controls over bright moss: idle, then the stick pushed and lunge held.
+		Settings.input_mode = Settings.InputMode.TOUCH
+		var b := g.balls[0]
+		g.player.place(b, b.surface_point(MossBall.dir_ll(60, 20), 0.1), Vector3.FORWARD)
+		g.cam.snap_behind()
+		await t.seconds(1.5)
+		await t.shot("hud_idle")
+		g.hud._stick_touch = 0
+		g.hud._stick_vec = Vector2(0.55, -0.6)
+		g.hud._pressed["lunge"] = 1.0
+		await t.seconds(0.1)
+		await t.shot("hud_active")
+		g.hud._stick_touch = -1
+		g.hud._stick_vec = Vector2.ZERO
 	if only == "" or only == "under":
 		# Walk the camera underneath moss ball #1 to look at gravel overhead.
 		var b := g.balls[0]

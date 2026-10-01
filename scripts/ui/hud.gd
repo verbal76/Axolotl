@@ -464,34 +464,88 @@ class HudCanvas extends Control:
 		var v: Vector2 = info[1]
 		var active: bool = info[2]
 		var r := hud.stick_radius()
-		var base_a := (0.22 if active else 0.12) * a
-		draw_circle(o, r, Color(0.8, 1.0, 0.95, base_a * 0.5))
-		draw_arc(o, r, 0, TAU, 48, Color(0.85, 1.0, 0.95, base_a * 2.2), 2.0 * scale_k, true)
-		draw_circle(o + v * r, r * 0.42, Color(0.9, 1.0, 0.97, (0.45 if active else 0.28) * a))
+		var k := (1.0 if active else 0.55) * a
+		# Frosted ring with faint direction ticks; the rim lights toward the push.
+		draw_circle(o + Vector2(0, 3) * scale_k, r, Color(0, 0.05, 0.05, 0.16 * k))
+		draw_circle(o, r, Color(0.08, 0.2, 0.2, 0.28 * k))
+		draw_arc(o, r, 0, TAU, 64, Color(0, 0.08, 0.08, 0.35 * k), 4.0 * scale_k, true)
+		draw_arc(o, r - 1.5 * scale_k, 0, TAU, 64, Color(0.85, 1.0, 0.95, 0.45 * k), 1.8 * scale_k, true)
+		for q in 4:
+			var d := Vector2.RIGHT.rotated(q * PI * 0.5)
+			draw_line(o + d * r * 0.8, o + d * r * 0.9, Color(0.9, 1.0, 0.97, 0.4 * k), 2.5 * scale_k, true)
+		var push := v.length()
+		if push > 0.05:
+			var ang := v.angle()
+			draw_arc(o, r - 1.5 * scale_k, ang - 0.6, ang + 0.6, 24, Color(0.75, 1.0, 0.92, 0.85 * push * k), 4.5 * scale_k, true)
+		var kc := o + v * r * 0.75
+		var kr := r * 0.4
+		draw_circle(kc + Vector2(0, 3) * scale_k, kr, Color(0, 0.05, 0.05, 0.3 * k))
+		draw_circle(kc, kr, Color(0.55, 0.85, 0.8, 0.75 * k))
+		draw_circle(kc + Vector2(0, -kr * 0.25), kr * 0.7, Color(0.85, 1.0, 0.96, 0.45 * k))
+		draw_arc(kc, kr, 0, TAU, 40, Color(1, 1, 1, 0.7 * k), 2.0 * scale_k, true)
+
+	## Frosted glass disc shared by every action button: drop shadow, tinted body, top sheen and a
+	## two-tone rim (dark outside so it reads over bright moss). Pressed shrinks it a touch.
+	func _glass(c: Vector2, r: float, a: float, glow: float, tint: Color, rim: float) -> float:
+		var rr := r * (1.0 - 0.06 * glow)
+		draw_circle(c + Vector2(0, 4) * scale_k, rr, Color(0, 0.05, 0.05, 0.22 * a))
+		draw_circle(c, rr, Color(tint.r * 0.25, tint.g * 0.3, tint.b * 0.3, (0.42 + glow * 0.2) * a))
+		draw_circle(c, rr * 0.92, Color(tint.r, tint.g, tint.b, (0.1 + glow * 0.25) * a))
+		draw_circle(c + Vector2(0, -rr * 0.38), rr * 0.55, Color(1, 1, 1, 0.07 * a))
+		draw_arc(c, rr, 0, TAU, 64, Color(0, 0.08, 0.08, 0.4 * a), 4.0 * scale_k, true)
+		if rim > 0.0:
+			draw_arc(c, rr - 1.5 * scale_k, 0, TAU, 64, Color(0.9, 1.0, 0.97, (rim + glow * 0.4) * a), 2.0 * scale_k, true)
+		return rr
+
+	## A filled icon with a soft dark under-shadow so it never washes out.
+	func _fill(pts: PackedVector2Array, ic: Color) -> void:
+		var sh := PackedVector2Array()
+		for q in pts:
+			sh.append(q + Vector2(0, 2.5) * scale_k)
+		draw_colored_polygon(sh, Color(0, 0.06, 0.06, 0.45 * ic.a))
+		draw_colored_polygon(pts, ic)
 
 	func _draw_button(action: String, a: float) -> void:
 		var b: Dictionary = hud.button_info()[action]
 		var c: Vector2 = b["c"]
-		var r: float = b["r"]
 		var glow := clampf(hud.pressed_glow(action), 0.0, 1.0)
-		draw_circle(c, r, Color(0.75, 1.0, 0.95, (0.14 + glow * 0.25) * a))
-		draw_arc(c, r, 0, TAU, 48, Color(0.9, 1.0, 0.97, (0.45 + glow * 0.5) * a), 2.5 * scale_k, true)
-		var ic := Color(1, 1, 1, (0.7 + glow * 0.3) * a)
-		var s := r * 0.42
+		var r := _glass(c, b["r"], a, glow, Color(0.75, 1.0, 0.95), 0.5)
+		var ic := Color(1, 1, 1, (0.85 + glow * 0.15) * a)
+		var s := r * 0.46
 		match action:
 			"jump":
-				# Upward push with a little bubble.
-				draw_polyline(PackedVector2Array([c + Vector2(-s, s * 0.4), c + Vector2(0, -s * 0.6), c + Vector2(s, s * 0.4)]), ic, 4.0 * scale_k, true)
-				draw_arc(c + Vector2(0, s * 0.75), s * 0.22, 0, TAU, 16, ic, 2.0 * scale_k, true)
+				# A bold up-arrow lifting off a little bubble.
+				_fill(PackedVector2Array([c + Vector2(0, -s * 0.95), c + Vector2(s * 0.85, -s * 0.05),
+						c + Vector2(s * 0.32, -s * 0.05), c + Vector2(s * 0.32, s * 0.45), c + Vector2(-s * 0.32, s * 0.45),
+						c + Vector2(-s * 0.32, -s * 0.05), c + Vector2(-s * 0.85, -s * 0.05)]), ic)
+				draw_circle(c + Vector2(0, s * 0.82), s * 0.2, ic)
 			"swipe":
-				# Tail sweep arc.
-				draw_arc(c, s * 0.9, PI * 0.15, PI * 1.05, 20, ic, 4.0 * scale_k, true)
-				draw_polyline(PackedVector2Array([c + Vector2(-s * 1.05, 0), c + Vector2(-s * 0.8, s * 0.45), c + Vector2(-s * 0.45, s * 0.1)]), ic, 3.0 * scale_k, true)
+				# A tapered tail sweep (thin to thick) ending in an arrowhead.
+				var pts := PackedVector2Array()
+				var a0 := PI * 0.95
+				var a1 := PI * 2.25
+				var n := 18
+				for q in n + 1:
+					var t := float(q) / n
+					pts.append(c + Vector2.from_angle(lerpf(a0, a1, t)) * s * 0.95)
+				for q in range(n, -1, -1):
+					var t := float(q) / n
+					pts.append(c + Vector2.from_angle(lerpf(a0, a1, t)) * s * (0.95 - lerpf(0.05, 0.38, t)))
+				_fill(pts, ic)
+				var tip := Vector2.from_angle(a1)
+				var mid := c + tip * s * 0.76
+				var fwd := tip.rotated(PI * 0.5)
+				_fill(PackedVector2Array([mid + fwd * s * 0.55, mid + tip * s * 0.42 - fwd * s * 0.05,
+						mid - tip * s * 0.42 - fwd * s * 0.05]), ic)
 			"lunge":
-				# Forward chevrons (a quick dart forward).
-				for k in 2:
-					var o := Vector2(0, -s * 0.35 + k * s * 0.6)
-					draw_polyline(PackedVector2Array([c + o + Vector2(-s * 0.7, s * 0.3), c + o + Vector2(0, -s * 0.3), c + o + Vector2(s * 0.7, s * 0.3)]), ic, 3.5 * scale_k, true)
+				# A forward dart: solid arrowhead with speed streaks trailing behind.
+				_fill(PackedVector2Array([c + Vector2(0, -s), c + Vector2(s * 0.75, s * 0.05),
+						c + Vector2(0, -s * 0.22), c + Vector2(-s * 0.75, s * 0.05)]), ic)
+				for q in 3:
+					var x := (q - 1) * s * 0.42
+					var y0 := s * (0.2 + 0.12 * absf(q - 1))
+					draw_line(c + Vector2(x, y0), c + Vector2(x, y0 + s * (0.75 - 0.25 * absf(q - 1))),
+							Color(ic.r, ic.g, ic.b, ic.a * (0.9 - 0.3 * absf(q - 1))), 3.5 * scale_k, true)
 
 	## The Tier-2 button: the equipped ability's glyph; dimmed with a radial refill while it cools.
 	func _draw_special(a: float) -> void:
@@ -503,7 +557,7 @@ class HudCanvas extends Control:
 		var ready := charge >= 1.0
 		var glow := clampf(hud.pressed_glow(Hud.BTN_SPECIAL), 0.0, 1.0)
 		var tint := Color(0.62, 0.9, 1.0)
-		draw_circle(c, r, Color(tint.r, tint.g, tint.b, ((0.2 if ready else 0.08) + glow * 0.25) * a))
+		_glass(c, r, a, glow, tint if ready else tint * 0.6, 0.0)
 		if not ready:
 			# The refill: a bright arc growing clockwise from the top as it recharges.
 			draw_arc(c, r, -PI * 0.5, -PI * 0.5 + TAU * charge, 48, Color(0.85, 0.97, 1.0, 0.85 * a), 4.0 * scale_k, true)
