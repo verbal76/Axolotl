@@ -603,6 +603,8 @@ var _health_dirty := false
 func add_heal(dir: Vector3, radius_deg: float, grow_time := 1.2) -> void:
 	var d := dir.normalized()
 	var target := deg_to_rad(radius_deg)
+	if _heal_record != null:
+		_heal_record.append([d, target])
 	if grow_time <= 0.0:
 		_paint_heal(d, target)
 		return
@@ -636,6 +638,11 @@ func _ensure_health_map() -> void:
 ## Paints a splat into the map (the strongest splat wins, as in the shader's splat formula).
 func _paint_heal(d: Vector3, ang: float) -> void:
 	_ensure_health_map()
+	_paint_into(health_img, d, ang)
+	_health_dirty = true
+
+
+static func _paint_into(img: Image, d: Vector3, ang: float) -> void:
 	var lat := asin(clampf(d.y, -1.0, 1.0))
 	var lon := atan2(d.x, d.z)
 	var y0 := maxi(0, int(floor((0.5 - (lat + ang) / PI) * HEALTH_MAP_H)) - 1)
@@ -660,9 +667,94 @@ func _paint_heal(d: Vector3, ang: float) -> void:
 			if c < cos_ang - 0.02 and ang < PI:
 				continue
 			var v := 1.0 - smoothstep(ang * 0.55, ang, acos(clampf(c, -1.0, 1.0)))
-			if v > health_img.get_pixel(x, y).r:
-				health_img.set_pixel(x, y, Color(v, 0, 0))
-	_health_dirty = true
+			if v > img.get_pixel(x, y).r:
+				img.set_pixel(x, y, Color(v, 0, 0))
+
+
+# --- Onboarding's staged restoration (presentation only; docs/ONBOARDING.md) -------------------
+# The true health (health_img, heals, health_at, restoration) is never touched here: the kill
+# applies exactly as always. Only the shaders are told to draw part of it as it looked before,
+# behind a front that spreads outward (health_field.gdshaderinc, stage_*).
+
+## While not null, every splat add_heal() is given is noted here ([dir, angle in radians]).
+var _heal_record = null
+## The staged reveal in progress (stage_outer > 0), for tests and diagnostics.
+var stage_dir := Vector3.UP
+var stage_reveal := 0.0
+var stage_outer := 0.0
+var _stage_base: ImageTexture
+var _stage_base_img: Image
+
+
+func record_heals_begin() -> void:
+	_heal_record = []
+
+
+func record_heals_end() -> Array:
+	var r: Array = _heal_record if _heal_record != null else []
+	_heal_record = null
+	return r
+
+
+## The moss as it is drawn right now (settled map plus the splats still growing), as an image.
+func health_snapshot() -> Image:
+	_ensure_health_map()
+	var img := health_img.duplicate() as Image
+	for i in heals.size():
+		var s := heals[i]
+		if s.w > 0.0:
+			_paint_into(img, Vector3(s.x, s.y, s.z), s.w)
+	return img
+
+
+## Starts drawing the area within `outer` (radians) of `dir` as `base` (the snapshot from before
+## the kill) beyond a front at angle 0; stage_set() moves the front out.
+func stage_begin(dir: Vector3, outer: float, base: Image) -> void:
+	stage_dir = dir.normalized()
+	stage_outer = maxf(0.001, outer)
+	stage_reveal = 0.0
+	_stage_base_img = base
+	_stage_base = ImageTexture.create_from_image(base)
+	for m in field_materials:
+		m.set_shader_parameter("health_base", _stage_base)
+		m.set_shader_parameter("stage_dir", stage_dir)
+		m.set_shader_parameter("stage_outer", stage_outer)
+		m.set_shader_parameter("stage_reveal", 0.0)
+
+
+func stage_set(reveal: float) -> void:
+	stage_reveal = reveal
+	set_field_param("stage_reveal", reveal)
+
+
+## Ends the staging: everything is drawn as it truly is.
+func stage_end() -> void:
+	stage_outer = 0.0
+	stage_reveal = 0.0
+	set_field_param("stage_outer", 0.0)
+	_stage_base = null
+	_stage_base_img = null
+
+
+func staging() -> bool:
+	return stage_outer > 0.0
+
+
+## What the shaders draw at `dir` (health_at with the staging applied): tests and renders.
+func shown_health_at(dir: Vector3) -> float:
+	var h := health_at(dir)
+	if stage_outer <= 0.0 or _stage_base_img == null:
+		return h
+	var d := dir.normalized()
+	var a := acos(clampf(d.dot(stage_dir), -1.0, 1.0))
+	if a >= stage_outer:
+		return h
+	var img := _stage_base_img
+	var u := atan2(d.x, d.z) / TAU + 0.5
+	var v := 0.5 - asin(clampf(d.y, -1.0, 1.0)) / PI
+	var b := img.get_pixel(clampi(int(u * HEALTH_MAP_W), 0, HEALTH_MAP_W - 1), clampi(int(v * HEALTH_MAP_H), 0, HEALTH_MAP_H - 1)).r
+	var ahead := smoothstep(stage_reveal - 0.045, stage_reveal, a)
+	return lerpf(h, minf(h, b), ahead)
 
 
 ## CPU mirror of the shader's health function (gameplay such as crumbling moss, and tests).

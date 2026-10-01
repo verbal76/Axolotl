@@ -653,6 +653,10 @@ func _nearest_threat() -> String:
 func tick() -> void:
 	await t.frames(1)
 	sim_time += 1.0 / 60.0
+	# Onboarding's cards (docs/ONBOARDING.md): read for a moment, then Got it / Begin, as a player.
+	if g.onboarding != null and g.onboarding.ui.waiting_for_tap() and g.onboarding.ui.shown_t > 1.0:
+		mark("onboarding card dismissed: %s" % g.onboarding.ui._title.text)
+		g.onboarding.ui.tap()
 	_hb += 1.0 / 60.0
 	_trace_n += 1
 	if Settings.test_args.has("trace_input") and _trace_n % 60 == 0:

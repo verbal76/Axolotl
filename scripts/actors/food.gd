@@ -26,6 +26,10 @@ var _hover := 1.0
 var _calm_t := 0.0         # ignores water pushes while the axolotl's own lunge is stirring it
 var _hole_pos := Vector3.ZERO
 var _hole_up := Vector3.UP
+## Onboarding's feeding lesson (docs/ONBOARDING.md): the jellyfish the player is asked to eat is held
+## near where it was first seen (INF: free), so it can never drift off, out of reach or out of the
+## region. No random numbers are drawn for it.
+var anchor := Vector3.INF
 
 
 func setup(p_ball: MossBall, p_type: int, pos: Vector3, p_region_dir: Vector3, p_region_deg: float) -> void:
@@ -315,6 +319,11 @@ func _update_drifter(dt: float) -> void:
 		vel += WaterFX.inst.push_at(global_position) * 4.0 * dt
 	vel += Vector3(sin(_t * 2.1), sin(_t * 1.3), cos(_t * 1.7)) * 0.15 * dt
 	_keep_in_region(up, dt, 0.4)
+	if anchor != Vector3.INF:
+		# A soft tether: free within a metre and a half, then drawn back (lunges may still push it).
+		var off := anchor - global_position
+		if off.length() > 1.5:
+			vel += off.normalized() * minf(3.0, off.length()) * 1.5 * dt
 	vel = vel.limit_length(2.5)
 	vel *= 1.0 - 0.5 * dt
 	global_position += vel * dt

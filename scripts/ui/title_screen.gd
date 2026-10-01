@@ -174,7 +174,7 @@ func hide_title() -> void:
 
 func _on_play() -> void:
 	Sfx.play("ui_tap", null, -6.0)
-	Game.inst.start_play()
+	Game.inst.begin_play()
 
 
 func _on_new_run() -> void:
