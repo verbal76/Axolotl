@@ -22,6 +22,8 @@ uniform float tint_amt = 0.0;
 // The current's offset is zero at the mouths (they are anchored), so the pool itself does not move.
 uniform float u_end = 0.0;
 
+#include "res://shaders/vortex_distress.gdshaderinc"
+
 float hash(vec2 p) {
 	p = fract(p * vec2(123.34, 456.21));
 	p += dot(p, p + 45.32);
@@ -68,9 +70,18 @@ void fragment() {
 	float ring = exp(-pow((r - 0.13) / 0.06, 2.0)) * (0.6 + 0.4 * n);
 	float lip = exp(-pow((r - 0.82) / 0.07, 2.0)) * smoothstep(0.35, 0.7, n2 + n * 0.4);
 	vec3 foam_t = mix(foam, tint, tint_amt * 1.2);
+	vec3 ds = vec3(1.0, 0.0, 0.0);
+	if (distress_any()) {
+		// Hard Mode distress: the whole pool, eye and lip belong to its own end's half.
+		ds = distress_at(u_end);
+		foam_t = mix(foam, tint, (tint_amt + ds.y) * 1.2) * ds.x;
+	}
 	col = mix(col, foam_t, clamp(ring * 0.7 + lip * 0.6, 0.0, 1.0) * strength);
 	// (A faint glow of the hue in the eye's water too.)
-	col = mix(col, col * tint * 1.25, tint_amt * 0.45 * smoothstep(0.5, 0.0, r));
+	col = mix(col, col * tint * 1.25 * ds.x, tint_amt * 0.45 * smoothstep(0.5, 0.0, r));
+	if (ds.z > 0.0) {
+		col = mix(col, vec3(1.0), ds.z * clamp(ring + lip, 0.0, 1.0));
+	}
 	float edge = 1.0 - smoothstep(0.8, 1.0, r);
 	float a = (0.6 + crest * 0.3 + ring * 0.3 + lip * 0.3) * edge * (0.35 + strength * 0.65);
 	ALBEDO = col;

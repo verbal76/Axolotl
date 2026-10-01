@@ -17,6 +17,9 @@ var _aquarium: Button
 var gear: Button
 var version_label: Label
 var title_label: Label
+## New Run's question: a two-choice dialog, Normal or Hard Mode (ledger row 12; the mode is chosen
+## here only, and a run never changes mode).
+const NEW_RUN_QUESTION := "Start a new run? Best finishes are kept. Hard: restored moss can fade."
 
 
 func _ready() -> void:
@@ -59,8 +62,7 @@ func _ready() -> void:
 	_play.name = "Play"
 	_play.theme_type_variation = "PrimaryButton"
 	_column.add_child(_play)
-	_new_run = UiStyle.confirm_button("New Run", "Start a new run? This run's progress and time are replaced (your best finish is kept).",
-			"Start over", _on_new_run)
+	_new_run = UiStyle.confirm_button("New Run", NEW_RUN_QUESTION, "Normal", _on_new_run, "Hard", _on_new_run_hard)
 	_column.add_child(_new_run)
 	# (While its question is open, the other buttons step aside: the question and its two answers
 	# need the column's room, and squeezed in they pushed the last buttons off the screen.)
@@ -197,6 +199,11 @@ func _on_play() -> void:
 func _on_new_run() -> void:
 	Sfx.play("ui_tap", null, -6.0)
 	Game.inst.restart_experience()
+
+
+func _on_new_run_hard() -> void:
+	Sfx.play("ui_tap", null, -6.0)
+	Game.inst.restart_experience(HardMode.MODE)
 
 
 ## Straight to his colours page (the pause menu's, opened from here), with his live preview.

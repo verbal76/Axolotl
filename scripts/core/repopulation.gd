@@ -17,8 +17,11 @@ extends RefCounted
 ## Arrivals happen only on the player's ball, at least `min_gill_m` from him and off camera, and never at an
 ## authored spot within `bloom_clear_m` of a bloom or `vortex_clear_m` of a vortex mouth.
 ##
-## Hard Mode (queued) reuses this class with its own Rules (rate, cap, grace) and reads the alive
-## returners per zone through `alive_in_zone` for its pressure model.
+## Hard Mode (HardMode, ledger row 12) reuses this class with its own Rules (rate, cap, grace, bloom
+## buffer, a slower rate at low health and no returners into a zone at its vitality floor) and reads the
+## alive returners per zone through `alive_in_zone` for its pressure model. When Gill reaches a sphere
+## under a remote incursion, its abstract load is handed over as `owe()`d returners, which arrive through
+## the same off-camera rules. Normal rules never owe, gate or slow anything.
 
 const FORMAT := 1
 
@@ -50,6 +53,14 @@ class Rules:
 
 	func cap_for(authored: int) -> int:
 		return 0 if authored <= 0 else maxi(1, roundi(cap_frac * authored))
+
+	## Multiplies every interval between returns (Normal: 1; Hard doubles it at low health).
+	func interval_scale() -> float:
+		return 1.0
+
+	## Whether a due zone may take a returner now (Normal: always; Hard: not at its vitality floor).
+	func allows(_z: Dictionary) -> bool:
+		return true
 
 
 static func normal_rules() -> Rules:
@@ -166,7 +177,7 @@ static func spot_of(b: MossBall, par: Parasite) -> Vector3:
 
 ## Seconds from the n-th return in a zone to the next one.
 func interval(z: Dictionary, n: int) -> float:
-	return lerpf(rules.every_min_s, rules.every_max_s, unit([key, z["ball"], z["zone"], n, "every"]))
+	return lerpf(rules.every_min_s, rules.every_max_s, unit([key, z["ball"], z["zone"], n, "every"])) * rules.interval_scale()
 
 
 func alive_in_zone(z: Dictionary) -> int:
@@ -219,8 +230,8 @@ func update(now: float, ball: MossBall, gill_pos: Vector3, cam: Camera3D) -> Par
 		return null
 	var due := []
 	for z in zones.values():
-		if int(z["ball"]) == ball.index and float(z["cleared"]) >= 0.0 and now >= float(z["next"]) \
-				and not (z["eligible"] as Array).is_empty() and alive_in_zone(z) < int(z["cap"]):
+		if int(z["ball"]) == ball.index and (int(z.get("owed", 0)) > 0 or (float(z["cleared"]) >= 0.0 and now >= float(z["next"]))) \
+				and not (z["eligible"] as Array).is_empty() and alive_in_zone(z) < int(z["cap"]) and rules.allows(z):
 			due.append(z)
 	due.sort_custom(func(a, b): return float(a["next"]) < float(b["next"]))
 	for z in due:
@@ -284,12 +295,26 @@ func _arrive(z: Dictionary, now: float, b: MossBall, gill_pos: Vector3, cam: Cam
 		b.returners.append(par)
 		b.returners_changed()
 		z["n"] = n + 1
-		z["next"] = now + interval(z, n + 1)
+		if int(z.get("owed", 0)) > 0:
+			# (A handed-over incursion returner: the zone's own timing is left as it was.)
+			z["owed"] = int(z["owed"]) - 1
+		else:
+			z["next"] = now + interval(z, n + 1)
 		_last_arrival[b.index] = now
 		arrivals.append({"t": now, "ball": b.index, "zone": z["zone"], "n": n, "kind": tpl.kind, "variant": tpl.variant,
 				"dist": dist, "on_camera": on_camera(cam, at, up)})
 		return par
 	return null
+
+
+## Hard Mode: `count` returners are owed to this zone (an incursion's abstract load, handed over when
+## Gill reaches its sphere). They arrive through the usual rules (off camera, far from him, spacing,
+## caps); owed returners beyond the zone's free room are dropped.
+func owe(zkey: String, count: int) -> void:
+	var z: Dictionary = zones.get(zkey, {})
+	if z.is_empty() or count <= 0:
+		return
+	z["owed"] = clampi(int(z.get("owed", 0)) + count, 0, maxi(0, int(z["cap"]) - alive_in_zone(z)))
 
 
 ## The timers for the run save (`run["world"]["repop"]`, additive): only zones that were cleared.
@@ -300,6 +325,8 @@ func to_dict() -> Dictionary:
 		var z: Dictionary = zones[k]
 		if float(z["cleared"]) >= 0.0:
 			zs[k] = {"cleared": snappedf(float(z["cleared"]), 0.001), "next": snappedf(float(z["next"]), 0.001), "n": int(z["n"])}
+			if int(z.get("owed", 0)) > 0:
+				zs[k]["owed"] = int(z["owed"])
 	return {"format": FORMAT, "zones": zs}
 
 
@@ -317,6 +344,8 @@ func from_dict(d: Dictionary) -> void:
 		z["cleared"] = float(s.get("cleared", -1.0))
 		z["next"] = float(s.get("next", float(z["cleared"]) + rules.grace_s))
 		z["n"] = maxi(0, int(s.get("n", 0)))
+		if s.has("owed"):
+			z["owed"] = maxi(0, int(s["owed"]))
 
 
 ## For the diagnostics and the long simulation.

@@ -8,6 +8,7 @@ render_mode unshaded, blend_mix, depth_draw_never, cull_disabled, shadows_disabl
 // offset at its height (u from the mouth: u_end = 0 at ball A, 1 at ball B; cur_basis in mouth space).
 
 #include "res://shaders/vortex_current.gdshaderinc"
+#include "res://shaders/vortex_distress.gdshaderinc"
 
 uniform float strength = 0.0;
 uniform float spin_phase = 0.0;
@@ -46,5 +47,11 @@ void fragment() {
 	}
 	float fade = smoothstep(0.0, 0.1, v_life) * (1.0 - smoothstep(0.75, 1.0, v_life));
 	ALBEDO = mix(COLOR.rgb, COLOR.rgb * tint * 1.2, tint_amt * 0.6);
+	if (distress_any()) {
+		// Hard Mode distress: the debris belongs to its own end's half (u_end).
+		vec3 ds = distress_at(u_end);
+		ALBEDO = mix(COLOR.rgb, COLOR.rgb * tint * 1.2, (tint_amt + ds.y) * 0.6) * ds.x;
+		ALBEDO = mix(ALBEDO, vec3(1.0), ds.z);
+	}
 	ALPHA = (1.0 - smoothstep(0.5, 1.0, d)) * fade * COLOR.a * strength;
 }

@@ -419,7 +419,7 @@ func _moss_lift(pos: Vector3, up: Vector3) -> float:
 	var slope: Variant = b.moss_material.get_shader_parameter("moss_slope")
 	var ms := 0.5 if slope == null else float(slope)
 	var flat_ := smoothstep(ms - 0.25, ms + 0.15, up.dot(dir))
-	return fz * lerpf(0.55, 1.0, b.health_at(dir)) * lerpf(0.35, 1.0, flat_)
+	return fz * lerpf(0.55, 1.0, b.drawn_health_at(dir)) * lerpf(0.35, 1.0, flat_)
 
 
 func _mark_xf(pos: Vector3, up: Vector3, dir: Vector3, length: float, width: float) -> Transform3D:

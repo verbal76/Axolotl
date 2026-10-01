@@ -14,6 +14,11 @@ uniform sampler2D health_base : hint_default_black, filter_linear, repeat_enable
 uniform vec3 stage_dir = vec3(0.0, 1.0, 0.0);
 uniform float stage_reveal = 0.0;
 uniform float stage_outer = 0.0;
+// Hard Mode (ledger row 12): each zone's vitality V (a 64x32 map painted by MossBall from HardMode) dims
+// the drawn health to health x mix(0.35, 1, V). The permanent health map is never changed. Off (Normal):
+// not sampled at all.
+uniform sampler2D vitality_map : hint_default_white, filter_linear, repeat_enable;
+uniform bool vitality_on = false;
 
 vec2 health_uv(vec3 dir) {
 	return vec2(atan(dir.x, dir.z) / 6.2831853 + 0.5, 0.5 - asin(clamp(dir.y, -1.0, 1.0)) / 3.1415927);
@@ -33,6 +38,9 @@ float health_at(vec3 dir) {
 			float ahead = smoothstep(stage_reveal - 0.045, stage_reveal, a);
 			h = mix(h, min(h, texture(health_base, health_uv(dir)).r), ahead);
 		}
+	}
+	if (vitality_on) {
+		h *= mix(0.35, 1.0, texture(vitality_map, health_uv(dir)).r);
 	}
 	return h;
 }

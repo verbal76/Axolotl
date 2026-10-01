@@ -541,6 +541,8 @@ func run(runner) -> void:
 		await _vortex_shots(g, "clear_")
 	if only == "vcur":
 		await _vcur_shots(g)
+	if only == "hard":
+		await load("res://scripts/tests/hard_tests.gd").new(t, g).shots(self)
 	if only == "feedback":
 		await _feedback(g, "")
 		for b in g.balls:

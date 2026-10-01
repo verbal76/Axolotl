@@ -149,14 +149,26 @@ func start_new_run() -> void:
 ## Records a finish (called once per run, when its clock finishes).
 ## `skills`: skill-tree nodes owned at the finish (shown with it as "Skills n/15"; there is no
 ## skills-off mode). Older records without it read as the current count.
-func record_finish(finish_s: float, pct: float, catalog_version: int, identity: Dictionary, skills := 0) -> void:
+## `mode`: "hard" for a Hard Mode run (ledger row 12): its records carry `"mode": "hard"` and its best
+## time is kept apart (`best_finish_s_hard`). A Normal finish is recorded exactly as before (no mode
+## key: missing = Normal).
+func record_finish(finish_s: float, pct: float, catalog_version: int, identity: Dictionary, skills := 0, mode := "") -> void:
 	var r := run()
 	r["finish"] = {"finish_s": finish_s, "percent": pct, "catalog_version": catalog_version,
 			"game_version": GameVersion.GAME_VERSION, "ota_id": identity.get("ota_id", "none"),
 			"timer_model": RunClock.TIMER_MODEL, "skills": skills}
 	var rec := records()
-	(rec["finishes"] as Array).append({"run_id": r["id"], "finish_s": finish_s, "percent": pct,
-			"catalog_version": catalog_version, "game_version": GameVersion.GAME_VERSION, "skills": skills})
+	var entry := {"run_id": r["id"], "finish_s": finish_s, "percent": pct,
+			"catalog_version": catalog_version, "game_version": GameVersion.GAME_VERSION, "skills": skills}
+	if mode == "hard":
+		r["finish"]["mode"] = mode
+		entry["mode"] = mode
+		(rec["finishes"] as Array).append(entry)
+		if float(rec.get("best_finish_s_hard", -1.0)) < 0.0 or finish_s < float(rec["best_finish_s_hard"]):
+			rec["best_finish_s_hard"] = finish_s
+			rec["best_run_id_hard"] = r["id"]
+		return
+	(rec["finishes"] as Array).append(entry)
 	if rec["best_finish_s"] < 0.0 or finish_s < rec["best_finish_s"]:
 		rec["best_finish_s"] = finish_s
 		rec["best_run_id"] = r["id"]

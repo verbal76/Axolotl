@@ -43,6 +43,15 @@ const CUR_AXES := Vector3(1.0, 0.78, 0.3)
 ## Off: the shipped straight tunnels (before/after comparisons in the render harness).
 static var currents := true
 
+## Hard Mode's remote distress (ledger row 12; §E2 of docs/research/2026-09-30-DEVICE_AUDIT.md, owner
+## rulings J-M), per severity level S0..S3: the luminance swing of the pulse, its period (s; never under
+## 2 s) and the tint amount (S0 = TINT_AMT, today's look). Each end's half shows its own sphere's level;
+## shown levels crossfade over DISTRESS_FADE_S. Purely visual: travel, unlocks and collision never read it.
+const DISTRESS_SWING := [0.0, 0.12, 0.25, 0.40]
+const DISTRESS_PERIOD := [6.0, 6.0, 4.0, 2.5]
+const DISTRESS_TINT := [0.5, 0.55, 0.62, 0.72]
+const DISTRESS_FADE_S := 3.0
+
 var ball_a: MossBall
 var ball_b: MossBall
 var dir_a := Vector3.UP
@@ -81,6 +90,13 @@ var cur_kap: Array[Vector3] = []
 ## Sideways, vertical, along (columns), in world space.
 var cur_basis := Basis()
 var _cur_mats: Array[ShaderMaterial] = []
+## Hard Mode: the severity level (0..3) each end's half signals (set by HardMode at 4 Hz), the level
+## shown now (crossfading toward it) and each half's pulse phase (rad). Normal never sets them, and
+## nothing is sent to the shaders until it does.
+var distress_level: Array[int] = [0, 0]
+var distress_shown: Array[float] = [0.0, 0.0]
+var distress_phase: Array[float] = [0.0, 0.0]
+var _distress_on := false
 
 
 func setup(a: MossBall, b: MossBall, p_dir_a: Vector3, p_dir_b: Vector3) -> void:
@@ -459,8 +475,55 @@ func _process(dt: float) -> void:
 		dm.set_shader_parameter("strength", s)
 		dm.set_shader_parameter("spin_phase", spin_phase)
 	_mouth_b.visible = _b_open > 0.001
+	if _distress_on:
+		_update_distress(dt)
 	_update_rush(_rush_a, 0.1 + strength)
 	_update_rush(_rush_b, 1.1 if connected else 0.0)
+
+
+## Hard Mode: the level each end's half signals (0 = normal .. 3 = urgent).
+func set_distress(level_a: int, level_b: int) -> void:
+	if not _distress_on:
+		if level_a == 0 and level_b == 0:
+			return
+		_distress_on = true
+		# (Every connection pulses on its own phase, never in step with the others.)
+		distress_phase = [link_index * 1.31, link_index * 1.31]
+	distress_level = [clampi(level_a, 0, 3), clampi(level_b, 0, 3)]
+
+
+## Back to exactly Normal's look at once (tests that drew distress clean up with it).
+func clear_distress() -> void:
+	distress_level = [0, 0]
+	distress_shown = [0.0, 0.0]
+	if _distress_on:
+		_update_distress(0.0)
+	_distress_on = false
+
+
+## The shown (crossfaded) look of one end's half: [luminance swing, period s, tint amount].
+func distress_look(end: int) -> Array:
+	var lv := clampf(distress_shown[end], 0.0, 3.0)
+	var i := mini(int(floor(lv)), 2)
+	var k := lv - i
+	return [lerpf(DISTRESS_SWING[i], DISTRESS_SWING[i + 1], k), maxf(2.0, lerpf(DISTRESS_PERIOD[i], DISTRESS_PERIOD[i + 1], k)),
+			lerpf(DISTRESS_TINT[i], DISTRESS_TINT[i + 1], k)]
+
+
+func _update_distress(dt: float) -> void:
+	var looks := []
+	for e in 2:
+		distress_shown[e] = move_toward(distress_shown[e], float(distress_level[e]), dt / DISTRESS_FADE_S)
+		var lk := distress_look(e)
+		distress_phase[e] = fmod(distress_phase[e] + dt * TAU / float(lk[1]), TAU * 64.0)
+		looks.append(lk)
+	var da := Vector2(looks[0][0], looks[0][1])
+	var db := Vector2(looks[1][0], looks[1][1])
+	var dx := Vector4(distress_phase[0], distress_phase[1], looks[0][2], looks[1][2])
+	for m in [_jet_mat, _stream_mat, _pool_mats[0], _pool_mats[1], _debris_mats[0], _debris_mats[1]]:
+		(m as ShaderMaterial).set_shader_parameter("distress_a", da)
+		(m as ShaderMaterial).set_shader_parameter("distress_b", db)
+		(m as ShaderMaterial).set_shader_parameter("distress_x", dx)
 
 
 func _update_rush(p: AudioStreamPlayer3D, s: float) -> void:

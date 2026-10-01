@@ -127,6 +127,9 @@ func register_material(m: ShaderMaterial) -> ShaderMaterial:
 	m.set_shader_parameter("ball_center", global_position if is_inside_tree() else position)
 	_ensure_health_map()
 	m.set_shader_parameter("health_map", health_tex)
+	if vitality_tex != null:
+		m.set_shader_parameter("vitality_map", vitality_tex)
+		m.set_shader_parameter("vitality_on", true)
 	if not caves.is_empty():
 		var arr := caves.duplicate()
 		while arr.size() < 4:
@@ -746,7 +749,7 @@ func staging() -> bool:
 
 ## What the shaders draw at `dir` (health_at with the staging applied): tests and renders.
 func shown_health_at(dir: Vector3) -> float:
-	var h := health_at(dir)
+	var h := drawn_health_at(dir)
 	if stage_outer <= 0.0 or _stage_base_img == null:
 		return h
 	var d := dir.normalized()
@@ -758,7 +761,65 @@ func shown_health_at(dir: Vector3) -> float:
 	var v := 0.5 - asin(clampf(d.y, -1.0, 1.0)) / PI
 	var b := img.get_pixel(clampi(int(u * HEALTH_MAP_W), 0, HEALTH_MAP_W - 1), clampi(int(v * HEALTH_MAP_H), 0, HEALTH_MAP_H - 1)).r
 	var ahead := smoothstep(stage_reveal - 0.045, stage_reveal, a)
-	return lerpf(h, minf(h, b), ahead)
+	if vitality_img == null:
+		return lerpf(h, minf(h, b), ahead)
+	# (As the shader: the staging is applied first, the vitality dims the result.)
+	var raw := health_at(dir)
+	return lerpf(raw, minf(raw, b), ahead) * lerpf(VIT_DIM, 1.0, vitality_at(dir))
+
+
+# --- Hard Mode vitality (HardMode, ledger row 12) -----------------------------------------------
+# Each zone's vitality V dims what is drawn: health x lerp(0.35, 1, V), through a small equirectangular
+# map (same layout as the health map). The permanent health map, restoration and every earned id are
+# never touched. Null in Normal: nothing is sampled or drawn differently.
+
+const VIT_W := 64
+const VIT_H := 32
+const VIT_DIM := 0.35
+var vitality_img: Image = null
+var vitality_tex: ImageTexture = null
+
+
+## Hard Mode: the vitality map to draw (R8, VIT_W x VIT_H). The first call turns it on in every material.
+func set_vitality_image(img: Image) -> void:
+	vitality_img = img
+	if vitality_tex == null:
+		vitality_tex = ImageTexture.create_from_image(img)
+		for m in field_materials:
+			m.set_shader_parameter("vitality_map", vitality_tex)
+			m.set_shader_parameter("vitality_on", true)
+	else:
+		vitality_tex.update(img)
+
+
+## Turns the vitality map off again (tests that drew it put the ball back as Normal draws it).
+func clear_vitality() -> void:
+	vitality_img = null
+	vitality_tex = null
+	for m in field_materials:
+		m.set_shader_parameter("vitality_on", false)
+		m.set_shader_parameter("vitality_map", null)
+
+
+## The vitality drawn at `dir` (1 without Hard Mode), sampled as the shader samples it.
+func vitality_at(dir: Vector3) -> float:
+	if vitality_img == null:
+		return 1.0
+	var d := dir.normalized()
+	var fx := (atan2(d.x, d.z) / TAU + 0.5) * VIT_W - 0.5
+	var fy := (0.5 - asin(clampf(d.y, -1.0, 1.0)) / PI) * VIT_H - 0.5
+	var x0 := int(floor(fx))
+	var y0 := int(floor(fy))
+	var tx := fx - x0
+	var ty := fy - y0
+	var px := func(x: int, y: int) -> float: return vitality_img.get_pixel(posmod(x, VIT_W), posmod(y, VIT_H)).r
+	return lerpf(lerpf(px.call(x0, y0), px.call(x0 + 1, y0), tx), lerpf(px.call(x0, y0 + 1), px.call(x0 + 1, y0 + 1), tx), ty)
+
+
+## The health drawn at `dir` with Hard Mode's vitality (health_at in Normal).
+func drawn_health_at(dir: Vector3) -> float:
+	var h := health_at(dir)
+	return h if vitality_img == null else h * lerpf(VIT_DIM, 1.0, vitality_at(dir))
 
 
 ## CPU mirror of the shader's health function (gameplay such as crumbling moss, and tests).

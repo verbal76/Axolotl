@@ -200,8 +200,9 @@ static func button(text: String, cb: Callable) -> Button:
 
 
 ## A button that asks before acting: the first tap shows `question` with Yes/Cancel under it.
-## Returns the container; `yes_text` confirms and calls `cb`.
-static func confirm_button(text: String, question: String, yes_text: String, cb: Callable) -> VBoxContainer:
+## Returns the container; `yes_text` confirms and calls `cb`. With `alt_text`, a second answer ("Alt")
+## stands beside it and calls `alt_cb` (New Run's two-choice mode question: Normal or Hard).
+static func confirm_button(text: String, question: String, yes_text: String, cb: Callable, alt_text := "", alt_cb := Callable()) -> VBoxContainer:
 	var box := VBoxContainer.new()
 	box.add_theme_constant_override("separation", 10)
 	var ask := VBoxContainer.new()
@@ -219,12 +220,24 @@ static func confirm_button(text: String, question: String, yes_text: String, cb:
 	yes.custom_minimum_size = Vector2(200, 64)
 	yes.name = "Yes"
 	row.add_child(yes)
+	if alt_text != "":
+		yes.custom_minimum_size = Vector2(150, 64)
+		var alt := button(alt_text, alt_cb)
+		alt.name = "Alt"
+		alt.custom_minimum_size = Vector2(150, 64)
+		row.add_child(alt)
 	var first := button(text, Callable())
 	var no := button("Cancel", func(): ask.visible = false; first.visible = true; first.grab_focus())
 	no.name = "Cancel"
 	no.custom_minimum_size = Vector2(140, 64)
-	row.add_child(no)
 	ask.add_child(row)
+	if alt_text != "":
+		# (Two answers and Cancel side by side are wider than a menu column: Cancel goes below them.)
+		var row2 := HBoxContainer.new()
+		row2.add_child(no)
+		ask.add_child(row2)
+	else:
+		row.add_child(no)
 	first.pressed.connect(func(): first.visible = false; ask.visible = true; no.grab_focus())
 	first.name = "Ask"
 	box.add_child(first)

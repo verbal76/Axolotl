@@ -78,8 +78,8 @@ func _ready() -> void:
 	# Return to Title directly beneath Resume (owner ruling 2026-09-30).
 	var title := _action("Return to Title", func(): Game.inst.return_to_title())
 	title.name = "ReturnToTitle"
-	var restart := UiStyle.confirm_button("New Run", "Start a new run? This run's progress and time are replaced (your best finish is kept).",
-			"Start over", func(): Game.inst.restart_experience())
+	var restart := UiStyle.confirm_button("New Run", TitleScreen.NEW_RUN_QUESTION, "Normal", func(): Game.inst.restart_experience(),
+			"Hard", func(): Game.inst.restart_experience(HardMode.MODE))
 	restart.name = "NewRun"
 	for c in restart.find_children("*", "Button", true, false):
 		(c as Button).custom_minimum_size.y = 64

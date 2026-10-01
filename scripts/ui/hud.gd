@@ -41,6 +41,9 @@ var _special_ready_flash := 0.0
 var _special_was_ready := true
 ## The red starfish chip (docs/SKILL_TREE.md): small, top left, only for a moment after a pickup.
 var star_chip: StarChip
+## Hard Mode's DEAD / LIVING bar (VitalityBar), top centre; never shown in Normal.
+var vitality_bar: VitalityBar
+var _vitality_on := false
 
 
 func _ready() -> void:
@@ -103,6 +106,11 @@ func _ready() -> void:
 	star_chip.name = "StarChip"
 	star_chip.mouse_filter = Control.MOUSE_FILTER_IGNORE
 	root.add_child(star_chip)
+	vitality_bar = VitalityBar.new()
+	vitality_bar.name = "VitalityBar"
+	vitality_bar.mouse_filter = Control.MOUSE_FILTER_IGNORE
+	vitality_bar.visible = false
+	root.add_child(vitality_bar)
 	get_viewport().size_changed.connect(_layout)
 	Settings.input_mode_changed.connect(func(_m): _update_alpha())
 	Settings.settings_changed.connect(_update_alpha)
@@ -149,8 +157,29 @@ func _layout() -> void:
 	if star_chip:
 		star_chip.k = s
 		star_chip.position = _safe.position + Vector2(6, 40 * s)
+	if vitality_bar:
+		vitality_bar.k = s
+		vitality_bar.size = Vector2(VitalityBar.W, VitalityBar.H) * s
+		vitality_bar.position = Vector2(_safe.position.x + (_safe.size.x - vitality_bar.size.x) * 0.5, _safe.position.y + 6)
 	canvas.scale_k = s
 	canvas.queue_redraw()
+
+
+## Hard Mode: the bar is part of this run's HUD (Game, when the run opens).
+func show_vitality(on: bool) -> void:
+	_vitality_on = on
+	vitality_bar.visible = on
+	_update_bar()
+
+
+## Hard Mode, four times a second: the current sphere's mean V, his zone's V and its pressure.
+func set_vitality(mean_v: float, zone_v: float, pressured: bool) -> void:
+	vitality_bar.set_values(mean_v, zone_v, pressured)
+
+
+func _update_bar() -> void:
+	if vitality_bar != null:
+		vitality_bar.want = _vitality_on and _controls_visible and not _cinematic
 
 
 func stick_radius() -> float:
@@ -170,6 +199,7 @@ func set_cinematic(v: bool) -> void:
 
 
 func _update_alpha() -> void:
+	_update_bar()
 	if not _controls_visible or _cinematic:
 		_target_alpha = 0.0
 	elif Settings.input_mode == Settings.InputMode.PAD:

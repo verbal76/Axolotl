@@ -62,6 +62,9 @@ var food: FoodDirector
 ## Parasites returning to cleared zones (Repopulation); Normal rules.
 var repop: Repopulation
 var _repop_t := 0.0
+## Hard Mode's tug of war (HardMode; ledger row 12): null in a Normal run.
+var hard: HardMode
+var _hard_t := 0.0
 var _vortex_block: Vortex = null
 var _pending_connect: Array = []
 var _moved := 0.0
@@ -378,9 +381,12 @@ func start_play(immediate := false) -> void:
 
 
 ## New Run: a fresh run (world, completion, clock) straight into play. Records such as the best
-## finish time are kept.
-func restart_experience() -> void:
+## finish time are kept. `mode` "hard" makes it a Hard Mode run (chosen here only; a Normal run never
+## converts). A Normal run carries no mode key, exactly as before Hard Mode existed.
+func restart_experience(mode := "normal") -> void:
 	run_save.start_new_run()
+	if mode == HardMode.MODE:
+		run_save.run()["mode"] = HardMode.MODE
 	run_save.save()
 	get_tree().paused = false
 	Settings.skip_title = true
@@ -419,12 +425,30 @@ func _open_run() -> void:
 	for b in balls:
 		food.initial(b)
 	StartupTrace.mark("food placed")
-	repop = Repopulation.new(Repopulation.normal_rules())
+	# (Automated runs: --mode=hard makes the fresh test run a Hard Mode run.)
+	if Settings.test_mode != "" and str(Settings.test_args.get("mode", "")) == HardMode.MODE and not has_run_in_progress():
+		run_save.run()["mode"] = HardMode.MODE
+	if is_hard():
+		hard = HardMode.new()
+		hard.key = rng_key()
+		var hr := HardMode.hard_rules()
+		hr.hard_ref = weakref(hard)
+		repop = Repopulation.new(hr)
+		hard.owe_fn = repop.owe
+		hard.can_return_fn = func(zk: String) -> bool: return not (repop.zones.get(zk, {}).get("eligible", []) as Array).is_empty()
+	else:
+		repop = Repopulation.new(Repopulation.normal_rules())
 	repop.key = rng_key()
 	repop.build(balls, vortices)
 	repop.from_dict((run_save.run().get("world", {}) as Dictionary).get("repop", {}))
 	_open_gill()
 	_apply_run()
+	if hard != null:
+		hard.build(balls, vortices)
+		hard.from_dict((run_save.run().get("world", {}) as Dictionary).get("vitality", {}))
+		hard.paint_all()
+		hard.living_aquarium.connect(_on_living_aquarium)
+		hud.show_vitality(true)
 	StartupTrace.mark("run save opened (%s)" % run_save.origin.get_slice(" (", 0))
 
 
@@ -505,6 +529,11 @@ func progress_line() -> String:
 	if gill == null:
 		return ""
 	return "Red Starfish %d/%d  ·  Skills %d/%d" % [gill.stars(), StarfishTable.COUNT, gill.skills(), SkillTree.COUNT]
+
+
+## Whether this run is a Hard Mode run (chosen at New Run; missing = Normal, so every older save is Normal).
+func is_hard() -> bool:
+	return run_save != null and str(run_save.run().get("mode", "normal")) == HardMode.MODE
 
 
 ## True when there is a run to continue (the title then offers Continue and New Run).
@@ -590,7 +619,8 @@ func _resume_position() -> void:
 func _capture_world() -> Dictionary:
 	return {"ball": player.ball.index, "checkpoint": checkpoint.get_meta("completion_id", "") if checkpoint else "",
 			"prompts_done": prompts_done.keys(), "tut_framed": _tut_framed, "all_clear_shown": all_clear_done,
-			"stats": stats.duplicate(true), "repop": repop.to_dict() if repop != null else {}}
+			"stats": stats.duplicate(true), "repop": repop.to_dict() if repop != null else {}}.merged(
+			{"vitality": hard.to_dict()} if hard != null else {})
 
 
 ## Writes the run (clock, world, earned) now.
@@ -629,7 +659,8 @@ func _finish_run() -> void:
 	if not clock.finish():
 		return
 	_earn(Completion.ENDING_ID)
-	run_save.record_finish(clock.finish_s, completion.percent(run_save.earned()), Completion.CATALOG_VERSION, Boot.identity(), gill.skills() if gill else 0)
+	run_save.record_finish(clock.finish_s, completion.percent(run_save.earned()), Completion.CATALOG_VERSION, Boot.identity(), gill.skills() if gill else 0,
+			HardMode.MODE if hard != null else "")
 	save_run()
 
 
@@ -638,11 +669,13 @@ func completion_percent() -> float:
 
 
 ## One line for the title and pause menu: "Run 12:34.56 · 43% complete" (or the finish time).
+## A Hard Mode run says so first ("Hard Mode  ·  Run time ...").
 func run_line() -> String:
 	var pct := completion.percent_display(run_save.earned())
+	var pre := "Hard Mode  ·  " if is_hard() else ""
 	if clock.is_finished():
-		return "Finished in %s  ·  %d%% complete  ·  Skills %d/%d" % [RunClock.format(clock.finish_s), pct, finish_skills(), SkillTree.COUNT]
-	return "Run time %s  ·  %d%% complete" % [RunClock.format(clock.run_s), pct]
+		return pre + "Finished in %s  ·  %d%% complete  ·  Skills %d/%d" % [RunClock.format(clock.finish_s), pct, finish_skills(), SkillTree.COUNT]
+	return pre + "Run time %s  ·  %d%% complete" % [RunClock.format(clock.run_s), pct]
 
 
 ## Skills owned when this run finished (its record), or now for an older record without it.
@@ -653,7 +686,17 @@ func finish_skills() -> int:
 	return gill.skills() if gill else 0
 
 
+## The best Normal finish, then the best Hard Mode finish when there is one (kept apart).
 func best_line() -> String:
+	var normal := _best_normal_line()
+	var hb := float(run_save.records().get("best_finish_s_hard", -1.0))
+	if hb < 0.0:
+		return normal
+	var hard_part := "Best Hard Mode finish %s" % RunClock.format(hb)
+	return hard_part if normal == "" else normal + "  ·  " + hard_part
+
+
+func _best_normal_line() -> String:
 	var rec := run_save.records()
 	var best: float = rec["best_finish_s"]
 	if best < 0.0:
@@ -721,6 +764,8 @@ func run_diagnostics_text() -> String:
 	L.append("  Last save: %s" % run_save.last_save_result)
 	if repop != null:
 		L.append("  " + repop.summary())
+	if hard != null:
+		L.append("  " + hard.summary())
 	if onboarding != null:
 		L.append("  " + onboarding.status_text())
 	if gill != null:
@@ -794,6 +839,7 @@ func _process(dt: float) -> void:
 	_update_mote_lights()
 	_update_food(dt)
 	_update_repop(dt)
+	_update_hard(dt)
 	_update_all_clear(dt)
 
 
@@ -1036,11 +1082,15 @@ func parasite_killed(par: Parasite) -> void:
 		Sfx.play("drain", par.global_position, -3.0)
 		if repop != null:
 			repop.on_killed(par, clock.play_s)
+		if hard != null:
+			hard.on_kill(par.ball.index, par.zone_id)
 		_hide_prompt("swipe", true)
 		return
 	stats["kills"] += 1
 	_earn(par.get_meta("completion_id", ""))
 	var ball := par.ball
+	if hard != null:
+		hard.on_kill(ball.index, par.zone_id)
 	# Stolen vitality returns to the moss.
 	WaterFX.inst.sparkle(par.global_position, Color(0.45, 1.0, 0.45, 0.9), 22, 2.2, 0.08, 1.2)
 	Sfx.play("drain", par.global_position)
@@ -1080,6 +1130,8 @@ func discover_species(sp: String) -> void:
 func mote_restored(m: Mote) -> void:
 	stats["motes"] += 1
 	_earn(m.get_meta("completion_id", ""))
+	if hard != null:
+		hard.on_mote(m.ball.index, m.zone_id)
 	WaterFX.inst.sparkle(m.global_position, Color(0.5, 1.0, 0.7, 0.9), 18, 1.6, 0.07, 1.2)
 	Sfx.play("restore", m.global_position)
 	m.ball.complete_event(m.zone_id, m.global_position, 11.0)
@@ -1518,6 +1570,27 @@ func _update_repop(dt: float) -> void:
 		return
 	_repop_t = 0.5
 	repop.update(clock.play_s, player.ball, player.global_position, cam)
+
+
+## Four times a second of play: Hard Mode's tug of war (HardMode). Only in play (the clock's play
+## seconds: nothing while closed, paused, on the title or in the aquarium).
+func _update_hard(dt: float) -> void:
+	if hard == null:
+		return
+	_hard_t -= dt
+	if _hard_t > 0.0 or state != "play":
+		return
+	_hard_t = HardMode.TICK_S
+	(repop.rules as HardMode.HardRules).slow = player.health <= 2
+	hard.tick(clock.play_s, player.ball.index, player.health)
+	var zk := hard.zone_at(player.ball.index, player.global_position - player.ball.global_position)
+	hud.set_vitality(hard.ball_mean(player.ball.index), float(hard.v.get(zk, -1.0)), hard.losing.has(zk))
+
+
+## Every ball restored and living (Hard Mode): a moment, not a completion entry.
+func _on_living_aquarium() -> void:
+	hud.show_discovery("Living aquarium")
+	Sfx.play("discover", null, -4.0)
 
 
 # --- Tutorial prompts ---------------------------------------------------------------------
