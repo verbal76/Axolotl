@@ -14,7 +14,7 @@ func run(runner) -> void:
 	p.use_bot_input = true
 	await t.seconds(0.5)
 	var only: String = Settings.test_args.get("only", "")
-	for name_ in ["_test_startup", "_test_ota_and_version", "_test_mesh_winding", "_test_terrain", "_test_ravines", "_test_terrain_grounded", "_test_no_floating_platforms", "_test_parasite_locomotion", "_test_parasite_body_and_death", "_test_parasite_combat", "_test_organic_motion", "_test_gill_look", "_test_gill_idles", "_test_gill_colours", "_test_gill_patterns", "_test_tail_whip", "_test_gill_traction", "_test_gill_incline_transitions", "_test_traction_no_shortcuts", "_test_gill_body_follow", "_test_swim_body_follow", "_test_ambient_sway", "_test_placements", "_test_tutorial_route", "_test_sphere_walk", "_test_jump_and_burst", "_test_coyote_and_buffer", "_test_swipe_direction_and_stages", "_test_hard_landing", "_test_food", "_test_food_reach", "_test_darter_and_burrower", "_test_food_repopulates", "_test_motes", "_test_checkpoint_and_regen", "_test_crumble", "_test_restoration_gates", "_test_bubble_columns", "_test_restoration_continuity", "_test_health_map", "_test_vortex", "_test_vortex_tints", "_test_current", "_test_canopy", "_test_canopy_plain_jumps", "_test_climbs_physical", "_test_jungle_ladders_physical", "_test_leaf_geometry", "_test_leaf_footing", "_test_caves", "_test_mounds", "_test_vegetation", "_test_vortex_mouths_clear", "_test_route_audit", "_test_new_areas", "_test_ecosystem", "_test_music", "_test_opening_audio", "_test_run_clock", "_test_completion_catalog", "_test_completion_frozen", "_test_run_save_file", "_test_run_timer_live", "_test_run_continue", "_test_timer_integrity", "_test_resume_points_safe", "_phase_continue_write", "_phase_continue_read", "_test_upgrades", "_test_ui", "_test_menus_no_scroll", "_test_menu_touch", "_test_tier2_rules", "_test_tier2_world", "_test_ambient_fish", "_test_parasite_never_buried", "_test_tier2_loadout", "_test_aquarium_experiences", "_test_aquarium_polish", "_test_all_clear", "_test_treasure_unlock", "_test_treasure_generation", "_test_treasure_play", "_phase_treasure_stress", "_phase_live_fish_diag", "_phase_cpu_probe", "_phase_incline_survey", "_phase_loco_diag", "_phase_crawl_trace", "_phase_mouth_crawls", "_phase_organic_trace", "_test_skilltree_graph", "_test_progress_store", "_test_starfish_spots", "_test_starfish_pickup", "_test_skill_ui", "_test_quick_gill", "_test_lunge_skills", "_test_burst_skills", "_test_glide_control", "_test_glide_transfers", "_test_mote_magnet", "_phase_starfish_survey", "_phase_starfish_sweep", "_phase_glide_probe", "_test_onb_progress", "_test_onb_owner_save", "_test_onb_intro", "_test_onb_feeding", "_test_onb_parasite", "_test_onb_starfish", "_test_onb_softlock", "_test_onb_relaunch", "_test_onb_restoration_equal", "_phase_onb_owner", "_phase_onb_write", "_phase_onb_read", "_phase_onb_kill"]:
+	for name_ in ["_test_startup", "_test_ota_and_version", "_test_mesh_winding", "_test_terrain", "_test_ravines", "_test_terrain_grounded", "_test_no_floating_platforms", "_test_parasite_locomotion", "_test_parasite_body_and_death", "_test_parasite_combat", "_test_organic_motion", "_test_gill_look", "_test_gill_idles", "_test_gill_colours", "_test_gill_patterns", "_test_tail_whip", "_test_gill_traction", "_test_gill_incline_transitions", "_test_traction_no_shortcuts", "_test_gill_body_follow", "_test_swim_body_follow", "_test_ambient_sway", "_test_placements", "_test_tutorial_route", "_test_sphere_walk", "_test_jump_and_burst", "_test_coyote_and_buffer", "_test_swipe_direction_and_stages", "_test_hard_landing", "_test_food", "_test_food_reach", "_test_darter_and_burrower", "_test_food_repopulates", "_test_motes", "_test_checkpoint_and_regen", "_test_crumble", "_test_restoration_gates", "_test_bubble_columns", "_test_restoration_continuity", "_test_health_map", "_test_vortex", "_test_vortex_tints", "_test_current", "_test_canopy", "_test_canopy_plain_jumps", "_test_climbs_physical", "_test_jungle_ladders_physical", "_test_leaf_geometry", "_test_leaf_footing", "_test_caves", "_test_mounds", "_test_vegetation", "_test_vortex_mouths_clear", "_test_route_audit", "_test_new_areas", "_test_ecosystem", "_test_music", "_test_opening_audio", "_test_run_clock", "_test_completion_catalog", "_test_completion_frozen", "_test_run_save_file", "_test_run_timer_live", "_test_run_continue", "_test_timer_integrity", "_test_resume_points_safe", "_phase_continue_write", "_phase_continue_read", "_test_upgrades", "_test_ui", "_test_menus_no_scroll", "_test_menu_touch", "_test_tier2_rules", "_test_tier2_world", "_test_ambient_fish", "_test_parasite_never_buried", "_test_tier2_loadout", "_test_aquarium_experiences", "_test_aquarium_polish", "_test_all_clear", "_test_treasure_unlock", "_test_treasure_generation", "_test_treasure_play", "_phase_treasure_stress", "_phase_live_fish_diag", "_phase_cpu_probe", "_phase_incline_survey", "_phase_loco_diag", "_phase_crawl_trace", "_phase_mouth_crawls", "_phase_organic_trace", "_test_skilltree_graph", "_test_progress_store", "_test_starfish_spots", "_test_starfish_pickup", "_test_skill_ui", "_test_quick_gill", "_test_lunge_skills", "_test_burst_skills", "_test_glide_control", "_test_glide_transfers", "_test_mote_magnet", "_phase_starfish_survey", "_phase_starfish_sweep", "_phase_glide_probe", "_test_plants_terminal_growth", "_test_sea_fan_depth", "_test_onb_progress", "_test_onb_owner_save", "_test_onb_intro", "_test_onb_feeding", "_test_onb_parasite", "_test_onb_starfish", "_test_onb_softlock", "_test_onb_relaunch", "_test_onb_restoration_equal", "_phase_onb_owner", "_phase_onb_write", "_phase_onb_read", "_phase_onb_kill"]:
 		# "_phase_*" tests are halves of a relaunch test: they run only when asked for by name
 		# (in a child process started by _test_run_continue).
 		if name_.begins_with("_phase") and not only.split(",", false).has(name_):
@@ -381,6 +381,125 @@ func _bend_near(centre: Vector3, reach: float, h := 1.0) -> float:
 			var base := b.surface_point(b.up_at(centre + off), 0.0)
 			best = maxf(best, g.wake.bend_at(b, base, h).length())
 	return best
+
+
+## Tall stem plants end in foliage (00040-plants, ledger row 10; DEVICE_AUDIT §C): above every
+## stem's tip there are young leaves (no bare stick), each ball grows at least four variant meshes
+## of both its tall crown and its smaller stem plants (no clones), the meshes keep the sway
+## convention (UV.y 0 at the base to 1 at the tip) and stay within their triangle budget. Also
+## the climbable leaves wear the golden-pothos look (row 15), on the same material as before.
+func _test_plants_terminal_growth() -> void:
+	var bare: Array[String] = []
+	var tips_n := 0
+	var few: Array[String] = []
+	var uv_bad: Array[String] = []
+	var over: Array[String] = []
+	var per_ball: Array[String] = []
+	for b in g.balls:
+		var sets := {"tall": [], "medium": []}
+		for n in b.sprout_nodes:
+			var mmi := n as MultiMeshInstance3D
+			if mmi == null or mmi.multimesh == null or mmi.multimesh.mesh == null or mmi.multimesh.mesh.resource_name != "stem_plant":
+				continue
+			var fam := "tall" if float((mmi.material_override as ShaderMaterial).get_shader_parameter("plant_height")) > 2.0 else "medium"
+			if not (sets[fam] as Array).has(mmi.multimesh.mesh):
+				(sets[fam] as Array).append(mmi.multimesh.mesh)
+		for fam in sets:
+			var meshes: Array = sets[fam]
+			# Distinct meshes with distinct geometry.
+			var sigs := {}
+			for m in meshes:
+				var v: PackedVector3Array = (m as ArrayMesh).surface_get_arrays(0)[Mesh.ARRAY_VERTEX]
+				sigs["%d %.4f %.4f" % [v.size(), v[v.size() / 2].x, (m as ArrayMesh).get_aabb().size.y]] = true
+			if sigs.size() < 4:
+				few.append("ball %d %s: %d variants" % [b.index + 1, fam, sigs.size()])
+			for m in meshes:
+				var arr: Array = (m as ArrayMesh).surface_get_arrays(0)
+				var vs: PackedVector3Array = arr[Mesh.ARRAY_VERTEX]
+				var uvs: PackedVector2Array = arr[Mesh.ARRAY_TEX_UV]
+				var lo := INF
+				var hi := -INF
+				for u in uvs:
+					lo = minf(lo, u.y)
+					hi = maxf(hi, u.y)
+				if absf(lo) > 0.001 or absf(hi - 1.0) > 0.001:
+					uv_bad.append("ball %d %s UV.y %.3f..%.3f" % [b.index + 1, fam, lo, hi])
+				var tris := (arr[Mesh.ARRAY_INDEX] as PackedInt32Array).size() / 3
+				if tris > (640 if fam == "tall" else 240):
+					over.append("ball %d %s %d triangles" % [b.index + 1, fam, tris])
+				# No bare tip: within a young leaf's reach of each stem's tip, foliage rises clearly
+				# above the tip.
+				for tp in (m as ArrayMesh).get_meta("tips", []):
+					tips_n += 1
+					var tip: Vector3 = tp[0]
+					var ax: Vector3 = tp[1]
+					var sz: float = tp[2]
+					var above := -INF
+					for v in vs:
+						var d := v - tip
+						var along := d.dot(ax)
+						if (d - ax * along).length() <= sz * 0.6:
+							above = maxf(above, along)
+					if above < sz * 0.3:
+						bare.append("ball %d %s: foliage only %.3f above a tip (leaf %.3f)" % [b.index + 1, fam, above, sz])
+		per_ball.append("b%d %d/%d" % [b.index + 1, (sets["tall"] as Array).size(), (sets["medium"] as Array).size()])
+	t.check("stem_plants_end_in_foliage", tips_n > 100 and bare.is_empty(), "%d stem tips checked; %s" % [tips_n, str(bare.slice(0, 4))])
+	t.check("stem_plants_four_variants_per_ball", few.is_empty() and per_ball.size() == g.balls.size(), "tall/medium meshes per ball: %s; %s" % [", ".join(per_ball), str(few)])
+	t.check("stem_plants_keep_sway_uv", uv_bad.is_empty(), str(uv_bad.slice(0, 4)))
+	t.check("stem_plants_triangle_budget", over.is_empty(), str(over.slice(0, 4)))
+	# The climbable leaves' material: the pothos look on, leaf data (flutter) kept.
+	var pothos_ok := true
+	for b in g.balls:
+		var lb: LevelBuilder = b.get_meta("builder")
+		pothos_ok = pothos_ok and lb.leaf_mat != null and float(lb.leaf_mat.get_shader_parameter("pothos")) == 1.0 and bool(lb.leaf_mat.get_shader_parameter("leaf_data"))
+	t.check("climb_leaves_wear_pothos_look", pothos_ok, "")
+
+
+## The Coral Garden's sea fan (00040-plants, owner phone report) is real 3D branching: round
+## tapering branches with a radius, some fore/aft depth (never a paper-thin sheet), faces wound
+## outward, a broad fan's silhouette, and collision that is exactly the drawn tubes.
+func _test_sea_fan_depth() -> void:
+	var fan: Node3D = null
+	for n in (g.balls[0].get_meta("builder") as LevelBuilder).root.get_children():
+		if n.get_meta("terrain_kind", "") == "sea fan":
+			fan = n
+	if not t.check("sea_fan_present", fan != null, ""):
+		return
+	var st: Dictionary = fan.get_meta("fan_stats", {})
+	var mi: MeshInstance3D = null
+	var cs: CollisionShape3D = null
+	for k in fan.get_children():
+		if k is MeshInstance3D:
+			mi = k
+		elif k is CollisionShape3D:
+			cs = k
+	var aabb := mi.mesh.get_aabb()
+	var depth := aabb.size.z
+	var width := aabb.size.x
+	t.check("sea_fan_has_depth", width > 6.0 and depth >= 0.08 * width and aabb.size.y > 6.0,
+			"%.2f m wide, %.2f m tall, %.2f m deep (%.0f%% of its width)" % [width, aabb.size.y, depth, depth / width * 100.0])
+	t.check("sea_fan_branches_are_tubes", float(st.get("min_radius", 0.0)) >= 0.025 and int(st.get("branches", 0)) > 30,
+			"%d branches, %d cross-links, %d tips; thinnest radius %.3f m" % [st.get("branches", 0), st.get("links", 0), st.get("tips", 0), st.get("min_radius", 0.0)])
+	# Every branch grows out of another's tube and every cross-link ends inside one: no floating twig.
+	t.check("sea_fan_no_detached_twigs", st.has("detached") and int(st["detached"]) == 0, "%s detached" % str(st.get("detached", "?")))
+	var wrong := _front_faces_out_normals(mi.mesh as ArrayMesh)
+	var tris := MossBall._mesh_tris(mi.mesh)
+	t.check("sea_fan_faces_outward", wrong == 0, "%d of %d faces inward" % [wrong, tris])
+	var faces := (cs.shape as ConcavePolygonShape3D).get_faces()
+	t.check("sea_fan_collision_is_the_drawn_fan", faces.size() / 3 == tris and tris < 6000, "%d collision faces, %d drawn triangles" % [faces.size() / 3, tris])
+
+
+## Faces whose winding disagrees with their own vertex normals (outward tubes).
+func _front_faces_out_normals(mesh: ArrayMesh) -> int:
+	var a := mesh.surface_get_arrays(0)
+	var v: PackedVector3Array = a[Mesh.ARRAY_VERTEX]
+	var nn: PackedVector3Array = a[Mesh.ARRAY_NORMAL]
+	var wrong := 0
+	for i in range(0, v.size(), 3):
+		var n := (v[i + 2] - v[i]).cross(v[i + 1] - v[i])
+		if n.length_squared() > 1e-12 and n.dot(nn[i] + nn[i + 1] + nn[i + 2]) <= 0.0:
+			wrong += 1
+	return wrong
 
 
 ## Reactive vegetation: families placed on the terrain and clear of what matters, no collision,

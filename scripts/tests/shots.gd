@@ -675,6 +675,22 @@ func run(runner) -> void:
 		g.g_disp = 1.0
 		g.aquarium.apply(1.0)
 		await _leaf_close(g, g.balls[2], "leaf_close_restored")
+	if only == "plants":
+		await _plant_shots(g)
+	if only == "seafan":
+		await _sea_fan_shots(g, "murky")
+		_heal_all(g)
+		await t.seconds(1.0)
+		await _sea_fan_shots(g, "restored")
+	if only == "touchup":
+		# (Leaves and the sea fan only: quick review of surface and twig changes.)
+		await _leaf_views(g, "murky")
+		_heal_all(g)
+		await t.seconds(1.0)
+		await _leaf_views(g, "restored")
+		await _sea_fan_shots(g, "restored")
+	if only == "plantperf":
+		await _plant_perf(g)
 	if only == "" or only == "moments":
 		await _moments(g)
 	if only == "" or only == "restored":
@@ -2833,3 +2849,222 @@ func _onboarding_shots(g: Game) -> void:
 		await t.seconds(0.6)
 		await t.shot("onb_star_card")
 		o.ui.tap()
+
+
+# --- 00040-plants: tall stem plants and the climbable leaves' golden-pothos look ---------------
+
+## The sprouted stem-plant meshes on ball `b` (Levels._sprouts): distinct meshes whose material
+## is a stem plant's (its tip colour is the ball's SPROUT_TIPS), the tall crown's first.
+func _stem_meshes(b: MossBall) -> Array:
+	var tall := []
+	var medium := []
+	for n in b.sprout_nodes:
+		var mmi := n as MultiMeshInstance3D
+		if mmi == null or mmi.multimesh == null:
+			continue
+		var m: ShaderMaterial = mmi.material_override
+		if m == null or m.get_shader_parameter("healthy_b") != Levels.SPROUT_TIPS[b.index]:
+			continue
+		var into: Array = tall if float(m.get_shader_parameter("plant_height")) > 2.0 else medium
+		if not into.has([mmi.multimesh.mesh, m]):
+			var seen := false
+			for e in into:
+				seen = seen or e[0] == mmi.multimesh.mesh
+			if not seen:
+				into.append([mmi.multimesh.mesh, m])
+	return [tall, medium]
+
+
+func _heal_all(g: Game) -> void:
+	for b in g.balls:
+		b.add_heal(Vector3.UP, 340.0, 0.0)
+	g.g_disp = 1.0
+	g.aquarium.apply(1.0)
+
+
+## Turntables of every stem-plant variant (still: no sway), the crown in place at three
+## distances, the far view, and the climbable leaves close and mid-range, murky and restored.
+func _plant_shots(g: Game) -> void:
+	var b: MossBall = g.balls[0]
+	# The climbable leaves first, murky (neglected tank).
+	await _leaf_views(g, "murky")
+	_heal_all(g)
+	await t.seconds(1.0)
+	await _leaf_views(g, "restored")
+	g.player.place(b, b.surface_point(MossBall.dir_ll(-40, -30), 0.2), Vector3.FORWARD)
+	await t.seconds(0.5)
+	var sets: Array = _stem_meshes(b)
+	t.log_line("PLANTS ball1 variants: tall %d, medium %d" % [sets[0].size(), sets[1].size()])
+	for n in b.sprout_nodes:
+		(n as Node3D).visible = false
+	# (Each plant alone in open water above the ball, so nothing else is in the frame.)
+	var spot := MossBall.dir_ll(89, 0)
+	var up := b.up_at(b.surface_point(spot))
+	var fr := MossBall.frame_at(up, 0.0)
+	var base := b.surface_point(spot, 30.0)
+	g.aquarium.env.fog_enabled = false
+	for si in 2:
+		var scale := 4.5 if si == 0 else 1.6
+		for v in sets[si].size():
+			var mat: ShaderMaterial = (sets[si][v][1] as ShaderMaterial).duplicate()
+			mat.set_shader_parameter("sway", 0.0)
+			mat.set_shader_parameter("wake_gain", 0.0)
+			mat.set_shader_parameter("cam_fade", 0.0)
+			var mi := MeshInstance3D.new()
+			mi.mesh = sets[si][v][0]
+			mi.material_override = mat
+			b.add_child(mi)
+			mi.global_transform = Transform3D(MossBall.frame_at(up, 0.0).scaled(Vector3.ONE * scale), base)
+			var h := 1.2 * scale
+			for k in 3:
+				var a := TAU * k / 3.0
+				_close(g, base + (fr.x * cos(a) + fr.z * sin(a)) * h * 1.0 + up * h * 0.6, base + up * h * 0.5, up)
+				await t.seconds(0.5)
+				await t.shot("turn_%s_v%d_%d" % ["tall" if si == 0 else "medium", v, k * 120])
+			# The top of the plant, close: the stems must end in leaves.
+			_close(g, base + fr.z * h * 0.42 + up * h * 1.2, base + up * h * 0.82, up)
+			await t.seconds(0.5)
+			await t.shot("turn_%s_v%d_top" % ["tall" if si == 0 else "medium", v])
+			mi.queue_free()
+	g.aquarium.env.fog_enabled = true
+	for n in b.sprout_nodes:
+		(n as Node3D).visible = true
+	# The crown in place on ball 1's top, at three distances.
+	# (Aimed at the tall plant nearest lat 72 lon 140, among the crown's thickest growth.)
+	var cd := MossBall.dir_ll(72, 140)
+	var best := -2.0
+	for n in b.sprout_nodes:
+		var mmi := n as MultiMeshInstance3D
+		if mmi == null or float((mmi.material_override as ShaderMaterial).get_shader_parameter("plant_height")) < 2.0:
+			continue
+		for x in mmi.get_meta("veg_transforms"):
+			var dd: Vector3 = (x as Transform3D).origin.normalized()
+			if dd.dot(MossBall.dir_ll(72, 140)) > best:
+				best = dd.dot(MossBall.dir_ll(72, 140))
+				cd = dd
+	var cu := b.up_at(b.surface_point(cd))
+	var cx := MossBall.frame_at(cu, 0.0).x
+	for dist in [5.0, 12.0, 28.0]:
+		_close(g, b.surface_point(cd, 1.0 + dist * 0.25) + cx * dist, b.surface_point(cd, 1.8), cu)
+		await t.seconds(1.5)
+		await t.shot("crown_%dm" % int(dist))
+	# Far: the whole ball from across the tank, then the room view.
+	var far_up := Vector3.UP
+	_close(g, b.global_position + Vector3(0.3, 0.55, 1.0).normalized() * b.radius * 3.2, b.global_position + Vector3(0, b.radius * 0.4, 0), far_up)
+	await t.seconds(1.5)
+	await t.shot("far_ball1")
+	_open(g)
+	var pr: Presentation = g.presentation
+	pr.enter("play")
+	await t.seconds(2.0)
+	await t.shot("far_room")
+	pr.exit()
+	await t.seconds(1.0)
+
+
+## Climbable leaves, close and mid-range: ball 3's ladder leaves and ball 6's canopy.
+func _leaf_views(g: Game, tag: String) -> void:
+	for bi in [2, 5]:
+		var b: MossBall = g.balls[bi]
+		var lb: LevelBuilder = b.get_meta("builder")
+		# (A ladder's merged leaves, else the fifth single climbing leaf: a spiral's.)
+		var pick: Array = []
+		var singles := 0
+		for n in lb.root.get_children():
+			if not n.has_meta("leaves"):
+				continue
+			var ls: Array = n.get_meta("leaves")
+			if ls.size() >= 6:
+				pick = ls[4]
+				break
+			singles += 1
+			if singles == 5 and pick.is_empty():
+				pick = ls[0]
+		if not pick.is_empty():
+			if true:
+				var xf: Transform3D = pick[0]
+				var len: float = pick[1]
+				var up := b.up_at(xf.origin)
+				var side := xf.basis.x.normalized()
+				var base := xf.origin
+				var mid := base - xf.basis.z * len * 0.5
+				_look(g, b.index, b.surface_point(b.up_at(base + side * 4.0), 0.2), -side, 0.3)
+				await t.seconds(0.6)
+				_close(g, mid + side * len * 0.55 + up * len * 0.45, mid, up)
+				await t.seconds(0.6)
+				await t.shot("leaves_b%d_close_%s" % [bi + 1, tag])
+				_close(g, mid + side * 9.0 + up * 4.0 - xf.basis.z * 2.0, mid - up * 1.5, up)
+				await t.seconds(0.6)
+				await t.shot("leaves_b%d_mid_%s" % [bi + 1, tag])
+				_open(g)
+
+
+## Rendering cost of the worst vegetation views, restored (the crowns grown): the crown in
+## place, the restored first views, ball 3's giant stems and ball 6's canopy, the room view.
+func _plant_perf(g: Game) -> void:
+	_heal_all(g)
+	await t.seconds(1.0)
+	var views := [[0, 62.0, 20.0, 0.0], [0, 75.0, 200.0, 0.0], [0, 10.0, 30.0, 0.0], [2, 60.0, 110.0, 0.0], [2, 10.0, 110.0, 0.0], [1, 70.0, -20.0, 0.0], [5, 30.0, 0.0, 0.0]]
+	for v in views:
+		var b := g.balls[v[0]]
+		var at := MossBall.dir_ll(v[1], v[2])
+		g.player.place(b, b.surface_point(at, 0.2), Vector3.FORWARD)
+		g.cam.snap_behind()
+		await _perf_view("restored_ball%d_%d_%d" % [v[0] + 1, v[1], v[2]])
+		await t.shot("perf_ball%d_%d_%d" % [v[0] + 1, v[1], v[2]])
+	# The sea fan, facing it from 11 m (the gameplay view) and from 5 m.
+	var b0: MossBall = g.balls[0]
+	for n in (b0.get_meta("builder") as LevelBuilder).root.get_children():
+		if n.get_meta("terrain_kind", "") == "sea fan":
+			var fx := (n as Node3D).global_transform
+			for dist in [11.0, 5.0]:
+				var stand := b0.surface_point(b0.up_at(fx.origin + fx.basis.z.normalized() * dist), 0.2)
+				g.player.place(b0, stand, fx.origin - stand)
+				g.cam.snap_behind()
+				await _perf_view("restored_seafan_%dm" % int(dist))
+				await t.shot("perf_seafan_%dm" % int(dist))
+	var pr: Presentation = g.presentation
+	pr.enter("play")
+	await _perf_view("aq_room")
+	pr.exit()
+
+
+## The Coral Garden's sea fan (00040-plants, owner phone report): gameplay distance, close front
+## and oblique, about 45 degrees, near-profile and side, and the junctions close up.
+func _sea_fan_shots(g: Game, tag: String) -> void:
+	var b: MossBall = g.balls[0]
+	var lb: LevelBuilder = b.get_meta("builder")
+	var fan: Node3D = null
+	for n in lb.root.get_children():
+		if n.get_meta("terrain_kind", "") == "sea fan":
+			fan = n
+	if fan == null:
+		t.log_line("no sea fan")
+		return
+	var xf := fan.global_transform
+	var x := xf.basis.x.normalized()
+	var y := xf.basis.y.normalized()
+	var z := xf.basis.z.normalized()
+	var c := xf.origin + y * 3.6
+	var mi: MeshInstance3D = null
+	for k in fan.get_children():
+		if k is MeshInstance3D:
+			mi = k
+	t.log_line("SEAFAN %s tris %d stats %s" % [tag, MossBall._mesh_tris(mi.mesh), str(fan.get_meta("fan_stats", {}))])
+	# 1. Gameplay: Gill 11 m in front of it, the ordinary follow camera.
+	var stand := b.surface_point(b.up_at(xf.origin + z * 11.0 + x * 1.5), 0.2)
+	g.player.place(b, stand, xf.origin - stand)
+	g.cam.snap_behind()
+	await t.seconds(1.2)
+	await t.shot("seafan_%s_1_gameplay" % tag)
+	# (Gill moved out of the close views.)
+	g.player.place(b, b.surface_point(b.up_at(xf.origin + z * 30.0), 0.2), z)
+	var views := [["2_close_front", c + z * 5.0 + x * 0.6 - y * 0.6, c], ["2b_close_oblique", c + (z * 0.8 + x * 0.6).normalized() * 5.0, c + y * 0.4],
+			["3_45deg", c + (z + x).normalized() * 9.0, c], ["4_near_profile", c + (x * 0.97 + z * 0.24).normalized() * 9.5, c],
+			["4b_side", c + x * 9.5 + y * 0.5, c], ["5_junctions_hub", xf.origin + y * 1.4 + z * 2.2 + x * 0.5, xf.origin + y * 1.5],
+			["5b_junctions_outer", xf.origin + y * 4.3 + z * 2.4 - x * 1.4, xf.origin + y * 4.6 - x * 1.6]]
+	for v in views:
+		_close(g, v[1], v[2], y)
+		await t.seconds(0.6)
+		await t.shot("seafan_%s_%s" % [tag, v[0]])
+	_open(g)

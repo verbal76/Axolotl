@@ -1139,9 +1139,12 @@ func set_far_view(on: bool, keep := 5, grow := 1.7) -> void:
 		return
 	# Every kept plant of the same mesh and material goes into one MultiMesh. Plants too small to
 	# read from the room are left out, and the rest are thinned evenly to FAR_TRIS per world.
+	# (A plant's variant meshes (Levels._variants) share one: from the room they cannot be told
+	# apart, and one MultiMesh is one draw call.)
 	var groups := {}
 	var tris := {}
 	var total := 0.0
+	var first_variant := {}
 	for c in _veg_parent.get_children():
 		if not (c is MultiMeshInstance3D and c.has_meta("veg_transforms")):
 			continue
@@ -1149,6 +1152,11 @@ func set_far_view(on: bool, keep := 5, grow := 1.7) -> void:
 		var mesh: Mesh = src.multimesh.mesh
 		if mesh == null or mesh.get_aabb().get_longest_axis_size() < FAR_MIN_SIZE:
 			continue
+		if mesh.resource_name == "stem_plant":
+			var vk := [mesh.resource_name, src.material_override]
+			if not first_variant.has(vk):
+				first_variant[vk] = mesh
+			mesh = first_variant[vk]
 		var key := [mesh, src.material_override]
 		if not groups.has(key):
 			groups[key] = []

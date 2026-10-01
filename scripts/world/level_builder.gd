@@ -794,55 +794,16 @@ func current_stream(from: Vector3, to: Vector3, radius := 1.2, speed := 7.0, zon
 	crossings.append({"a": from, "b": to, "gate": gate, "stream": true})
 
 
-## A giant sea fan (landmark): a lattice of branching ribs in one gently rippled sheet, `height`
-## tall and `width` across, standing at `xf` (sheet in its local XY plane). Collision is the
-## drawn ribs (two-sided).
+## A giant sea fan (landmark): a gorgonian of real branching tubes in a gently cupped, rippled
+## fan (MeshLib.sea_fan_mesh; 00040-plants replaced the old flat crossing strips), `height` tall and
+## `width` across, standing at `xf` (its broad face in the local XY plane). Collision is the drawn
+## tubes.
 func sea_fan(xf: Transform3D, height: float, width: float, color: Color, seed_v: int) -> StaticBody3D:
-	var rng := RandomNumberGenerator.new()
-	rng.seed = seed_v
-	var st := SurfaceTool.new()
-	st.begin(Mesh.PRIMITIVE_TRIANGLES)
-	var faces := PackedVector3Array()
-	var ripple := func(p: Vector3) -> Vector3:
-		return p + Vector3(0, 0, sin(p.x * 0.9 + p.y * 0.4) * 0.35)
-	var rib := func(a: Vector3, b: Vector3, w: float) -> void:
-		var dir := (b - a).normalized()
-		var side := Vector3(-dir.y, dir.x, 0) * w * 0.5
-		var q := [ripple.call(a - side), ripple.call(a + side), ripple.call(b + side), ripple.call(b - side)]
-		for tri in [[0, 1, 2], [0, 2, 3]]:
-			for k in tri:
-				st.set_normal(Vector3(0, 0, 1))
-				st.set_color(color.lerp(Color(1, 1, 1), clampf(a.y / height, 0.0, 1.0) * 0.25))
-				st.add_vertex(q[k])
-				faces.append(q[k])
-	# A short trunk, then spokes fanning out from its top, joined by irregular cross-ribs: a
-	# lattice that reads as one broad fan from across the ball.
-	var hub := Vector3(0, height * 0.14, 0)
-	rib.call(Vector3.ZERO, hub, 0.45)
-	var reach := height - hub.y
-	var spokes := 17
-	var tips: Array[Vector3] = []
-	for k in spokes:
-		var ang := deg_to_rad(lerpf(12.0, 168.0, (k + rng.randf_range(-0.25, 0.25)) / (spokes - 1)))
-		var dir := Vector3(cos(ang) * width * 0.5 / reach, sin(ang), 0).normalized()
-		var tip := hub + dir * reach * rng.randf_range(0.82, 1.0)
-		# Each spoke bends a little on the way out.
-		var mid := hub.lerp(tip, 0.5) + Vector3(rng.randf_range(-0.3, 0.3), rng.randf_range(-0.2, 0.2), 0)
-		rib.call(hub, mid, 0.2)
-		rib.call(mid, tip, 0.14)
-		tips.append(tip)
-	# Cross-ribs between neighbouring spokes at several distances out.
-	for ring in 7:
-		var f := (ring + 1.0) / 8.0
-		for k in spokes - 1:
-			if rng.randf() < 0.18:
-				continue
-			var p0 := hub.lerp(tips[k], f + rng.randf_range(-0.03, 0.03))
-			var p1 := hub.lerp(tips[k + 1], f + rng.randf_range(-0.03, 0.03))
-			rib.call(p0, p1, 0.09)
+	var fan: Array = MeshLib.sea_fan_mesh(height, width, color, seed_v)
+	var faces: PackedVector3Array = fan[1]
 	var mat := StandardMaterial3D.new()
 	mat.vertex_color_use_as_albedo = true
-	mat.cull_mode = BaseMaterial3D.CULL_DISABLED
+	mat.cull_mode = BaseMaterial3D.CULL_BACK
 	mat.roughness = 0.8
 	mat.emission_enabled = true
 	mat.emission = color * 0.25
@@ -857,9 +818,10 @@ func sea_fan(xf: Transform3D, height: float, width: float, color: Color, seed_v:
 	cs.shape = shape
 	body.add_child(cs)
 	var mi := MeshInstance3D.new()
-	mi.mesh = st.commit()
+	mi.mesh = fan[0]
 	mi.material_override = mat
 	body.add_child(mi)
+	body.set_meta("fan_stats", fan[2])
 	body.set_meta("grounded", "sea fan")
 	body.set_meta("terrain_kind", "sea fan")
 	return body

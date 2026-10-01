@@ -106,66 +106,170 @@ static func broadleaf_mesh(leaves: int, size: float, seed_v: int) -> ArrayMesh:
 
 
 ## A cluster of stem plants (Expansion 6, owner reference "a sprouted moss ball": Rotala-like red
-## stems crowning the healed moss). `stems` thin upright stems of up to `height`, leaning a little
-## outward, each with pairs of narrow leaves turning a quarter turn up the stem, longer below and
-## shorter toward the tip. UV.y runs base to tip (the material's colour runs green to red by it).
-static func stem_plant_mesh(stems: int, height: float, seed_v: int, pairs := 10) -> ArrayMesh:
+## stems crowning the healed moss), rebuilt to end in foliage (00040-plants, ledger row 10;
+## docs/research/2026-09-30-DEVICE_AUDIT.md §C, owner's office-plant reference). Each of `stems`
+## stems has `nodes` (±1) nodes whose internodes shorten geometrically toward the top; the stem
+## kinks a little away from each leaf (a zigzag) and tapers to a fifth of its base width. One leaf
+## per node, most in two ranks (alternate sides), some in a spiral; the leaves shrink, rise and fold
+## toward the top, and a terminal cluster of three young folded leaves encloses the tip, so no bare
+## stick ends the stem. Different seeds give the per-ball variants (no clones). UV.y runs base to
+## tip along each stem (the vegetation material's sway and green-to-red colour follow it; every
+## vertex of a leaf takes its node's value, so a leaf moves with its node). The mesh records each
+## stem's tip and axis in meta "tips" ([[tip, axis, leaf size], ...]) for the no-bare-tip audit.
+## Triangle budget (the old mesh: 3-sided tube plus 2-triangle kites): the tube has a ring per
+## node in the lower stem and every other node above; leaves are 6-triangle lances low down and
+## 4-triangle folded lances higher up (2-triangle folded kites with `light`).
+static func stem_plant_mesh(stems: int, height: float, seed_v: int, nodes := 9, light := false) -> ArrayMesh:
 	var rng := RandomNumberGenerator.new()
 	rng.seed = seed_v
 	var st := SurfaceTool.new()
 	st.begin(Mesh.PRIMITIVE_TRIANGLES)
-	var base := 0
+	var vb := [0]
+	var tips := []
 	for i in stems:
-		var a := TAU * i / stems + rng.randf() * 0.8
-		var lean := rng.randf_range(0.04, 0.3)
-		var dirv := Vector3(sin(a) * sin(lean), cos(lean), cos(a) * sin(lean))
-		var bow := Vector3(cos(a), 0, -sin(a)) * rng.randf_range(-0.08, 0.08)
-		var root := Vector3(sin(a), 0, cos(a)) * height * rng.randf_range(0.0, 0.12)
+		var a0 := TAU * i / stems + rng.randf() * 0.8
+		var lean := rng.randf_range(0.04, 0.28)
+		var axis := Vector3(sin(a0) * sin(lean), cos(lean), cos(a0) * sin(lean))
+		var bow := Vector3(cos(a0), 0, -sin(a0)) * rng.randf_range(-0.08, 0.08)
+		var root := Vector3(sin(a0), 0, cos(a0)) * height * rng.randf_range(0.0, 0.12)
 		var len := height * rng.randf_range(0.6, 1.0)
 		var tint := Color.WHITE.darkened(rng.randf() * 0.15)
-		var at := func(t: float) -> Vector3: return root + dirv * len * t + bow * len * t * t
-		# The stem: a thin three-sided tube.
-		var r0 := height * 0.012
-		var rings := 3
-		var start := base
-		var x := dirv.cross(Vector3.RIGHT if absf(dirv.x) < 0.9 else Vector3.FORWARD).normalized()
-		var y := dirv.cross(x).normalized()
-		for j in rings:
-			var t := float(j) / (rings - 1)
-			var c: Vector3 = at.call(t)
-			for k in 3:
-				var ang := TAU * k / 3.0
+		var n := maxi(6, nodes + rng.randi_range(-1, 1))
+		var q := rng.randf_range(0.8, 0.9)
+		# Phyllotaxis: mostly two-ranked (alternate sides, 180 deg +- 20), some spiral (137 deg).
+		var div := (PI + rng.randf_range(-0.35, 0.35)) if rng.randf() < 0.7 else deg_to_rad(137.5 + rng.randf_range(-6.0, 6.0))
+		var zig := rng.randf_range(0.08, 0.16)
+		var leaf0 := height * rng.randf_range(0.28, 0.33)
+		var az := rng.randf() * TAU
+		var sum := 0.0
+		for k in n:
+			sum += pow(q, k)
+		# The nodes: node 0 at the root, node n the tip. Above each leaf the stem leans a little
+		# away from it, so the stem zigzags.
+		var pts: Array[Vector3] = [root]
+		var ts: Array[float] = [0.0]
+		var outs: Array[Vector3] = [Vector3.ZERO]
+		for k in n:
+			var lk := len * pow(q, k) / sum
+			var t0: float = ts[k]
+			var along := (axis + bow * 2.0 * t0).normalized()
+			var dir := along
+			if k > 0:
+				dir = (along * cos(zig) - outs[k] * sin(zig)).normalized()
+			pts.append(pts[k] + dir * lk)
+			ts.append(t0 + lk / len)
+			var o := Vector3(sin(az + (k + 1) * div), 0, cos(az + (k + 1) * div))
+			outs.append((o - along * o.dot(along)).normalized())
+		ts[n] = 1.0
+		# The stem: a thin 3-sided tube tapering to 20 %, a ring per node low down, every other
+		# node higher up (short internodes there; the leaves hide the difference).
+		var r0 := height * 0.011
+		var ring_at: Array[int] = []
+		for k in n + 1:
+			if k <= 1 or k == n or (k % 2 == 1 and k < n - 1):
+				ring_at.append(k)
+		var start: int = vb[0]
+		for k in ring_at:
+			var d := (pts[mini(k + 1, n)] - pts[maxi(k - 1, 0)]).normalized()
+			var x := d.cross(Vector3.RIGHT if absf(d.x) < 0.9 else Vector3.FORWARD).normalized()
+			var y := d.cross(x).normalized()
+			for s in 3:
+				var ang := TAU * s / 3.0
 				st.set_color(tint)
-				st.set_uv(Vector2(float(k) / 3.0, t))
-				st.add_vertex(c + (x * cos(ang) + y * sin(ang)) * r0 * (1.0 - 0.6 * t))
-				base += 1
-		for j in rings - 1:
-			for k in 3:
-				var i0 := start + j * 3 + k
-				var i1 := start + j * 3 + (k + 1) % 3
-				for q in [i0, i1, i0 + 3, i1, i1 + 3, i0 + 3]:
-					st.add_index(q)
-		# Leaf pairs: narrow lance-shaped leaves, arching out and a little down.
-		for j in pairs:
-			var t := 0.12 + 0.86 * float(j) / (pairs - 1)
-			var c: Vector3 = at.call(t)
-			var ll := height * lerpf(0.2, 0.11, t)
-			var lw := ll * 0.3
-			for side in [-1.0, 1.0]:
-				var la := a + j * PI * 0.5 + (0.0 if side > 0.0 else PI) + rng.randf_range(-0.2, 0.2)
-				var out := Vector3(sin(la), 0, cos(la))
-				var tip: Vector3 = c + out * ll * 0.85 + dirv * ll * lerpf(0.45, 0.1, t) - Vector3.UP * ll * 0.1
-				var mid: Vector3 = c + out * ll * 0.45 + dirv * ll * 0.35
-				var wv := out.cross(dirv).normalized() * lw
-				for v in [c, mid + wv, tip, mid - wv]:
-					st.set_color(tint.lightened(0.05))
-					st.set_uv(Vector2(0.5, t))
-					st.add_vertex(v)
-				for q in [base, base + 1, base + 2, base, base + 2, base + 3]:
-					st.add_index(q)
-				base += 4
+				st.set_uv(Vector2(s / 3.0, ts[k]))
+				st.add_vertex(pts[k] + (x * cos(ang) + y * sin(ang)) * r0 * (1.0 - 0.8 * ts[k]))
+				vb[0] += 1
+		for j in ring_at.size() - 1:
+			for s in 3:
+				var i0 := start + j * 3 + s
+				var i1 := start + j * 3 + (s + 1) % 3
+				for qq in [i0, i1, i0 + 3, i1, i1 + 3, i0 + 3]:
+					st.add_index(qq)
+		# One leaf per node: big, low and spreading below; smaller, steeper and more folded above.
+		for k in range(1, n):
+			var tn := float(k) / n
+			var out := (outs[k].rotated(axis, rng.randf_range(-0.12, 0.12))).normalized()
+			var size := leaf0 * lerpf(1.0, 0.5, pow(tn, 1.4)) * rng.randf_range(0.9, 1.1)
+			var elev := deg_to_rad(lerpf(30.0, 62.0, tn))
+			var droop := lerpf(0.45, 0.12, tn)
+			var fold := deg_to_rad(lerpf(12.0, 45.0, tn))
+			var form := (0 if tn < 0.45 else 1) if not light else (1 if tn < 0.5 else 2)
+			var r := r0 * (1.0 - 0.8 * ts[k])
+			_stem_leaf(st, vb, pts[k] + out * r, axis, out, size, elev, droop, fold, form, ts[k], tint.lightened(0.05 + 0.02 * (k % 3)))
+		# The terminal cluster: three young leaves, steep and folded, set a quarter of their
+		# length below the tip so they enclose it.
+		var tip: Vector3 = pts[n]
+		var csize := 0.0
+		for c in 3:
+			var o := Vector3(sin(az + n * div + c * TAU / 3.0 + rng.randf_range(-0.3, 0.3)), 0, cos(az + n * div + c * TAU / 3.0))
+			o = (o - axis * o.dot(axis)).normalized()
+			var size := leaf0 * rng.randf_range(0.26, 0.36)
+			csize = maxf(csize, size)
+			_stem_leaf(st, vb, tip - axis * size * 0.25, axis, o, size, deg_to_rad(rng.randf_range(68.0, 80.0)), 0.04, deg_to_rad(55.0),
+					1 if not light else 2, 1.0, tint.lightened(0.12))
+		tips.append([tip, axis, csize])
 	st.generate_normals()
-	return st.commit()
+	var mesh := st.commit()
+	mesh.resource_name = "stem_plant"
+	mesh.set_meta("tips", tips)
+	return mesh
+
+
+## One stem-plant leaf from `at`, pointing along `out` (perpendicular to the stem `axis`), raised
+## `elev` from it, its tip drooping by `droop` of its length, its halves folded up `fold` along the
+## midrib. form 0: a lance (5 stations, 6 triangles, a narrow stalk-like base and sin^0.8 width);
+## 1: a folded lance with one midrib point (4 triangles); 2: a folded kite (2 triangles). Every
+## vertex takes UV.y = `t` (its node: the leaf sways with it); UV.x runs 0..1 across.
+static func _stem_leaf(st: SurfaceTool, vb: Array, at: Vector3, axis: Vector3, out: Vector3, size: float, elev: float, droop: float,
+		fold: float, form: int, t: float, col: Color) -> void:
+	var side := axis.cross(out).normalized()
+	var fwd := out * cos(elev) + axis * sin(elev)
+	var up := fwd.cross(side).normalized()
+	if up.dot(axis) < 0.0:
+		up = -up
+	var mid := func(u: float) -> Vector3: return at + fwd * size * u - axis * size * droop * u * u
+	var half := func(u: float) -> float: return size * 0.235 * pow(sin(PI * clampf(u * 0.94 + 0.03, 0.0, 1.0)), 0.8) * (0.35 if u < 0.12 else 1.0)
+	var put := func(p: Vector3, x: float) -> void:
+		st.set_color(col)
+		st.set_uv(Vector2(x, t))
+		st.add_vertex(p)
+		vb[0] += 1
+	var b: int = vb[0]
+	if form == 0:
+		# base, 3 x (left, right), tip
+		put.call(mid.call(0.0), 0.5)
+		for u in [0.25, 0.5, 0.75]:
+			var w: float = half.call(u)
+			var c: Vector3 = mid.call(u)
+			var lift := up * w * sin(fold)
+			put.call(c - side * w * cos(fold) + lift, 0.0)
+			put.call(c + side * w * cos(fold) + lift, 1.0)
+		put.call(mid.call(1.0), 0.5)
+		for qq in [b, b + 1, b + 2, b + 1, b + 3, b + 2, b + 2, b + 3, b + 4, b + 3, b + 5, b + 4, b + 4, b + 5, b + 6, b + 5, b + 7, b + 6]:
+			st.add_index(qq)
+	elif form == 1:
+		# base, left, midrib, right (at 0.45), tip: folded along the midrib
+		var w: float = half.call(0.45) * 1.08
+		var c: Vector3 = mid.call(0.45)
+		var lift := up * w * sin(fold)
+		put.call(mid.call(0.0), 0.5)
+		put.call(c - side * w * cos(fold) + lift, 0.0)
+		put.call(c, 0.5)
+		put.call(c + side * w * cos(fold) + lift, 1.0)
+		put.call(mid.call(1.0), 0.5)
+		for qq in [b, b + 1, b + 2, b, b + 2, b + 3, b + 1, b + 4, b + 2, b + 2, b + 4, b + 3]:
+			st.add_index(qq)
+	else:
+		# base, left, right, tip: folded along the base-tip diagonal
+		var w: float = half.call(0.45)
+		var c: Vector3 = mid.call(0.45)
+		var lift := up * w * sin(fold)
+		put.call(mid.call(0.0), 0.5)
+		put.call(c - side * w * cos(fold) + lift, 0.0)
+		put.call(c + side * w * cos(fold) + lift, 1.0)
+		put.call(mid.call(1.0), 0.5)
+		for qq in [b, b + 1, b + 3, b, b + 3, b + 2]:
+			st.add_index(qq)
 
 
 ## Fine roots and strands trailing from the underside of a healed moss ball (Expansion 6, the
@@ -245,6 +349,224 @@ static func coral_mesh(tubes: int, height: float, seed_v: int) -> ArrayMesh:
 					st.add_index(q)
 	st.generate_normals()
 	return st.commit()
+
+
+## A gorgonian sea fan (00040-plants, owner phone report: the old fan was flat strips that crossed
+## without joining). Real branching 3D geometry, `height` tall and `width` across, its broad face
+## in the local XY plane, standing on the origin. A trunk rises to a hub; a few main limbs leave it
+## and fork again and again (each fork divides its parent's share of the fan, so branches never
+## cross); every child starts inside its parent's end, at the parent's radius, and tapers toward
+## the tips (low-poly tubes: 6 sides on the thick limbs down to 3 on twigs). Short cross-links
+## join neighbouring branches in the outer fan, the ends buried in both. The outline is irregular
+## and the sheet gently cupped and rippled (fore/aft depth, never coplanar). Colour: deep at the
+## base, paler toward the tips. Returns [ArrayMesh, collision faces (the drawn triangles),
+## {"tris", "depth", "width", "min_radius"}].
+static func sea_fan_mesh(height: float, width: float, color: Color, seed_v: int) -> Array:
+	var rng := RandomNumberGenerator.new()
+	rng.seed = seed_v
+	var hub := Vector3(0, height * 0.09, 0)
+	var reach := height - hub.y
+	var half_w := width * 0.5
+	# An irregular outline: how far out (0..1) the fan reaches at each angle.
+	var ph := [rng.randf() * TAU, rng.randf() * TAU, rng.randf() * TAU]
+	var edge := func(th: float) -> float:
+		return 0.84 + 0.06 * sin(th * 5.0 + ph[0]) + 0.05 * sin(th * 9.0 + ph[1]) + 0.04 * sin(th * 15.0 + ph[2])
+	var zph := [rng.randf() * TAU, rng.randf() * TAU]
+	var cup := width * rng.randf_range(0.08, 0.1)
+	# A point of the fan at angle th (radians, 0 = right, PI = left) and s (0 hub .. 1 outline):
+	# the face slightly cupped toward +Z at the sides and rippled.
+	var at := func(th: float, s: float) -> Vector3:
+		var p: Vector3 = hub + Vector3(cos(th) * half_w, sin(th) * reach, 0.0) * s
+		var sx := p.x / half_w
+		p.z = cup * sx * sx * s + 0.28 * sin(p.x * 0.75 + p.y * 0.35 + zph[0]) * s + 0.18 * sin(th * 3.0 + zph[1]) * s * s
+		return p
+	var r_of := func(sector: float, s: float) -> float:
+		return maxf(0.035, 0.17 * sqrt(sector / PI) * (1.0 - 0.35 * s))
+	# Branches as polylines of [point, radius, s]; terminal ones kept in angular order for links.
+	var branches := []
+	var tips := []
+	var min_sector := deg_to_rad(2.7)
+	var stack := []
+	# The trunk: from below the ground up to the hub, leaning a touch.
+	var trunk := []
+	var lean := Vector3(rng.randf_range(-0.12, 0.12), 0, rng.randf_range(-0.08, 0.08))
+	for j in 4:
+		var u := float(j) / 3.0
+		var tp: Vector3 = Vector3(0, -0.4, 0).lerp(hub, u) + lean * sin(PI * u)
+		trunk.append([tp, lerpf(0.26, 0.2, u) * clampf(height / 7.5, 0.6, 1.6), 0.0])
+	branches.append(trunk)
+	# The main limbs: the fan's span split unevenly among three or four.
+	var lo0 := deg_to_rad(rng.randf_range(6.0, 12.0))
+	var hi0 := deg_to_rad(rng.randf_range(168.0, 174.0))
+	var limbs := rng.randi_range(4, 5)
+	var cuts := [lo0]
+	for k in range(1, limbs):
+		cuts.append(lerpf(lo0, hi0, (k + rng.randf_range(-0.25, 0.25)) / limbs))
+	cuts.append(hi0)
+	var r_hub: float = trunk[3][1]
+	for k in limbs:
+		stack.append([cuts[k], cuts[k + 1], 0.0, hub, r_hub, 0])
+	while not stack.is_empty():
+		var b: Array = stack.pop_back()
+		var lo: float = b[0]
+		var hi: float = b[1]
+		var s: float = b[2]
+		var start: Vector3 = b[3]
+		var r_start: float = b[4]
+		var level: int = b[5]
+		var sector := hi - lo
+		var th := lerpf(lo, hi, rng.randf_range(0.4, 0.6))
+		var pts := [[start, r_start, s]]
+		var fork_at := s + rng.randf_range(0.09, 0.2) * (1.15 if level == 0 else 1.0)
+		var can_fork := sector > min_sector * 2.0
+		var limit: float = edge.call(lerpf(lo, hi, 0.5))
+		var forked := false
+		while true:
+			s += rng.randf_range(0.06, 0.085)
+			th = clampf(th + (lerpf(lo, hi, 0.5) - th) * 0.3 + rng.randf_range(-0.035, 0.035), lo + sector * 0.12, hi - sector * 0.12)
+			var r: float = r_of.call(sector, s)
+			if s >= limit:
+				pts.append([at.call(th, limit), maxf(r * 0.7, 0.028), limit])
+				break
+			var p: Vector3 = at.call(th, s)
+			# (The first stretch eases from the shared junction radius to its own.)
+			pts.append([p, lerpf(r_start, r, 0.65) if pts.size() == 1 else r, s])
+			if can_fork and s >= fork_at:
+				var f := rng.randf_range(0.36, 0.64)
+				var mid := lerpf(lo, hi, f)
+				# Children start inside this branch's end, at its radius.
+				var back: Vector3 = p.lerp(pts[pts.size() - 2][0], 0.3)
+				stack.append([lo, mid, s, back, r, level + 1])
+				stack.append([mid, hi, s, back, r, level + 1])
+				# This branch ends just past the fork, closing over the junction.
+				pts.append([p + (p - pts[pts.size() - 2][0]).normalized() * r * 0.8, maxf(r * 0.5, 0.028), s])
+				forked = true
+				break
+		branches.append(pts)
+		if not forked:
+			tips.append([lo, pts])
+	# Cross-links between angular neighbours among the twigs, in the outer fan.
+	tips.sort_custom(func(a, b2): return a[0] < b2[0])
+	var links := 0
+	var link_ids := []
+	for kk in (tips.size() - 1) * 2:
+		var k := kk / 2
+		if rng.randf() < 0.35:
+			continue
+		var pa: Array = tips[k][1]
+		var pb: Array = tips[k + 1][1]
+		var want := rng.randf_range(0.42, 0.64) if kk % 2 == 0 else rng.randf_range(0.66, 0.9)
+		var best_a: Array = pa[0]
+		var best_b: Array = pb[0]
+		for q in pa:
+			if absf(float(q[2]) - want) < absf(float(best_a[2]) - want):
+				best_a = q
+		for q in pb:
+			if absf(float(q[2]) - want) < absf(float(best_b[2]) - want):
+				best_b = q
+		var d: float = (best_a[0] as Vector3).distance_to(best_b[0])
+		if d < 0.15 or d > 1.1 or float(best_a[2]) < 0.4 or float(best_b[2]) < 0.4:
+			continue
+		var r := maxf(minf(float(best_a[1]), float(best_b[1])) * 0.8, 0.03)
+		var m: Vector3 = (best_a[0] as Vector3).lerp(best_b[0], 0.5) + Vector3(0, rng.randf_range(-0.06, 0.06), 0)
+		branches.append([[best_a[0], r, best_a[2]], [m, r * 0.9, best_a[2]], [best_b[0], r, best_b[2]]])
+		link_ids.append(branches.size() - 1)
+		links += 1
+	# The tubes.
+	var st := SurfaceTool.new()
+	st.begin(Mesh.PRIMITIVE_TRIANGLES)
+	var faces := PackedVector3Array()
+	var min_r := INF
+	var lo_z := INF
+	var hi_z := -INF
+	var tip_col := color.lerp(Color(1.0, 0.8, 0.7), 0.28)
+	var base_col := color.darkened(0.18)
+	for pts in branches:
+		var sides: int = 6 if float(pts[0][1]) >= 0.1 else (5 if float(pts[0][1]) >= 0.05 else 4)
+		var rings := []
+		var prev_x := Vector3.ZERO
+		for j in pts.size():
+			var c: Vector3 = pts[j][0]
+			var dvec: Vector3 = ((pts[mini(j + 1, pts.size() - 1)][0] as Vector3) - (pts[maxi(j - 1, 0)][0] as Vector3)).normalized()
+			# A frame carried along the branch (no twist between rings).
+			var xv := prev_x - dvec * prev_x.dot(dvec)
+			if xv.length_squared() < 1e-6:
+				xv = dvec.cross(Vector3.FORWARD if absf(dvec.z) < 0.9 else Vector3.RIGHT)
+			xv = xv.normalized()
+			prev_x = xv
+			var yv := dvec.cross(xv).normalized()
+			var r: float = pts[j][1]
+			min_r = minf(min_r, r)
+			var ring := []
+			for k in sides:
+				var a: float = TAU * (k + 0.5 * (j % 2)) / sides
+				var nrm := xv * cos(a) + yv * sin(a)
+				ring.append([c + nrm * r, nrm])
+			rings.append(ring)
+			lo_z = minf(lo_z, c.z - r)
+			hi_z = maxf(hi_z, c.z + r)
+		for j in pts.size() - 1:
+			var s0: float = clampf(float(pts[j][2]), 0.0, 1.0)
+			var s1: float = clampf(float(pts[j + 1][2]), 0.0, 1.0)
+			for k in sides:
+				var a0: Array = rings[j][k]
+				var a1: Array = rings[j][(k + 1) % sides]
+				var b0: Array = rings[j + 1][k]
+				var b1: Array = rings[j + 1][(k + 1) % sides]
+				for tri in [[a0, b0, a1], [a1, b0, b1]]:
+					# Wound to face outward (front faces out, as Godot reads them).
+					var v0: Vector3 = tri[0][0]
+					var v1: Vector3 = tri[1][0]
+					var v2: Vector3 = tri[2][0]
+					var out_n: Vector3 = tri[0][1] + tri[1][1] + tri[2][1]
+					var order := [tri[0], tri[1], tri[2]] if (v2 - v0).cross(v1 - v0).dot(out_n) > 0.0 else [tri[0], tri[2], tri[1]]
+					for v in order:
+						var sv := s0 if v in [a0, a1] else s1
+						st.set_color(base_col.lerp(tip_col, sv * sv))
+						st.set_normal(v[1])
+						st.add_vertex(v[0])
+						faces.append(v[0])
+		# Close the free tip with a short point.
+		var last: Array = pts[pts.size() - 1]
+		var lp: Vector3 = last[0]
+		var ldir: Vector3 = (lp - (pts[pts.size() - 2][0] as Vector3)).normalized()
+		var apex: Vector3 = lp + ldir * float(last[1]) * 1.2
+		for k in sides:
+			var a0: Array = rings[pts.size() - 1][k]
+			var a1: Array = rings[pts.size() - 1][(k + 1) % sides]
+			var order := [a0, a1, [apex, ldir]] if (apex - a0[0]).cross(a1[0] - a0[0]).dot(a0[1] + a1[1]) > 0.0 else [a0, [apex, ldir], a1]
+			for v in order:
+				st.set_color(tip_col if float(last[2]) > 0.5 else base_col)
+				st.set_normal(v[1])
+				st.add_vertex(v[0])
+				faces.append(v[0])
+	# Connectivity: every branch but the trunk starts inside another branch's tube, and every
+	# cross-link ends inside one too (nothing floats).
+	var detached := 0
+	for bi in range(1, branches.size()):
+		var ends := [branches[bi][0][0]]
+		if bi in link_ids:
+			ends.append(branches[bi][branches[bi].size() - 1][0])
+		for e in ends:
+			var inside := false
+			for bj in branches.size():
+				if bj == bi or inside:
+					continue
+				var q: Array = branches[bj]
+				for j in q.size() - 1:
+					var a0: Vector3 = q[j][0]
+					var a1: Vector3 = q[j + 1][0]
+					var seg := a1 - a0
+					var f := clampf((e - a0).dot(seg) / maxf(seg.length_squared(), 1e-9), 0.0, 1.0)
+					if (a0 + seg * f).distance_to(e) <= lerpf(float(q[j][1]), float(q[j + 1][1]), f) + 0.002:
+						inside = true
+						break
+			if not inside:
+				detached += 1
+	var mesh := st.commit()
+	mesh.resource_name = "sea_fan"
+	return [mesh, faces, {"tris": faces.size() / 3, "depth": hi_z - lo_z, "width": mesh.get_aabb().size.x, "min_radius": min_r,
+			"branches": branches.size(), "links": links, "tips": tips.size(), "detached": detached}]
 
 
 ## One rosette leaf pointing out along the basis' +Z: `rise` radians up from level at the base,
