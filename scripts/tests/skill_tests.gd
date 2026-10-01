@@ -981,12 +981,23 @@ func magnet() -> void:
 	tiers({"magnet": 3})
 	m.global_position = m.anchor + up * 0.6
 	u.place_at(bi, m.anchor + up * 0.2 + fwd * 2.5 + fwd.cross(up) * 2.0, -fwd)
+	await u.wait_grounded()
 	await t.frames(20)
 	var on_before := m.magnet_on
-	await u.press("lunge")
-	await t.seconds(0.4)
+	# (He must actually lunge for there to be a miss: a press while still settling or recovering from
+	# an earlier lunge does nothing, so press again until one happens; at most three.)
+	var lunges := [0]
+	var count := func() -> void: lunges[0] += 1
+	p.lunged.connect(count)
+	for attempt in 3:
+		await u.press("lunge")
+		await t.seconds(0.4)
+		if lunges[0] > 0:
+			break
+		await t.seconds(0.6)
+	p.lunged.disconnect(count)
 	var on_after := m.magnet_on
-	t.check("magnet_startled_by_a_miss", on_before and not on_after and m.startle_t > 0.0, "drawn before %s, after the miss %s (startled %.1f s)" % [on_before, on_after, m.startle_t])
+	t.check("magnet_startled_by_a_miss", on_before and not on_after and m.startle_t > 0.0, "drawn before %s, after the miss %s (startled %.1f s, lunges %d)" % [on_before, on_after, m.startle_t, lunges[0]])
 	# No line of sight: a wall between them.
 	await t.seconds(3.0)
 	var wall := StaticBody3D.new()
