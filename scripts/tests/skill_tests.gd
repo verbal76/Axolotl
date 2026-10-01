@@ -980,7 +980,10 @@ func magnet() -> void:
 	# A miss startles it: the pull stops for a moment.
 	tiers({"magnet": 3})
 	m.global_position = m.anchor + up * 0.6
-	u.place_at(bi, m.anchor + up * 0.2 + fwd * 2.5 + fwd.cross(up) * 2.0, -fwd)
+	# (Facing away from the Mote and with the parasites held off, the lunge is certain to miss:
+	# the Magnet draws the Mote towards his head, so a lunge at it could simply catch it.)
+	var release: Callable = u._hold_threats(g.balls[bi])
+	u.place_at(bi, m.anchor + up * 0.2 + fwd * 2.5 + fwd.cross(up) * 2.0, fwd)
 	await u.wait_grounded()
 	await t.frames(20)
 	var on_before := m.magnet_on
@@ -998,6 +1001,7 @@ func magnet() -> void:
 			break
 		await t.seconds(0.6)
 	p.lunged.disconnect(count)
+	release.call()
 	var on_after := m.magnet_on
 	t.check("magnet_startled_by_a_miss", on_before and not on_after and m.startle_t > 0.0, "drawn before %s, after the miss %s (startled %.1f s, lunges %d)" % [on_before, on_after, m.startle_t, lunges[0]])
 	# No line of sight: a wall between them.
