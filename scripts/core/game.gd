@@ -76,6 +76,8 @@ var _regen_from := Vector3.ZERO
 var loading: LoadingScreen
 ## Fully automatic OTA updates: the launch check and applying a downloaded update at a safe moment.
 var auto_update: AutoUpdate
+## The everyday About / Diagnostics page (the native recovery panel sits behind its Advanced).
+var diagnostics: DiagnosticsPage
 ## True once the whole world is built and the first usable frame has been handed over.
 var ready_done := false
 ## The stages the loading screen showed this launch.
@@ -112,6 +114,8 @@ func _ready() -> void:
 	visible = false
 	loading = LoadingScreen.new()
 	add_child(loading)
+	diagnostics = DiagnosticsPage.new()
+	add_child(diagnostics)
 	auto_update = AutoUpdate.new()
 	auto_update.g = self
 	add_child(auto_update)
@@ -734,15 +738,23 @@ func _notification(what: int) -> void:
 
 ## Android back: one step out of wherever the player is (never straight out of the game in play).
 func _go_back() -> void:
-	if presentation != null and presentation.active():
+	if diagnostics != null and diagnostics.visible:
+		diagnostics.close()
+	elif presentation != null and presentation.active():
 		presentation.back()
 	elif pause_menu.visible:
 		pause_menu.close()
 	elif state == "play":
 		pause_menu.open()
 	elif state == "title":
-		save_run()
-		get_tree().quit()
+		exit_game()
+
+
+## Leaves the game from the title (Exit button, Android back): the run is saved first, then the app
+## closes the way Android back on the title always has.
+func exit_game() -> void:
+	save_run()
+	get_tree().quit()
 
 
 ## Diagnostics section (shown through StartupTrace.timeline_text, the r5 bootstrap's hook).

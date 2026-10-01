@@ -172,7 +172,7 @@ func context() -> Dictionary:
 		"state": gg.state,
 		"title_visible": gg.title != null and gg.title.visible,
 		"paused": get_tree().paused,
-		"menu_open": (gg.pause_menu != null and gg.pause_menu.visible) or _diagnostics_open(),
+		"menu_open": (gg.pause_menu != null and gg.pause_menu.visible) or (gg.get("diagnostics") != null and gg.diagnostics.visible) or _diagnostics_open(),
 		"cinematic": gg.cinematic != "",
 		"lesson": gg.onboarding != null and gg.onboarding.staging(),
 		"card": gg.onboarding != null and gg.onboarding.ui != null and gg.onboarding.ui.card_kind() != "",

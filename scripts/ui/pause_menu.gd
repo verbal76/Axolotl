@@ -178,7 +178,7 @@ func _ready() -> void:
 	_startup.autowrap_mode = TextServer.AUTOWRAP_WORD_SMART
 	info.add_child(_startup)
 	# Version, build, OTA and source identities (and OTA recovery in dev builds).
-	var about := UiStyle.button("About / Diagnostics", func(): Boot.show_diagnostics())
+	var about := UiStyle.button("About / Diagnostics", func(): Game.inst.diagnostics.open())
 	about.name = "AboutDiagnostics"
 	about.custom_minimum_size = Vector2(0, 64)
 	about.add_theme_font_size_override("font_size", 24)

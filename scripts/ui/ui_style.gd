@@ -182,6 +182,20 @@ static func gear_button(cb: Callable, touch := 96.0, glyph := 64) -> Button:
 	b.focus_mode = Control.FOCUS_ALL
 	if cb.is_valid():
 		b.pressed.connect(cb)
+	# A soft, still halo behind the silver gear (owner, 2026-10-01: it blended into the title's water):
+	# a few faint layered discs, brightest near the rim of the glyph, gone well inside the button.
+	var halo := Control.new()
+	halo.name = "Halo"
+	halo.show_behind_parent = true
+	halo.mouse_filter = Control.MOUSE_FILTER_IGNORE
+	halo.set_anchors_preset(Control.PRESET_FULL_RECT)
+	halo.draw.connect(func() -> void:
+		var c := halo.size * 0.5
+		var r := minf(halo.size.x, halo.size.y) * 0.5
+		for i in 6:
+			var f := 1.0 - float(i) / 6.0
+			halo.draw_circle(c, r * lerpf(0.42, 0.78, f), Color(0.82, 0.95, 1.0, 0.07)))
+	b.add_child(halo)
 	# (A small press: it sinks a little while held.)
 	b.pivot_offset = Vector2(touch, touch) * 0.5
 	b.button_down.connect(func() -> void: b.scale = Vector2.ONE * 0.9)

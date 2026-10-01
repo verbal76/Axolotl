@@ -324,7 +324,8 @@ func _incursions() -> void:
 	var plateau_t: float = st["plateau"]
 	# (Its two zones are the whole sphere and it is restored: the 0.65 mean holds them above the floors.)
 	var plateau_ok := plateau_t > 0.0 and _near(m.ball_mean(bi), HardMode.COMPLETED_MEAN, 1e-4) and m.incursion.is_empty()
-	var signalling := m.levels[bi] > 0 and m.signal_level(bi) > 0
+	# (Owner ruling 2026-10-01: once it no longer pushes, the warning settles; the load still waits.)
+	var settled := m.levels[bi] == 0 and m.signal_level(bi) == 0 and m.pending.has(bi)
 	# Waiting spheres are not targets again; ball 2 (nothing restored) and his own never are.
 	m.next_incursion = end_t
 	m.tick(end_t + 0.25, 0)
@@ -343,7 +344,7 @@ func _incursions() -> void:
 	t.check("hard_incursion_timing", first_ok and none_before and started, "first at %.0f s (15-25 min: %s), ball %d, zones %s" % [first, first_ok, bi + 1, str(inc.get("zones", {}).keys())])
 	t.check("hard_incursion_ramp_and_rate", capped and _near(rate, 0.0003, 2e-6), "caps reached %s; remote rate %.6f V/s (want 0.000300)" % [capped, rate])
 	t.check("hard_incursion_one_at_a_time", one_at_a_time and second_ok and not cands_now.has(bi) and not cands_now.has(2) and not cands_now.has(0), "candidates then %s" % str(cands_now))
-	t.check("hard_incursion_plateau_keeps_signal", plateau_ok and signalling, "plateau %.0f s after the start (mean %.3f); level %d" % [plateau_t - first, m.ball_mean(bi), m.levels[bi]])
+	t.check("hard_incursion_plateau_signal_settles", plateau_ok and settled, "plateau %.0f s after the start (mean %.3f); level %d" % [plateau_t - first, m.ball_mean(bi), m.levels[bi]])
 	t.check("hard_incursion_handover_on_arrival", handed, "owed %s" % str(owed))
 	t.check("hard_incursion_not_where_he_just_left", not cands.has(bi) and cands_later.has(bi), "now %s, 10 min later %s" % [str(cands), str(cands_later)])
 
@@ -379,14 +380,22 @@ func _distress_levels() -> void:
 			[{"zone": "z0", "area": 1.0, "weights": [3, 3, 3, 3], "total": 4, "done": 4, "bloom": false}]]
 	var m := _model(layout, {})
 	m.next_incursion = 0.0
-	var st := {"first_h": -1.0, "rising": true, "last": 0, "consistent": true}
+	# (Owner ruling 2026-10-01: the warning follows the current condition. Levels rise while the
+	# sphere loses; at the floor plateau the incursion stops pushing and the warning steps down, one
+	# level per STEP_DOWN_S, while its load still waits for him.)
+	var st := {"first_h": -1.0, "rising": true, "last": 0, "consistent": true, "top": 0, "plateau": -1.0, "steps": []}
 	_run(m, 0.0, 1500.0, 0, func(_n):
 		var lv: int = m.levels[1]
 		var h := m.ball_h(1)
 		if st["first_h"] < 0.0 and lv >= 1:
 			st["first_h"] = h
-		if lv < st["last"]:
+		if st["plateau"] < 0.0 and m.pending.has(1):
+			st["plateau"] = _n
+		if st["plateau"] < 0.0 and lv < st["last"]:
 			st["rising"] = false
+		if st["plateau"] >= 0.0 and lv != st["last"]:
+			(st["steps"] as Array).append([_n - float(st["plateau"]), lv])
+		st["top"] = maxi(int(st["top"]), lv)
 		st["last"] = lv
 		# (Never a level whose entry the sphere has not reached.)
 		for k in 3:
@@ -395,18 +404,15 @@ func _distress_levels() -> void:
 	var first_h: float = st["first_h"]
 	var rising: bool = st["rising"]
 	var consistent: bool = st["consistent"]
-	var top: int = m.levels[1]
-	# Relieved: he arrives, the load is handed over (nobody alive in this data world), V stops falling.
-	var steps := []
-	var pv := {"prev": top}
-	var t_rel := 1500.0
-	_run(m, 1500.0, 1540.0, 1, func(n):
-		if m.levels[1] != pv["prev"]:
-			steps.append([n - t_rel, m.levels[1]])
-			pv["prev"] = m.levels[1])
-	var step_ok := steps.size() == top and steps.size() > 0
+	var top: int = st["top"]
+	var steps: Array = st["steps"]
+	var step_ok := steps.size() == top and steps.size() > 0 and m.pending.has(1)
+	# (The fall stays visible for FALL_WINDOW_S after the plateau, then one level per STEP_DOWN_S.)
 	for i in steps.size():
-		step_ok = step_ok and absf(float(steps[i][0]) - HardMode.STEP_DOWN_S * (i + 1)) <= HardMode.TICK_S + 1e-6
+		var due := HardMode.FALL_WINDOW_S + HardMode.STEP_DOWN_S * (i + 1)
+		step_ok = step_ok and float(steps[i][0]) <= due + 2.0 * HardMode.TICK_S + 1e-6
+		if i > 0:
+			step_ok = step_ok and absf(float(steps[i][0]) - float(steps[i - 1][0]) - HardMode.STEP_DOWN_S) <= HardMode.TICK_S + 1e-6
 	# Hysteresis: from S1, h back between 0.90 and 0.95 keeps S1; at 0.95 it is left.
 	var hm := _model(layout, {"b1.z0": 6.0})
 	hm.next_incursion = 1e9
@@ -420,9 +426,9 @@ func _distress_levels() -> void:
 	hm._hist[1] = [[0.0, 1.0]]
 	hm._distress(1.25, 0.25)
 	var left: int = hm.levels[1]
-	t.check("hard_distress_tracks_pressure", rising and consistent and top == 3, "levels only rose while pressed, top S%d" % top)
+	t.check("hard_distress_tracks_pressure", rising and consistent and top == 3, "levels only rose while pressed, peak S%d" % top)
 	t.check("hard_distress_before_major_regression", first_h >= 0.85, "S1 first at h %.3f" % first_h)
-	t.check("hard_distress_clears_when_relieved", step_ok and m.levels[1] == 0, "steps (s after relief, level): %s" % str(steps))
+	t.check("hard_distress_clears_when_relieved", step_ok and m.levels[1] == 0, "steps (s after the plateau, level): %s; load still waiting %s" % [str(steps), m.pending.has(1)])
 	t.check("hard_distress_hysteresis", kept == 1 and left == 0, "h 0.93 keeps S%d, h 0.951 gives S%d" % [kept, left])
 
 
@@ -488,7 +494,7 @@ func _returner_rules() -> void:
 	var allows_before := hr.allows({"ball": 0, "zone": "z0"})
 	_run(m, 0.0, 2000.0, 0)
 	var allows_floor := hr.allows({"ball": 0, "zone": "z0"})
-	t.check("hard_returner_rules", ok_int and caps == [1, 2, 2, 3, 4] and hr.ball_cap == 10 and hr.grace_s == 240.0 and hr.bloom_clear_m == 20.0
+	t.check("hard_returner_rules", ok_int and caps == [1, 2, 2, 3, 4] and hr.ball_cap == 10 and hr.grace_s == 240.0 and hr.bloom_clear_m == 11.0
 			and allows_before and not allows_floor, "caps %s; at the floor allows %s" % [str(caps), allows_floor])
 
 
@@ -1242,9 +1248,8 @@ func sim() -> void:
 			chore["travel"] = chore["travel"] and float(r["travel_frac"]) <= 0.15
 			chore["runs"] = chore["runs"] and int(r["runs_p95"]) <= 2
 			chore["ordinary"] = chore["ordinary"] and float(r["ordinary_frac"]) >= 0.70
-			# (Quiet time is the network's: a player who leaves S1 unanswered keeps it signalling, as the
-			# ruling requires ("stays until relieved"), so it is measured where the summons are answered.
-			# The others' figures are logged for the owner: ledger row 12, question 1.)
+			# (Quiet time is asserted where the summons are answered; the others' figures are logged. Since
+			# the 2026-10-01 ruling an unanswered warning settles once the threat stops pushing.)
 			if kind == "responsive":
 				chore["quiet"] = chore["quiet"] and float(r["quiet"]) >= 0.70
 			else:

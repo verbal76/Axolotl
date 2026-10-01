@@ -15,6 +15,8 @@ var _colours: Button
 var _skills: Button
 var _aquarium: Button
 var gear: Button
+## Exit (owner, 2026-10-01): bottom right, away from the menu column, behind a confirm.
+var exit_box: VBoxContainer
 var version_label: Label
 var title_label: Label
 ## New Run's question: a two-choice dialog, Normal or Hard Mode (ledger row 12; the mode is chosen
@@ -86,6 +88,11 @@ func _ready() -> void:
 	# Continue (owner, 2026-09-30): the owner's gear, top right, always on screen.
 	gear = UiStyle.gear_button(_on_settings)
 	_root.add_child(gear)
+	exit_box = UiStyle.confirm_button("Exit", "Leave Mote? Your run is saved.", "Exit", func(): Game.inst.exit_game())
+	exit_box.name = "Exit"
+	exit_box.alignment = BoxContainer.ALIGNMENT_END
+	_root.add_child(exit_box)
+	(exit_box.get_node("Confirm") as Control).visibility_changed.connect(_layout)
 	# Product version only; build/OTA/SHA identities live in Diagnostics (behind the gear).
 	var ver := Label.new()
 	ver.name = "VersionLabel"
@@ -151,6 +158,13 @@ func _layout() -> void:
 	version_label.add_theme_font_size_override("font_size", int(20 * s))
 	version_label.reset_size()
 	version_label.position = area.end - version_label.size - Vector2(8, 4) * s
+	# Exit: modest, bottom right above the version line (a thumb's reach, far from the column's buttons);
+	# its question opens upward from there.
+	var ask: Button = exit_box.get_node("Ask")
+	ask.custom_minimum_size = Vector2(200, 58) * s
+	ask.add_theme_font_size_override("font_size", int(24 * s))
+	exit_box.reset_size()
+	exit_box.position = Vector2(area.end.x - exit_box.size.x - 8 * s, version_label.position.y - exit_box.size.y - 12 * s)
 
 
 func show_title() -> void:
@@ -172,6 +186,8 @@ func show_title() -> void:
 	# (The New Run question starts closed each time the title shows.)
 	(_new_run.get_node("Confirm") as Control).visible = false
 	(_new_run.get_node("Ask") as Control).visible = true
+	(exit_box.get_node("Confirm") as Control).visible = false
+	(exit_box.get_node("Ask") as Control).visible = true
 	_on_new_run_asking()
 	visible = true
 	_layout()
