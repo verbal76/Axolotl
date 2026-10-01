@@ -6107,6 +6107,9 @@ func _test_polish_a() -> void:
 	t.check("title_exit_safe", gap > 200.0 and asks and reset and exr.size.y >= 44.0, "gap to menu %.0f px, question on screen %s, reset %s, height %.0f" % [gap, asks, reset, exr.size.y])
 	g.start_play(true)
 	await t.frames(3)
+	await t.frames(40)
+	var fl: String = g.frame_stats.line("play")
+	t.check("frame_stats_in_diagnostics", fl.contains("fps") and g.run_diagnostics_text().contains("Frames title"), fl)
 	t.check("hud_thumb_targets_separated", worst >= 20.0 and outside.is_empty() and wrong == 0,
 			"min dead space %.1f px, outside safe %s, edge misroutes %d" % [worst, str(outside), wrong])
 
