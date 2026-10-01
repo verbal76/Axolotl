@@ -1,11 +1,14 @@
 class_name Onboarding
 extends Node
-## Onboarding (docs/ONBOARDING.md, ledger row 20): the intro screen on the first new run, then three
-## first-discovery lessons, each once per profile: feeding (his fronds are his health), the first
+## Onboarding (docs/ONBOARDING.md, ledger rows 20 and 24): the intro screen, then three lessons, all
+## once per RUN while Settings.tutorials is on: feeding (his fronds are his health), the first
 ## parasite (removing parasites restores the moss) and the first Red Starfish (Skills).
 ##
 ## Rules this keeps:
-## - Flags live in the profile (GillProgress.onboarding), never in the run save: New Run keeps them.
+## - Flags live in the run save (RunSave.lessons): Continue keeps them, New Run starts them again.
+##   A run saved before that record existed counts every lesson as done (Game._setup_onboarding).
+## - Tutorials off: every lesson reads as done (nothing starts, no frond is emptied) without being
+##   marked, so turning them back on mid-run lets this run's remaining lessons still come.
 ## - Everything here is presentation. The food's healing, the kill, its restoration and completion
 ##   are applied by Game exactly as without a lesson; a lesson only stages how they are SHOWN (the
 ##   frond's colour returning, the moss's reveal front), moves the camera and shows a card.
@@ -59,7 +62,7 @@ var last_end := ""
 var objective := ""
 var food_target: Food = null
 var parasite_target: Parasite = null
-## This run started with the lesson's empty frond (saved in the run, so a Continue keeps it).
+## This run started with the lesson's empty frond (saved in the run's record, so a Continue keeps it).
 var run_frond := false
 var _scan := 0.0
 var _feed := {}
@@ -79,8 +82,12 @@ func _ready() -> void:
 	process_mode = Node.PROCESS_MODE_ALWAYS
 
 
+## Done in this run, or tutorials are off, or the run has no record (one from before it existed).
 func done(flag: String) -> bool:
-	return g.gill == null or g.gill.onb_done(flag)
+	if not Settings.tutorials:
+		return true
+	var rs := g.run_save
+	return rs == null or not rs.has_lessons() or rs.lessons().has(flag)
 
 
 func all_done() -> bool:
@@ -90,23 +97,45 @@ func all_done() -> bool:
 	return true
 
 
+## Marks a lesson done in this run and writes the run at once (an interrupted lesson is never
+## replayed in it).
 func _mark(flag: String) -> void:
-	if g.gill != null:
-		g.gill.mark_onb(flag)
+	var rs := g.run_save
+	if rs == null or not rs.has_lessons() or rs.lessons().has(flag):
+		return
+	rs.lessons()[flag] = true
+	g.save_run()
 
 
-## Test switch: every lesson (and the intro) counted as done, in memory and in the profile.
-func mark_all_done() -> void:
+## The record for this run: a new run's (nothing done), or every lesson done (a run from before the
+## record existed, and the test switch).
+func record_for_new_run() -> void:
+	g.run_save.set_lessons({})
+	run_frond = false
+
+
+func record_all_done() -> void:
+	var d := {}
 	for f in FLAGS:
-		g.gill.onboarding[f] = true
-	g.gill.onboarding["first_frond"] = true
-	g.gill.onb_known = true
+		d[f] = true
+	g.run_save.set_lessons(d)
+	run_frond = false
+
+
+## Settings' Tutorials toggle. Off: an objective or a staged lesson ends now (cleanly, as on any
+## other exit). On: nothing starts by itself; this run's lessons not yet done may still come.
+func tutorials_changed(on: bool) -> void:
+	if on:
+		return
+	if stage != "":
+		finish("off")
+	_set_objective("")
 
 
 # --- Intro ------------------------------------------------------------------------------------
 
-## The intro shows when a genuinely new run starts (Play with no saved run, or New Run) and the
-## profile has never seen it: the first new run ever. Continue never shows it.
+## The intro shows when a genuinely new run starts (Play with no saved run, or New Run) while
+## tutorials are on: every new run. Continue never shows it.
 func intro_due(continuing: bool) -> bool:
 	return not continuing and not done("intro")
 
@@ -131,14 +160,17 @@ func _on_intro_begin() -> void:
 
 # --- Play starts ------------------------------------------------------------------------------
 
-## Called by Game.start_play. On the profile's first run (feeding not learnt yet) one unlocked frond
-## starts empty, so the first jellyfish visibly heals him; a Continue of that run keeps it empty.
+## Called by Game.start_play. A new run, tutorials on: one unlocked frond starts empty, so the first
+## jellyfish visibly heals him; a Continue of that run keeps it empty until the lesson is done.
+## Tutorials off: none (he starts at full health).
 func on_play_started(continuing: bool) -> void:
+	var rs := g.run_save
+	run_frond = rs != null and bool(rs.lessons().get("frond", false))
 	if done("feeding"):
 		return
-	if not continuing and not done("first_frond"):
+	if not continuing and not run_frond:
 		run_frond = true
-		_mark("first_frond")
+		rs.lessons()["frond"] = true
 		g._save_dirty = true
 	if run_frond:
 		var p := g.player
@@ -317,8 +349,9 @@ func on_food_eaten(before: int) -> void:
 	var p := g.player
 	if done("feeding") or p.health <= before:
 		return
-	_mark("feeding")
 	run_frond = false
+	g.run_save.lessons().erase("frond")
+	_mark("feeding")
 	_release_food()
 	_set_objective("")
 	if not _can_stage():
@@ -491,6 +524,8 @@ func staging() -> bool:
 ## Diagnostics line.
 func status_text() -> String:
 	var L: Array[String] = []
+	var rs := g.run_save
 	for f in FLAGS:
-		L.append("%s %s" % [f, "done" if done(f) else "-"])
-	return "Onboarding: %s; stage '%s', objective '%s'" % [", ".join(L), stage, objective]
+		L.append("%s %s" % [f, "done" if rs != null and rs.lessons().has(f) else "-"])
+	var rec := "this run: " + ", ".join(L) if rs != null and rs.has_lessons() else "no record (a run from before it: all done)"
+	return "Tutorials %s; %s; stage '%s', objective '%s'" % ["on" if Settings.tutorials else "off", rec, stage, objective]

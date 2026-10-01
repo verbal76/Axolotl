@@ -18,7 +18,7 @@ func run(runner) -> void:
 		g.repop.enabled = false
 	await t.seconds(0.5)
 	var only: String = Settings.test_args.get("only", "")
-	for name_ in ["_test_startup", "_test_ota_and_version", "_test_mesh_winding", "_test_terrain", "_test_ravines", "_test_terrain_grounded", "_test_no_floating_platforms", "_test_parasite_locomotion", "_test_parasite_body_and_death", "_test_parasite_combat", "_test_organic_motion", "_test_gill_look", "_test_gill_idles", "_test_gill_colours", "_test_gill_patterns", "_test_tail_whip", "_test_gill_traction", "_test_gill_incline_transitions", "_test_traction_no_shortcuts", "_test_gill_body_follow", "_test_swim_body_follow", "_test_ambient_sway", "_test_placements", "_test_tutorial_route", "_test_sphere_walk", "_test_jump_and_burst", "_test_coyote_and_buffer", "_test_swipe_direction_and_stages", "_test_hard_landing", "_test_food", "_test_food_reach", "_test_darter_and_burrower", "_test_food_repopulates", "_test_motes", "_test_checkpoint_and_regen", "_test_crumble", "_test_restoration_gates", "_test_bubble_columns", "_test_restoration_continuity", "_test_health_map", "_test_vortex", "_test_vortex_tints", "_test_current", "_test_canopy", "_test_canopy_plain_jumps", "_test_climbs_physical", "_test_jungle_ladders_physical", "_test_leaf_geometry", "_test_leaf_footing", "_test_caves", "_test_mounds", "_test_vegetation", "_test_vortex_mouths_clear", "_test_route_audit", "_test_new_areas", "_test_ecosystem", "_test_music", "_test_opening_audio", "_test_run_clock", "_test_completion_catalog", "_test_completion_frozen", "_test_run_save_file", "_test_run_timer_live", "_test_run_continue", "_test_timer_integrity", "_test_resume_points_safe", "_phase_continue_write", "_phase_continue_read", "_test_upgrades", "_test_ui", "_test_menus_no_scroll", "_test_menu_touch", "_test_tier2_rules", "_test_tier2_world", "_test_ambient_fish", "_test_parasite_never_buried", "_test_tier2_loadout", "_test_aquarium_experiences", "_test_aquarium_polish", "_test_all_clear", "_test_treasure_unlock", "_test_treasure_generation", "_test_treasure_play", "_phase_treasure_stress", "_phase_live_fish_diag", "_phase_cpu_probe", "_phase_incline_survey", "_phase_loco_diag", "_phase_crawl_trace", "_phase_mouth_crawls", "_phase_organic_trace", "_test_skilltree_graph", "_test_progress_store", "_test_starfish_spots", "_test_starfish_pickup", "_test_skill_ui", "_test_quick_gill", "_test_lunge_skills", "_test_burst_skills", "_test_glide_control", "_test_glide_transfers", "_test_mote_magnet", "_phase_starfish_survey", "_phase_starfish_sweep", "_phase_glide_probe", "_test_plants_terminal_growth", "_test_sea_fan_depth", "_test_repopulation", "_phase_repop_survey", "_phase_repop_sim", "_test_aquarium_gill", "_phase_aq_nav", "_test_replay_and_title", "_test_onb_progress", "_test_onb_owner_save", "_test_onb_intro", "_test_onb_feeding", "_test_onb_parasite", "_test_onb_starfish", "_test_onb_softlock", "_test_onb_relaunch", "_test_onb_restoration_equal", "_phase_onb_owner", "_phase_onb_write", "_phase_onb_read", "_phase_onb_kill"]:
+	for name_ in ["_test_startup", "_test_ota_and_version", "_test_mesh_winding", "_test_terrain", "_test_ravines", "_test_terrain_grounded", "_test_no_floating_platforms", "_test_parasite_locomotion", "_test_parasite_body_and_death", "_test_parasite_combat", "_test_organic_motion", "_test_gill_look", "_test_gill_idles", "_test_gill_colours", "_test_gill_patterns", "_test_tail_whip", "_test_gill_traction", "_test_gill_incline_transitions", "_test_traction_no_shortcuts", "_test_gill_body_follow", "_test_swim_body_follow", "_test_ambient_sway", "_test_placements", "_test_tutorial_route", "_test_sphere_walk", "_test_jump_and_burst", "_test_coyote_and_buffer", "_test_swipe_direction_and_stages", "_test_hard_landing", "_test_food", "_test_food_reach", "_test_darter_and_burrower", "_test_food_repopulates", "_test_motes", "_test_checkpoint_and_regen", "_test_crumble", "_test_restoration_gates", "_test_bubble_columns", "_test_restoration_continuity", "_test_health_map", "_test_vortex", "_test_vortex_tints", "_test_current", "_test_canopy", "_test_canopy_plain_jumps", "_test_climbs_physical", "_test_jungle_ladders_physical", "_test_leaf_geometry", "_test_leaf_footing", "_test_caves", "_test_mounds", "_test_vegetation", "_test_vortex_mouths_clear", "_test_route_audit", "_test_new_areas", "_test_ecosystem", "_test_music", "_test_opening_audio", "_test_run_clock", "_test_completion_catalog", "_test_completion_frozen", "_test_run_save_file", "_test_run_timer_live", "_test_run_continue", "_test_timer_integrity", "_test_resume_points_safe", "_phase_continue_write", "_phase_continue_read", "_test_upgrades", "_test_ui", "_test_menus_no_scroll", "_test_menu_touch", "_test_tier2_rules", "_test_tier2_world", "_test_ambient_fish", "_test_parasite_never_buried", "_test_tier2_loadout", "_test_aquarium_experiences", "_test_aquarium_polish", "_test_all_clear", "_test_treasure_unlock", "_test_treasure_generation", "_test_treasure_play", "_phase_treasure_stress", "_phase_live_fish_diag", "_phase_cpu_probe", "_phase_incline_survey", "_phase_loco_diag", "_phase_crawl_trace", "_phase_mouth_crawls", "_phase_organic_trace", "_test_skilltree_graph", "_test_progress_store", "_test_starfish_spots", "_test_starfish_pickup", "_test_skill_ui", "_test_quick_gill", "_test_lunge_skills", "_test_burst_skills", "_test_glide_control", "_test_glide_transfers", "_test_mote_magnet", "_phase_starfish_survey", "_phase_starfish_sweep", "_phase_glide_probe", "_test_plants_terminal_growth", "_test_sea_fan_depth", "_test_repopulation", "_phase_repop_survey", "_phase_repop_sim", "_test_aquarium_gill", "_phase_aq_nav", "_test_tutorials_and_title", "_test_onb_progress", "_test_onb_owner_save", "_test_onb_per_run", "_test_onb_toggle", "_test_onb_intro", "_test_onb_feeding", "_test_onb_parasite", "_test_onb_starfish", "_test_onb_softlock", "_test_onb_relaunch", "_test_onb_restoration_equal", "_phase_onb_owner", "_phase_onb_write", "_phase_onb_read", "_phase_onb_kill", "_phase_onb_toggle"]:
 		# "_phase_*" tests are halves of a relaunch test: they run only when asked for by name
 		# (in a child process started by _test_run_continue).
 		if name_.begins_with("_phase") and not only.split(",", false).has(name_):
@@ -5546,27 +5546,11 @@ func _test_aquarium_polish() -> void:
 ## inside the safe area, no two touch targets overlapping, none under 56 px tall. Settings is checked
 ## at its fullest (Tier 2 row, Treasure Hunt and the New Run question all showing) and from the title.
 ## Pause order: Resume, then Return to Title directly beneath it.
-## Replay tutorial clears the lesson flags in every copy of the profile and nothing else; the title
-## menu with the New Run question open keeps every control on screen (owner phone screenshot,
-## 2026-10-01: the question pushed the last buttons off the bottom).
-func _test_replay_and_title() -> void:
-	var path := "user://replay_test_progress.json"
-	for suf in ["", ".bak", ".tmp"]:
-		if FileAccess.file_exists(path + suf):
-			DirAccess.remove_absolute(ProjectSettings.globalize_path(path + suf))
-	var gp := GillProgress.open(path)
-	gp.migrate_onboarding(true, true)
-	gp.mark_onb("starfish")
-	gp.save()
-	var c0 := JSON.stringify(gp.collected)
-	var p0 := JSON.stringify(gp.purchased)
-	gp.reset_onboarding()
-	var re := GillProgress.open(path)
-	t.check("replay_clears_every_copy", re.onboarding.is_empty() and re.onb_known and re.onb_epoch == 1, str(re.onboarding))
-	t.check("replay_keeps_progress", JSON.stringify(re.collected) == c0 and JSON.stringify(re.purchased) == p0, "")
-	re.mark_onb("intro")
-	var re2 := GillProgress.open(path)
-	t.check("replay_lessons_learnt_again", re2.onb_done("intro") and not re2.onb_done("feeding"), str(re2.onboarding))
+## The Tutorials toggle (owner ruling 2026-10-01, docs/ONBOARDING.md; it replaces Replay tutorial) is
+## in Settings from the title and in-run; the title menu with the New Run question open keeps every
+## control on screen (owner phone screenshot, 2026-10-01: the question pushed the last buttons off
+## the bottom). (The toggle's behaviour: _test_onb_toggle and _test_onb_per_run.)
+func _test_tutorials_and_title() -> void:
 	# The title with the New Run question open.
 	var ts := g.title
 	g._enter_title()
@@ -5586,29 +5570,19 @@ func _test_replay_and_title() -> void:
 	await t.frames(3)
 	t.check("title_buttons_back_after_cancel", ts._colours.visible and ts._skills.visible and ts._aquarium.visible
 			and (ts._new_run.get_node("Ask") as Control).visible, "")
-	# From the title's Settings: two taps replay the tutorial (only the lesson flags change).
+	# Settings from the title: the Tutorials toggle (on), and no Replay tutorial any more.
 	var pm := g.pause_menu
 	pm.open(true)
 	await t.frames(3)
-	var rb := pm._panel.find_child("ReplayTutorial", true, false) as Button
-	var stars0: int = g.gill.stars()
-	var skills0: int = g.gill.skills()
-	var one_tap_kept := false
-	if rb != null and rb.is_visible_in_tree():
-		rb.pressed.emit()
-		one_tap_kept = not g.gill.onboarding.is_empty()
-		rb.pressed.emit()
-	t.check("replay_from_title_settings_two_taps", rb != null and one_tap_kept and g.gill.onboarding.is_empty()
-			and g.gill.stars() == stars0 and g.gill.skills() == skills0 and rb.disabled, "button %s" % (rb != null))
+	var tb := pm._panel.find_child("Tutorials", true, false) as CheckButton
+	t.check("tutorials_toggle_from_title_settings", tb != null and tb.is_visible_in_tree() and tb.button_pressed == Settings.tutorials
+			and pm._panel.find_child("ReplayTutorial", true, false) == null, "toggle %s" % (tb != null))
 	pm.close()
 	await t.frames(1)
 	pm.open()
 	await t.frames(2)
-	t.check("replay_hidden_in_run_settings", rb != null and not rb.is_visible_in_tree(), "")
+	t.check("tutorials_toggle_in_run_settings_too", tb != null and tb.is_visible_in_tree(), "")
 	pm.close()
-	# (The other tests expect a player who has done the lessons.)
-	for f in ["intro", "feeding", "parasite", "starfish", "first_frond"]:
-		g.gill.mark_onb(f)
 	ts.hide_title()
 	g.start_play(true)
 	await t.frames(3)
@@ -8454,6 +8428,18 @@ func _test_onb_progress() -> void:
 
 func _test_onb_owner_save() -> void:
 	await _onboarding().owner_save()
+
+
+func _test_onb_per_run() -> void:
+	await _onboarding().per_run()
+
+
+func _test_onb_toggle() -> void:
+	await _onboarding().toggle()
+
+
+func _phase_onb_toggle() -> void:
+	await _onboarding().phase_toggle()
 
 
 func _test_onb_intro() -> void:
