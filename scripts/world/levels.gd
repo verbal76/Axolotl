@@ -121,7 +121,9 @@ static func _sprouts(lb: LevelBuilder, i: int) -> void:
 	var stems := b.make_veg_material(Color(0.22, 0.46, 0.12), SPROUT_TIPS[i],
 			Vegetation.family_params("medium", 1.0).merged({"sway": 0.2, "wake_gain": 0.8, "cam_fade": 1.4, "sprout": 1.0}, true))
 	var nodes: Array = []
-	nodes += b.scatter(MeshLib.stem_plant_mesh(5, 1.2, 700 + i, 7), stems, int(90 * area), 700 + i, 0.8, 1.6, crown, 45.0)
+	# (Several variant meshes per ball, so no two neighbouring plants are clones: 00040-plants.)
+	nodes += _variants(b, SPROUT_VARIANTS[0], func(v: int) -> Mesh: return MeshLib.stem_plant_mesh(4, 1.2, 7000 + i * 20 + v, 8, true),
+			stems, int(90 * area), 700 + i, 0.8, 1.6, crown, 45.0)
 	# (Variegated: an earth star's pink margins and cream stripes, or a fire-and-ice white centre.)
 	var fern_p := Vegetation.family_params("short", 0.6).merged({"sway": 0.18, "wake_gain": 0.7, "cam_fade": 1.2, "sprout": 1.0,
 			"variegate": 1.0, "vari_style": float(i % 2), "vari_edge": Color(0.96, 0.58, 0.72), "vari_stripe": Color(0.95, 0.94, 0.84)}, true)
@@ -132,13 +134,29 @@ static func _sprouts(lb: LevelBuilder, i: int) -> void:
 	var top := func(d: Vector3) -> bool: return not keep.call(d) and d.y > 0.5 and pick.call(d * 1.7) < smoothstep(0.5, 0.9, d.y)
 	var tall := b.make_veg_material(Color(0.2, 0.44, 0.1), SPROUT_TIPS[i],
 			Vegetation.family_params("tall", 4.0).merged({"sway": 0.16, "sway_speed": 0.9, "wake_gain": 0.9, "cam_fade": 2.4, "sprout": 1.0}, true))
-	nodes += b.scatter(MeshLib.stem_plant_mesh(8, 1.2, 760 + i, 8), tall, int(55 * area), 760 + i, 3.0, 5.5, top, 120.0)
+	nodes += _variants(b, SPROUT_VARIANTS[1], func(v: int) -> Mesh: return MeshLib.stem_plant_mesh(7, 1.2, 7600 + i * 20 + v, 10),
+			tall, int(55 * area), 760 + i, 3.0, 5.5, top, 120.0)
 	nodes += b.scatter(MeshLib.broadleaf_mesh(6, 1.0, 780 + i), ferns, int(18 * area), 780 + i, 2.0, 3.0, top, 120.0)
 	var roots := b.make_veg_material(Color(0.22, 0.3, 0.12), Color(0.5, 0.45, 0.3),
 			Vegetation.family_params("tall", 2.0).merged({"sway": 0.3, "sway_speed": 0.8, "wake_gain": 0.9, "cam_fade": 2.0, "sprout": 1.0}, true))
 	var under := func(d: Vector3) -> bool: return not keep.call(d) and d.y < -0.65
 	nodes += b.scatter(MeshLib.root_strands_mesh(5, 2.2, 740 + i), roots, int(45 * area), 740 + i, 1.8, 3.0, under, 110.0)
 	b.sprout_nodes = nodes
+
+
+## Variant meshes per ball for the sprouted stem plants [medium, tall] (00040-plants: 4-6 per ball).
+const SPROUT_VARIANTS := [4, 5]
+
+
+## Scatters `count` plants as `n` variant meshes (`make(v)`), the count shared evenly, each variant
+## placed from its own seed (`seed_v` for the first, as a single scatter would).
+static func _variants(b: MossBall, n: int, make: Callable, mat: Material, count: int, seed_v: int, s0: float, s1: float,
+		accept: Callable, vis_end: float) -> Array:
+	var out := []
+	for v in n:
+		var c := count / n + (1 if v < count % n else 0)
+		out += b.scatter(make.call(v), mat, c, seed_v + v * 1000, s0, s1, accept, vis_end)
+	return out
 
 
 ## A shadow-only flat stand-in for a body's detailed climbing leaves (MeshLib.leaf_shadow_proxy).
@@ -172,7 +190,9 @@ static func _materials(lb: LevelBuilder, stem_a: Color, stem_b: Color, leaf_a: C
 	var b := lb.ball
 	lb.stem_mat = b.make_plant_material(stem_a, stem_b)
 	# (Leaves flap a few centimetres at the tip, each on its own; the stems stay rigid.)
-	lb.leaf_mat = b.make_plant_material(leaf_a, leaf_b, {"vein": 1.0, "variegate": 0.45, "vari_style": 1.0, "vari_stripe": Color(0.9, 0.95, 0.78),
+	# (The climbable leaves take the golden-pothos look, ledger row 15: surface only, the shape
+	# and collision unchanged.)
+	lb.leaf_mat = b.make_plant_material(leaf_a, leaf_b, {"vein": 0.0, "pothos": 1.0,
 			"flutter": LEAF_FLUTTER, "flutter_speed": 1.1, "leaf_data": true})
 	lb.shell_mat = b.make_moss_material({"fuzz": 0.0})
 	lb.strand_mat = b.make_veg_material(b.palette["moss_healthy_a"], b.palette["moss_healthy_b"], {"sway": 0.08, "impulse_gain": 2.2, "cam_fade": 1.2,
