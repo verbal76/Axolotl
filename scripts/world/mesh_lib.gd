@@ -634,12 +634,12 @@ static func leaf_shadow_proxy(leaves: Array) -> ArrayMesh:
 
 ## Half-width (0..1) of a platform leaf at t along it (0 base, 1 tip): the golden-pothos outline of
 ## the owner's reference (2026-10-01): a narrow neck at the stalk (as before, so the base stays clear
-## of the stem it grows from), a broad rounded (heart-like) base
-## widest about a quarter of the way along, then a long taper to a pointed tip.
+## of the stem it grows from), a broad rounded (heart-like) body
+## widest about a third of the way along, then a long taper to a pointed tip.
 static func leaf_profile(t: float) -> float:
 	var tc := clampf(t, 0.0, 1.0)
-	var neck := 0.22 + 0.78 * smoothstep(0.0, 0.22, tc)
-	return neck * pow(1.0 - tc, 0.85) * (1.0 + 1.6 * tc) / 1.096
+	var neck := 0.22 + 0.78 * smoothstep(0.0, 0.3, tc)
+	return neck * pow(1.0 - tc, 0.85) * (1.0 + 2.41 * tc) / 1.278
 
 
 ## Height of a platform leaf's upper surface above its base plane at (t along, s across in -1..1):
