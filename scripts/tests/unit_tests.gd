@@ -18,7 +18,7 @@ func run(runner) -> void:
 		g.repop.enabled = false
 	await t.seconds(0.5)
 	var only: String = Settings.test_args.get("only", "")
-	for name_ in ["_test_startup", "_test_ota_and_version", "_test_mesh_winding", "_test_terrain", "_test_ravines", "_test_terrain_grounded", "_test_no_floating_platforms", "_test_parasite_locomotion", "_test_parasite_body_and_death", "_test_parasite_combat", "_test_organic_motion", "_test_gill_look", "_test_gill_idles", "_test_gill_colours", "_test_gill_patterns", "_test_tail_whip", "_test_gill_traction", "_test_gill_incline_transitions", "_test_traction_no_shortcuts", "_test_gill_body_follow", "_test_swim_body_follow", "_test_ambient_sway", "_test_placements", "_test_tutorial_route", "_test_sphere_walk", "_test_jump_and_burst", "_test_coyote_and_buffer", "_test_swipe_direction_and_stages", "_test_hard_landing", "_test_food", "_test_food_reach", "_test_darter_and_burrower", "_test_food_repopulates", "_test_motes", "_test_checkpoint_and_regen", "_test_crumble", "_test_restoration_gates", "_test_bubble_columns", "_test_restoration_continuity", "_test_health_map", "_test_vortex", "_test_vortex_tints", "_test_current", "_test_canopy", "_test_canopy_plain_jumps", "_test_climbs_physical", "_test_jungle_ladders_physical", "_test_leaf_geometry", "_test_leaf_footing", "_test_caves", "_test_mounds", "_test_vegetation", "_test_vortex_mouths_clear", "_test_route_audit", "_test_new_areas", "_test_ecosystem", "_test_music", "_test_opening_audio", "_test_run_clock", "_test_completion_catalog", "_test_completion_frozen", "_test_run_save_file", "_test_run_timer_live", "_test_run_continue", "_test_timer_integrity", "_test_resume_points_safe", "_phase_continue_write", "_phase_continue_read", "_test_upgrades", "_test_ui", "_test_menus_no_scroll", "_test_menu_touch", "_test_tier2_rules", "_test_tier2_world", "_test_ambient_fish", "_test_parasite_never_buried", "_test_tier2_loadout", "_test_aquarium_experiences", "_test_aquarium_polish", "_test_all_clear", "_test_treasure_unlock", "_test_treasure_generation", "_test_treasure_play", "_phase_treasure_stress", "_phase_live_fish_diag", "_phase_cpu_probe", "_phase_incline_survey", "_phase_loco_diag", "_phase_crawl_trace", "_phase_mouth_crawls", "_phase_organic_trace", "_test_skilltree_graph", "_test_progress_store", "_test_starfish_spots", "_test_starfish_pickup", "_test_skill_ui", "_test_quick_gill", "_test_lunge_skills", "_test_burst_skills", "_test_glide_control", "_test_glide_transfers", "_test_mote_magnet", "_phase_starfish_survey", "_phase_starfish_sweep", "_phase_glide_probe", "_test_plants_terminal_growth", "_test_sea_fan_depth", "_test_repopulation", "_phase_repop_survey", "_phase_repop_sim", "_test_aquarium_gill", "_phase_aq_nav", "_test_replay_and_title", "_test_onb_progress", "_test_onb_owner_save", "_test_onb_intro", "_test_onb_feeding", "_test_onb_parasite", "_test_onb_starfish", "_test_onb_softlock", "_test_onb_relaunch", "_test_onb_restoration_equal", "_phase_onb_owner", "_phase_onb_write", "_phase_onb_read", "_phase_onb_kill"]:
+	for name_ in ["_test_startup", "_test_ota_and_version", "_test_mesh_winding", "_test_terrain", "_test_ravines", "_test_terrain_grounded", "_test_no_floating_platforms", "_test_parasite_locomotion", "_test_parasite_body_and_death", "_test_parasite_combat", "_test_organic_motion", "_test_gill_look", "_test_gill_idles", "_test_gill_colours", "_test_gill_patterns", "_test_tail_whip", "_test_gill_traction", "_test_gill_incline_transitions", "_test_traction_no_shortcuts", "_test_gill_body_follow", "_test_swim_body_follow", "_test_ambient_sway", "_test_placements", "_test_tutorial_route", "_test_sphere_walk", "_test_jump_and_burst", "_test_coyote_and_buffer", "_test_swipe_direction_and_stages", "_test_hard_landing", "_test_food", "_test_food_reach", "_test_darter_and_burrower", "_test_food_repopulates", "_test_motes", "_test_checkpoint_and_regen", "_test_crumble", "_test_restoration_gates", "_test_bubble_columns", "_test_restoration_continuity", "_test_health_map", "_test_vortex", "_test_vortex_tints", "_test_current", "_test_current_brace", "_test_canopy", "_test_canopy_plain_jumps", "_test_climbs_physical", "_test_jungle_ladders_physical", "_test_leaf_geometry", "_test_leaf_footing", "_test_caves", "_test_mounds", "_test_vegetation", "_test_vortex_mouths_clear", "_test_route_audit", "_test_new_areas", "_test_ecosystem", "_test_music", "_test_opening_audio", "_test_run_clock", "_test_completion_catalog", "_test_completion_frozen", "_test_run_save_file", "_test_run_timer_live", "_test_run_continue", "_test_timer_integrity", "_test_resume_points_safe", "_phase_continue_write", "_phase_continue_read", "_test_upgrades", "_test_ui", "_test_menus_no_scroll", "_test_menu_touch", "_test_tier2_rules", "_test_tier2_world", "_test_ambient_fish", "_test_parasite_never_buried", "_test_tier2_loadout", "_test_aquarium_experiences", "_test_aquarium_polish", "_test_all_clear", "_test_treasure_unlock", "_test_treasure_generation", "_test_treasure_play", "_phase_treasure_stress", "_phase_live_fish_diag", "_phase_cpu_probe", "_phase_incline_survey", "_phase_loco_diag", "_phase_crawl_trace", "_phase_mouth_crawls", "_phase_organic_trace", "_test_skilltree_graph", "_test_progress_store", "_test_starfish_spots", "_test_starfish_pickup", "_test_skill_ui", "_test_quick_gill", "_test_lunge_skills", "_test_burst_skills", "_test_glide_control", "_test_glide_transfers", "_test_mote_magnet", "_phase_starfish_survey", "_phase_starfish_sweep", "_phase_glide_probe", "_test_plants_terminal_growth", "_test_sea_fan_depth", "_test_repopulation", "_phase_repop_survey", "_phase_repop_sim", "_test_aquarium_gill", "_phase_aq_nav", "_test_replay_and_title", "_test_onb_progress", "_test_onb_owner_save", "_test_onb_intro", "_test_onb_feeding", "_test_onb_parasite", "_test_onb_starfish", "_test_onb_softlock", "_test_onb_relaunch", "_test_onb_restoration_equal", "_phase_onb_owner", "_phase_onb_write", "_phase_onb_read", "_phase_onb_kill"]:
 		# "_phase_*" tests are halves of a relaunch test: they run only when asked for by name
 		# (in a child process started by _test_run_continue).
 		if name_.begins_with("_phase") and not only.split(",", false).has(name_):
@@ -3521,6 +3521,180 @@ func _test_current() -> void:
 	p.invuln_t = 0.0
 
 
+## Pushed by a current along the ground (ledger row 19): he braces against it, scaled by how hard
+## he is pushed, and his feet leave small pooled drag marks that fade; none swimming, in a column or
+## in the air; movement is identical with the gesture on and off; no gameplay random numbers drawn.
+func _test_current_brace() -> void:
+	var b := g.balls[1]
+	var release := _hold_threats(b)
+	var m := p.model
+	var fx := WaterFX.inst
+	p.invuln_t = 999
+	# The brace weight follows the push: sampled across the current's band (strong at its equator,
+	# fading toward the poles), standing still on open ground.
+	var rows := []
+	var worst := 0.0
+	var lo := 1.0
+	var hi := 0.0
+	var mono := true
+	for k in 11:
+		mono = mono and Axolotl.brace_for_push(0.12 * (k + 1)) >= Axolotl.brace_for_push(0.12 * k)
+	for lat in [0.0, 12.0, 24.0, 32.0, 38.0, 44.0, 52.0, 70.0]:
+		place(1, lat, 150, 0.1, 90)
+		if not await wait_grounded():
+			continue
+		await t.seconds(1.0)
+		if not p.grounded:
+			continue
+		var push := p.current_push.length()
+		var want := Axolotl.brace_for_push(push)
+		worst = maxf(worst, absf(p.current_brace - want))
+		lo = minf(lo, p.current_brace)
+		hi = maxf(hi, p.current_brace)
+		rows.append("lat %d push %.2f brace %.2f drawn %.2f" % [lat, push, p.current_brace, m._brace_w])
+	t.check("brace_follows_push_strength", rows.size() >= 6 and worst < 0.05 and lo < 0.15 and hi > 0.45 and mono,
+			"worst off %.3f, range %.2f..%.2f, curve monotonic %s; %s" % [worst, lo, hi, mono, "; ".join(rows)])
+	# Not pushed: on a ball without a current he never braces.
+	place(0, -10, -40, 0.1, 0)
+	await wait_grounded()
+	var still_max := 0.0
+	for i in 60:
+		await t.frames(1)
+		still_max = maxf(still_max, p.current_brace + m._brace_w)
+	# In the air: a jump in the strongest push; zero every airborne frame.
+	place(1, 0, 150, 0.1, 90)
+	await wait_grounded()
+	await t.seconds(1.0)
+	var before_jump := p.current_brace
+	await press("jump")
+	var air_max := 0.0
+	var air_frames := 0
+	for i in 90:
+		await t.frames(1)
+		if not p.grounded:
+			air_frames += 1
+			air_max = maxf(air_max, p.current_brace + m._brace_w)
+		elif i > 5:
+			break
+	# In a column and swimming: the controller's and the model's gates (the state set directly).
+	p.set_physics_process(false)
+	p.grounded = true
+	p.current_push = p.facing * 1.5
+	p._in_column = true
+	p._update_current_brace(0.5)
+	var col_w := p.current_brace
+	p._in_column = false
+	m.swim = 1.0
+	p._update_current_brace(0.5)
+	var swim_w := p.current_brace
+	m.current_brace = 1.0
+	m.grounded = true
+	var swim_drawn := m.brace_weight()
+	m.swim = 0.0
+	var ground_drawn := m.brace_weight()
+	m.grounded = false
+	var air_drawn := m.brace_weight()
+	m.grounded = true
+	p.set_physics_process(true)
+	t.check("brace_zero_unpushed_air_column_swimming", still_max == 0.0 and air_frames > 10 and air_max == 0.0 and col_w == 0.0 and swim_w == 0.0
+			and swim_drawn == 0.0 and air_drawn == 0.0 and ground_drawn > 0.9 and before_jump > 0.3,
+			"unpushed %.2f; air %.2f over %d frames (braced %.2f before the jump); column %.2f; swimming %.2f (drawn %.2f); air drawn %.2f; ground drawn %.2f"
+			% [still_max, air_max, air_frames, before_jump, col_w, swim_w, swim_drawn, air_drawn, ground_drawn])
+	# Movement and velocity identical with the gesture on and off: standing in the push, then
+	# walking across it, then still again.
+	var traces := []
+	var on_max_w := 0.0
+	var on_marks := 0
+	var lifted := [false, false, false, false]
+	var rig_low := 0.0
+	var live_max := 0
+	# (A first pass warms the spot up: the first walk after arriving differs by a few hundredths of
+	# a millimetre from every later one, gesture or not. Then on, off, and on again.)
+	for pass_ in 4:
+		var on := pass_ != 2
+		Axolotl.brace_enabled = on
+		place(1, 0, 150, 0.1, 90)
+		await wait_grounded()
+		await t.frames(10)
+		var m0 := m.drag_marks
+		var tr := []
+		for i in 240:
+			p.bot_input = Vector2(0.7, 0.2) if i >= 90 and i < 150 else Vector2.ZERO
+			await t.frames(1)
+			tr.append([p.global_position, p.velocity, p.grounded])
+			if on:
+				on_max_w = maxf(on_max_w, p.current_brace)
+				rig_low = minf(rig_low, m.rig.position.y)
+				live_max = maxi(live_max, fx.marks_live)
+				for k in 4:
+					lifted[k] = lifted[k] or m._brace_lift(k) > 0.5
+		p.bot_input = Vector2.ZERO
+		if on:
+			on_marks = m.drag_marks - m0
+		traces.append(tr)
+	Axolotl.brace_enabled = true
+	var dpos := 0.0
+	var dvel := 0.0
+	var dgr := 0
+	for pair in [[1, 2], [2, 3]]:
+		var ta: Array = traces[pair[0]]
+		var tb: Array = traces[pair[1]]
+		for i in ta.size():
+			dpos = maxf(dpos, (ta[i][0] as Vector3).distance_to(tb[i][0]))
+			dvel = maxf(dvel, (ta[i][1] as Vector3).distance_to(tb[i][1]))
+			dgr += 0 if ta[i][2] == tb[i][2] else 1
+	var moved := (traces[1][0][0] as Vector3).distance_to(traces[1][traces[1].size() - 1][0])
+	t.check("brace_movement_identical_on_off", dpos == 0.0 and dvel == 0.0 and dgr == 0 and moved > 1.0,
+			"on vs off and off vs on: max position difference %.7f m, velocity %.7f m/s, grounded mismatches %d over %d frames each (moved %.1f m)" % [dpos, dvel, dgr, traces[1].size(), moved])
+	t.check("brace_gesture_drawn", on_max_w > 0.4 and rig_low < -0.02 and not lifted.has(false) and on_marks >= 4,
+			"brace up to %.2f, body down %.3f m, every foot re-planted %s, %d marks scraped" % [on_max_w, -rig_low, str(lifted), on_marks])
+	# The pool stays bounded, and each mark fades out and frees its slot.
+	var dt := 1.0 / 60.0
+	var up := p.up
+	for i in WaterFX.MARK_POOL * 3:
+		fx.drag_mark(p.global_position, up, p.facing, 0.2, 0.075, 1.0)
+	var full := fx.marks_live
+	var h := fx.drag_mark(p.global_position, up, p.facing, 0.2, 0.075, 1.0)
+	var slot := h % WaterFX.MARK_POOL
+	var alphas := []
+	var stale_ok := true
+	for i in int((WaterFX.MARK_LIFE + 0.5) / dt):
+		fx._update_marks(dt)
+		if i % 30 == 29:
+			alphas.append(snappedf(fx.mark_alpha(slot), 0.01))
+	stale_ok = not fx.drag_mark_stretch(h, p.global_position, p.global_position + p.facing * 0.1, 0.05)
+	var fades: bool = alphas[1] > 0.9 and alphas[alphas.size() - 1] == 0.0
+	for i in range(2, alphas.size()):
+		fades = fades and alphas[i] <= alphas[i - 1]
+	t.check("drag_marks_pooled_and_fade", full == WaterFX.MARK_POOL and live_max <= WaterFX.MARK_POOL and live_max > 0 and fades and fx.marks_live == 0 and stale_ok and not fx._mark_mi.visible,
+			"%d spawned -> %d live (pool %d); in play up to %d live; one mark's alpha each 0.5 s: %s; all gone after %.1f s %s (layer hidden %s); stale handle refused %s"
+			% [WaterFX.MARK_POOL * 3 + 1, full, WaterFX.MARK_POOL, live_max, str(alphas), WaterFX.MARK_LIFE, fx.marks_live == 0, not fx._mark_mi.visible, stale_ok])
+	# No gameplay random numbers: a detached model bracing and scraping marks for ten seconds.
+	var m2 := AxolotlModel.new()
+	m2.set_process(false)
+	add_child_safe(m2)
+	m2.global_transform = m.global_transform
+	m2.current_brace = 1.0
+	m2.current_push = p.facing.cross(p.up) * 1.3
+	m2.grounded = true
+	m2.idle_ok = true
+	seed(4711)
+	var r1 := randi()
+	seed(4711)
+	for i in 600:
+		m2._process(dt)
+		fx._update_marks(dt)
+	var r2 := randi()
+	var m2_marks := m2.drag_marks
+	m2.queue_free()
+	for i in int(WaterFX.MARK_LIFE / dt) + 2:
+		fx._update_marks(dt)
+	t.check("brace_draws_no_gameplay_random", r1 == r2 and m2_marks > 10, "sequence %s; %d marks scraped meanwhile" % ["untouched" if r1 == r2 else "MOVED", m2_marks])
+	t.log_line("brace samples: %s" % "; ".join(rows))
+	release.call()
+	p.invuln_t = 0.0
+
+
 func _test_canopy() -> void:
 	var b := g.balls[2]
 	var lb: LevelBuilder = b.get_meta("builder")
@@ -4484,6 +4658,7 @@ func _test_gill_idles() -> void:
 		"not in play": func(on: bool) -> void: p.state = "dead" if on else "normal",
 		"moving": func(on: bool) -> void: p.move_input = Vector2(0, 0.5) if on else Vector2.ZERO,
 		"current pull": func(on: bool) -> void: p.ext_vel = p.facing * 2.0 if on else Vector3.ZERO,
+		"current push (brace)": func(on: bool) -> void: p.current_brace = 0.5 if on else 0.0,
 		"falling danger": func(on: bool) -> void: p.fall_danger = on,
 	}
 	p.set_physics_process(false)
@@ -4498,7 +4673,7 @@ func _test_gill_idles() -> void:
 	p.set_physics_process(true)
 	# (And the model's side: a forced idle stops at once for anything the model itself plays.)
 	var mblocked := []
-	var mcases := ["hurt_t", "land_t", "burst_t", "happy_t", "perk_t", "lunge_t", "swipe_t", "surf", "brace", "dissolve"]
+	var mcases := ["hurt_t", "land_t", "burst_t", "happy_t", "perk_t", "lunge_t", "swipe_t", "surf", "brace", "dissolve", "current_brace"]
 	var m2 := AxolotlModel.new()
 	m2.set_process(false)
 	m2.visible = false
@@ -4507,11 +4682,11 @@ func _test_gill_idles() -> void:
 		m2.idle_ok = true
 		m2.grounded = true
 		m2.start_idle(0)
-		m2.set(key, 0.5 if key in ["surf", "brace", "dissolve"] else 0.1)
+		m2.set(key, 0.5 if key in ["surf", "brace", "dissolve", "current_brace"] else 0.1)
 		m2._update_idle(1.0 / 60.0)
 		if m2.idle_kind == AxolotlModel.Idle.NONE:
 			mblocked.append(key)
-		m2.set(key, 0.0 if key in ["surf", "brace", "dissolve"] else -1.0)
+		m2.set(key, 0.0 if key in ["surf", "brace", "dissolve", "current_brace"] else -1.0)
 	t.check("incompatible_states_suppress_idles", base_ok and blocked.size() == cases.size() and mblocked.size() == mcases.size(),
 			"allowed when idle %s; blocked by %s; model stops for %s" % [base_ok, str(blocked), str(mblocked)])
 	# Twenty minutes of standing still: all four idles, never the same one twice running, no fixed

@@ -62,6 +62,15 @@ const CRAWL_STEEP_DOT := 0.643        # cos 50 degrees: steeper than this is a b
 const WALK_DOT := 0.707               # cos 45 degrees: purchase, and the ground a crawl starts from
 const CRAWL_UP := 2.6
 const CRAWL_FWD := 1.6
+## Pushed by a current (ledger row 19): on the ground a ball's current pushes him along (0.45 of it,
+## see the move below). He visibly resists, a brace gesture scaled by how hard he is pushed: none
+## under BRACE_PUSH_MIN (m/s), full at BRACE_PUSH_FULL and above, linear between. The model draws it
+## (AxolotlModel.current_brace) and his feet scrape drag marks (WaterFX.drag_mark). Cosmetic only:
+## read from the push already applied, never fed back into movement, current strength or timing.
+const BRACE_PUSH_MIN := 0.1
+const BRACE_PUSH_FULL := 0.95
+const BRACE_RISE := 3.0            # how quickly the brace sets in (1/s)
+const BRACE_FALL := 2.5            # and eases off when the push weakens (1/s)
 
 var ball: MossBall
 var cam: Node3D                  # FollowCam
@@ -115,6 +124,11 @@ var _probe_cd := 0.0               # the ground ahead is not re-read every frame
 var _probe_at := Vector3.INF
 var crawl_amount := 0.0            # 0..1, how far into the crawl's reach-and-pull (the model reads it)
 var _guard_pushed := false
+## The brace against a current (see BRACE_PUSH_MIN): 0..1, and the ground push it answers (world, m/s).
+var current_brace := 0.0
+var current_push := Vector3.ZERO
+## Tests: the brace gesture and its marks off, for on/off comparisons. Movement never reads it.
+static var brace_enabled := true
 
 ## Skill tree (docs/SKILL_TREE.md): each family's tier, applied by apply_skills. With no skills every
 ## value below is exactly the base constant, so a player without skills moves exactly as before.
@@ -229,6 +243,8 @@ func place(p_ball: MossBall, pos: Vector3, face_dir := Vector3.ZERO) -> void:
 	gliding = false
 	glide_t = -1.0
 	_carry_t = 0.0
+	current_brace = 0.0
+	current_push = Vector3.ZERO
 	# (No smear of his body from where he was.)
 	model.reset_follow()
 
@@ -314,6 +330,9 @@ func _physics_process(dt: float) -> void:
 		gliding = false
 		glide_amount = 0.0
 		model.glide = 0.0
+		current_brace = 0.0
+		current_push = Vector3.ZERO
+		model.current_brace = 0.0
 		_update_shadow()
 		return
 	_jumped_this_frame = false
@@ -583,7 +602,10 @@ func _physics_process(dt: float) -> void:
 			vh = (c["dir"] as Vector3) * CRAWL_FWD * 0.55
 	crawl_amount = move_toward(crawl_amount, 1.0 if _mantle_t >= 0.0 else 0.0, dt * (8.0 if _mantle_t >= 0.0 else 4.0))
 	# (Inside a bubble column its upflow shelters him from the ball's current.)
-	var cur := ball.current_at(global_position) * (0.0 if _in_column else (0.45 if grounded else 1.0)) + ext_vel + stream
+	var ball_cur := ball.current_at(global_position)
+	var cur := ball_cur * (0.0 if _in_column else (0.45 if grounded else 1.0)) + ext_vel + stream
+	# (The ground push the brace answers: read only, for the model.)
+	current_push = ball_cur * 0.45 if grounded and not _in_column else Vector3.ZERO
 	velocity = vh + up * vup + cur
 	var was_grounded := grounded
 	var pre_vup := vup
@@ -1008,9 +1030,34 @@ func _update_model(dt: float) -> void:
 	model.swipe_t = swipe_t
 	model.lunge_t = lunge_t
 	model.brace = move_toward(model.brace, 1.0 if fall_danger else 0.0, 0.1)
+	_update_current_brace(dt)
+	model.current_brace = current_brace
+	model.current_push = current_push
 	model.idle_ok = idle_allowed()
 	if cam:
 		model.camera_pos = cam.global_position
+
+
+## The brace weight for a ground push of `push` m/s (see BRACE_PUSH_MIN): 0 below it, 1 at
+## BRACE_PUSH_FULL and above, linear between.
+static func brace_for_push(push: float) -> float:
+	return clampf((push - BRACE_PUSH_MIN) / (BRACE_PUSH_FULL - BRACE_PUSH_MIN), 0.0, 1.0)
+
+
+## Whether a current's push may show as a brace: standing on the ground in play, not in a bubble
+## column, not crawling or lunging. In the air, in a column (or swimming, the swimmer's own model)
+## it is zero at once.
+func brace_possible() -> bool:
+	return brace_enabled and grounded and not _in_column and state == "normal" and _mantle_t < 0.0 \
+			and lunge_t < 0.0 and model != null and model.swim <= 0.0
+
+
+func _update_current_brace(dt: float) -> void:
+	if not brace_possible():
+		current_brace = 0.0
+		return
+	var want := brace_for_push(current_push.length())
+	current_brace = move_toward(current_brace, want, dt * (BRACE_RISE if want > current_brace else BRACE_FALL))
 
 
 ## Where to put him back after a ravine fall: his last safe footing, stepped a little further from
@@ -1034,7 +1081,7 @@ func ravine_return_point() -> Array:
 
 
 ## Whether the model may play an idle: he is standing still on the ground under the player's
-## control with nothing else going on (no input, action, landing, hit, fall, current pull, cinematic).
+## control with nothing else going on (no input, action, landing, hit, fall, current pull or push, cinematic).
 ## Idles are cosmetic (AxolotlModel); this only says when they may start and makes them stop.
 func idle_allowed() -> bool:
 	if state != "normal" or not controls_enabled or not grounded or _acted:
@@ -1043,7 +1090,7 @@ func idle_allowed() -> bool:
 		return false
 	if Game.inst != null and Game.inst.t2 != null and Game.inst.t2.active != "":
 		return false
-	if move_input.length() > 0.05 or ext_vel.length() > 0.05:
+	if move_input.length() > 0.05 or ext_vel.length() > 0.05 or current_brace > 0.05:
 		return false
 	var vh := velocity - up * velocity.dot(up)
 	if vh.length() > 0.3:

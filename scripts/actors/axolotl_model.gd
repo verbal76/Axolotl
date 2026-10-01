@@ -185,6 +185,40 @@ var _f_prev_pos := Vector3.INF
 var _conform_w := 0.0
 var _ray_q: PhysicsRayQueryParameters3D
 
+# Brace against a current (ledger row 19). A ball's current pushing him along the ground (set by the
+# controller: current_brace 0..1, how hard; current_push, the push in the world) shows as resistance:
+# body low and leaning into the flow, legs splayed with the feet propped downstream and dug in, the
+# feet re-planted one at a time (each lags upstream as he skids, lifts and is set down again
+# downstream), the tail held off to the downstream side as a rudder with small corrections, chin
+# tucked, mouth set, gills streaming. Each planted foot scrapes a small drag mark (WaterFX.drag_mark)
+# that grows as the foot skids, up to BRACE_MARK_MAX, and fades. Purely the model and the ground
+# marks: the gameplay body, its collision, movement and timing are untouched, and nothing here draws
+# a random number (the steps run on their own clock).
+var current_brace := 0.0
+var current_push := Vector3.ZERO
+## Seconds for all four feet to be re-planted in turn: light push .. full push.
+const BRACE_CYCLE := Vector2(2.2, 1.1)
+## The part of each foot's turn spent lifted (the re-planting step).
+const BRACE_LIFT := 0.13
+## The order the feet are re-planted: diagonal pairs, like the gait (FL, BR, FR, BL).
+const BRACE_ORDER := [0, 3, 1, 2]
+## A drag mark: from where the foot was planted along its skid, at most this long (m), this wide.
+const BRACE_MARK_MAX := 0.32
+const BRACE_MARK_MIN := 0.07
+const BRACE_MARK_W := 0.11
+var drag_marks := 0                 # marks scraped (tests)
+var _brace_w := 0.0                 # the brace this frame, after the model's own gates
+var _brace_plant := 0.0             # how much of it is the planted stance (eases off as he walks)
+var _brace_clock := 0.0
+var _brace_up := Vector2(0, -1)     # upstream, in the model's ground plane (x, z)
+var _rudder := 0.0
+var _hands: Array[Node3D] = []
+var _foot_lifted: Array[bool] = [true, true, true, true]
+var _foot_mark: Array[int] = [-1, -1, -1, -1]          # the WaterFX mark each planted foot is drawing
+var _foot_at: Array[Vector3] = [Vector3.INF, Vector3.INF, Vector3.INF, Vector3.INF]
+var _foot_n: Array[Vector3] = [Vector3.UP, Vector3.UP, Vector3.UP, Vector3.UP]
+var _mark_q: PhysicsRayQueryParameters3D
+
 
 func _ready() -> void:
 	_fx.seed = 0x6711
@@ -604,6 +638,7 @@ func _build_legs(_body_mat: ShaderMaterial) -> void:
 		hand.position = Vector3(side * 0.035, -0.095, -0.02)
 		elbow.add_child(hand)
 		_mesh(_hand_mesh(side, front), skin, hand)
+		_hands.append(hand)
 		legs.append(shoulder)
 		_elbows.append(elbow)
 
@@ -683,7 +718,8 @@ func _update_idle(dt: float) -> void:
 			_idle_stride = 0.0
 		return
 	var busy := not idle_ok or dissolve > 0.0 or swipe_t >= 0.0 or _whip_s >= 0.0 or lunge_t >= 0.0 or burst_t >= 0.0 \
-			or hurt_t >= 0.0 or land_t >= 0.0 or happy_t >= 0.0 or perk_t >= 0.0 or surf > 0.0 or brace > 0.0 or not grounded
+			or hurt_t >= 0.0 or land_t >= 0.0 or happy_t >= 0.0 or perk_t >= 0.0 or surf > 0.0 or brace > 0.0 or not grounded \
+			or current_brace > 0.0
 	if busy:
 		# Anything else going on ends an idle at once (the pose blends out in a few frames) and
 		# restarts the wait.
@@ -965,6 +1001,7 @@ func _process(dt: float) -> void:
 ## respawn, a checkpoint, a teleport) leaves no smear from where he was.
 func reset_follow() -> void:
 	_f_prev_pos = Vector3.INF
+	_end_marks()
 
 
 ## The follow-through, once a frame (see FOLLOW_RATE_MIN): writes _f_yaw, _f_pitch (each segment's
@@ -1235,6 +1272,38 @@ func _animate(dt: float) -> void:
 		head_rot.x -= 0.22 * crawl
 		gill_back = maxf(gill_back, 0.5 * crawl)
 		wave_amp *= 1.0 - 0.6 * crawl
+	_brace_w = brace_weight()
+	_brace_plant = 0.0
+	_rudder = 0.0
+	if _brace_w > 0.0:
+		# Braced against the current: leaning into it (toward upstream), body low and squat, chin
+		# tucked, mouth set, eyes narrowed, gills streaming; the body stiffens (less wave).
+		var bw := _brace_w
+		var lp := global_transform.basis.orthonormalized().inverse() * current_push if is_inside_tree() else current_push
+		var u := Vector2(-lp.x, -lp.z)
+		if u.length() > 0.001:
+			_brace_up = u.normalized()
+		u = _brace_up
+		_brace_plant = bw * (1.0 - smoothstep(0.3, 0.75, s))
+		var pl := _brace_plant
+		var lean := 0.3 * bw
+		rig_rot.x += lean * u.y
+		rig_rot.z -= lean * u.x
+		# (Shoulders turned a little into the flow, head further: he faces up into it.)
+		rig_rot.y -= 0.12 * bw * u.x
+		head_rot.y -= 0.25 * bw * u.x
+		rig_pos += Vector3(u.x, 0.0, u.y) * 0.05 * bw
+		rig_pos.y -= 0.045 * pl
+		rig_scale *= Vector3(1.0 + 0.08 * pl, 1.0 - 0.15 * pl, 1.0)
+		head_rot.x += 0.16 * pl
+		eye_scale.y *= 1.0 - 0.3 * pl
+		mouth_open = lerpf(mouth_open, 0.08, pl)
+		gill_back = maxf(gill_back, 0.35 + 0.6 * bw)
+		gill_flap = maxf(gill_flap, 0.15 + 0.2 * bw)
+		wave_amp *= 1.0 - 0.75 * pl
+		# The tail as a rudder: held off to the downstream side, set against the flow, with small
+		# steering corrections (on his own clock).
+		_rudder = (-u.x * 0.75 + sin(_t * 2.3) * 0.18 + sin(_t * 5.1) * 0.06) * bw
 	if burst_t >= 0.0:
 		var k := sin(burst_t * PI)
 		wave_amp = 0.18 + 0.3 * k
@@ -1375,7 +1444,7 @@ func _animate(dt: float) -> void:
 			# Whip: the bend travels down the tail, each bone a little behind the one before.
 			yaw += whip_curve(_whip_s - (i - 3) * 0.008) * _whip_side * WHIP_BONE_W[i]
 		elif i >= 5:
-			yaw += tail_base * 0.12
+			yaw += tail_base * 0.12 + _rudder * (0.07 + 0.03 * (i - 5))
 		var pitch := arch * (1.0 if i >= 5 else -0.4) * 0.5
 		if brace > 0.0 and i >= 5:
 			pitch -= 0.06 * brace
@@ -1404,6 +1473,7 @@ func _animate(dt: float) -> void:
 
 	_update_gills(dt, clampf(gill_back, 0.0, 1.4), gill_flap, gill_flare)
 	_animate_legs(dt, maxf(s, ip.get("stride", 0.0)), leg_mode)
+	_brace_marks(dt)
 
 	# The water arc: its bright head rides the tail tip, from the strike to the follow-through.
 	var arc_a := smoothstep(0.02, 0.05, _whip_s) * (1.0 - smoothstep(0.2, 0.34, _whip_s)) if whip else 0.0
@@ -1469,6 +1539,15 @@ func _animate_legs(dt: float, s: float, mode: int) -> void:
 			yaw += fist.y
 			roll += fist.z
 			bend += fist.x * 0.5
+		if _brace_plant > 0.0 and mode == 0:
+			var bp := _brace_leg(i, side)
+			yaw = lerpf(yaw, bp.x, _brace_plant)
+			roll = lerpf(roll, bp.y, _brace_plant)
+			bend = lerpf(bend, bp.z, _brace_plant)
+		if _hands.size() == legs.size():
+			# (Planted, the fingers press into the ground.)
+			var dig := -0.35 * _brace_plant * (1.0 - _brace_lift(i))
+			_hands[i].rotation.x = lerpf(_hands[i].rotation.x, dig, minf(1.0, dt * 14.0))
 		if _leg_idle_w > 0.0 and not _leg_idle.is_empty():
 			var li: Vector3 = _leg_idle[i]    # (shoulder yaw, shoulder roll, elbow bend), mirrored per side
 			yaw = lerpf(yaw, side * li.x, _leg_idle_w)
@@ -1476,6 +1555,111 @@ func _animate_legs(dt: float, s: float, mode: int) -> void:
 			bend = lerpf(bend, side * li.z, _leg_idle_w)
 		legs[i].rotation = legs[i].rotation.lerp(Vector3(0, yaw, roll), minf(1.0, dt * 14.0))
 		_elbows[i].rotation = _elbows[i].rotation.lerp(Vector3(0, 0, bend), minf(1.0, dt * 14.0))
+
+
+# --- Brace against a current (ledger row 19) ---------------------------------------------------
+
+## The brace drawn this frame: the controller's current_brace while he stands on the ground with
+## nothing else posing him; 0 swimming, in the air, crawling, or in another full-body moment.
+func brace_weight() -> float:
+	if current_brace <= 0.0 or not grounded or swim > 0.0 or crawl > 0.05 or brace > 0.0 or surf > 0.0 \
+			or lunge_t >= 0.0 or dissolve > 0.0 or glide > 0.05:
+		return 0.0
+	return clampf(current_brace, 0.0, 1.0)
+
+
+## Where foot `i` is in its re-planting turn: 0..1 round the cycle from the moment it lifts.
+func _brace_phase(i: int) -> float:
+	return fposmod(_brace_clock - BRACE_ORDER.find(i) * 0.25, 1.0)
+
+
+## 0..1..0 while foot `i` is lifted for its re-planting step, 0 while it is planted.
+func _brace_lift(i: int) -> float:
+	var p := _brace_phase(i)
+	return sin(p / BRACE_LIFT * PI) if p < BRACE_LIFT else 0.0
+
+
+## The braced pose of leg `i` (shoulder yaw, shoulder roll, elbow bend, as _animate_legs uses them):
+## splayed wide and propped toward downstream, the foot lagging upstream as he skids, then lifted
+## and set down downstream again.
+func _brace_leg(i: int, side: float) -> Vector3:
+	var p := _brace_phase(i)
+	# -1: lagged upstream (about to lift); +1: just set down downstream.
+	var at := lerpf(-1.0, 1.0, p / BRACE_LIFT) if p < BRACE_LIFT else lerpf(1.0, -1.0, (p - BRACE_LIFT) / (1.0 - BRACE_LIFT))
+	var d := -_brace_up
+	var dir := Vector2(side, 0.0) + d * (0.8 + 0.4 * at)
+	var out := side * dir.x
+	var yaw := clampf(side * atan2(-dir.y, maxf(out, 0.05)), -1.0, 1.0)
+	var lift := _brace_lift(i)
+	var strain := sin(_t * 17.0 + i * 1.7) * 0.03
+	# Elbows up and out, forearms angled outward to the planted feet (the low body keeps them on
+	# the ground); the props on the downstream side reach wider.
+	var roll := side * (0.36 + 0.12 * (out - 1.0) + 0.45 * lift + strain)
+	var bend := side * (0.3 + 0.12 * (out - 1.0) + 0.45 * lift)
+	return Vector3(yaw, roll, bend)
+
+
+## The feet's drag marks: a planted foot starts a mark where it is set down and draws it out along
+## its skid (up to BRACE_MARK_MAX); lifting it ends the mark. Only on the moss and gravel itself
+## (the ball's ground, layer 1), never on a leaf, a stone or a platform.
+func _brace_marks(dt: float) -> void:
+	if _brace_plant < 0.3 or _hands.size() != 4 or not is_inside_tree() or WaterFX.inst == null:
+		_end_marks()
+		return
+	var bw := _brace_w
+	_brace_clock += dt / lerpf(BRACE_CYCLE.x, BRACE_CYCLE.y, bw)
+	var fx := WaterFX.inst
+	for i in 4:
+		var lifted := _brace_phase(i) < BRACE_LIFT
+		var foot := _hands[i].global_position
+		if lifted:
+			if not _foot_lifted[i] and _foot_mark[i] >= 0:
+				# Lifting off: a little kicked-up silt where the scrape ends.
+				fx.scuff(_foot_at[i].lerp(foot, 0.5), _foot_n[i], current_push * 0.4, bw)
+			_foot_mark[i] = -1
+			_foot_at[i] = Vector3.INF
+		elif _foot_lifted[i] or _foot_at[i] == Vector3.INF:
+			# Set down: dig in where the ground is.
+			var hit := _ground_under(foot)
+			if not hit.is_empty():
+				_foot_at[i] = hit[0]
+				_foot_n[i] = hit[1]
+				var down := current_push - (hit[1] as Vector3) * current_push.dot(hit[1])
+				var dir := down.normalized() if down.length() > 0.01 else global_transform.basis.z
+				_foot_mark[i] = fx.drag_mark(hit[0], hit[1], dir, BRACE_MARK_MIN, BRACE_MARK_W, 0.55 + 0.45 * bw)
+				drag_marks += 1
+		elif _foot_mark[i] >= 0:
+			# Skidding: the mark follows the foot (kept on the ground plane where it dug in).
+			var n: Vector3 = _foot_n[i]
+			var a: Vector3 = _foot_at[i]
+			var b := foot - n * (foot - a).dot(n)
+			if a.distance_to(b) > BRACE_MARK_MAX:
+				_foot_mark[i] = -1
+			elif not fx.drag_mark_stretch(_foot_mark[i], a, b, BRACE_MARK_MIN):
+				_foot_mark[i] = -1
+		_foot_lifted[i] = lifted
+
+
+func _end_marks() -> void:
+	for i in 4:
+		_foot_mark[i] = -1
+		_foot_at[i] = Vector3.INF
+		_foot_lifted[i] = true
+
+
+## The ball's ground (layer 1) under a foot: [point, normal], or [] (not on the moss or gravel).
+func _ground_under(foot: Vector3) -> Array:
+	if _mark_q == null:
+		_mark_q = PhysicsRayQueryParameters3D.new()
+		_mark_q.collision_mask = 1
+		_mark_q.hit_back_faces = false
+	var n := global_transform.basis.y.normalized()
+	_mark_q.from = foot + n * 0.25
+	_mark_q.to = foot - n * 0.3
+	var hit := get_world_3d().direct_space_state.intersect_ray(_mark_q)
+	if hit.is_empty() or (hit["normal"] as Vector3).dot(n) < 0.6:
+		return []
+	return [hit["position"], hit["normal"]]
 
 
 func _animate_landing(_dt: float) -> void:
