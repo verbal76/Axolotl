@@ -206,7 +206,7 @@ func _process(dt: float) -> void:
 	if _scan <= 0.0:
 		_scan = SCAN_S
 		_update_objective()
-	ui.update_marker(_marker_pos(), UiStyle.DANGER if objective == "parasite" else UiStyle.GOLD)
+	ui.update_marker(_marker_pos())
 
 
 ## The app went to the background (or lost focus): a staged moment ends cleanly.

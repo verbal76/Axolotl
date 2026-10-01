@@ -181,7 +181,7 @@ func objective_panel() -> PanelContainer:
 	return _obj
 
 
-func update_marker(world_pos: Vector3, color := UiStyle.GOLD) -> void:
+func update_marker(world_pos: Vector3, color := UiStyle.DANGER) -> void:
 	_marker.world_pos = world_pos
 	_marker.color = color
 	_marker.queue_redraw()
@@ -229,7 +229,7 @@ func layout_in(area: Rect2, s: float) -> void:
 ## The soft ring round the objective's target (centred on it).
 class Marker extends Control:
 	var world_pos := Vector3.INF
-	var color := UiStyle.GOLD    # gold for food, red for the parasite to defeat
+	var color := UiStyle.DANGER    # owner, 2026-10-01: red for every objective (food and parasite)
 	var _t := 0.0
 
 	func _process(dt: float) -> void:

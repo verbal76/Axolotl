@@ -713,7 +713,7 @@ func feeding() -> void:
 
 
 ## While a card is up, a touch on the HUD's buttons does nothing in the game.
-## Owner, 2026-10-01: the first jellyfish in view starts the food lesson (gold ring), even with a
+## Owner, 2026-10-01: the first jellyfish in view starts the food lesson (red ring, centred on it), even with a
 ## parasite in view too; a parasite lesson already under way is not interrupted by one.
 func feed_first() -> void:
 	await reset(["intro", "starfish"])
@@ -735,12 +735,16 @@ func feed_first() -> void:
 	if p.health == p.max_health:
 		p.health -= 1
 	var f := jelly(3.0)
-	# (Facing it already armed the parasite lesson; drop that so both come into view at once.)
+	# (Facing it already armed the parasite lesson; once the camera has settled with the jellyfish in
+	# view, drop that so both are in view at the next scan.)
+	await wait_until(func() -> bool: return o.visible_to_player(f.global_position, Onboarding.FOOD_SEE_M), 2.0)
 	o._set_objective("")
 	var on := await wait_until(func() -> bool: return o.objective == "feeding", 2.0)
 	await t.frames(2)
-	t.check("feed_first_jelly_beats_parasite", on and o.food_target == f and o.ui._marker.color == UiStyle.GOLD,
-			"objective '%s'" % o.objective)
+	t.check("feed_first_jelly_beats_parasite", on and o.food_target == f and o.ui._marker.color == UiStyle.DANGER
+			and o._marker_pos().distance_to(f.global_position) < 0.001,
+			"objective '%s'; done(feeding) %s, hp %d/%d, food ok %s, food visible %s at %.1f m" % [o.objective, o.done("feeding"), p.health, p.max_health,
+			o._food_ok(f), o.visible_to_player(f.global_position, Onboarding.FOOD_SEE_M), f.global_position.distance_to(p.global_position)])
 	# Mid-parasite lesson: a jellyfish coming into view does not switch it.
 	f.queue_free()
 	p.ball.foods.erase(f)
