@@ -7649,8 +7649,20 @@ func _test_treasure_play() -> void:
 	# Quit right after a find: the save holds exactly that find.
 	var idx_a := int(st["index"])
 	var got3 := await _lunge_at_current(tp)
+	if not got3:
+		# (This check is about the save after a find, not about awkward spots: a random spot the
+		# test's approach cannot reach is moved the way the game moves a bad spot, then tried again.)
+		t.log_line("TREASURE QUIT find missed at %s (world %d); recovering the spot and trying again"
+				% [str(TreasureHunt.target_pos(TreasureHunt.current(st))), int(TreasureHunt.current(st)["world"])])
+		TreasureHunt.recover(st, int(st["index"]), g.balls)
+		tp.stop()
+		tp.start()
+		await t.frames(3)
+		idx_a = int(st["index"])
+		got3 = await _lunge_at_current(tp)
 	var on_disk := TreasureHunt.state_of(RunSave.open(g.run_save.path).run())
-	t.check("treasure_quit_mid_celebration_safe", got3 and int(on_disk["index"]) == idx_a + 1 and on_disk["targets"] == st["targets"], "")
+	t.check("treasure_quit_mid_celebration_safe", got3 and int(on_disk["index"]) == idx_a + 1 and on_disk["targets"] == st["targets"],
+			"found %s, index on disk %d (expected %d), targets match %s" % [got3, int(on_disk["index"]), idx_a + 1, on_disk["targets"] == st["targets"]])
 	await _until(func(): return not tp.celebrating, 6.0)
 	tp.stop()
 	await t.frames(2)
