@@ -953,7 +953,7 @@ static func _ball3(lb: LevelBuilder) -> void:
 		# Each leaf's base just clear of the tapering trunk, joined to it by its stalk.
 		var rr := lerpf(1.1, 0.75, h / 19.0) + LevelBuilder.LEAF_CLEAR
 		var xf := C.p(cos(a) * rr, h, sin(a) * rr, Site.yaw_out(cos(a), sin(a)))
-		lb.leaf_xf(xf, 3.0, SPIRAL_LEAF_W)
+		lb.leaf_xf(xf, 3.0, SPIRAL_LEAF_W, true, true, LevelBuilder.STEM_STALK)
 		spiral.append(xf)
 	# C1 (canopy bloom), C3 (mote) branch from the giant stem; C1b/C2 from stem S2.
 	var c1 := C.p(cos(deg_to_rad(120)) * 0.9, 16.9, sin(deg_to_rad(120)) * 0.9, Site.yaw_out(cos(deg_to_rad(120)), sin(deg_to_rad(120))))

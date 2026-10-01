@@ -6779,11 +6779,15 @@ func _test_leaf_geometry() -> void:
 				if not hit.is_empty() and hit["collider"] == body:
 					beside.append("b%d t%.2f: solid beyond the drawn edge" % [b.index + 1, tt])
 		# Its stalk's root, inside the stem it grows from (flex leaves are on their own thin stem).
-		var root_pt := xf * Vector3(0, 0.3, 0.45)
-		var pq := PhysicsPointQueryParameters3D.new()
-		pq.position = root_pt
-		pq.collision_mask = 1
-		if space.intersect_point(pq, 4).is_empty():
+		# (Stem leaves stand 0.3 m further out since the pothos reshape, with a longer stalk:
+		# LevelBuilder.STEM_STALK.)
+		var rooted := false
+		for back in [0.45, LevelBuilder.STEM_STALK - 0.1]:
+			var pq := PhysicsPointQueryParameters3D.new()
+			pq.position = xf * Vector3(0, 0.3, back)
+			pq.collision_mask = 1
+			rooted = rooted or not space.intersect_point(pq, 4).is_empty()
+		if not rooted:
 			floating.append("b%d leaf at h %.1f: stalk root not in a stem" % [b.index + 1, b.altitude(xf.origin)])
 		# Room to turn round at the landing point.
 		var land := Levels.leaf_mid(xf, minf(1.4, len * 0.5), 0.0).origin
@@ -6865,7 +6869,8 @@ func _leaf_angle_gap(b: MossBall, la: Array, lb_: Array) -> float:
 	var xb: Transform3D = lb_[0]
 	var up := b.up_at(xa.origin)
 	# The stem axis: back along each leaf from its base, where the two base directions meet.
-	var centre := (xa.origin + xa.basis.z.normalized() * 0.6 + xb.origin + xb.basis.z.normalized() * 0.6) * 0.5
+	# (Stem leaves stand LevelBuilder.LEAF_CLEAR off the stem: 0.3 m more since the pothos reshape.)
+	var centre := (xa.origin + xa.basis.z.normalized() * 0.9 + xb.origin + xb.basis.z.normalized() * 0.9) * 0.5
 	var spans := []
 	for e in [la, lb_]:
 		var xf: Transform3D = e[0]

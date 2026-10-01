@@ -637,7 +637,7 @@ static func leaf_shadow_proxy(leaves: Array) -> ArrayMesh:
 ## widest about a quarter of the way along, then a long taper to a pointed tip.
 static func leaf_profile(t: float) -> float:
 	var tc := clampf(t, 0.0, 1.0)
-	var neck := 0.22 + 0.78 * smoothstep(0.0, 0.14, tc)
+	var neck := 0.22 + 0.78 * smoothstep(0.0, 0.22, tc)
 	return neck * pow(1.0 - tc, 0.85) * (1.0 + 1.6 * tc) / 1.096
 
 
@@ -667,9 +667,9 @@ static func leaf_collision_depth(s: float) -> float:
 ## card. With `petiole`, a curved stalk runs from the leaf's base back into the stem it grows from
 ## (+Z, rising slightly as it enters the stem), so the leaf is seen to grow out of it: nothing but
 ## the drawn leaf collides (MeshLib.leaf_collision_shapes); the stalk never snags.
-static func platform_leaf_mesh(length: float, width: float, petiole := false) -> ArrayMesh:
+static func platform_leaf_mesh(length: float, width: float, petiole := false, stalk := 0.55) -> ArrayMesh:
 	var st := leaf_surface()
-	_leaf_into(st, Transform3D.IDENTITY, length, width, petiole, 0)
+	_leaf_into(st, Transform3D.IDENTITY, length, width, petiole, 0, stalk)
 	st.generate_normals()
 	return st.commit()
 
@@ -691,7 +691,8 @@ static func leaf_phase(at: Vector3) -> float:
 
 ## Appends a platform leaf (as platform_leaf_mesh) transformed by `xf` to `st` (indexed), whose
 ## vertices so far number `base`; returns the new count. Call generate_normals() once at the end.
-static func _leaf_into(st: SurfaceTool, xf: Transform3D, length: float, width: float, petiole: bool, p_base: int) -> int:
+## `stalk`: how far back (+Z) the stalk reaches into its stem.
+static func _leaf_into(st: SurfaceTool, xf: Transform3D, length: float, width: float, petiole: bool, p_base: int, stalk := 0.55) -> int:
 	var lup := xf.basis.y.normalized()
 	st.set_custom(0, Color(lup.x, lup.y, lup.z, leaf_phase(xf.origin)))
 	var rows := 10
@@ -744,8 +745,8 @@ static func _leaf_into(st: SurfaceTool, xf: Transform3D, length: float, width: f
 		# The stalk: from inside the stem (0.55 m back, a little higher) arcing down and out into
 		# the leaf's narrow base, thickest where it leaves the stem.
 		var r_scale := clampf(width / 2.2, 0.8, 1.5)
-		var p0 := Vector3(0, 0.3, 0.55)
-		var p1 := Vector3(0, 0.28, 0.12)
+		var p0 := Vector3(0, 0.3, stalk)
+		var p1 := Vector3(0, 0.28, stalk * 0.22)
 		var p2 := Vector3(0, 0.1, -0.08)
 		var p3 := Vector3(0, 0.02, -0.34)
 		var rings := 6
