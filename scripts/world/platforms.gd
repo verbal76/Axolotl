@@ -173,7 +173,7 @@ class FlexLeaf extends AnimatableBody3D:
 			_pending_rebound = clampf(impact * 0.55, 5.0, 11.0)
 			_rebound_player = player
 		if impact > 9.0:
-			for p in ball.parasites:
+			for p in ball.hostiles():
 				if p.standing_on == self and p.is_alive():
 					var up := ball.up_at(p.global_position)
 					var out: Vector3 = (p.global_position - global_position)

@@ -497,6 +497,14 @@ func no_input_leak() -> void:
 	t.check("onb_card_no_input_leak", not leaked and o.ui.waiting_for_tap(), "")
 
 
+
+## Runs the parasite lesson in a fresh process (a new run and profile) and reports its checks here.
+func _parasite_fresh(name_: String) -> void:
+	var tag := str(Time.get_ticks_usec())
+	var code := _child("_test_onb_parasite", ["--onb-fresh=1", "--run-save=" + ProjectSettings.globalize_path("user://onb_par_run_%s.json" % tag),
+			"--gill-save=" + ProjectSettings.globalize_path("user://onb_par_gill_%s.json" % tag)])
+	t.check(name_, code == 0, "fresh process exited %d" % code)
+
 # --- Lesson 2: the first parasite ------------------------------------------------------------------
 
 func parasite() -> void:
@@ -507,15 +515,20 @@ func parasite() -> void:
 	if par == null:
 		# (In the full suite, earlier tests have cleared these balls: run the lesson in a fresh
 		# process with a new run and profile, and report its checks here.)
-		var tag := str(Time.get_ticks_usec())
-		var code := _child("_test_onb_parasite", ["--run-save=" + ProjectSettings.globalize_path("user://onb_par_run_%s.json" % tag),
-				"--gill-save=" + ProjectSettings.globalize_path("user://onb_par_gill_%s.json" % tag)])
-		t.check("parasite_lesson_has_a_parasite", code == 0, "fresh process exited %d" % code)
+		await _parasite_fresh("parasite_lesson_has_a_parasite")
 		return
 	await face(par, 6.0)
 	var on := await wait_until(func() -> bool: return o.objective == "parasite", 2.0)
+	if not on and not Settings.test_args.has("onb-fresh"):
+		# (Earlier suite tests can leave this ball's parasites roused, so the chosen one rushes in
+		# out of clear view: a player's first parasite is met in a fresh world, so check it there.)
+		t.log_line("parasite lesson: not armed in the shared process (state from earlier tests); rerunning fresh")
+		await _parasite_fresh("parasite_lesson_fresh_world")
+		return
 	t.check("parasite_objective_when_visible", on and o.parasite_target == par and o.ui.objective_text() == Onboarding.OBJ_PARASITE and g.hud.prompts.has("swipe")
-			and o._marker_pos() != Vector3.INF, "objective '%s'" % o.objective)
+			and o._marker_pos() != Vector3.INF, "objective '%s'; state %s, cinematic '%s', player %s, controls %s, parasite at %.1f m, seen %s"
+			% [o.objective, g.state, g.cinematic, p.state, p.controls_enabled, par.global_position.distance_to(p.global_position),
+			o.visible_to_player(par.global_position + par.ball.up_at(par.global_position) * 0.3, Onboarding.PARASITE_SEE_M, par)])
 	t.check("parasite_gill_never_frozen", p.controls_enabled and g.cinematic == "", "")
 	# The tutorial's own swipe prompt does not show as well.
 	t.check("parasite_no_duplicate_prompt", not g.prompts_active.has("swipe"), str(g.prompts_active))

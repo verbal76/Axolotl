@@ -118,7 +118,7 @@ func update(dt: float) -> void:
 		_add(t[0], 0.42 + 0.25 * age, t[1] * (1.0 - age), s)
 	# Nearby parasites disturb vegetation too: head and tail.
 	var near := []
-	for par in p.ball.parasites:
+	for par in p.ball.hostiles():
 		if par.is_alive() and par.visible and par.global_position.distance_to(p.global_position) < 30.0:
 			near.append([par.global_position.distance_squared_to(p.global_position), par])
 	near.sort_custom(func(a, b): return a[0] < b[0])

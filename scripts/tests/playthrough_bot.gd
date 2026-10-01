@@ -639,7 +639,7 @@ var _high_logged := {}
 func _nearest_threat() -> String:
 	var best := "none"
 	var bd := 4.0
-	for par in p.ball.parasites:
+	for par in p.ball.hostiles():
 		if par.is_alive() and par.global_position.distance_to(p.global_position) < bd:
 			bd = par.global_position.distance_to(p.global_position)
 			best = "parasite %s %.1f m" % [par.zone_id, bd]
@@ -1227,8 +1227,10 @@ func settle_on(target: Variant) -> void:
 
 # --- combat / feeding --------------------------------------------------------------------
 
+## (Self-defence covers returners too; completion routing never does: it walks `ball.parasites`
+## only, so repopulation never sends the bot after a parasite that is not in the catalog.)
 func _threat() -> Parasite:
-	for par in p.ball.parasites:
+	for par in p.ball.hostiles():
 		if par.is_alive() and par.state in ["chase", "windup", "attack"] and par.global_position.distance_to(p.global_position) < 2.6 \
 				and absf(height_of(par.global_position)) < 1.2:
 			return par

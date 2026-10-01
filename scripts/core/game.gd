@@ -57,7 +57,11 @@ var all_clear_done := false
 var _all_clear_wait := -1.0
 var _tut_framed := false
 var _mote_lights: Array[OmniLight3D] = []
-var _food_timer := 0.0
+## Food arrivals: local region targets and cooldowns, its own generator (FoodDirector).
+var food: FoodDirector
+## Parasites returning to cleared zones (Repopulation); Normal rules.
+var repop: Repopulation
+var _repop_t := 0.0
 var _vortex_block: Vortex = null
 var _pending_connect: Array = []
 var _moved := 0.0
@@ -84,7 +88,7 @@ var _save_dirty := false
 var tier2 := Tier2.new()
 ## Harmless practice targets a Tier-2 shrine sets out (PracticeTarget): struck like parasites.
 var practice_targets: Array = []
-var stats := {"kills": 0, "motes": 0, "eaten": [0, 0, 0], "upgrades": 0, "deaths": 0, "extreme_landings": 0, "hard_landings": 0,
+var stats := {"kills": 0, "returner_kills": 0, "motes": 0, "eaten": [0, 0, 0], "upgrades": 0, "deaths": 0, "extreme_landings": 0, "hard_landings": 0,
 		"travels": [], "connects": []}
 
 
@@ -235,9 +239,6 @@ func _build_world() -> void:
 		_mote_lights.append(l)
 
 	StartupTrace.mark("vortices, axolotl, camera, lights")
-	for b in balls:
-		_initial_food(b)
-	StartupTrace.mark("food placed")
 	ecosystem = Ecosystem.new()
 	add_child(ecosystem)
 	ecosystem.populate(balls)
@@ -399,6 +400,16 @@ func _open_run() -> void:
 	run_save = RunSave.open(path)
 	clock = RunClock.from_dict(run_save.run()["clock"])
 	tier2 = Tier2.from_dict(run_save.run().get("tier2", {}))
+	# Food and repopulation hash from the run (food's first organisms too, so they wait for it).
+	food = FoodDirector.new()
+	food.setup(rng_key(), balls)
+	for b in balls:
+		food.initial(b)
+	StartupTrace.mark("food placed")
+	repop = Repopulation.new(Repopulation.normal_rules())
+	repop.key = rng_key()
+	repop.build(balls, vortices)
+	repop.from_dict((run_save.run().get("world", {}) as Dictionary).get("repop", {}))
 	_open_gill()
 	_apply_run()
 	StartupTrace.mark("run save opened (%s)" % run_save.origin.get_slice(" (", 0))
@@ -409,6 +420,14 @@ static func gill_progress_path() -> String:
 		return Settings.test_args["gill-save"]
 	# Automated runs never touch the player's progress.
 	return "user://test_gill_progress.json" if Settings.test_mode != "" else GillProgress.PATH
+
+
+## The key food and repopulation hash from: the run id (a fixed key in seeded test runs, so a
+## seed always plays out the same way).
+func rng_key() -> String:
+	if Settings.test_mode != "":
+		return "test-%s" % str(Settings.test_args.get("seed", "4242"))
+	return str(run_save.run()["id"])
 
 
 ## Opens the permanent progression and gives him its skills. Tests start from none unless given a
@@ -568,7 +587,7 @@ func _capture_world() -> Dictionary:
 	return {"ball": player.ball.index, "checkpoint": checkpoint.get_meta("completion_id", "") if checkpoint else "",
 			"prompts_done": prompts_done.keys(), "tut_framed": _tut_framed, "all_clear_shown": all_clear_done,
 			"onb_frond": onboarding != null and onboarding.run_frond,
-			"stats": stats.duplicate(true)}
+			"stats": stats.duplicate(true), "repop": repop.to_dict() if repop != null else {}}
 
 
 ## Writes the run (clock, world, earned) now.
@@ -697,6 +716,8 @@ func run_diagnostics_text() -> String:
 			int(run_save.run()["catalog_version_at_start"]), Completion.CATALOG_VERSION])
 	L.append("  Run save: %s, format %d, timer model %d; %s" % [run_save.path, RunSave.FORMAT, RunClock.TIMER_MODEL, run_save.origin])
 	L.append("  Last save: %s" % run_save.last_save_result)
+	if repop != null:
+		L.append("  " + repop.summary())
 	if gill != null:
 		L.append(gill.diagnostics_text())
 		if starfish != null:
@@ -766,6 +787,7 @@ func _process(dt: float) -> void:
 	_update_restoration(dt)
 	_update_mote_lights()
 	_update_food(dt)
+	_update_repop(dt)
 	_update_all_clear(dt)
 
 
@@ -825,7 +847,7 @@ const SWIPE_AIM_TARGET := deg_to_rad(80.0)
 ## creatures that can be hit (Critter.hittable).
 func _strikeable(p: Axolotl) -> Array:
 	var out := []
-	for par in p.ball.parasites:
+	for par in p.ball.hostiles():
 		if par.is_alive():
 			out.append(par)
 	for c in p.ball.critters:
@@ -992,6 +1014,8 @@ func _eat(p: Axolotl, f: Food) -> void:
 	Sfx.play("eat_big" if f.type == Food.Type.BURROWER else "eat", p.global_position)
 	p.model.happy_t = 0.0 if f.type == Food.Type.BURROWER else p.model.happy_t
 	p.ball.foods.erase(f)
+	if food != null:
+		food.on_eaten(f)
 	f.eaten()
 	_hide_prompt("lunge", true)
 	# (The healing above is the real one; the lesson only paces how the frond is SHOWN coming back.)
@@ -999,6 +1023,15 @@ func _eat(p: Axolotl, f: Food) -> void:
 
 
 func parasite_killed(par: Parasite) -> void:
+	if par.returner:
+		# Repopulation: a returner earns, restores and changes nothing (no id, no zone event).
+		stats["returner_kills"] = int(stats.get("returner_kills", 0)) + 1
+		WaterFX.inst.sparkle(par.global_position, Color(0.45, 1.0, 0.45, 0.9), 14, 1.6, 0.08, 1.0)
+		Sfx.play("drain", par.global_position, -3.0)
+		if repop != null:
+			repop.on_killed(par, clock.play_s)
+		_hide_prompt("swipe", true)
+		return
 	stats["kills"] += 1
 	_earn(par.get_meta("completion_id", ""))
 	var ball := par.ball
@@ -1062,7 +1095,7 @@ func upgrade_collected(u: Node) -> void:
 func on_water_impulse(pos: Vector3, strength: float) -> void:
 	if player == null or player.ball == null:
 		return
-	for par in player.ball.parasites:
+	for par in player.ball.hostiles():
 		if par.is_alive():
 			var d: Vector3 = par.global_position - pos
 			if d.length() < 2.0:
@@ -1416,7 +1449,7 @@ func _cine_regen() -> void:
 			(target[2] as Bloom).brighten()
 			# The bloom's pulse startles parasites off (Expansion 6): he never re-forms into an
 			# attack he cannot answer.
-			for par in b.parasites:
+			for par in b.hostiles():
 				if par.is_alive() and par.global_position.distance_to(dest_pos) < Parasite.STARTLE_R:
 					par.startle(dest_pos)
 		audio.set_ball(b.index, true)
@@ -1468,63 +1501,17 @@ func _update_mote_lights() -> void:
 
 # --- Food ---------------------------------------------------------------------------------
 
-func _initial_food(b: MossBall) -> void:
-	for i in b.food_target:
-		_spawn_food(b, true)
-
-
 func _update_food(dt: float) -> void:
-	_food_timer -= dt
-	if _food_timer > 0.0:
+	food.update(dt, player.ball, player.global_position, cam)
+
+
+## Twice a second in play: parasites may return to cleared zones on his ball (Repopulation).
+func _update_repop(dt: float) -> void:
+	_repop_t -= dt
+	if _repop_t > 0.0 or repop == null or state != "play":
 		return
-	var b := player.ball
-	# (One every 2.5 s on a ball that keeps 7; bigger balls keep more and refill as quickly.)
-	_food_timer = 2.5 * 7.0 / maxf(1.0, float(b.food_target))
-	b.foods = b.foods.filter(func(f): return is_instance_valid(f))
-	if b.foods.size() < b.food_target:
-		_spawn_food(b, false)
-
-
-func _pick_type(b: MossBall) -> int:
-	var r := randf()
-	var w: Array = b.food_weights
-	if r < w[0]:
-		return Food.Type.DRIFTER
-	if r < w[0] + w[1]:
-		return Food.Type.DARTER
-	return Food.Type.BURROWER
-
-
-func _spawn_food(b: MossBall, initial: bool) -> void:
-	var t := _pick_type(b)
-	var pdir := b.up_at(player.global_position) if player and player.ball == b else Vector3.ZERO
-	if t == Food.Type.BURROWER:
-		var free := b.food_spots.filter(func(h): return not h["occupied"] and (pdir == Vector3.ZERO or initial or (h["dir"] as Vector3).angle_to(pdir) > deg_to_rad(10)))
-		if free.is_empty():
-			t = Food.Type.DRIFTER
-		else:
-			var f := Food.new()
-			f.setup_burrower(b, free[randi() % free.size()])
-			b.add_child(f)
-			b.foods.append(f)
-			return
-	if b.food_regions.is_empty():
-		return
-	var reg: Dictionary = b.food_regions[randi() % b.food_regions.size()]
-	var rd: Vector3 = reg["dir"]
-	for attempt in 8:
-		var dir := rd.rotated(MossBall.frame_at(rd, randf() * 360.0).x, deg_to_rad(randf() * float(reg["radius"]) * 0.8))
-		# New organisms arrive out of view: they drift or swim in from open water.
-		if not initial and pdir != Vector3.ZERO and dir.angle_to(pdir) < deg_to_rad(22):
-			continue
-		var h := randf_range(0.8, 1.8) if initial else randf_range(7.0, 10.0)
-		var f := Food.new()
-		f.setup(b, t, b.surface_point(dir, h), rd, float(reg["radius"]))
-		if initial:
-			f.state = "idle"
-		b.add_child(f)
-		b.foods.append(f)
-		return
+	_repop_t = 0.5
+	repop.update(clock.play_s, player.ball, player.global_position, cam)
 
 
 # --- Tutorial prompts ---------------------------------------------------------------------
@@ -1563,7 +1550,7 @@ func _update_tutorial(_dt: float) -> void:
 	# (While the parasite and feeding lessons are still to come, they show the Tail Swipe and Lunge
 	# prompts themselves, as their objectives: never twice.)
 	if not prompts_done.has("swipe") and onboarding.done("parasite"):
-		for par in b.parasites:
+		for par in b.hostiles():
 			if par.is_alive() and par.global_position.distance_to(player.global_position) < 5.0:
 				_show_prompt("swipe")
 				break
