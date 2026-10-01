@@ -39,6 +39,11 @@ var g: Node
 var _launch_t0 := -1
 var _poll := 0.0
 var _resume_due := false
+## Seconds after a return from the background during which it still counts as that safe moment
+## (owner phone, 2026-10-01: the native layer starts its own check at the same instant, so a single
+## attempt always met "an update check is running" and the waiting update sat until the title).
+const RESUME_WINDOW_S := 15.0
+var _resume_left := 0.0
 var _applying := false
 var _announced_download := ""
 ## Package verdicts already computed this session (see applicable()).
@@ -265,17 +270,20 @@ func launch_gate(loading) -> bool:
 func _notification(what: int) -> void:
 	if what == NOTIFICATION_APPLICATION_RESUMED or what == NOTIFICATION_APPLICATION_FOCUS_IN:
 		_resume_due = true
+		_resume_left = RESUME_WINDOW_S
 
 
 func _process(dt: float) -> void:
 	if _applying or g == null or not g.ready_done:
 		_resume_due = false
+		_resume_left = 0.0
 		return
+	_resume_left = maxf(0.0, _resume_left - dt)
 	_poll -= dt
 	if _poll > 0.0 and not _resume_due:
 		return
 	_poll = POLL_S
-	var where := "resume" if _resume_due else "title"
+	var where := "resume" if _resume_due or _resume_left > 0.0 else "title"
 	_resume_due = false
 	if _off() != "":
 		return

@@ -6113,6 +6113,14 @@ func _test_polish_a() -> void:
 	await t.frames(40)
 	var fl: String = g.frame_stats.line("play")
 	t.check("frame_stats_in_diagnostics", fl.contains("fps") and g.run_diagnostics_text().contains("Frames title"), fl)
+	# Automatic updates: a return from the background stays a safe moment for RESUME_WINDOW_S, so a
+	# native check starting at the same instant no longer costs the install (owner phone 2026-10-01).
+	var au: AutoUpdate = g.auto_update
+	au._notification(Node.NOTIFICATION_APPLICATION_RESUMED)
+	au._process(1.0)
+	var open_after_1s := au._resume_left > 0.0
+	au._process(AutoUpdate.RESUME_WINDOW_S)
+	t.check("auto_update_resume_window", open_after_1s and au._resume_left == 0.0, "window %.0f s" % AutoUpdate.RESUME_WINDOW_S)
 	t.check("hud_thumb_targets_separated", worst >= 20.0 and outside.is_empty() and wrong == 0,
 			"min dead space %.1f px, outside safe %s, edge misroutes %d" % [worst, str(outside), wrong])
 
