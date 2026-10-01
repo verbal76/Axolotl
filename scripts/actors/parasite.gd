@@ -113,6 +113,11 @@ var _pushed := Vector3.ZERO
 var _wave_phase := 0.0
 var _wave_amp := 0.0
 var _last_head := Vector3.ZERO
+## Leech gait (owner 2026-10-01: "slides and stays stiff"): a stretch-and-gather cycle whose phase
+## advances with the distance crawled; the body bunches with a hump, then reaches forward, and the
+## crawl surges with it (average speed unchanged).
+var _crawl := 0.0
+var _gait := 0.0
 ## Expression layer (Open Issue #3): drift, weave, pace and look on top of its intent; seeded from
 ## `_rng.seed` (read, never drawn from). See OrganicMotion.
 var _org := OrganicMotion.new(0)
@@ -191,6 +196,7 @@ func _ready() -> void:
 		m.set_shader_parameter("color_b", p[1])
 		m.set_shader_parameter("spot", p[2])
 	_body_mat.set_shader_parameter("npts", seg_count)
+	_body_mat.set_shader_parameter("leech", 1.0)
 	for i in seg_count:
 		var mi := MeshInstance3D.new()
 		mi.set_instance_shader_parameter("seg_t", (float(i) + 0.5) / seg_count)
@@ -234,23 +240,6 @@ func _ready() -> void:
 		m.rotation = Vector3(-PI / 2 + 0.3, 0, side * -0.4)
 		m.name = "Mandible"
 		_segs[0].add_child(m)
-	# Tiny bristly legs on larger bodies, merged into one mesh per segment.
-	if kind > Kind.SMALL:
-		var leg := CylinderMesh.new()
-		leg.top_radius = 0.0
-		leg.bottom_radius = seg_radius * 0.12
-		leg.height = seg_radius * 1.2
-		leg.radial_segments = 4
-		for i in range(1, seg_count - 1):
-			var parts := []
-			for side in [-1.0, 1.0]:
-				parts.append([leg, Transform3D(Basis.from_euler(Vector3(0, 0, side * 1.1)), Vector3(side * seg_radius * 0.8, -seg_radius * 0.35, 0))])
-			var l := MeshInstance3D.new()
-			l.mesh = MeshLib.merge(parts)
-			l.material_override = _mat
-			l.set_instance_shader_parameter("seg_t", (float(i) + 0.5) / seg_count)
-			l.visibility_range_end = 40.0
-			_segs[i].add_child(l)
 	for sgi in _segs:
 		for c in sgi.get_children():
 			if c is GeometryInstance3D:
@@ -274,7 +263,7 @@ static func _body_tube() -> ArrayMesh:
 	if _tube != null:
 		return _tube
 	var rings := 34
-	var sides := 10
+	var sides := 14
 	var verts := PackedVector3Array()
 	var uvs := PackedVector2Array()
 	var nrm := PackedVector3Array()
@@ -481,21 +470,23 @@ func _update_crawl(dt: float, pl: Axolotl) -> void:
 	var to_player := pl.global_position - global_position
 	var d := to_player.length()
 	var player_here := pl.ball == ball and pl.state == "normal"
-	var in_home := _angle_from_home(pl.global_position) < home_radius * 1.7
+	# (Owner 2026-10-01, "pursue and lunge": they notice sooner, follow further from home and keep
+	# after him longer; damage per hit unchanged.)
+	var in_home := _angle_from_home(pl.global_position) < home_radius * 2.3
 	# Sight (never through rock): checked a few times a second, and only when he is near.
 	_los_check -= dt
 	if _los_check <= 0.0:
 		_los_check = 0.2
-		_los = player_here and d < 12.0 and _sees(pl)
-	var aggro := 7.5 if kind == Kind.LARGE else 6.5
+		_los = player_here and d < 14.0 and _sees(pl)
+	var aggro := 10.0 if kind == Kind.LARGE else 8.5
 	if variant == "spitter":
-		aggro = 9.0
+		aggro = 11.0
 	if _wary_t > 0.0:
 		aggro *= 0.5
 	var alerted := _alerted_t > 0.0
 	var engaged := state == "chase"
-	var noticed := player_here and in_home and absf(to_player.dot(up)) < 2.2 and (d < aggro or (alerted and d < 12.0))
-	var keep := _los or (engaged and _unseen_t < (2.5 if alerted else 1.5))
+	var noticed := player_here and in_home and absf(to_player.dot(up)) < 2.2 and (d < aggro or (alerted and d < 14.0))
+	var keep := _los or (engaged and _unseen_t < (4.0 if alerted else 3.0))
 	if noticed and keep:
 		if not engaged:
 			_set_state("chase")
@@ -609,6 +600,8 @@ func _move(dir: Vector3, spd: float, dt: float) -> void:
 			dn = heading.rotated(up, _turn_side * 2.0)
 		# (Expression: heavier ones turn with more momentum.)
 		_face(dn, dt * 5.0 * lerpf(1.0, _org.turn, _edge))
+	if state in ["graze", "chase", "retreat"]:
+		spd *= 1.0 + 0.35 * _gait * sin(_crawl)
 	var step := heading * spd * dt + _pushed * dt
 	_pushed = _pushed.move_toward(Vector3.ZERO, dt * 6.0)
 	# Parasites grip the moss: they never crawl off a ledge on their own, and never into a wall
@@ -1001,10 +994,15 @@ func _update_segments(dt: float) -> void:
 	_wave_phase = fmod(_wave_phase + moved / wavelength * TAU + dt * 1.1, TAU * 64.0)
 	var pace := clampf(moved / maxf(dt * speed, 0.0001), 0.0, 1.2) if dt > 0.0 else 0.0
 	_wave_amp = lerpf(_wave_amp, seg_radius * (0.1 + 0.34 * pace), 1.0 - exp(-dt * 6.0))
+	var crawling := state in ["graze", "chase", "retreat"]
+	_crawl = fmod(_crawl + moved / maxf(body_len * 0.85, 0.05) * TAU, TAU * 64.0)
+	_gait = lerpf(_gait, clampf(pace, 0.0, 1.0) if crawling else 0.0, 1.0 - exp(-dt * 5.0))
+	var stretch_now := _stretch_v * (1.0 + 0.13 * _gait * sin(_crawl))
+	var hump := seg_radius * 1.4 * _gait * maxf(0.0, -sin(_crawl))
 	var base: Array[Vector3] = []
 	var ups: Array[Vector3] = []
 	for i in seg_count:
-		var dist := spacing * i * _stretch_v
+		var dist := spacing * i * stretch_now
 		base.append(_sample_trail(dist))
 		ups.append(_trail_up[mini(_trail_up.size() - 1, int(dist / (spacing * 0.35)))])
 	var limp: Array[Vector3] = []
@@ -1024,6 +1022,7 @@ func _update_segments(dt: float) -> void:
 				ax -= u * ax.dot(u)
 				if ax.length() > 0.0001:
 					p += ax.normalized().cross(u) * tw * sin(state_t * 34.0 - float(i) * 1.2) * lerpf(0.4, 1.0, float(i) / maxf(1.0, seg_count - 1))
+			p += u * hump * sin(PI * float(i) / maxf(1.0, seg_count - 1))
 			if i == 0:
 				p += u * rear_lift * seg_radius * 1.6
 			elif i == 1:
@@ -1064,7 +1063,8 @@ func _push_body() -> void:
 	ups.resize(MAX_SEGS)
 	for i in seg_count:
 		var t := float(i) / maxf(1.0, seg_count - 1)
-		var r := seg_radius * (1.0 - 0.5 * pow(t, 1.4)) * (1.08 if i == 0 else 1.0)
+		# (A leech's taper: a narrower head, widest a third of the way back, a long thin tail.)
+		var r := seg_radius * lerpf(0.78, 1.1, smoothstep(0.0, 0.35, t)) * (1.0 - 0.6 * smoothstep(0.35, 1.0, t))
 		var sp := _segs[i].global_position
 		pts[i] = Vector4(sp.x, sp.y, sp.z, r)
 		var su := _segs[i].global_basis.y.normalized()
@@ -1087,7 +1087,9 @@ func _limp_chain() -> Array[Vector3]:
 	for i in seg_count:
 		out.append(p)
 		var tt := float(i) / maxf(1.0, seg_count - 1)
-		var bend := 0.16 * (1.0 - relax * 0.6) + sin(_drift_t * 6.5 - float(i) * 1.1) * 0.42 * relax * (0.3 + tt)
+		# (Owner 2026-10-01: a little ragdoll first, a loose flop that settles into a soft droop.)
+		var bend := 0.22 * (1.0 - relax * 0.5) + sin(_drift_t * 6.5 - float(i) * 1.1) * 0.7 * relax * (0.3 + tt) \
+				+ sin(_drift_t * 1.7 + float(i) * 0.6) * 0.08 * (1.0 - relax)
 		dir = dir.rotated(ax, bend).rotated(ax2, 0.07 * (1.0 - relax * 0.5)).normalized()
 		p += dir * spacing
 	return out
@@ -1220,10 +1222,16 @@ func _detach() -> void:
 func _update_drift(dt: float) -> void:
 	_drift_t += dt
 	var away := ball.up_at(global_position)
-	var target_v := away * 1.6 + Game.inst.tank_flow()
-	vel = vel.lerp(target_v, minf(1.0, dt * 0.3))
+	# Rising like a leaf falls (owner 2026-10-01): slowly, swinging side to side and tilting with each
+	# swing, carried by the ball's current and the tank's flow all the way up.
+	var side := global_basis.x - away * global_basis.x.dot(away)
+	side = side.normalized() if side.length() > 0.01 else away.cross(Vector3.FORWARD).normalized()
+	var swing := sin(_drift_t * 1.5 + float(get_instance_id() % 17))
+	var target_v := away * 0.95 + side * swing * 1.1 + Game.inst.tank_flow() + ball.current_at(global_position) * 0.8
+	vel = vel.lerp(target_v, minf(1.0, dt * 0.9))
 	global_position += vel * dt
-	global_basis = (global_basis * Basis.from_euler(_spin * dt)).orthonormalized()
+	var roll := Basis(-global_basis.z.normalized(), swing * 0.5 * dt)
+	global_basis = (roll * global_basis * Basis.from_euler(_spin * 0.4 * dt)).orthonormalized()
 	_update_segments(dt)
 	var cam := get_viewport().get_camera_3d()
 	var far := cam == null or cam.global_position.distance_to(global_position) > 45.0
