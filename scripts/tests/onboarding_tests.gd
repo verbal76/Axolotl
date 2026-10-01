@@ -29,6 +29,9 @@ func reset(done_flags: Array) -> void:
 	for f in done_flags:
 		g.gill.onboarding[f] = true
 	g.gill.onb_known = true
+	# (Twice: the save copies the old main file to .bak, and flags merge across the copies, so one
+	# save would leave the previous test's flags readable from the backup.)
+	g.gill.save()
 	g.gill.save()
 	o.run_frond = false
 	if g.cinematic != "":
@@ -502,7 +505,12 @@ func parasite() -> void:
 	if par == null:
 		par = a_parasite(1)
 	if par == null:
-		t.check("parasite_lesson_has_a_parasite", false, "none alive")
+		# (In the full suite, earlier tests have cleared these balls: run the lesson in a fresh
+		# process with a new run and profile, and report its checks here.)
+		var tag := str(Time.get_ticks_usec())
+		var code := _child("_test_onb_parasite", ["--run-save=" + ProjectSettings.globalize_path("user://onb_par_run_%s.json" % tag),
+				"--gill-save=" + ProjectSettings.globalize_path("user://onb_par_gill_%s.json" % tag)])
+		t.check("parasite_lesson_has_a_parasite", code == 0, "fresh process exited %d" % code)
 		return
 	await face(par, 6.0)
 	var on := await wait_until(func() -> bool: return o.objective == "parasite", 2.0)

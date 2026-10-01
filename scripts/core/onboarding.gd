@@ -1,7 +1,7 @@
 class_name Onboarding
 extends Node
 ## Onboarding (docs/ONBOARDING.md, ledger row 20): the intro screen on the first new run, then three
-## first-discovery lessons, each once per profile: feeding (Gill's fronds are his health), the first
+## first-discovery lessons, each once per profile: feeding (his fronds are his health), the first
 ## parasite (removing parasites restores the moss) and the first Red Starfish (Skills).
 ##
 ## Rules this keeps:
@@ -32,14 +32,16 @@ const FOOD_SEE_M := 11.0
 const PARASITE_SEE_M := 13.0
 const SCAN_S := 0.2
 
-const FEED_TITLE := "FOOD HEALS GILL"
-const FEED_BODY := ["Gill's glowing fronds are his health.", "Food restores them."]
+static var FEED_TITLE: String = "FOOD HEALS %s" % GameVersion.CHARACTER_NAME.to_upper()
+# (The character's name comes from GameVersion, never typed here; the owner's wording is otherwise verbatim.)
+static var FEED_BODY: Array = ["%s's glowing fronds are his health." % GameVersion.CHARACTER_NAME, "Food restores them."]
 const KILL_TITLE := "DID YOU SEE THAT?"
 const KILL_BODY := ["Removing parasites lets the moss recover."]
 const STAR_TITLE := "RED STARFISH FOUND!"
-const STAR_BODY := ["Gill found a Red Starfish!", "Spend Red Starfish on new abilities in the Skills tab, available from the Main Menu or Settings."]
-const INTRO_TITLE := "THIS IS GILL'S HOME."
-const INTRO_BODY := ["Parasites have infested the aquarium and damaged the moss balls he lives among.", "Help Gill clear them out and bring his home back to life."]
+static var STAR_BODY: Array = ["%s found a Red Starfish!" % GameVersion.CHARACTER_NAME, "Spend Red Starfish on new abilities in the Skills tab, available from the Main Menu or Settings."]
+static var INTRO_TITLE: String = "THIS IS %s'S HOME." % GameVersion.CHARACTER_NAME.to_upper()
+static var INTRO_BODY: Array = ["Parasites have infested the aquarium and damaged the moss balls he lives among.",
+		"Help %s clear them out and bring his home back to life." % GameVersion.CHARACTER_NAME]
 const OBJ_FEED := "EAT THE JELLYFISH"
 const OBJ_PARASITE := "DEFEAT THE PARASITE"
 
