@@ -80,6 +80,8 @@ var auto_update: AutoUpdate
 var diagnostics: DiagnosticsPage
 ## Platform leaves' landing give and current sway (visual only).
 var leaf_motion: LeafMotion
+## Frame pacing on the title and in play (Diagnostics).
+var frame_stats: FrameStats
 ## True once the whole world is built and the first usable frame has been handed over.
 var ready_done := false
 ## The stages the loading screen showed this launch.
@@ -118,6 +120,9 @@ func _ready() -> void:
 	add_child(loading)
 	diagnostics = DiagnosticsPage.new()
 	add_child(diagnostics)
+	frame_stats = FrameStats.new()
+	frame_stats.g = self
+	add_child(frame_stats)
 	auto_update = AutoUpdate.new()
 	auto_update.g = self
 	add_child(auto_update)
@@ -780,6 +785,9 @@ func run_diagnostics_text() -> String:
 			int(run_save.run()["catalog_version_at_start"]), Completion.CATALOG_VERSION])
 	L.append("  Run save: %s, format %d, timer model %d; %s" % [run_save.path, RunSave.FORMAT, RunClock.TIMER_MODEL, run_save.origin])
 	L.append("  Last save: %s" % run_save.last_save_result)
+	if frame_stats != null:
+		L.append("  Frames " + frame_stats.line("title"))
+		L.append("  Frames " + frame_stats.line("play"))
 	if repop != null:
 		L.append("  " + repop.summary())
 	if hard != null:

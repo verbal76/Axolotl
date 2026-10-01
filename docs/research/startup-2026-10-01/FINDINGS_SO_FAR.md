@@ -176,3 +176,29 @@ Two consecutive restarts on the SAME dev-000058 (58806d2), i.e. not a first laun
   `_open_run`/food) on desktop with the probe patch.
 - Balls 8.5–8.8 s vs 6.1 s on dev-000041 (+2.4–2.7 s): content added since 041 (plants, sea fan,
   vortex currents, drag marks, Hard Mode build) needs a per-ball comparison too.
+
+## 13. Full phone timeline, dev-000059, fresh run (0 %, 0 ids), 2026-10-01 — title usable 10 436 ms
+
+| Phase | ms |
+|---|---|
+| engine → native bootstrap | 704 |
+| OTA choose/verify/mount | 61 |
+| script load → autoload Settings | 966 |
+| loading frame | 49 |
+| environment + audio | 88 |
+| aquarium | 293 |
+| balls 1–7 | 1281 / 949 / 1685 / 554 / 989 / 429 / 713 = **6 600** |
+| vortices, axolotl, camera, lights | 323 |
+| creatures | 740 |
+| HUD / pause menu / title | 155 / 78 / 7 |
+| `_open_run` (food placed → run save opened) | 142 |
+| first title frame | 308 |
+| **title usable** | **10 436** |
+
+Compared with the owner's two dev-000058 launches (12 831 / 13 398 ms, balls done at 8 520 / 8 840 ms —
+about the same as here, 8 672 ms): the extra ~2.2–3.0 s sits **between "balls built" and "food
+finished"** (there ~3.8 s, here ~1.44 s). This launch was a brand-new run; the slow ones were very likely
+a progressed run being continued. Working hypothesis: restoring a progressed run (earned ids, restored
+zones' health paint, repopulation, Hard Mode vitality paint, food for restored zones) costs ~2+ s on the
+phone. Needed: one full timeline from a slow launch (Continue on a progressed run) to split that window.
+Also: the launch OTA check was still running after 8.3 s (it never blocks the title).

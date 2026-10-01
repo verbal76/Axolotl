@@ -2626,7 +2626,7 @@ func _body_bend(par: Parasite) -> float:
 func _par_snapshot(par: Parasite) -> Dictionary:
 	return {"pos": par.global_position, "heading": par.heading, "up": par.up, "trail": par._trail.duplicate(),
 			"trail_up": par._trail_up.duplicate(), "state": par.state, "clock": par._clock, "phase": par._wave_phase,
-			"amp": par._wave_amp, "last": par._last_head}
+			"amp": par._wave_amp, "last": par._last_head, "crawl": par._crawl, "gait": par._gait, "stretch": par._stretch_v}
 
 
 func _par_restore(par: Parasite, s: Dictionary) -> void:
@@ -2640,6 +2640,9 @@ func _par_restore(par: Parasite, s: Dictionary) -> void:
 	par._wave_phase = s["phase"]
 	par._wave_amp = s["amp"]
 	par._last_head = s["last"]
+	par._crawl = s["crawl"]
+	par._gait = s["gait"]
+	par._stretch_v = s["stretch"]
 	par._update_segments(0.0)
 
 
@@ -6107,6 +6110,9 @@ func _test_polish_a() -> void:
 	t.check("title_exit_safe", gap > 200.0 and asks and reset and exr.size.y >= 44.0, "gap to menu %.0f px, question on screen %s, reset %s, height %.0f" % [gap, asks, reset, exr.size.y])
 	g.start_play(true)
 	await t.frames(3)
+	await t.frames(40)
+	var fl: String = g.frame_stats.line("play")
+	t.check("frame_stats_in_diagnostics", fl.contains("fps") and g.run_diagnostics_text().contains("Frames title"), fl)
 	t.check("hud_thumb_targets_separated", worst >= 20.0 and outside.is_empty() and wrong == 0,
 			"min dead space %.1f px, outside safe %s, edge misroutes %d" % [worst, str(outside), wrong])
 
