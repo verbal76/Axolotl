@@ -71,6 +71,8 @@ var _title_t := 0.0
 var _regen_from := Vector3.ZERO
 ## Mote's loading screen, on top until the first usable frame has been drawn.
 var loading: LoadingScreen
+## Fully automatic OTA updates: the launch check and applying a downloaded update at a safe moment.
+var auto_update: AutoUpdate
 ## True once the whole world is built and the first usable frame has been handed over.
 var ready_done := false
 ## The stages the loading screen showed this launch.
@@ -107,10 +109,19 @@ func _ready() -> void:
 	visible = false
 	loading = LoadingScreen.new()
 	add_child(loading)
+	auto_update = AutoUpdate.new()
+	auto_update.g = self
+	add_child(auto_update)
 	await _drawn()
 	StartupTrace.mark("first frame drawn: Mote loading screen visible")
+	AutoUpdate.on_loading_visible()
+	# Automatic updates: the channel is checked while the world builds; a verified update that is
+	# ready in time (capped) takes over before the title appears.
+	auto_update.begin_launch_check()
 	await _build_world()
 	_open_run()
+	if await auto_update.launch_gate(loading):
+		return
 	process_mode = Node.PROCESS_MODE_INHERIT
 	if Settings.test_mode != "":
 		start_play(true)
@@ -121,6 +132,7 @@ func _ready() -> void:
 	StartupTrace.mark("world ready (%s); first world frame requested" % state)
 	await _drawn()
 	StartupTrace.mark("first frame drawn: %s usable" % state)
+	AutoUpdate.on_usable()
 	loading_stages = loading.stages.duplicate()
 	loading.finish()
 	# (The colours page's pattern swatches, drawn off the main thread now that the game is up.)
@@ -722,6 +734,7 @@ func run_diagnostics_text() -> String:
 		L.append(gill.diagnostics_text())
 		if starfish != null:
 			L.append(starfish.diagnostics_text())
+	L.append(AutoUpdate.diagnostics_text())
 	return "\n".join(L)
 
 

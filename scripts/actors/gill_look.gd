@@ -73,13 +73,26 @@ static var _cache := {}
 ## Built-in patterns drawn ahead on a worker thread (warm_patterns), waiting to become textures.
 static var _drawn := {}
 static var _drawn_lock := Mutex.new()
+static var _warm_task := -1
 
 
 ## Draws the built-in patterns on a worker thread once the game is up (drawing them pixel by pixel
 ## took about 2 s of every startup when the colours page was built); pattern_texture then only
 ## wraps the finished image. Safe to call more than once.
 static func warm_patterns() -> void:
-	WorkerThreadPool.add_task(_draw_all, false, "draw the pattern swatches")
+	if _warm_task >= 0:
+		if not WorkerThreadPool.is_task_completed(_warm_task):
+			return
+		WorkerThreadPool.wait_for_task_completion(_warm_task)
+	_warm_task = WorkerThreadPool.add_task(_draw_all, false, "draw the pattern swatches")
+
+
+## Waits for the pattern worker, if one is running (before game scripts are recompiled by an
+## in-process update, nothing may still be running their code on another thread).
+static func wait_idle() -> void:
+	if _warm_task >= 0:
+		WorkerThreadPool.wait_for_task_completion(_warm_task)
+		_warm_task = -1
 
 
 static func _draw_all() -> void:
