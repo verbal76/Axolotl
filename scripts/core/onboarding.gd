@@ -31,7 +31,7 @@ const HOLD_S := 0.8
 const CLOSE_S := 1.0
 const FROND_S := 1.3
 ## How near a target must be, and how often the view is checked for one.
-const FOOD_SEE_M := 11.0
+const FOOD_SEE_M := 16.0
 const PARASITE_SEE_M := 13.0
 const SCAN_S := 0.2
 
@@ -226,9 +226,15 @@ func _playing() -> bool:
 func _update_objective() -> void:
 	var want := ""
 	if _playing():
-		if not done("parasite") and _find_parasite():
+		# Owner, 2026-10-01: the food lesson starts the first time a jellyfish comes into view
+		# (he starts a frond down for it), ahead of the parasite; a parasite lesson already
+		# under way is not interrupted.
+		var hungry := not done("feeding") and g.player.health < g.player.max_health
+		if objective != "parasite" and hungry and _find_food():
+			want = "feeding"
+		elif not done("parasite") and _find_parasite():
 			want = "parasite"
-		elif not done("feeding") and g.player.health < g.player.max_health and _find_food():
+		elif hungry and _find_food():
 			want = "feeding"
 	_set_objective(want)
 
@@ -284,7 +290,7 @@ func visible_to_player(pos: Vector3, max_d: float, ignore: Object = null) -> boo
 	return hit.is_empty() or hit["collider"] == ignore or (hit["position"] as Vector3).distance_to(pos) < 0.8
 
 
-func _food_ok(f: Food) -> bool:
+func _food_ok(f) -> bool:  # (untyped: a freed jellyfish must read as "not ok", not error)
 	return is_instance_valid(f) and f.type == Food.Type.DRIFTER and f.state == "idle" and f.is_catchable() \
 			and f.ball == g.player.ball
 

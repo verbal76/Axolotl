@@ -713,6 +713,41 @@ func feeding() -> void:
 
 
 ## While a card is up, a touch on the HUD's buttons does nothing in the game.
+## Owner, 2026-10-01: the first jellyfish in view starts the food lesson (gold ring), even with a
+## parasite in view too; a parasite lesson already under way is not interrupted by one.
+func feed_first() -> void:
+	await reset(["intro", "starfish"])
+	var par := a_parasite(0)
+	if par == null:
+		par = a_parasite(1)
+	if par == null:
+		t.log_line("feed_first: no parasite left in the shared process; skipped")
+		return
+	p.invuln_t = 999.0
+	await face(par, 9.0)
+	if p.health == p.max_health:
+		p.health -= 1
+	var f := jelly(3.0)
+	# (Facing it already armed the parasite lesson; drop that so both come into view at once.)
+	o._set_objective("")
+	var on := await wait_until(func() -> bool: return o.objective == "feeding", 2.0)
+	await t.frames(2)
+	t.check("feed_first_jelly_beats_parasite", on and o.food_target == f and o.ui._marker.color == UiStyle.GOLD,
+			"objective '%s'" % o.objective)
+	# Mid-parasite lesson: a jellyfish coming into view does not switch it.
+	f.queue_free()
+	p.ball.foods.erase(f)
+	await face(par, 6.0)
+	var pon := await wait_until(func() -> bool: return o.objective == "parasite", 2.0)
+	if pon:
+		var f2 := jelly(3.0)
+		await t.frames(20)
+		t.check("feed_first_parasite_lesson_not_interrupted", o.objective == "parasite", "objective '%s'" % o.objective)
+		f2.queue_free()
+		p.ball.foods.erase(f2)
+	p.invuln_t = 0.0
+
+
 func no_input_leak() -> void:
 	var b: Dictionary = g.hud.button_info()["jump"]
 	var ev := InputEventScreenTouch.new()
