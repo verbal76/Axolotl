@@ -37,6 +37,10 @@ var completed := false
 # Content registries (filled by the level builder).
 var motes: Array = []
 var parasites: Array = []
+## Repopulation (Repopulation; spec docs/research/2026-09-30-DEVICE_AUDIT.md §D): parasites that came back to cleared zones.
+## Never in `parasites`, so the completion catalog, the run save and restoration never see them.
+var returners: Array = []
+var _hostiles: Array = []
 var foods: Array = []
 var food_spots: Array = []     # burrower holes: {dir, occupied}
 var food_regions: Array = []   # {dir, radius_deg}
@@ -836,6 +840,17 @@ func restore_event(zone_id: String, pos: Vector3, splat_deg := 11.0) -> void:
 	if events_done >= events_total and not completed:
 		completed = true
 		add_heal(Vector3.UP, 340.0, 0.0)
+
+
+## Every parasite on the ball that fights (authored ones and returners): for combat, neighbours and
+## hits, never for completion or restoration (those use `parasites`).
+func hostiles() -> Array:
+	return parasites if returners.is_empty() else _hostiles
+
+
+## Call after `returners` changes.
+func returners_changed() -> void:
+	_hostiles = parasites + returners
 
 
 func zone_health(zone_id: String) -> float:

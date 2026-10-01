@@ -152,6 +152,21 @@ func setup(p_ball: MossBall, p_kind: int, p_zone: String, dir: Vector3, home_deg
 	_org = OrganicMotion.new(_rng.seed, [OrganicMotion.PARASITE_SMALL, OrganicMotion.PARASITE_MEDIUM, OrganicMotion.PARASITE_LARGE][kind - 1])
 
 
+## Repopulation: a parasite that came back to a cleared zone (Repopulation). It is never in
+## `ball.parasites`, has no completion id, and killing it earns and restores nothing.
+var returner := false
+
+
+## Makes this a returner, its behaviour seeded from `seed_v` (call after setup, before make_spitter).
+func make_returner(seed_v: int) -> void:
+	returner = true
+	set_meta("completion_id", "")
+	_rng.seed = seed_v
+	_brave = kind == Kind.SMALL or _rng.randf() < 0.35
+	_circle_dir = 1.0 if _rng.randf() < 0.5 else -1.0
+	_org = OrganicMotion.new(_rng.seed, [OrganicMotion.PARASITE_SMALL, OrganicMotion.PARASITE_MEDIUM, OrganicMotion.PARASITE_LARGE][kind - 1])
+
+
 ## Makes this a spitter (a medium parasite that keeps its distance and spits globs).
 func make_spitter() -> void:
 	variant = "spitter"
@@ -446,7 +461,8 @@ func _init_on_ground() -> void:
 	else:
 		global_position = hit.position + up * _ground_offset
 		standing_on = hit.collider
-	heading = MossBall.frame_at(up, randf() * 360.0).z * -1.0
+	# (A returner draws from its own generator: repopulation never moves the gameplay sequence.)
+	heading = MossBall.frame_at(up, (_rng.randf() if returner else randf()) * 360.0).z * -1.0
 	for i in 12:
 		_trail.push_back(global_position + heading * -spacing * i * 0.5)
 		_trail_up.push_back(up)
@@ -489,7 +505,7 @@ func _update_crawl(dt: float, pl: Axolotl) -> void:
 				_alert_nearby(pl)
 				# Joining a fight already under way: it takes its own side.
 				var others := 0
-				for q in ball.parasites:
+				for q in ball.hostiles():
 					if q != self and q.is_alive() and q.state in ["chase", "windup", "attack"] and q.global_position.distance_to(pl.global_position) < 6.0:
 						others += 1
 				if others > 0:
@@ -727,7 +743,7 @@ func _may_commit() -> bool:
 	if Game.inst.cinematic != "":
 		return false
 	var n := ParasiteGlob.incoming_on(ball)
-	for q in ball.parasites:
+	for q in ball.hostiles():
 		if q != self and q.is_alive() and q.state in ["windup", "attack"]:
 			n += 1
 	if n >= MAX_COMMITTED:
@@ -757,7 +773,7 @@ func _on_screen() -> bool:
 ## own side. Only a parasite that saw him itself raises the alarm (no chain across the ball).
 func _alert_nearby(pl: Axolotl) -> void:
 	var k := 0
-	for q in ball.parasites:
+	for q in ball.hostiles():
 		if q == self or not q.is_alive() or q.state != "graze":
 			continue
 		if q.global_position.distance_to(global_position) > ALERT_R:
@@ -785,7 +801,7 @@ func alert(k: int) -> void:
 ## A push away from other engaged parasites close by (they spread round him, not stack).
 func _separation() -> Vector3:
 	var push := Vector3.ZERO
-	for q in ball.parasites:
+	for q in ball.hostiles():
 		if q == self or not q.is_alive() or not q.state in ["chase", "windup", "retreat"]:
 			continue
 		var off: Vector3 = global_position - q.global_position
@@ -1195,7 +1211,10 @@ func _detach() -> void:
 	var u := up
 	global_transform = Transform3D(Basis(heading.cross(u).normalized(), u, -heading), global_position)
 	vel = u * 2.6 + Game.inst.tank_flow() * 0.6 + ball.current_at(global_position)
-	_spin = Vector3(randf_range(-1, 1), randf_range(-1, 1), randf_range(-1, 1)) * 0.35
+	if returner:
+		_spin = Vector3(_rng.randf_range(-1, 1), _rng.randf_range(-1, 1), _rng.randf_range(-1, 1)) * 0.35
+	else:
+		_spin = Vector3(randf_range(-1, 1), randf_range(-1, 1), randf_range(-1, 1)) * 0.35
 
 
 func _update_drift(dt: float) -> void:
