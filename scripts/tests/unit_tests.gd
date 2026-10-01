@@ -14,7 +14,7 @@ func run(runner) -> void:
 	p.use_bot_input = true
 	await t.seconds(0.5)
 	var only: String = Settings.test_args.get("only", "")
-	for name_ in ["_test_startup", "_test_ota_and_version", "_test_mesh_winding", "_test_terrain", "_test_ravines", "_test_terrain_grounded", "_test_no_floating_platforms", "_test_parasite_locomotion", "_test_parasite_body_and_death", "_test_parasite_combat", "_test_organic_motion", "_test_gill_look", "_test_gill_idles", "_test_gill_colours", "_test_gill_patterns", "_test_tail_whip", "_test_gill_traction", "_test_gill_incline_transitions", "_test_traction_no_shortcuts", "_test_gill_body_follow", "_test_swim_body_follow", "_test_ambient_sway", "_test_placements", "_test_tutorial_route", "_test_sphere_walk", "_test_jump_and_burst", "_test_coyote_and_buffer", "_test_swipe_direction_and_stages", "_test_hard_landing", "_test_food", "_test_food_reach", "_test_darter_and_burrower", "_test_food_repopulates", "_test_motes", "_test_checkpoint_and_regen", "_test_crumble", "_test_restoration_gates", "_test_bubble_columns", "_test_restoration_continuity", "_test_health_map", "_test_vortex", "_test_vortex_tints", "_test_current", "_test_canopy", "_test_canopy_plain_jumps", "_test_climbs_physical", "_test_jungle_ladders_physical", "_test_leaf_geometry", "_test_leaf_footing", "_test_caves", "_test_mounds", "_test_vegetation", "_test_vortex_mouths_clear", "_test_route_audit", "_test_new_areas", "_test_ecosystem", "_test_music", "_test_opening_audio", "_test_run_clock", "_test_completion_catalog", "_test_completion_frozen", "_test_run_save_file", "_test_run_timer_live", "_test_run_continue", "_test_timer_integrity", "_test_resume_points_safe", "_phase_continue_write", "_phase_continue_read", "_test_upgrades", "_test_ui", "_test_menus_no_scroll", "_test_menu_touch", "_test_tier2_rules", "_test_tier2_world", "_test_ambient_fish", "_test_parasite_never_buried", "_test_tier2_loadout", "_test_aquarium_experiences", "_test_aquarium_polish", "_test_all_clear", "_test_treasure_unlock", "_test_treasure_generation", "_test_treasure_play", "_phase_treasure_stress", "_phase_live_fish_diag", "_phase_cpu_probe", "_phase_incline_survey", "_phase_loco_diag", "_phase_crawl_trace", "_phase_mouth_crawls", "_phase_organic_trace", "_test_skilltree_graph", "_test_progress_store", "_test_starfish_spots", "_test_starfish_pickup", "_test_skill_ui", "_test_quick_gill", "_test_lunge_skills", "_test_burst_skills", "_test_glide_control", "_test_glide_transfers", "_test_mote_magnet", "_phase_starfish_survey", "_phase_starfish_sweep", "_phase_glide_probe", "_test_plants_terminal_growth", "_test_sea_fan_depth", "_test_onb_progress", "_test_onb_owner_save", "_test_onb_intro", "_test_onb_feeding", "_test_onb_parasite", "_test_onb_starfish", "_test_onb_softlock", "_test_onb_relaunch", "_test_onb_restoration_equal", "_phase_onb_owner", "_phase_onb_write", "_phase_onb_read", "_phase_onb_kill"]:
+	for name_ in ["_test_startup", "_test_ota_and_version", "_test_mesh_winding", "_test_terrain", "_test_ravines", "_test_terrain_grounded", "_test_no_floating_platforms", "_test_parasite_locomotion", "_test_parasite_body_and_death", "_test_parasite_combat", "_test_organic_motion", "_test_gill_look", "_test_gill_idles", "_test_gill_colours", "_test_gill_patterns", "_test_tail_whip", "_test_gill_traction", "_test_gill_incline_transitions", "_test_traction_no_shortcuts", "_test_gill_body_follow", "_test_swim_body_follow", "_test_ambient_sway", "_test_placements", "_test_tutorial_route", "_test_sphere_walk", "_test_jump_and_burst", "_test_coyote_and_buffer", "_test_swipe_direction_and_stages", "_test_hard_landing", "_test_food", "_test_food_reach", "_test_darter_and_burrower", "_test_food_repopulates", "_test_motes", "_test_checkpoint_and_regen", "_test_crumble", "_test_restoration_gates", "_test_bubble_columns", "_test_restoration_continuity", "_test_health_map", "_test_vortex", "_test_vortex_tints", "_test_vortex_currents", "_test_vortex_currents_travel", "_test_current", "_test_canopy", "_test_canopy_plain_jumps", "_test_climbs_physical", "_test_jungle_ladders_physical", "_test_leaf_geometry", "_test_leaf_footing", "_test_caves", "_test_mounds", "_test_vegetation", "_test_vortex_mouths_clear", "_test_route_audit", "_test_new_areas", "_test_ecosystem", "_test_music", "_test_opening_audio", "_test_run_clock", "_test_completion_catalog", "_test_completion_frozen", "_test_run_save_file", "_test_run_timer_live", "_test_run_continue", "_test_timer_integrity", "_test_resume_points_safe", "_phase_continue_write", "_phase_continue_read", "_test_upgrades", "_test_ui", "_test_menus_no_scroll", "_test_menu_touch", "_test_tier2_rules", "_test_tier2_world", "_test_ambient_fish", "_test_parasite_never_buried", "_test_tier2_loadout", "_test_aquarium_experiences", "_test_aquarium_polish", "_test_all_clear", "_test_treasure_unlock", "_test_treasure_generation", "_test_treasure_play", "_phase_treasure_stress", "_phase_live_fish_diag", "_phase_cpu_probe", "_phase_incline_survey", "_phase_loco_diag", "_phase_crawl_trace", "_phase_mouth_crawls", "_phase_organic_trace", "_test_skilltree_graph", "_test_progress_store", "_test_starfish_spots", "_test_starfish_pickup", "_test_skill_ui", "_test_quick_gill", "_test_lunge_skills", "_test_burst_skills", "_test_glide_control", "_test_glide_transfers", "_test_mote_magnet", "_phase_starfish_survey", "_phase_starfish_sweep", "_phase_glide_probe", "_test_plants_terminal_growth", "_test_sea_fan_depth", "_test_onb_progress", "_test_onb_owner_save", "_test_onb_intro", "_test_onb_feeding", "_test_onb_parasite", "_test_onb_starfish", "_test_onb_softlock", "_test_onb_relaunch", "_test_onb_restoration_equal", "_phase_onb_owner", "_phase_onb_write", "_phase_onb_read", "_phase_onb_kill"]:
 		# "_phase_*" tests are halves of a relaunch test: they run only when asked for by name
 		# (in a child process started by _test_run_continue).
 		if name_.begins_with("_phase") and not only.split(",", false).has(name_):
@@ -3387,6 +3387,203 @@ func _test_vortex_tints() -> void:
 				distinct = distinct and d > 0.3
 	t.check("vortex_tints_per_connection", same_ends and stable and distinct and g.vortices.size() == Levels.LINKS.size(),
 			"%d connections, both ends %s, stable %s, closest pair sharing a ball %.2f apart" % [g.vortices.size(), same_ends, stable, worst])
+
+
+## Vortex currents (ledger row 14): the visible centreline meanders as a moving water current over a
+## fixed logical path. The stable parameter u (0 = ball A, 0.5 = midpoint, 1 = ball B) reaches every
+## vortex shader; the mouths stay anchored; the offset is bounded, slow and keeps clear of the balls;
+## several influences per axis; no two connections in sync; deterministic; no repeat over 30 minutes.
+func _test_vortex_currents() -> void:
+	# u along the connection.
+	var u_ok := true
+	var u_bad: Array[String] = []
+	for v: Vortex in g.vortices:
+		var mesh: ArrayMesh = (v.get_node("Jets") as MeshInstance3D).mesh
+		var arr := mesh.surface_get_arrays(0)
+		var uvs: PackedVector2Array = arr[Mesh.ARRAY_TEX_UV]
+		var cus: PackedFloat32Array = arr[Mesh.ARRAY_CUSTOM0]
+		var lo := INF
+		var hi := -INF
+		var mid_err := INF
+		var same := true
+		for i in uvs.size():
+			lo = minf(lo, uvs[i].y)
+			hi = maxf(hi, uvs[i].y)
+			same = same and is_equal_approx(cus[i * 4 + 3], uvs[i].y)
+			# (Each ring's own path point is the logical path at its u; the rings nearest the middle.)
+			if absf(uvs[i].y - 0.5) < 0.02:
+				mid_err = minf(mid_err, Vector3(cus[i * 4], cus[i * 4 + 1], cus[i * 4 + 2]).distance_to(v.sample(uvs[i].y)[0]))
+		var ends := (v.sample(0.0)[0] as Vector3).distance_to(v.mouth_pos(false)) < 2.0 and (v.sample(1.0)[0] as Vector3).distance_to(v.mouth_pos(true)) < 2.0
+		var mats := is_equal_approx(float(v._pool_mats[0].get_shader_parameter("u_end")), 0.0) and is_equal_approx(float(v._pool_mats[1].get_shader_parameter("u_end")), 1.0) \
+				and is_equal_approx(float(v._debris_mats[0].get_shader_parameter("u_end")), 0.0) and is_equal_approx(float(v._debris_mats[1].get_shader_parameter("u_end")), 1.0)
+		var code := v._jet_mat.shader.code.contains("vortex_current.gdshaderinc") and v._debris_mats[0].shader.code.contains("vortex_current.gdshaderinc")
+		var ok := is_zero_approx(lo) and is_equal_approx(hi, 1.0) and same and mid_err < 0.05 and ends and mats and code
+		if not ok:
+			u_bad.append("%d-%d: u %.3f..%.3f custom %s mid %.3f ends %s mats %s code %s" % [v.ball_a.index + 1, v.ball_b.index + 1, lo, hi, same, mid_err, ends, mats, code])
+		u_ok = u_ok and ok
+	t.check("vortex_current_u_parameter", u_ok and g.vortices.size() == Levels.LINKS.size(), "; ".join(u_bad))
+	# Mouths anchored, bounded, slow, clear of every ball, several influences per axis.
+	var worst_mouth := 0.0
+	var worst_ratio := 0.0
+	var worst_speed := 0.0
+	var worst_clear := INF
+	var min_peak := INF
+	var min_split := INF
+	var detail: Array[String] = []
+	for v: Vortex in g.vortices:
+		var bound := v.current_bound()
+		var peak := 0.0
+		for i in 900:
+			var tm := i * 4.03
+			worst_mouth = maxf(worst_mouth, maxf(v.current_offset_at(0.0, tm).length(), v.current_offset_at(1.0, tm).length()))
+			worst_mouth = maxf(worst_mouth, maxf(v.current_offset_at(0.02, tm).length(), v.current_offset_at(0.98, tm).length()) / bound * 0.1)
+			for j in 11:
+				var u := 0.08 + 0.84 * j / 10.0
+				var d := v.current_offset_at(u, tm)
+				peak = maxf(peak, d.length())
+				worst_ratio = maxf(worst_ratio, d.length() / bound)
+				if i % 9 == 0:
+					# The current never brings the water nearer a ball than the straight tunnel was
+					# (or, where that was far, keeps the jets well clear of it).
+					var lp: Vector3 = v.sample(u)[0]
+					var vp: Vector3 = lp + d
+					for b in g.balls:
+						var cl_v := vp.distance_to(b.global_position) - b.radius - v.helix_radius(u, Vortex.TUBE_RADIUS)
+						var cl_l := lp.distance_to(b.global_position) - b.radius - v.helix_radius(u, Vortex.TUBE_RADIUS)
+						worst_clear = minf(worst_clear, cl_v - minf(cl_l, 4.0))
+			var sp := (v.current_offset_at(0.5, tm + 0.1) - v.current_offset_at(0.5, tm)).length() / 0.1
+			worst_speed = maxf(worst_speed, sp)
+		min_peak = minf(min_peak, peak / v._length)
+		worst_ratio = maxf(worst_ratio, peak / (v._length * 0.16))
+		for ax in 3:
+			var ws := [v.cur_omega[0][ax], v.cur_omega[1][ax], v.cur_omega[2][ax]]
+			for i in 3:
+				for j in range(i + 1, 3):
+					min_split = minf(min_split, absf(ws[i] - ws[j]) / maxf(ws[i], ws[j]))
+		detail.append("%d-%d len %.0f bound %.1f peak %.1f" % [v.ball_a.index + 1, v.ball_b.index + 1, v._length, bound, peak])
+	t.check("vortex_current_mouths_anchored", worst_mouth < 0.02, "worst offset at the mouths %.4f m" % worst_mouth)
+	t.check("vortex_current_bounded", worst_ratio <= 1.0 and worst_clear > -0.5 and min_peak > 0.03, "max |D| / min(bound, 16%% of length) %.2f; clearance from every ball vs the straight tunnel's (capped at 4 m) %+.1f m; smallest peak %.1f%% of length; %s" % [worst_ratio, worst_clear, min_peak * 100.0, ", ".join(detail)])
+	t.check("vortex_current_slow_several_influences", worst_speed < 1.6 and min_split > 0.15, "mid-span speed <= %.2f m/s; closest two frequencies on one axis differ by %.0f%%" % [worst_speed, min_split * 100.0])
+	# No two connections in sync: correlation of their mid-span offsets over 20 minutes (and of their
+	# shapes, the quarter-span against the three-quarter-span).
+	var series: Array = []
+	for v: Vortex in g.vortices:
+		var sr: Array[Vector3] = []
+		for i in 2400:
+			sr.append(v.cur_basis.inverse() * v.current_offset_at(0.5, i * 0.5))
+		series.append(sr)
+	var worst_corr := 0.0
+	for a in series.size():
+		for b in range(a + 1, series.size()):
+			for ax in 3:
+				var sab := 0.0
+				var saa := 0.0
+				var sbb := 0.0
+				for i in 2400:
+					var x: float = series[a][i][ax]
+					var y: float = series[b][i][ax]
+					sab += x * y
+					saa += x * x
+					sbb += y * y
+				worst_corr = maxf(worst_corr, absf(sab) / sqrt(maxf(saa * sbb, 1e-9)))
+	t.check("vortex_current_not_in_sync", worst_corr < 0.5, "largest |correlation| between two connections on one axis %.2f" % worst_corr)
+	# Deterministic: the same personality rebuilt from the link index, the same offset every time.
+	var det := true
+	for v: Vortex in g.vortices:
+		var v2 := Vortex.new()
+		v2.link_index = v.link_index
+		v2._length = v._length
+		v2._setup_current(v.points[0], v.points[v.points.size() - 1])
+		for k in 3:
+			det = det and v2.cur_amp[k] == v.cur_amp[k] and v2.cur_omega[k] == v.cur_omega[k] and v2.cur_phi[k] == v.cur_phi[k] and v2.cur_kap[k] == v.cur_kap[k]
+		det = det and v2.cur_basis == v.cur_basis
+		for tm in [0.0, 13.7, 999.1, 7201.3]:
+			det = det and v2.current_offset_at(0.37, tm) == v.current_offset_at(0.37, tm)
+		v2.free()
+	# The shaders get this frame's phases from the same clock.
+	await t.frames(2)
+	var v0: Vortex = g.vortices[0]
+	var ph := Vector3.ZERO
+	for ax in 3:
+		ph[ax] = fposmod(v0.cur_omega[0][ax] * v0.current_time + v0.cur_phi[0][ax], TAU)
+	var shader_sync := (v0._jet_mat.get_shader_parameter("cur_ph0") as Vector3).is_equal_approx(ph) and (v0._debris_mats[1].get_shader_parameter("cur_ph0") as Vector3).is_equal_approx(ph)
+	t.check("vortex_current_deterministic", det and shader_sync and v0.current_time > 0.0, "rebuilt identical %s, shader phases match the clock %s" % [det, shader_sync])
+	# Long-time non-repetition: the first minute of mid-span motion never comes back within 30 minutes.
+	var worst_rep := INF
+	for v: Vortex in g.vortices:
+		var sr: Array[Vector3] = []
+		for i in 1800:
+			sr.append(v.current_offset_at(0.5, i * 1.0))
+		var rms := 0.0
+		for i in 60:
+			rms += sr[i].length_squared()
+		rms = sqrt(rms / 60.0)
+		for lag in range(40, 1740):
+			var e := 0.0
+			for i in range(0, 60, 2):
+				e += (sr[i + lag] - sr[i]).length_squared()
+			worst_rep = minf(worst_rep, sqrt(e / 30.0) / maxf(rms, 0.01))
+	t.check("vortex_current_no_repeat_30_min", worst_rep > 0.2, "closest return of the first minute: %.0f%% of its rms" % (worst_rep * 100.0))
+
+
+## Vortex currents (ledger row 14): travel is preserved. Every connection, both ways, with the current
+## on: same destination, the same frame count as the straight tunnel (currents off), the same landing,
+## and Gill inside the moving current (within the jets' helix round the visible centreline), carried
+## away from the logical path by it.
+func _test_vortex_currents_travel() -> void:
+	p.invuln_t = 9999
+	for v: Vortex in g.vortices:
+		v.connected = true
+		v.strength = 1.0
+	var rows: Array[String] = []
+	var all_ok := true
+	var worst_inside := 0.0
+	var max_carry := 0.0
+	var worst_frames := 0
+	for li in g.vortices.size():
+		var v: Vortex = g.vortices[li]
+		var land := {}
+		var frames_ := {}
+		for mode in ["off", "on", "on_rev"]:
+			Vortex.currents = (mode as String) != "off"
+			var rev: bool = mode == "on_rev"
+			var start: MossBall = v.ball_b if rev else v.ball_a
+			var dest: MossBall = v.ball_a if rev else v.ball_b
+			place_at(start.index, start.surface_point(Vector3.UP, 0.2), Vector3.FORWARD)
+			await t.frames(2)
+			# (A different moment of the meander on each connection: well displaced mid-span.)
+			v.current_time = 137.0 + li * 53.0
+			var n0: int = g.stats["travels"].size()
+			g._start_cinematic("travel", {"v": v, "reverse": rev})
+			var n := 0
+			for i in 60 * 9:
+				await t.frames(1)
+				n += 1
+				if g.cinematic != "travel":
+					break
+				var k := clampf(g.cine_t / 6.0, 0.0, 1.0)
+				var e := k * k * (3.0 - 2.0 * k)
+				var tt := 1.0 - e if rev else e
+				var vis := v.visual_point(tt)
+				var inside := p.global_position.distance_to(vis) / v.helix_radius(tt, Vortex.TUBE_RADIUS)
+				if Vortex.currents:
+					worst_inside = maxf(worst_inside, inside)
+					max_carry = maxf(max_carry, (vis - (v.sample(tt)[0] as Vector3)).length())
+			frames_[mode] = n
+			land[mode] = p.global_position
+			var ok: bool = p.ball == dest and g.cinematic == "" and g.stats["travels"].size() == n0 + 1 and g.stats["travels"][n0] == [v.ball_a.index, rev]
+			all_ok = all_ok and ok
+			if not ok:
+				rows.append("%d-%d %s: on ball %d cine '%s'" % [v.ball_a.index + 1, v.ball_b.index + 1, mode, p.ball.index + 1, g.cinematic])
+			await t.frames(10)
+		var df := absi(int(frames_["on"]) - int(frames_["off"]))
+		worst_frames = maxi(worst_frames, df)
+		var dl: float = (land["on"] as Vector3).distance_to(land["off"])
+		all_ok = all_ok and df <= 2 and dl < 0.6
+		rows.append("%d-%d frames %d/%d (rev %d) landing %.2f m apart" % [v.ball_a.index + 1, v.ball_b.index + 1, frames_["off"], frames_["on"], frames_["on_rev"], dl])
+	Vortex.currents = true
+	t.check("vortex_current_travel_preserved", all_ok and worst_frames <= 2, "; ".join(rows))
+	t.check("vortex_current_gill_rides_inside", worst_inside < 1.0 and max_carry > 1.5, "worst distance from the visible centreline %.0f%% of the jets' radius; current carried him up to %.1f m off the logical path" % [worst_inside * 100.0, max_carry])
 
 
 func _test_vortex() -> void:

@@ -204,6 +204,7 @@ func _build_world() -> void:
 		var pair: Array = Levels.LINKS[li]
 		var v := Vortex.new()
 		v.tint = Vortex.TINTS[li % Vortex.TINTS.size()]
+		v.link_index = li
 		v.setup(balls[pair[0]], balls[pair[1]], Levels._vortex_dir(pair[0], pair[1]), Levels._vortex_dir(pair[1], pair[0]))
 		add_child(v)
 		vortices.append(v)
@@ -1292,7 +1293,7 @@ func _cine_connect() -> void:
 	var side := v.dir_a.cross(Vector3.UP).normalized()
 	if side.length() < 0.1:
 		side = Vector3.RIGHT
-	var look: Vector3 = v.sample(0.05 + 0.9 * smoothstep(0.0, 0.8, k))[0]
+	var look: Vector3 = v.visual_point(0.05 + 0.9 * smoothstep(0.0, 0.8, k))
 	cam.cine_pos = a + v.dir_a * 7.0 + side * 9.0 + (look - a) * 0.25
 	cam.cine_look = look
 	cam.cine_up = v.dir_a.cross(side).normalized() * -1.0 if false else (Vector3.UP - v.dir_a * Vector3.UP.dot(v.dir_a)).normalized()

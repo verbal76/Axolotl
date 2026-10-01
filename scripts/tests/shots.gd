@@ -539,6 +539,8 @@ func run(runner) -> void:
 		g.g_disp = 1.0
 		g.aquarium.apply(1.0)
 		await _vortex_shots(g, "clear_")
+	if only == "vcur":
+		await _vcur_shots(g)
 	if only == "feedback":
 		await _feedback(g, "")
 		for b in g.balls:
@@ -3067,4 +3069,176 @@ func _sea_fan_shots(g: Game, tag: String) -> void:
 		_close(g, v[1], v[2], y)
 		await t.seconds(0.6)
 		await t.shot("seafan_%s_%s" % [tag, v[0]])
+	_open(g)
+
+
+# --- Vortex currents (ledger row 14) ------------------------------------------------------
+
+## A free camera at `pos` looking at `look` (the follow camera in its cinematic mode).
+func _vc_cam(g: Game, pos: Vector3, look: Vector3, up: Vector3) -> void:
+	_close(g, pos, look, up)
+	g.cam.global_position = pos
+	g.cam.look_at(look, up)
+
+
+## Every view twice at the same moment of the current: "on" (the meander) and "off" (the shipped
+## straight tunnel), files vc_<name>_on / vc_<name>_off.
+func _vc_pair(g: Game, name_: String) -> void:
+	for mode in ["on", "off"]:
+		Vortex.currents = mode == "on"
+		await t.frames(3)
+		await t.shot("vc_%s_%s" % [name_, mode])
+	Vortex.currents = true
+
+
+func _vc_time(g: Game, tm: float) -> void:
+	for v: Vortex in g.vortices:
+		v.current_time = tm
+	await t.frames(2)
+
+
+## Side view (perpendicular to the connection) and a second, high oblique angle of one connection.
+func _vc_side(v: Vortex, dist_k := 0.8) -> Array:
+	var mid: Vector3 = v.sample(0.5)[0]
+	var b := v.cur_basis
+	var view_side: Vector3 = b.x
+	# (From whichever side of the tunnel is away from the aquarium's middle.)
+	if view_side.dot(mid) < 0.0:
+		view_side = -view_side
+	return [mid + view_side * v._length * dist_k + b.y * v._length * 0.12, mid, b.y]
+
+
+func _vc_oblique(v: Vortex, dist_k := 0.7) -> Array:
+	var mid: Vector3 = v.sample(0.5)[0]
+	var b := v.cur_basis
+	var d := (b.y * 0.85 + b.z * 0.45 + b.x * 0.3).normalized()
+	return [mid + d * v._length * dist_k, mid, b.z]
+
+
+func _vcur_shots(g: Game) -> void:
+	var p := g.player
+	p.invuln_t = 9999
+	for v: Vortex in g.vortices:
+		v.connected = true
+		v._target = 1.0
+		v.strength = 1.0
+	_heal_all(g)
+	g.hud.visible = false
+	# Park Gill out of the way on ball 1 (the follow camera is replaced by the free one anyway).
+	p.place(g.balls[0], g.balls[0].surface_point(Vector3.UP, 0.2), Vector3.FORWARD)
+	await t.seconds(2.0)
+	var v: Vortex = g.vortices[0]
+	# The moment the middle of 1-2 is most displaced in the first ten minutes.
+	var best_t := 0.0
+	var best := 0.0
+	for i in 600:
+		var d := v.current_offset_at(0.5, float(i)).length()
+		if d > best:
+			best = d
+			best_t = float(i)
+	t.log_line("VCUR most displaced: 1-2 at %.0f s, %.1f m (bound %.1f, length %.0f)" % [best_t, best, v.current_bound(), v._length])
+	await _vc_time(g, best_t)
+	# 1. Side view and second angle of 1-2 and 1-4.
+	for li in [0, 2, 3]:
+		var vv: Vortex = g.vortices[li]
+		var nm := "%d-%d" % [vv.ball_a.index + 1, vv.ball_b.index + 1]
+		var sv := _vc_side(vv)
+		_vc_cam(g, sv[0], sv[1], sv[2])
+		await t.seconds(0.6)
+		await _vc_pair(g, "side_" + nm)
+		var ob := _vc_oblique(vv)
+		_vc_cam(g, ob[0], ob[1], ob[2])
+		await t.seconds(0.6)
+		await _vc_pair(g, "oblique_" + nm)
+	# 2. Several together: the three connections at Current Hollows (ball 2) from high above it, and
+	# the two out of Mossy Meadow (ball 1).
+	var b1 := g.balls[1]
+	var cen := b1.global_position
+	var away := (g.balls[0].global_position - b1.global_position).normalized()
+	var top := b1.global_position + Vector3(-25.0, 122.0, 30.0)
+	_vc_cam(g, top, cen, away)
+	await t.seconds(0.6)
+	await _vc_pair(g, "together_ball2")
+	_vc_cam(g, g.balls[0].global_position + Vector3(-40, 150, 140), g.balls[0].global_position, Vector3.UP)
+	await t.seconds(0.6)
+	await _vc_pair(g, "together_ball1")
+	var tog := {
+		"together_ball2_sw": [b1.global_position + Vector3(-30.0, 80.0, 125.0), b1.global_position + Vector3(-50.0, 0.0, -40.0)],
+		"together_ball2_w": [b1.global_position + Vector3(-150.0, 70.0, 60.0), b1.global_position + Vector3(0.0, -5.0, -20.0)],
+		"together_ball1_se": [g.balls[0].global_position + Vector3(110.0, 60.0, 120.0), g.balls[0].global_position + Vector3(30.0, 5.0, 20.0)],
+	}
+	for nm in tog:
+		_vc_cam(g, tog[nm][0], tog[nm][1], Vector3.UP)
+		await t.seconds(0.6)
+		await _vc_pair(g, nm)
+	# 3. Long-time non-repetition: the side view of 1-2 at moments up to half an hour apart.
+	var sv0 := _vc_side(v)
+	_vc_cam(g, sv0[0], sv0[1], sv0[2])
+	for tm in [0.0, 20.0, 45.0, 90.0, 180.0, 400.0, 900.0, 1800.0]:
+		await _vc_time(g, tm)
+		await t.frames(2)
+		await t.shot("vc_time_1-2_%04d" % int(tm))
+	# 4. Both mouths while the middle is displaced (and the whole span for context).
+	await _vc_time(g, best_t)
+	for at_b in [false, true]:
+		var mb: MossBall = v.ball_b if at_b else v.ball_a
+		var m := v.mouth_pos(at_b)
+		var mu := mb.up_at(m)
+		var u_in := 0.18 if not at_b else 0.82
+		var toward: Vector3 = v.sample(u_in)[0]
+		var sd := v.cur_basis.x
+		_vc_cam(g, m + mu * 7.0 + sd * 16.0, m.lerp(toward, 0.35), mu)
+		await t.seconds(0.6)
+		await _vc_pair(g, "mouth_%s_1-2" % ("b" if at_b else "a"))
+	# 5. Gill travelling inside the moving current: an outside camera beside the middle, then the
+	# game's own ride camera. (The current is at its most displaced moment.)
+	var cam2 := Camera3D.new()
+	g.add_child(cam2)
+	cam2.fov = g.cam.fov
+	cam2.near = g.cam.near
+	cam2.far = g.cam.far
+	cam2.environment = g.cam.environment
+	cam2.attributes = g.cam.attributes
+	for mode in ["on", "off"]:
+		Vortex.currents = mode == "on"
+		await _vc_time(g, best_t - 2.4)
+		p.place(g.balls[0], g.balls[0].surface_point(v.dir_a, 0.2), Vector3.FORWARD)
+		await t.frames(2)
+		g._start_cinematic("travel", {"v": v, "reverse": false})
+		cam2.make_current()
+		for k in [2.0, 2.6, 3.2]:
+			await t.seconds(k - g.cine_t)
+			var e := clampf(g.cine_t / 6.0, 0.0, 1.0)
+			e = e * e * (3.0 - 2.0 * e)
+			var at: Vector3 = v.visual_point(e)
+			cam2.global_position = at + v.cur_basis.x * 17.0 + v.cur_basis.y * 5.0 - v.cur_basis.z * 4.0
+			cam2.look_at(at, v.cur_basis.y)
+			await t.frames(1)
+			await t.shot("vc_ride_out_%s_%.1f" % [mode, k])
+		g.cam.make_current()
+		await t.seconds(0.9)
+		await t.shot("vc_ride_in_%s_4.1" % mode)
+		while g.cinematic != "":
+			await t.frames(1)
+	Vortex.currents = true
+	cam2.queue_free()
+	# 6. Performance in the worst views: inside the current mid-span (all the jets round the camera),
+	# a whole tunnel filling the screen, and three tunnels at once; currents on and off alternately.
+	await _vc_time(g, best_t)
+	p.place(g.balls[0], g.balls[0].surface_point(Vector3.DOWN, 0.2), Vector3.FORWARD)
+	var views := {
+		"inside_1-2": [v.visual_point(0.42), v.visual_point(0.62), v.cur_basis.y],
+		"side_close_1-2": _vc_side(v, 0.45),
+		"together_ball2": [top, cen, away],
+	}
+	for nm in views:
+		var vw: Array = views[nm]
+		_vc_cam(g, vw[0], vw[1], vw[2])
+		await t.seconds(0.5)
+		await t.shot("vc_perfview_%s" % nm)
+		for rep in 3:
+			for mode in ["off", "on"]:
+				Vortex.currents = mode == "on"
+				await _perf_still("vcur %s %s %d" % [nm, mode, rep])
+	Vortex.currents = true
 	_open(g)

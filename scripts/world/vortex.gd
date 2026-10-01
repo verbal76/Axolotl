@@ -9,6 +9,16 @@ extends Node3D
 ## tidal pool lies on the moss at each end, sand and bubbles spiral up out of it, and JETS jets of
 ## water wind as a helix round the path between the balls, flaring out into the pools. The spiral
 ## revolves (`spin_phase`), and the ride carries Gill round the path beside one of the jets.
+##
+## Vortex currents (ledger row 14, owner: the tunnels read as straight pipes; they must read as moving
+## water currents): the logical travel path `points` stays fixed, and the visible centreline is carried
+## by a slow, bounded, deterministic offset D(u, time) (`current_offset`): w(u) = sin(pi u)^1.5 keeps the
+## mouths anchored and lets mid-span move most, and per axis (sideways, vertical, along) three slow sines
+## at incommensurate frequencies, phases and phase gradients along u sum to a meander, each connection with
+## its own stable personality (seeded by its link index). The jets', streams' and debris' vertex shaders
+## (shaders/vortex_current.gdshaderinc) evaluate the same formula from the phases set here, and
+## `ride_pose` adds it on the CPU, so Gill rides inside the moving current. u (0 = ball A, 0.5 = midpoint,
+## 1 = ball B) is the stable parameter along the connection, available to every vortex shader.
 
 const CONNECT_AT := 0.7
 ## Radius of the helix the jets wind along (and of the old tube, kept for the mouth clearance).
@@ -23,6 +33,15 @@ const POOL_R := 5.2
 const TINTS := [Color(1.0, 0.36, 0.62), Color(0.36, 1.0, 0.42), Color(1.0, 0.72, 0.22), Color(0.7, 0.46, 1.0),
 		Color(1.0, 0.42, 0.3), Color(0.32, 0.52, 1.0)]
 const TINT_AMT := 0.5
+## The current's three terms per axis: base angular speeds (rad/s; periods ~37 s, ~63 s, ~114 s before
+## each connection's own scaling) and their share of the amplitude. Slow on purpose: a drift, never a wobble.
+const CUR_OMEGA := [0.17, 0.1, 0.055]
+const CUR_SHARE := [0.46, 0.34, 0.2]
+## Amplitude share per axis: sideways, vertical, along the connection (depth).
+const CUR_AXES := Vector3(1.0, 0.78, 0.3)
+
+## Off: the shipped straight tunnels (before/after comparisons in the render harness).
+static var currents := true
 
 var ball_a: MossBall
 var ball_b: MossBall
@@ -50,6 +69,18 @@ var _rush_b: AudioStreamPlayer3D
 var _length := 1.0
 ## This connection's hue (TINTS).
 var tint := Color.WHITE
+## Its index in Levels.LINKS: seeds the current's personality.
+var link_index := 0
+## The current's clock (s): advances with play, so the meander is a pure function of (link, time).
+var current_time := 0.0
+## Per term k: amplitude (m), angular speed (rad/s), phase (rad) and phase gradient along u, per axis.
+var cur_amp: Array[Vector3] = []
+var cur_omega: Array[Vector3] = []
+var cur_phi: Array[Vector3] = []
+var cur_kap: Array[Vector3] = []
+## Sideways, vertical, along (columns), in world space.
+var cur_basis := Basis()
+var _cur_mats: Array[ShaderMaterial] = []
 
 
 func setup(a: MossBall, b: MossBall, p_dir_a: Vector3, p_dir_b: Vector3) -> void:
@@ -86,12 +117,14 @@ func _ready() -> void:
 	for i in range(1, n):
 		_length += points[i].distance_to(points[i - 1])
 	turns = clampf(_length / 9.0, 3.0, 7.0)
+	_setup_current(p0, p3)
 	var jets := MeshInstance3D.new()
 	jets.mesh = _jet_mesh(JETS, TUBE_RADIUS, JET_R, 7, 0.0)
 	_jet_mat = _make_jet_mat(0.85, 9.0)
 	jets.material_override = _jet_mat
 	jets.cast_shadow = GeometryInstance3D.SHADOW_CASTING_SETTING_OFF
 	jets.name = "Jets"
+	jets.extra_cull_margin = current_bound()
 	add_child(jets)
 	# Thinner streams of spray further in, between the jets.
 	var streams := MeshInstance3D.new()
@@ -100,11 +133,104 @@ func _ready() -> void:
 	streams.material_override = _stream_mat
 	streams.cast_shadow = GeometryInstance3D.SHADOW_CASTING_SETTING_OFF
 	streams.name = "Streams"
+	streams.extra_cull_margin = current_bound()
 	add_child(streams)
 	_mouth_a = _make_mouth(ball_a, dir_a)
 	_mouth_b = _make_mouth(ball_b, dir_b)
+	for i in 2:
+		var root := _mouth_b if i == 1 else _mouth_a
+		_pool_mats[i].set_shader_parameter("u_end", float(i))
+		var dm := _debris_mats[i]
+		dm.set_shader_parameter("u_end", float(i))
+		dm.set_shader_parameter("length_m", _length)
+		dm.set_shader_parameter("cur_basis", root.global_basis.inverse() * cur_basis)
+		_cur_mats.append(dm)
+	_jet_mat.set_shader_parameter("cur_basis", cur_basis)
+	_stream_mat.set_shader_parameter("cur_basis", cur_basis)
+	_cur_mats.append_array([_jet_mat, _stream_mat])
+	_update_current()
 	_rush_a = _make_rush(_mouth_a)
 	_rush_b = _make_rush(_mouth_b)
+
+
+## The current's personality, fixed by the link index (never by the gameplay random sequence).
+func _setup_current(p0: Vector3, p3: Vector3) -> void:
+	var along := (p3 - p0).normalized()
+	var side := along.cross(Vector3.UP)
+	if side.length() < 0.2:
+		side = along.cross(Vector3.RIGHT)
+	side = side.normalized()
+	var vert := side.cross(along).normalized()
+	cur_basis = Basis(side, vert, along)
+	var rng := RandomNumberGenerator.new()
+	rng.seed = 91733 + link_index * 7919
+	# Mid-span sway in metres: room to bend, and still clearly a route between the two mouths.
+	var big := clampf(_length * 0.11, 3.0, 9.0) * rng.randf_range(0.85, 1.15)
+	cur_amp.clear()
+	cur_omega.clear()
+	cur_phi.clear()
+	cur_kap.clear()
+	for k in 3:
+		var a := Vector3.ZERO
+		var w := Vector3.ZERO
+		var ph := Vector3.ZERO
+		var kp := Vector3.ZERO
+		for ax in 3:
+			a[ax] = big * CUR_AXES[ax] * CUR_SHARE[k] * rng.randf_range(0.8, 1.2)
+			w[ax] = CUR_OMEGA[k] * rng.randf_range(0.75, 1.3)
+			ph[ax] = rng.randf_range(0.0, TAU)
+			kp[ax] = rng.randf_range(-3.0, 3.0)
+		cur_amp.append(a)
+		cur_omega.append(w)
+		cur_phi.append(ph)
+		cur_kap.append(kp)
+
+
+## The largest offset the current can ever reach (m).
+func current_bound() -> float:
+	var s := Vector3.ZERO
+	for a in cur_amp:
+		s += a.abs()
+	return s.length()
+
+
+## The current's envelope along u: 0 at both mouths, 1 mid-span.
+static func current_weight(u: float) -> float:
+	return pow(maxf(sin(PI * clampf(u, 0.0, 1.0)), 0.0), 1.5)
+
+
+## The visible centreline's offset from the logical path at u (0 = A .. 1 = B) at `time` (s): the same
+## formula as shaders/vortex_current.gdshaderinc.
+func current_offset_at(u: float, time: float) -> Vector3:
+	if not currents or cur_amp.is_empty():
+		return Vector3.ZERO
+	var s := Vector3.ZERO
+	for k in 3:
+		for ax in 3:
+			s[ax] += cur_amp[k][ax] * sin(fposmod(cur_omega[k][ax] * time + cur_phi[k][ax], TAU) + cur_kap[k][ax] * u)
+	return cur_basis * (s * current_weight(u))
+
+
+## The offset now (what the shaders draw this frame).
+func current_offset(u: float) -> Vector3:
+	return current_offset_at(u, current_time)
+
+
+## The visible (meandering) centreline at u.
+func visual_point(u: float) -> Vector3:
+	return (sample(u)[0] as Vector3) + current_offset(u)
+
+
+func _update_current() -> void:
+	var on := 1.0 if currents else 0.0
+	for k in 3:
+		var ph := Vector3.ZERO
+		for ax in 3:
+			ph[ax] = fposmod(cur_omega[k][ax] * current_time + cur_phi[k][ax], TAU)
+		for m in _cur_mats:
+			m.set_shader_parameter("cur_amp%d" % k, cur_amp[k] * on)
+			m.set_shader_parameter("cur_ph%d" % k, ph)
+			m.set_shader_parameter("cur_kap%d" % k, cur_kap[k])
 
 
 func _make_jet_mat(opacity: float, flow: float) -> ShaderMaterial:
@@ -272,7 +398,7 @@ func _debris(seed_v: int) -> MultiMeshInstance3D:
 	_tint(m)
 	mi.material_override = m
 	mi.cast_shadow = GeometryInstance3D.SHADOW_CASTING_SETTING_OFF
-	mi.custom_aabb = AABB(Vector3(-POOL_R, -1, -POOL_R), Vector3(POOL_R * 2, 9, POOL_R * 2))
+	mi.custom_aabb = AABB(Vector3(-POOL_R, -1, -POOL_R), Vector3(POOL_R * 2, 9, POOL_R * 2)).grow(current_bound() * 0.5)
 	mi.name = "Debris"
 	_debris_mats.append(m)
 	return mi
@@ -302,7 +428,7 @@ func pulse() -> void:
 	# A little rush of water drawn along the tunnel.
 	var k := int(clampf(strength, 0.0, 1.0) * (points.size() - 1) * 0.9)
 	for i in range(0, k, 6):
-		WaterFX.inst._spawn_puff(points[i] + Vector3(randf() - 0.5, randf() - 0.5, randf() - 0.5) * TUBE_RADIUS,
+		WaterFX.inst._spawn_puff(points[i] + current_offset(float(i) / (points.size() - 1)) + Vector3(randf() - 0.5, randf() - 0.5, randf() - 0.5) * TUBE_RADIUS,
 				(points[mini(i + 1, points.size() - 1)] - points[i]).normalized() * 6.0, 1.0, 0.1, Color(0.7, 0.95, 1.0, 0.6), 0.2)
 
 
@@ -313,6 +439,8 @@ func _process(dt: float) -> void:
 	_b_open = move_toward(_b_open, 1.0 if connected else 0.0, dt * 0.7)
 	# The spiral revolves faster as it strengthens: a slow stir, then a hurricane.
 	spin_phase = fmod(spin_phase + dt * (0.35 + strength * 2.2), TAU * 64.0)
+	current_time += dt
+	_update_current()
 	var grow := 1.0 if connected else strength * 0.96
 	# The spiral physically reaches out toward the next ball.
 	for m in [_jet_mat, _stream_mat]:
@@ -359,19 +487,24 @@ func sample(t: float) -> Array:
 
 ## The axolotl's pose on the ride at t (0..1 from A): carried round the path beside the first jet, a
 ## little inside it, as the spiral revolves: a corkscrew. At both ends he is at the eye of the pool.
-## Returns [position, direction of travel from A to B, up (toward the path: his belly to the jet)].
+## The ride follows the logical path's timing, carried by the current's offset (ledger row 14), so he
+## stays inside the meandering water the shaders draw.
+## Returns [position, direction of travel from A to B, up (toward the path: his belly to the jet),
+## the visible centreline point, its direction].
 func ride_pose(t: float) -> Array:
 	var ride := func(tt: float) -> Vector3:
 		var f := _frame(tt)
 		var env := smoothstep(0.0, 0.07, tt) * (1.0 - smoothstep(0.93, 1.0, tt))
 		var a := helix_angle(tt, 0.0) + spin_phase
 		var r := helix_radius(tt, TUBE_RADIUS - 0.6) * env
-		return (f[0] as Vector3) + ((f[2] as Vector3) * cos(a) + (f[3] as Vector3) * sin(a)) * r
+		return (f[0] as Vector3) + current_offset(tt) + ((f[2] as Vector3) * cos(a) + (f[3] as Vector3) * sin(a)) * r
 	var p: Vector3 = ride.call(t)
 	var fwd: Vector3 = ((ride.call(minf(t + 0.004, 1.0)) as Vector3) - (ride.call(maxf(t - 0.004, 0.0)) as Vector3)).normalized()
 	var f := _frame(t)
-	var inward := (f[0] as Vector3) - p
+	var axis := (f[0] as Vector3) + current_offset(t)
+	var axis_f := (visual_point(minf(t + 0.004, 1.0)) - visual_point(maxf(t - 0.004, 0.0))).normalized()
+	var inward := axis - p
 	if inward.length() < 0.2:
 		inward = f[2]
 	var up := (inward - fwd * inward.dot(fwd)).normalized()
-	return [p, fwd, up, f[0], f[1]]
+	return [p, fwd, up, axis, axis_f]

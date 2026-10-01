@@ -18,6 +18,9 @@ uniform vec3 foam : source_color = vec3(0.9, 0.98, 1.0);
 // The connection's own faint hue (Vortex.TINTS), strongest in the churning ring round the eye.
 uniform vec3 tint : source_color = vec3(1.0);
 uniform float tint_amt = 0.0;
+// Which end of the connection this pool is (u: 0 = ball A, 1 = ball B; ledger row 14, for Hard Mode).
+// The current's offset is zero at the mouths (they are anchored), so the pool itself does not move.
+uniform float u_end = 0.0;
 
 float hash(vec2 p) {
 	p = fract(p * vec2(123.34, 456.21));
