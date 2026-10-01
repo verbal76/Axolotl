@@ -117,13 +117,22 @@ func a_parasite(bi: int) -> Parasite:
 	return best
 
 
-## Gill `dist` m from `par`, facing it, camera behind him.
+## Gill `dist` m from `par`, facing it, camera behind him: on ordinary ground, never on or in a
+## ravine (a ravine floor would cost him a frond and put him back at its rim, a ravine cinematic,
+## once a lesson gives his controls back: which parasite is nearest depends on what earlier tests
+## cleared, and one lies beside Ball 1's great ravine).
 func face(par: Parasite, dist := 6.0) -> void:
 	var b := par.ball
 	var pp := par.global_position
 	var up := b.up_at(pp)
 	var side := MossBall.frame_at(up, 0.0).z
-	var from := b.surface_point(b.up_at(pp + side * dist), 0.1)
+	var d := b.up_at(pp + side * dist)
+	for k in 16:
+		var cand := b.up_at(pp + side.rotated(up, TAU * k / 16.0) * dist)
+		if b.ravine_carve(cand) < 0.02 and b.ravine_at(cand) == "":
+			d = cand
+			break
+	var from := b.surface_point(d, 0.1)
 	u.place_at(b.index, from, pp - from)
 	p.invuln_t = 999.0
 	await t.frames(3)
@@ -795,9 +804,12 @@ func parasite() -> void:
 	await layout_checks("parasite")
 	o.ui.tap()
 	await t.frames(2)
-	t.check("parasite_camera_returns", o.stage == "" and g.cinematic == "" and p.controls_enabled and not g.cam.cinematic, "")
+	t.check("parasite_camera_returns", o.stage == "" and g.cinematic == "" and p.controls_enabled and not g.cam.cinematic,
+			"stage '%s', cinematic '%s', controls %s, player %s, cam.cinematic %s, cine weight %.2f, card '%s', last end '%s'" % [o.stage, g.cinematic,
+			p.controls_enabled, p.state, g.cam.cinematic, g.cam._cine_weight, o.ui.card_kind(), o.last_end])
 	await t.seconds(1.2)
-	t.check("parasite_camera_back_smoothly", g.cam._cine_weight < 0.05, "%.2f" % g.cam._cine_weight)
+	t.check("parasite_camera_back_smoothly", g.cam._cine_weight < 0.05, "%.2f; cinematic '%s', cam.cinematic %s, player %s" % [g.cam._cine_weight,
+			g.cinematic, g.cam.cinematic, p.state])
 	# Once only: the next kill plays at normal speed.
 	var par2 := a_parasite(b.index)
 	if par2 != null:
