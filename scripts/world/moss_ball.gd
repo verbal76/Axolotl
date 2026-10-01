@@ -13,6 +13,8 @@ const PLANT_SHADER := preload("res://shaders/plant.gdshader")
 const NOISE := preload("res://assets/textures/noise_rgb.png")
 const MAX_HEALS := 64
 
+## The platform leaves' material (LeafMotion sets its landing give and current sway).
+var leaf_mat: ShaderMaterial
 var index := 0
 var radius := 24.0
 var display_name := ""

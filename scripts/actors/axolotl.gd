@@ -888,6 +888,9 @@ func _on_land(impact: float, r: float) -> void:
 		landed.emit("leaf")
 		Sfx.play("leaf_bend", global_position)
 		return
+	if col is Node and (col as Node).has_meta("leaves") and Game.inst != null and Game.inst.leaf_motion != null:
+		# A platform leaf gives a little and springs back (visual only; the landing is unchanged).
+		Game.inst.leaf_motion.landed(ball, global_position, impact)
 	if fall >= EXTREME_FALL:
 		_superhero_landing(true)
 		landed.emit("extreme")

@@ -35,6 +35,13 @@ uniform float flutter = 0.0;
 uniform float flutter_speed = 1.1;
 uniform bool leaf_data = false;
 uniform float flutter_reach = 5.0;
+// Platform leaves (leaf_data), owner 2026-10-01 (LeafMotion drives these, one set per ball):
+// `press` = world point and depth (m) of the give under a landing, springing back and settling;
+// `cur_axis` / `cur_strength` = the ball's own water current (MossBall.current_at), which leans the
+// blades along the flow with a slow per-leaf wave. Base and stalk stay put (UV.y = 0 there).
+uniform vec4 press = vec4(0.0);
+uniform vec3 cur_axis = vec3(0.0, 1.0, 0.0);
+uniform float cur_strength = 0.0;
 // Golden-pothos look (00040-plants, ledger row 15): the climbable leaves (the ones with leaf_data
 // CUSTOM0, so never stalks or roots sharing the material) take a lively mid-green with irregular
 // cream-to-yellow variegation streaking out from a pale midrib along the veins, paler edges in
@@ -70,6 +77,21 @@ void vertex() {
 			float k = clamp(length(VERTEX) / flutter_reach, 0.0, 1.0);
 			float pace = flutter_speed * mix(0.75, 1.3, fract(node_ph * 7.31));
 			VERTEX.xz += vec2(flutter_wave(node_ph, pace, TIME), flutter_wave(fract(node_ph + 0.37), pace * 0.83, TIME)) * flutter * k * k;
+		}
+	}
+	if (v_leaf > 0.5 && (press.w != 0.0 || cur_strength > 0.0)) {
+		vec3 wp0 = (MODEL_MATRIX * vec4(VERTEX, 1.0)).xyz;
+		float along = UV.y;
+		if (press.w != 0.0) {
+			float d = distance(wp0, press.xyz);
+			VERTEX -= CUSTOM0.xyz * press.w * exp(-d * d / 2.6) * smoothstep(0.0, 0.35, along);
+		}
+		if (cur_strength > 0.0) {
+			vec3 up = normalize(wp0 - ball_center);
+			float band = 1.0 - smoothstep(0.45, 0.8, abs(dot(up, cur_axis)));
+			vec3 flow = normalize(cross(cur_axis, up) + vec3(1e-5));
+			float k = cur_strength * band * (0.024 + 0.012 * sin(TIME * mix(0.9, 1.4, v_lph) + v_lph * 6.2832));
+			VERTEX += transpose(mat3(MODEL_MATRIX)) * flow * k * along * along;
 		}
 	}
 	vec3 wp = (MODEL_MATRIX * vec4(VERTEX, 1.0)).xyz;

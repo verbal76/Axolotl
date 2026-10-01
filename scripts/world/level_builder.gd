@@ -380,7 +380,7 @@ func stem(lat: float, lon: float, height: float, r0: float, r1: float, collide :
 
 ## Static leaf platform: attached at xf.origin, extending along xf's -Z; with `petiole`, a curved
 ## stalk reaches back (+Z) into the stem it grows from.
-func leaf_xf(xf: Transform3D, length: float, width: float, collide := true, petiole := true) -> Node3D:
+func leaf_xf(xf: Transform3D, length: float, width: float, collide := true, petiole := true, stalk := 0.55) -> Node3D:
 	var node: Node3D
 	if collide:
 		var body := StaticBody3D.new()
@@ -403,7 +403,7 @@ func leaf_xf(xf: Transform3D, length: float, width: float, collide := true, peti
 	else:
 		node.set_meta("decor_leaf", true)
 	var mi := MeshInstance3D.new()
-	mi.mesh = MeshLib.platform_leaf_mesh(length, width, petiole)
+	mi.mesh = MeshLib.platform_leaf_mesh(length, width, petiole, stalk)
 	mi.material_override = leaf_mat
 	mi.visibility_range_end = 140.0
 	node.add_child(mi)

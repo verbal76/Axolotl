@@ -632,22 +632,35 @@ static func leaf_shadow_proxy(leaves: Array) -> ArrayMesh:
 	return st.commit()
 
 
+## Half-width (0..1) of a platform leaf at t along it (0 base, 1 tip): the golden-pothos outline of
+## the owner's reference (2026-10-01): a narrow neck at the stalk (as before, so the base stays clear
+## of the stem it grows from), a broad rounded (heart-like) body
+## widest about a third of the way along, then a long taper to a pointed tip.
 static func leaf_profile(t: float) -> float:
 	var tc := clampf(t, 0.0, 1.0)
-	var neck := 0.22 + 0.78 * smoothstep(0.0, 0.2, tc)
-	return neck * pow(sin(PI * tc), 0.42) * (1.0 - 0.12 * tc)
+	var neck := 0.22 + 0.78 * smoothstep(0.0, 0.3, tc)
+	return neck * pow(1.0 - tc, 0.85) * (1.0 + 2.41 * tc) / 1.278
 
 
 ## Height of a platform leaf's upper surface above its base plane at (t along, s across in -1..1):
-## a gentle crown along the midrib, edges curling a little down, the tip drooping slightly. Nearly
-## level where the axolotl stands (the middle).
+## a gentle arch along the blade with the tip drooping, and a soft V fold about the midrib whose halves
+## rise a little before the edges curl down. Within a few centimetres of level where the axolotl
+## stands (the broad middle).
 static func leaf_top_y(t: float, s: float, width: float) -> float:
-	return 0.06 - 0.15 * pow(clampf(t, 0.0, 1.0), 2.4) - 0.08 * s * s * minf(width / 2.2, 1.4)
+	var tc := clampf(t, 0.0, 1.0)
+	var a := absf(s)
+	return 0.05 + 0.06 * sin(PI * tc * 0.9) - 0.22 * pow(tc, 2.6) + (0.09 * a - 0.12 * s * s) * minf(width / 2.2, 1.4)
 
 
-## Visual thickness of a platform leaf at s across (thickest at the midrib, a thin edge).
+## Visual thickness of a platform leaf at s across: a thin blade with a fuller midrib.
 static func leaf_thickness(s: float) -> float:
-	return 0.02 + 0.07 * (1.0 - s * s)
+	return 0.012 + 0.03 * (1.0 - s * s)
+
+
+## How deep the collision reaches below the upper surface (kept as before the blade was thinned, so
+## nothing that landed safely before can pass through now; the upper surface is the drawn one).
+static func leaf_collision_depth(s: float) -> float:
+	return 0.02 + 0.07 * (1.0 - s * s) + 0.03
 
 
 ## A large leaf used as a platform, lying in the XZ plane, pointing along -Z from the origin (where
@@ -655,9 +668,9 @@ static func leaf_thickness(s: float) -> float:
 ## card. With `petiole`, a curved stalk runs from the leaf's base back into the stem it grows from
 ## (+Z, rising slightly as it enters the stem), so the leaf is seen to grow out of it: nothing but
 ## the drawn leaf collides (MeshLib.leaf_collision_shapes); the stalk never snags.
-static func platform_leaf_mesh(length: float, width: float, petiole := false) -> ArrayMesh:
+static func platform_leaf_mesh(length: float, width: float, petiole := false, stalk := 0.55) -> ArrayMesh:
 	var st := leaf_surface()
-	_leaf_into(st, Transform3D.IDENTITY, length, width, petiole, 0)
+	_leaf_into(st, Transform3D.IDENTITY, length, width, petiole, 0, stalk)
 	st.generate_normals()
 	return st.commit()
 
@@ -679,11 +692,12 @@ static func leaf_phase(at: Vector3) -> float:
 
 ## Appends a platform leaf (as platform_leaf_mesh) transformed by `xf` to `st` (indexed), whose
 ## vertices so far number `base`; returns the new count. Call generate_normals() once at the end.
-static func _leaf_into(st: SurfaceTool, xf: Transform3D, length: float, width: float, petiole: bool, p_base: int) -> int:
+## `stalk`: how far back (+Z) the stalk reaches into its stem.
+static func _leaf_into(st: SurfaceTool, xf: Transform3D, length: float, width: float, petiole: bool, p_base: int, stalk := 0.55) -> int:
 	var lup := xf.basis.y.normalized()
 	st.set_custom(0, Color(lup.x, lup.y, lup.z, leaf_phase(xf.origin)))
 	var rows := 10
-	var cols := [-1.0, -0.55, 0.0, 0.55, 1.0]
+	var cols := [-1.0, -0.68, -0.34, 0.0, 0.34, 0.68, 1.0]
 	var base := p_base
 	var top := []
 	for i in rows + 1:
@@ -732,8 +746,8 @@ static func _leaf_into(st: SurfaceTool, xf: Transform3D, length: float, width: f
 		# The stalk: from inside the stem (0.55 m back, a little higher) arcing down and out into
 		# the leaf's narrow base, thickest where it leaves the stem.
 		var r_scale := clampf(width / 2.2, 0.8, 1.5)
-		var p0 := Vector3(0, 0.3, 0.55)
-		var p1 := Vector3(0, 0.28, 0.12)
+		var p0 := Vector3(0, 0.3, stalk)
+		var p1 := Vector3(0, 0.28, stalk * 0.22)
 		var p2 := Vector3(0, 0.1, -0.08)
 		var p3 := Vector3(0, 0.02, -0.34)
 		var rings := 6
@@ -785,7 +799,7 @@ static func leaf_collision_shapes(length: float, width: float) -> Array:
 			for s in [-1.0, -0.5, 0.0, 0.5, 1.0]:
 				var y := leaf_top_y(t, s, width)
 				pts.append(Vector3(s * hw, y, -t * length))
-				pts.append(Vector3(s * hw, y - leaf_thickness(s) - 0.03, -t * length))
+				pts.append(Vector3(s * hw, y - leaf_collision_depth(s), -t * length))
 		var shape := ConvexPolygonShape3D.new()
 		shape.points = pts
 		out.append(shape)
