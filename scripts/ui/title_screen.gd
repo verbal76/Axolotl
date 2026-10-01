@@ -119,8 +119,11 @@ func _layout() -> void:
 	# The menu column: buttons as tall as fit between the run line and the bottom of the safe area.
 	# (Room for every line of the run info: two before the skill tree, three with its progress line.)
 	var info_lines := maxi(2, _run_info.text.count("\n") + 1)
-	_run_info.size.y = 30 * s * info_lines
-	var top := _run_info.position.y + ((29 * info_lines) * s if _run_info.visible else 8 * s)
+	# (Measured from the font, not a guessed 29 px a line: the third line, starfish and skills, sat on
+	# the Continue button. A clear gap of 18 px always separates the last line from the buttons.)
+	var line_h := float(_run_info.get_line_height())
+	_run_info.size.y = line_h * info_lines
+	var top := _run_info.position.y + (line_h * info_lines + 18 * s if _run_info.visible else 8 * s)
 	var n := 0
 	for c in _column.get_children():
 		if (c as Control).visible:
