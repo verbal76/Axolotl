@@ -225,3 +225,14 @@ progress level of the 058 run; a slow launch's full timeline is still the missin
 - After threading, per-ball terrain is only heights 37–98 ms + mesh/collision 83–206 ms, so terrain
   tiles are ~0.3 s of the ~6 s world build; the rest is vegetation scatter, per-ball layout and
   sprouts (§3). The 1–2 s estimate in §7 overstated the terrain share. Phone gain unmeasured yet.
+
+## 16. Phone, dev-000069 (threaded terrain heights), continuing a run (3.5 %, 13 ids) — title usable 10 718 ms
+
+- Balls 1–7: 1184 / 761 / 1906 / 481 / 943 / 364 / 633 = **6 272 ms** (dev-000059 fresh: 6 600 ms):
+  about **0.33 s** less, matching the desktop A/B (§15).
+- Whole launch 10.7 s vs 9.9–10.4 s on dev-000059: the saving is inside the launch-to-launch spread;
+  the rest of the timeline (engine 0→1.73 s before Settings, aquarium, creatures 0.6 s, title frame
+  0.78 s after world ready) is unchanged. Startup stays OPEN; ball 3 (1.9 s) is still the largest
+  single stage.
+- Title frames on this launch: 25.6 fps, median 34.7 ms (the 30 fps cap from dev-000064 engaged), p95
+  53 ms, worst 145 ms.
