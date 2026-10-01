@@ -589,6 +589,8 @@ func run(runner) -> void:
 		await _starfish_shots(g)
 	if only == "glide":
 		await _glide_shots(g)
+	if only == "brace":
+		await _brace_shots(g)
 	if only == "perfstar":
 		await _perf_starfish(g)
 	if only == "organic":
@@ -2541,6 +2543,83 @@ func _starfish_shots(g: Game) -> void:
 ## Glide: the posture from behind (the gameplay camera), from the side and in a turn, a plain fall
 ## for comparison, and a representative transfer (the Undercut bridges) before (no Glide: short) and
 ## after (Glide II: across).
+## Pushed by a current (ledger row 19): the brace from the gameplay camera, close and from the side
+## (gesture off for comparison), a step sequence, and the drag marks fading over time from above.
+func _brace_shots(g: Game) -> void:
+	var p := g.player
+	p.use_bot_input = true
+	p.invuln_t = 9999
+	var b := g.balls[1]
+	g.ecosystem.set_physics_process(false)
+	for pp in b.parasites:
+		pp.set_physics_process(false)
+	var lat := float(Settings.test_args.get("lat", "6"))
+	var lon := float(Settings.test_args.get("lon", "150"))
+	var spot := func(heading: float) -> void:
+		var d := MossBall.dir_ll(lat, lon)
+		p.place(b, b.surface_point(d, 0.1), -MossBall.frame_at(d, heading).z)
+		p.bot_input = Vector2.ZERO
+		g.cam.snap_behind()
+		g.audio.set_ball(1, false)
+	var views := func(tag: String) -> void:
+		await t.shot("brace_%s_mid" % tag)
+		var c := p.global_position + p.up * 0.15
+		var flow := p.current_push.normalized() if p.current_push.length() > 0.01 else p.facing.cross(p.up)
+		var right := p.facing.cross(p.up)
+		_close(g, c + right * 1.1 - p.facing * 0.9 + p.up * 0.75, c, p.up)
+		await t.frames(2)
+		await t.shot("brace_%s_close" % tag)
+		# Side on to the current: looking across the flow, upstream to the left of the frame.
+		var across := flow.cross(p.up).normalized()
+		_close(g, c + across * 1.6 + p.up * 0.22, c, p.up)
+		await t.frames(2)
+		await t.shot("brace_%s_side" % tag)
+		_open(g)
+	for heading in [90.0, 0.0]:
+		var h := "h%d" % int(heading)
+		Axolotl.brace_enabled = false
+		spot.call(heading)
+		await t.seconds(1.5)
+		t.log_line("%s off: push %.2f" % [h, p.current_push.length()])
+		await views.call(h + "_off")
+		Axolotl.brace_enabled = true
+		spot.call(heading)
+		await t.seconds(1.8)
+		var lp: Vector3 = p.model.global_transform.basis.orthonormalized().inverse() * p.current_push
+		t.log_line("%s on: push %.2f brace %.2f marks live %d; push in his frame %s (x right, -z ahead), upstream %s, rig rot %s, tail tip az %.2f"
+				% [h, p.current_push.length(), p.current_brace, WaterFX.inst.marks_live, str(lp), str(p.model._brace_up), str(p.model.rig.rotation), p.model.whip_tip_az])
+		await views.call(h + "_on")
+	# The steps: close, every 0.15 s.
+	spot.call(90.0)
+	await t.seconds(1.5)
+	for i in 8:
+		var c := p.global_position + p.up * 0.15
+		var right := p.facing.cross(p.up)
+		_close(g, c + right * 1.0 - p.facing * 0.6 + p.up * 0.9, c, p.up)
+		await t.frames(1)
+		await t.shot("brace_step_%d" % i)
+		await t.frames(4)
+	_open(g)
+	# The marks fading: braced for 3 s, then the gesture off (no new marks) and the camera held over
+	# the trail, a frame every half second.
+	spot.call(90.0)
+	await t.seconds(3.0)
+	Axolotl.brace_enabled = false
+	var c0 := p.global_position
+	var u := p.up
+	var back := -p.current_push.normalized() if p.current_push.length() > 0.01 else p.facing
+	var mid := c0 + back * 0.6
+	var side := back.cross(u).normalized()
+	for i in 9:
+		_close(g, mid + u * 1.3 + side * 0.5 - back * 0.3, mid, back)
+		await t.frames(1)
+		t.log_line("fade %d: marks live %d" % [i, WaterFX.inst.marks_live])
+		await t.shot("brace_marks_%.1fs" % (i * 0.5))
+		await t.seconds(0.5)
+	_open(g)
+	Axolotl.brace_enabled = true
+
+
 func _glide_shots(g: Game) -> void:
 	var p := g.player
 	p.use_bot_input = true
