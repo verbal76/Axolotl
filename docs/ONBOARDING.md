@@ -12,6 +12,20 @@ Owner rulings with it:
 - Do not redesign this spec. Record it durably.
 - Implement it at its queued position: second in the train, right after the Skills-page fix.
 
+## Owner ruling, 2026-10-01 (later): ONCE PER RUN, with an off switch (supersedes "first new run ever" and "once per profile")
+
+- The intro and the three lessons happen **once per run**: every new run, while tutorials are on.
+- **Settings has a "Tutorials" on/off toggle** (title and in-run Settings). It is on by default for
+  everyone, existing players included. Off skips the intro and all three lessons.
+- The **empty frond** is per run too: each new run starts with one unlocked frond empty, only while
+  tutorials are on. With tutorials off, a run starts at full health.
+- The Replay tutorial button is removed; the toggle replaces it.
+- A run already in progress when this ships (Continue) counts its lessons as done, so nothing
+  appears mid-run. The next new run plays them.
+
+The verbatim text below still defines what each lesson does; where it says "first-ever", "once", or
+"stays seen across New Run", this ruling wins.
+
 ## Owner text (verbatim)
 
 ```
