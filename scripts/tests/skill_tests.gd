@@ -444,13 +444,13 @@ func pickup() -> void:
 			sg.disconnect(count)
 		if gp.has_star(sid):
 			break
-		t.log_line("STARFISH WALK %s not reached: Gill %s, controls %s, game %s, cinematic '%s', %.1f m from it" % [sid, p.state,
+		t.log_line("STARFISH WALK %s not reached: state %s, controls %s, game %s, cinematic '%s', %.1f m from it" % [sid, p.state,
 				p.controls_enabled, g.state, g.cinematic, p.global_position.distance_to(sp)])
 		n0 = gp.stars()
 	var on_disk: Dictionary = GillProgress._read(gp.path).get("data", {})
 	var walked: bool = gp.has_star(sid) and acts[0] == 0 and (on_disk.get("collected", {}) as Dictionary).has(sid)
 	t.check("starfish_touch_pickup_walking", walked and gp.stars() == n0 + 1 and gp.balance() == gp.stars() - gp.spent(),
-			"%s collected by walking into it, %d actions; on disk at once; %d collected (was %d), balance %d; Gill %s, %.1f m from it, hostiles within 15 m: %d"
+			"%s collected by walking into it, %d actions; on disk at once; %d collected (was %d), balance %d; state %s, %.1f m from it, hostiles within 15 m: %d"
 			% [sid, acts[0], gp.stars(), n0, gp.balance(), p.state, p.global_position.distance_to(sp),
 			b.hostiles().filter(func(h: Node) -> bool: return h.is_alive() and (h as Node3D).global_position.distance_to(p.global_position) < 15.0).size()])
 	t.check("starfish_hud_chip_shows", g.hud.star_chip.showing() and g.hud.star_chip.text == "%d/30" % gp.stars(), g.hud.star_chip.text)
