@@ -6949,7 +6949,9 @@ func _test_treasure_play() -> void:
 	# (A random hunt may already have moved this object once, e.g. off a top with no room: count the
 	# recovery, not the total.)
 	var rec0 := int(cur.get("recovered", 0))
-	var buried := TreasureHunt.target_pos(cur) - cw.up_at(TreasureHunt.target_pos(cur)) * 3.0
+	# (Deep in the world's core, not 3 m under the spot: from a leaf, rock or cave perch 3 m down is
+	# often open ground, a good spot, so nothing was recovered.)
+	var buried := cw.global_position.lerp(TreasureHunt.target_pos(cur), 0.3)
 	cur["pos"] = [buried.x, buried.y, buried.z]
 	tp.stop()
 	tp.start()
