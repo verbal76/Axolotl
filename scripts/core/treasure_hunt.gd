@@ -161,11 +161,16 @@ static func generate(seed_v: int, scale: float, balls: Array, avoid: Array[Vecto
 		# The kind this slot asks for; if this world has none left (spread, not repeating last
 		# time): in the first hunt the ground or grass, later the other kinds, ending with the ground.
 		var order: Array = ["ground", "grass"] if scale >= NORMAL_SCALE else ["grass", "rock", "leaf", "cave", "ground"]
-		for k in [want] + order:
-			var list: Array = sets[w].get(k, [])
-			if list.is_empty():
-				continue
-			pick = _choose(b, list, chosen, avoid, rng, false)
+		# (A spot new this hunt in any kind beats repeating one of last hunt's: every kind is tried
+		# without repeats first, then again allowing them.)
+		for allow_repeat in [false, true]:
+			for k in [want] + order:
+				var list: Array = sets[w].get(k, [])
+				if list.is_empty():
+					continue
+				pick = _choose(b, list, chosen, avoid, rng, false, allow_repeat)
+				if not pick.is_empty():
+					break
 			if not pick.is_empty():
 				break
 		if pick.is_empty():
@@ -438,7 +443,7 @@ static func candidates(b: MossBall, scale: float, rng: RandomNumberGenerator) ->
 	return out
 
 
-static func _choose(b: MossBall, cands: Array, chosen: Array[Vector3], avoid: Array[Vector3], rng: RandomNumberGenerator, fallback := true) -> Dictionary:
+static func _choose(b: MossBall, cands: Array, chosen: Array[Vector3], avoid: Array[Vector3], rng: RandomNumberGenerator, fallback := true, allow_repeat := true) -> Dictionary:
 	var spread := b.radius * SPREAD
 	var tiers := [[], [], []]
 	for c in cands:
@@ -456,9 +461,9 @@ static func _choose(b: MossBall, cands: Array, chosen: Array[Vector3], avoid: Ar
 		# Partly hidden (some cover, not boxed in) first; then any; then even a repeat of last time.
 		var tier := 2 if repeat else (0 if int(c["cover"]) >= 1 and int(c["cover"]) <= 5 else 1)
 		tiers[tier].append(c)
-	for t in tiers:
-		if not t.is_empty():
-			return t[rng.randi() % t.size()]
+	for ti in (3 if allow_repeat else 2):
+		if not tiers[ti].is_empty():
+			return tiers[ti][rng.randi() % tiers[ti].size()]
 	if not fallback:
 		return {}
 	# No spread-out spot left (only with very few candidates): the nearest-to-valid fallback is any
