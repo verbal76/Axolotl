@@ -273,7 +273,7 @@ func tap_hits_tank(sp: Vector2) -> bool:
 
 # --- The stand-in (room, inspection, Live Tank) ----------------------------------------------
 
-## Gill's explorer round `home` on `ball` (also used by the tests to set him down anywhere).
+## His explorer round `home` on `ball` (also used by the tests to set him down anywhere).
 func start_explorer(ball: MossBall, home: Vector3, facing: Vector3) -> void:
 	if explorer:
 		explorer.free_body()
