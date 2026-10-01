@@ -1459,6 +1459,9 @@ func _cine_connect() -> void:
 	cam.cine_up = v.dir_a.cross(side).normalized() * -1.0 if false else (Vector3.UP - v.dir_a * Vector3.UP.dot(v.dir_a)).normalized()
 	if cine_t > 4.8:
 		_end_cinematic()
+		# Owner, 2026-10-01: the first tunnel of a run explains itself (a tutorial card).
+		if onboarding != null:
+			onboarding.on_tunnel_opened()
 
 
 func _cine_travel(dt: float) -> void:
@@ -1525,19 +1528,31 @@ func _cine_travel(dt: float) -> void:
 
 
 ## A quick fade out of the ravine and back in at its edge (about 0.9 s; the camera follows).
+## Owner, 2026-10-01: he lands in the ravine's ooze (RavineOoze), sinks slowly into it and is gone,
+## then reforms on the rim as before.
+const OOZE_SINK_S := 1.5
+const OOZE_SINK_M := 0.9
+
+
 func _cine_ravine() -> void:
-	if cine_t < 0.35:
-		player.model.dissolve = cine_t / 0.35
-		if int(cine_t * 30.0) % 3 == 0:
-			WaterFX.inst.sparkle(player.body_center(), Color(0.45, 1.0, 0.85, 0.9), 3, 1.0, 0.06, 0.6)
+	if cine_t < OOZE_SINK_S:
+		if not cine_data.has("sinking"):
+			cine_data["sinking"] = true
+			Sfx.play("ooze_sink", player.global_position, -2.0)
+		var k := cine_t / OOZE_SINK_S
+		player.model.position.y = -OOZE_SINK_M * k * k * (3.0 - 2.0 * k)
+		player.model.dissolve = smoothstep(0.65, 1.0, k)
+		if int(cine_t * 30.0) % 4 == 0:
+			WaterFX.inst.sparkle(player.global_position + player.up * RavineOoze.LEVEL, Color(0.5, 1.0, 0.25, 0.9), 2, 0.6, 0.08, 0.7)
 	elif not cine_data.has("placed"):
 		cine_data["placed"] = true
 		var to: Array = cine_data["to"]
+		player.model.position.y = 0.0
 		player.place(to[0], to[1])
 		Sfx.play("reform", to[1], -6.0)
 		cam.snap_behind()
 	else:
-		var k := clampf((cine_t - 0.35) / 0.55, 0.0, 1.0)
+		var k := clampf((cine_t - OOZE_SINK_S) / 0.55, 0.0, 1.0)
 		player.model.dissolve = 1.0 - k
 		if k >= 1.0:
 			player.state = "normal"

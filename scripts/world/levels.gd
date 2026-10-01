@@ -71,6 +71,8 @@ static func build_ball(i: int, game: Node) -> MossBall:
 	_accent_flora(lb, i)
 	_sprouts(lb, i)
 	b.finalize_terrain()
+	if not b.carves.is_empty():
+		b.add_child(RavineOoze.build(b))
 	# Selective shadows: the climbing leaves and the stems cast; formations and ground do not.
 	# The detailed climbing leaves cast through a flat stand-in (a few triangles per leaf).
 	var shadow_mat := StandardMaterial3D.new()

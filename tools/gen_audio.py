@@ -574,6 +574,10 @@ def main():
         aquarium_bed()
         print("audio written to", os.path.abspath(OUT))
         return
+    if "--only=tunnel" in sys.argv:
+        tunnel_and_ooze()
+        print("audio written to", os.path.abspath(OUT))
+        return
     if "--only=skills" not in sys.argv:
         sfx()
         ambience()
@@ -581,8 +585,44 @@ def main():
         creatures()
         parasites()
         gill()
+        tunnel_and_ooze()
     skills()
     print("audio written to", os.path.abspath(OUT))
+
+
+def tunnel_and_ooze():
+    """Owner, 2026-10-01. The water tunnel opening (replaces sfx() 's vortex_connect): a soft swell with
+    rising, twinkly bell sparkles over the whole 4.8 s shot. The ravine ooze: a thick low gurgle as
+    Gill sinks in. Own random generator, so every other sound stays byte-identical."""
+    r = np.random.default_rng(4242)
+    dur = 4.8
+    tt = t_axis(dur)
+    swell = np.sin(np.pi * np.clip(tt / dur, 0, 1)) ** 1.5
+    s = np.zeros(len(tt))
+    for f in (note_f(60), note_f(64), note_f(67), note_f(72)):
+        for det in (-0.004, 0.0, 0.005):
+            s += np.sin(2 * np.pi * f * (1 + det) * tt + r.random() * 6.28) * 0.06
+    s = lowpass_fast(s, 1400) * swell
+    # A rising sparkle arpeggio (C major pentatonic, climbing two octaves), then a scatter of twinkles.
+    scale = [72, 74, 76, 79, 81, 84, 86, 88, 91, 93, 96]
+    for k, m in enumerate(scale):
+        place(s, 0.15 + k * 0.17, bell(note_f(m), 1.4), 0.22, wrap=False)
+    for k in range(34):
+        m = scale[int(r.integers(4, len(scale)))] + 12 * int(r.integers(0, 2))
+        place(s, r.uniform(1.6, dur - 0.9), bell(note_f(min(m, 103)), 0.9), r.uniform(0.06, 0.16), wrap=False)
+    shimmer = highpass_fast(np.array([r.uniform(-1, 1) for _ in range(len(tt))]), 6000) * 0.05 * swell
+    write_wav("sfx_vortex_connect", reverb(s + shimmer, 0.5))
+    # The ooze: slow, thick, low bubbles and a sinking moan.
+    dur = 1.6
+    tt = t_axis(dur)
+    g = np.zeros(len(tt))
+    for k in range(16):
+        f0 = r.uniform(90, 260)
+        place(g, r.uniform(0, dur * 0.8), drop(f0, f0 * 1.6, r.uniform(0.08, 0.16)), r.uniform(0.4, 0.9), wrap=False)
+    f = 160 * (1 - 0.45 * tt / dur)
+    moan = np.sin(2 * np.pi * np.cumsum(f) / SR) * np.sin(np.pi * tt / dur) * 0.25
+    g = lowpass_fast(g, 900) + moan
+    write_wav("sfx_ooze_sink", reverb(g, 0.25))
 
 
 def skills():

@@ -25,6 +25,27 @@ func run(runner) -> void:
 		await t.shot("diag_page")
 		g.diagnostics.close()
 		g.pause_menu.close()
+	if only == "ooze":
+		# The green ooze on a ravine floor, seen from its rim (owner, 2026-10-01).
+		var deep: MossBall = null
+		for bb in g.balls:
+			for cv in bb.carves:
+				if deep == null or float(cv[2]) > float(deep.carves[0][2]):
+					deep = bb
+		for b in [g.balls[0], deep]:
+			if b.carves.is_empty():
+				continue
+			var pts: Array = b.carves[0][0]
+			var mid: Vector3 = (pts[pts.size() / 2] as Vector3).normalized()
+			var nxt: Vector3 = (pts[mini(pts.size() / 2 + 1, pts.size() - 1)] as Vector3).normalized()
+			var along := (nxt - mid).normalized()
+			var side := mid.cross(along).normalized()
+			var rim := mid.rotated(along, (float(b.carves[0][1]) + float(b.carves[0][3]) + 1.5) / b.radius)
+			g.player.place(b, b.surface_point(rim, 0.1), b.global_position + mid * b.radius - b.surface_point(rim))
+			g.cam.snap_behind()
+			g.cam.pitch = -0.6
+			await t.seconds(2.0)
+			await t.shot("ooze_ball%d" % (b.index + 1))
 	if only == "hud":
 		# Touch controls over bright moss: idle, then the stick pushed and lunge held.
 		Settings.input_mode = Settings.InputMode.TOUCH

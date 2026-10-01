@@ -18,7 +18,7 @@ func run(runner) -> void:
 		g.repop.enabled = false
 	await t.seconds(0.5)
 	var only: String = Settings.test_args.get("only", "")
-	for name_ in ["_test_startup", "_test_ota_and_version", "_test_mesh_winding", "_test_terrain", "_test_ravines", "_test_terrain_grounded", "_test_no_floating_platforms", "_test_parasite_locomotion", "_test_parasite_body_and_death", "_test_parasite_combat", "_test_organic_motion", "_test_gill_look", "_test_gill_idles", "_test_gill_colours", "_test_gill_patterns", "_test_tail_whip", "_test_gill_traction", "_test_gill_incline_transitions", "_test_traction_no_shortcuts", "_test_gill_body_follow", "_test_swim_body_follow", "_test_ambient_sway", "_test_placements", "_test_tutorial_route", "_test_sphere_walk", "_test_jump_and_burst", "_test_coyote_and_buffer", "_test_swipe_direction_and_stages", "_test_hard_landing", "_test_food", "_test_food_reach", "_test_darter_and_burrower", "_test_food_repopulates", "_test_motes", "_test_checkpoint_and_regen", "_test_crumble", "_test_restoration_gates", "_test_bubble_columns", "_test_restoration_continuity", "_test_health_map", "_test_vortex", "_test_vortex_tints", "_test_vortex_currents", "_test_vortex_currents_travel", "_test_current", "_test_current_brace", "_test_canopy", "_test_canopy_plain_jumps", "_test_climbs_physical", "_test_jungle_ladders_physical", "_test_leaf_geometry", "_test_leaf_footing", "_test_caves", "_test_mounds", "_test_vegetation", "_test_vortex_mouths_clear", "_test_route_audit", "_test_new_areas", "_test_ecosystem", "_test_music", "_test_opening_audio", "_test_run_clock", "_test_completion_catalog", "_test_completion_frozen", "_test_run_save_file", "_test_run_timer_live", "_test_run_continue", "_test_timer_integrity", "_test_resume_points_safe", "_phase_continue_write", "_phase_continue_read", "_test_upgrades", "_test_ui", "_test_menus_no_scroll", "_test_menu_touch", "_test_tier2_rules", "_test_tier2_world", "_test_ambient_fish", "_test_parasite_never_buried", "_test_tier2_loadout", "_test_aquarium_experiences", "_test_aquarium_polish", "_test_all_clear", "_test_treasure_unlock", "_test_treasure_generation", "_test_treasure_play", "_phase_treasure_stress", "_phase_live_fish_diag", "_phase_cpu_probe", "_phase_incline_survey", "_phase_loco_diag", "_phase_crawl_trace", "_phase_mouth_crawls", "_phase_organic_trace", "_test_skilltree_graph", "_test_progress_store", "_test_starfish_spots", "_test_starfish_pickup", "_test_skill_ui", "_test_quick_gill", "_test_lunge_skills", "_test_burst_skills", "_test_glide_control", "_test_glide_transfers", "_test_mote_magnet", "_phase_starfish_survey", "_phase_starfish_sweep", "_phase_glide_probe", "_test_plants_terminal_growth", "_test_sea_fan_depth", "_test_repopulation", "_phase_repop_survey", "_phase_repop_sim", "_test_aquarium_gill", "_phase_aq_nav", "_test_tutorials_and_title", "_test_onb_progress", "_test_onb_owner_save", "_test_onb_per_run", "_test_onb_toggle", "_test_onb_intro", "_test_onb_feeding", "_test_onb_parasite", "_test_onb_feed_first", "_test_onb_starfish", "_test_onb_softlock", "_test_onb_relaunch", "_test_onb_restoration_equal", "_test_hard_mode", "_test_hard_mode_save", "_test_polish_a", "_test_leaf_motion", "_phase_world_hash", "_phase_th_bench", "_phase_hard_write", "_phase_hard_read", "_phase_hard_newrun", "_phase_hard_finish", "_phase_hard_sim", "_phase_hard_intervals", "_phase_onb_owner", "_phase_onb_write", "_phase_onb_read", "_phase_onb_kill", "_phase_onb_toggle"]:
+	for name_ in ["_test_startup", "_test_ota_and_version", "_test_mesh_winding", "_test_terrain", "_test_ravines", "_test_terrain_grounded", "_test_no_floating_platforms", "_test_parasite_locomotion", "_test_parasite_body_and_death", "_test_parasite_combat", "_test_organic_motion", "_test_gill_look", "_test_gill_idles", "_test_gill_colours", "_test_gill_patterns", "_test_tail_whip", "_test_gill_traction", "_test_gill_incline_transitions", "_test_traction_no_shortcuts", "_test_gill_body_follow", "_test_swim_body_follow", "_test_ambient_sway", "_test_placements", "_test_tutorial_route", "_test_sphere_walk", "_test_jump_and_burst", "_test_coyote_and_buffer", "_test_swipe_direction_and_stages", "_test_hard_landing", "_test_food", "_test_food_reach", "_test_darter_and_burrower", "_test_food_repopulates", "_test_motes", "_test_checkpoint_and_regen", "_test_crumble", "_test_restoration_gates", "_test_bubble_columns", "_test_restoration_continuity", "_test_health_map", "_test_vortex", "_test_vortex_tints", "_test_vortex_currents", "_test_vortex_currents_travel", "_test_current", "_test_current_brace", "_test_canopy", "_test_canopy_plain_jumps", "_test_climbs_physical", "_test_jungle_ladders_physical", "_test_leaf_geometry", "_test_leaf_footing", "_test_caves", "_test_mounds", "_test_vegetation", "_test_vortex_mouths_clear", "_test_route_audit", "_test_new_areas", "_test_ecosystem", "_test_music", "_test_opening_audio", "_test_run_clock", "_test_completion_catalog", "_test_completion_frozen", "_test_run_save_file", "_test_run_timer_live", "_test_run_continue", "_test_timer_integrity", "_test_resume_points_safe", "_phase_continue_write", "_phase_continue_read", "_test_upgrades", "_test_ui", "_test_menus_no_scroll", "_test_menu_touch", "_test_tier2_rules", "_test_tier2_world", "_test_ambient_fish", "_test_parasite_never_buried", "_test_tier2_loadout", "_test_aquarium_experiences", "_test_aquarium_polish", "_test_all_clear", "_test_treasure_unlock", "_test_treasure_generation", "_test_treasure_play", "_phase_treasure_stress", "_phase_live_fish_diag", "_phase_cpu_probe", "_phase_incline_survey", "_phase_loco_diag", "_phase_crawl_trace", "_phase_mouth_crawls", "_phase_organic_trace", "_test_skilltree_graph", "_test_progress_store", "_test_starfish_spots", "_test_starfish_pickup", "_test_skill_ui", "_test_quick_gill", "_test_lunge_skills", "_test_burst_skills", "_test_glide_control", "_test_glide_transfers", "_test_mote_magnet", "_phase_starfish_survey", "_phase_starfish_sweep", "_phase_glide_probe", "_test_plants_terminal_growth", "_test_sea_fan_depth", "_test_repopulation", "_phase_repop_survey", "_phase_repop_sim", "_test_aquarium_gill", "_phase_aq_nav", "_test_tutorials_and_title", "_test_onb_progress", "_test_onb_owner_save", "_test_onb_per_run", "_test_onb_toggle", "_test_onb_intro", "_test_onb_feeding", "_test_onb_parasite", "_test_onb_feed_first", "_test_onb_tunnel", "_test_onb_starfish", "_test_onb_softlock", "_test_onb_relaunch", "_test_onb_restoration_equal", "_test_hard_mode", "_test_hard_mode_save", "_test_polish_a", "_test_leaf_motion", "_phase_world_hash", "_phase_th_bench", "_phase_hard_write", "_phase_hard_read", "_phase_hard_newrun", "_phase_hard_finish", "_phase_hard_sim", "_phase_hard_intervals", "_phase_onb_owner", "_phase_onb_write", "_phase_onb_read", "_phase_onb_kill", "_phase_onb_toggle"]:
 		# "_phase_*" tests are halves of a relaunch test: they run only when asked for by name
 		# (in a child process started by _test_run_continue).
 		if name_.begins_with("_phase") and not only.split(",", false).has(name_):
@@ -2325,17 +2325,29 @@ func _test_ravines() -> void:
 				break
 		p.bot_input = Vector2.ZERO
 		var kind := g.cinematic
+		var sank := 0.0
 		for i in 60 * 5:
 			await t.frames(1)
+			sank = minf(sank, p.model.position.y)
 			if g.cinematic == "" and p.state == "normal":
 				break
 		await t.seconds(0.5)
-		return [kind, int(g.stats.get("ravine_falls", 0)) - falls0, g.stats["deaths"] - deaths0, rim, safe_in_ravine]
+		return [kind, int(g.stats.get("ravine_falls", 0)) - falls0, g.stats["deaths"] - deaths0, rim, safe_in_ravine, sank]
 	var r: Array = await fall.call(3)
 	var back := p.global_position
 	var back_ok: bool = b.ravine_carve(b.up_at(back)) < 0.05 and b.altitude(back) < 0.3 and b.terrain_height(b.up_at(back)) > 2.9 and back.distance_to(r[3]) < 4.0
 	t.check("ravine_fall_costs_one_frond_back_to_rim", r[0] == "ravine" and r[1] == 1 and r[2] == 0 and p.health == 2 and back_ok and p.state == "normal" and not r[4],
 			"shot %s; falls %d, deaths %d; health %d of 3; back on the rim %s (%.1f m from where he left it; ground %.2f m up, %.2f m above it, ravine '%s'); safe spot ever in the ravine %s" % [r[0], r[1], r[2], p.health, back_ok, back.distance_to(r[3]), b.terrain_height(b.up_at(back)), b.altitude(back), b.ravine_at(b.up_at(back)), r[4]])
+	# Owner, 2026-10-01: he sinks into the ooze and is gone before he reforms on the rim, upright.
+	t.check("ravine_fall_sinks_into_ooze", r[5] < -Game.OOZE_SINK_M * 0.9 and p.model.position.y == 0.0 and p.model.dissolve < 0.01,
+			"sank %.2f m; model y now %.2f, dissolve %.2f" % [-r[5], p.model.position.y, p.model.dissolve])
+	var oozed: Array[String] = []
+	for bb in g.balls:
+		var oz := bb.get_node_or_null("RavineOoze") as RavineOoze
+		var built := n_carves if bb == b else bb.carves.size()   # (this test adds its own ravine to b)
+		if built > 0 and (oz == null or oz.mesh.get_surface_count() == 0):
+			oozed.append("ball %d" % (bb.index + 1))
+	t.check("ravine_ooze_on_every_ravine_ball", oozed.is_empty(), "missing on %s" % str(oozed))
 	var r2: Array = await fall.call(1)
 	t.check("ravine_fall_on_last_frond_is_a_death", r2[0] == "regen" and r2[2] == 1 and p.state == "normal" and p.health == p.max_health
 			and g.run_save.earned().size() >= earned_before, "shot %s; deaths %d; re-formed with %d of %d" % [r2[0], r2[2], p.health, p.max_health])
@@ -9132,6 +9144,10 @@ func _test_onb_parasite() -> void:
 
 func _test_onb_feed_first() -> void:
 	await _onboarding().feed_first()
+
+
+func _test_onb_tunnel() -> void:
+	await _onboarding().tunnel()
 
 
 func _test_onb_starfish() -> void:

@@ -19,7 +19,7 @@ extends Node
 ## - During the interactive parts (find and eat the jellyfish, defeat the parasite) Gill is never
 ##   held: only a small objective and the real control's prompt are shown.
 
-const FLAGS := ["intro", "feeding", "parasite", "starfish"]
+const FLAGS := ["intro", "feeding", "parasite", "starfish", "tunnel"]
 
 ## A staged moment is given back after this long at the most, card or not (seconds).
 const STAGE_CAP := 45.0
@@ -45,6 +45,9 @@ static var STAR_BODY: Array = ["%s found a Red Starfish!" % GameVersion.CHARACTE
 static var INTRO_TITLE: String = "THIS IS %s'S HOME." % GameVersion.CHARACTER_NAME.to_upper()
 static var INTRO_BODY: Array = ["Parasites have infested the aquarium and damaged the moss balls he lives among.",
 		"Help %s clear them out and bring his home back to life." % GameVersion.CHARACTER_NAME]
+const TUNNEL_TITLE := "A WATER TUNNEL OPENED!"
+static var TUNNEL_BODY: Array = ["This is a water tunnel.",
+		"Once you have a moss ball almost completely cleared, it'll let you travel to another. Swim into the swirl to ride it."]
 const OBJ_FEED := "EAT THE JELLYFISH"
 const OBJ_PARASITE := "DEFEAT THE PARASITE"
 
@@ -475,6 +478,20 @@ func on_starfish() -> void:
 		return
 	_begin("star", "starfish", false)
 	_card(STAR_TITLE, STAR_BODY)
+
+
+# --- Lesson 4: the first water tunnel -----------------------------------------------------------------
+
+## Game._cine_connect, as the tunnel-opening shot ends (owner, 2026-10-01): once per run, a card that
+## says what just happened.
+func on_tunnel_opened() -> void:
+	if done("tunnel"):
+		return
+	_mark("tunnel")
+	if not _can_stage():
+		return
+	_begin("tunnel", "tunnel", false)
+	_card(TUNNEL_TITLE, TUNNEL_BODY)
 
 
 # --- Staged moments ---------------------------------------------------------------------------------

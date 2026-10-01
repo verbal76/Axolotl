@@ -874,6 +874,43 @@ func parasite() -> void:
 	await all_done()
 
 
+# --- Lesson 4: the first water tunnel (owner, 2026-10-01) -------------------------------------------
+
+func tunnel() -> void:
+	await reset(["intro", "feeding", "parasite", "starfish"])
+	await home(0)
+	var b := p.ball
+	var v: Vortex = null
+	for vv in b.vortices:
+		if vv.ball_a == b:
+			v = vv
+			break
+	if v == null:
+		t.check("tunnel_card_has_a_tunnel", false, "no tunnel out of ball %d" % (b.index + 1))
+		return
+	# The real shot plays, then the card comes up as it ends.
+	g._start_cinematic("connect", {"v": v})
+	var carded := await wait_until(func() -> bool: return o.ui.waiting_for_tap(), 7.0)
+	var texts: Array[String] = []
+	for l in o.ui.panel().find_children("*", "Label", true, false):
+		texts.append((l as Label).text)
+	var all_text := texts.has(Onboarding.TUNNEL_TITLE)
+	for w in Onboarding.TUNNEL_BODY:
+		all_text = all_text and texts.has(w)
+	t.check("tunnel_card_after_first_shot", carded and all_text and o.ui.button().text == "Got it" and g.cinematic == "lesson",
+			"card %s; cinematic '%s'; %s" % [carded, g.cinematic, ", ".join(texts)])
+	t.check("tunnel_flag_persisted", on_disk().has("tunnel"), "")
+	o.ui.tap()
+	await t.frames(3)
+	t.check("tunnel_card_gives_control_back", g.cinematic == "" and p.controls_enabled and o.stage == "", "cinematic '%s'" % g.cinematic)
+	# Once per run: the next tunnel's shot plays alone.
+	g._start_cinematic("connect", {"v": v})
+	await wait_until(func() -> bool: return g.cinematic == "", 7.0)
+	await t.frames(3)
+	t.check("tunnel_card_once_per_run", not o.ui.waiting_for_tap() and g.cinematic == "", "cinematic '%s'" % g.cinematic)
+	await all_done()
+
+
 # --- Lesson 3: the first Red Starfish ----------------------------------------------------------------
 
 func starfish() -> void:
