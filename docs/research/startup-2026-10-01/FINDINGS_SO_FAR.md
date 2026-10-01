@@ -211,3 +211,17 @@ balls done 8 447 ms; vortices… 277; creatures 508; HUD/menus 225; food 115; op
 dev-000058 launches 12.8–13.4 s. Next: compare dev-000058 vs dev-000059 in the balls→food window
 (Hard Mode build in 058 and 059 alike; 059 added the Diagnostics page, frame stats came later) and the
 progress level of the 058 run; a slow launch's full timeline is still the missing piece.
+
+## 15. §7 #1 and #2 implemented (2026-10-01) — bit-identical, ~0.3 s desktop
+
+- #1 terrain tile heights now run on WorkerThreadPool (same sample order; meshes and collision
+  stay on the main thread). #2 hill parameters cached in typed arrays with precomputed cos.
+- Proof: `_phase_world_hash` (all terrain/scenery vertices, collision faces, transforms, 4000
+  terrain samples per ball) gives `6e17ca24…` (1401 meshes, 737 shapes) before and after.
+  Terrain/route/climb/cave tests 26/0; seed-4242 playthrough 23/0.
+- Measured (desktop headless, 3 runs each, aquarium → ball 7 window): base 6506/6718/6421 ms,
+  new 6104/6210/6724 ms, about 0.3 s. #2 alone: no measurable change (`_phase_th_bench`: the cell
+  lookup, not the hill math, is ~70 % of `terrain_height`).
+- After threading, per-ball terrain is only heights 37–98 ms + mesh/collision 83–206 ms, so terrain
+  tiles are ~0.3 s of the ~6 s world build; the rest is vegetation scatter, per-ball layout and
+  sprouts (§3). The 1–2 s estimate in §7 overstated the terrain share. Phone gain unmeasured yet.
