@@ -989,10 +989,12 @@ func magnet() -> void:
 	var lunges := [0]
 	var count := func() -> void: lunges[0] += 1
 	p.lunged.connect(count)
+	# (A lunge that connects with something, e.g. a parasite that came in to fight (they pursue
+	# sooner since 2026-10-01), is no miss: keep going until the Mote is startled; at most three.)
 	for attempt in 3:
 		await u.press("lunge")
 		await t.seconds(0.4)
-		if lunges[0] > 0:
+		if m.startle_t > 0.0:
 			break
 		await t.seconds(0.6)
 	p.lunged.disconnect(count)
