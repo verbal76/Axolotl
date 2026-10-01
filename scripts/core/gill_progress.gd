@@ -43,16 +43,13 @@ var read_only := false
 var last_save_result := "not saved yet"
 ## Spent more than collected (a hand-edited or damaged file): the nodes are kept, the balance shows 0.
 var overspent := 0
-## Onboarding (docs/ONBOARDING.md): flag -> true for each one done. The four player-facing flags are
-## Onboarding.FLAGS ("intro", "feeding", "parasite", "starfish"); "first_frond" notes that the
-## first run's empty frond was given (never again on a later run). Like the starfish, flags only
-## ever get set (a merge is their union), and keys this build does not know are kept.
+## Legacy: the once-per-profile onboarding record ("onboarding", "onboarding_epoch") that builds
+## before the once-per-run ruling (docs/ONBOARDING.md, 2026-10-01) wrote here. Tutorials are now
+## per run (RunSave.lessons) and this is no longer read for anything: a file that has it loads as
+## before and keeps it verbatim (so rolling back to such a build finds what it wrote); nothing new
+## is ever added to it.
 var onboarding := {}
-## Whether any copy read had the onboarding record (else the profile predates it and is migrated
-## once, Game._setup_onboarding). Until then nothing about onboarding is written.
 var onb_known := false
-## Bumped by Replay tutorial: only copies written at the newest epoch contribute lesson flags (the
-## copies otherwise merge as a union, so a cleared flag would come back from .bak).
 var onb_epoch := 0
 
 
@@ -298,54 +295,6 @@ func to_dict() -> Dictionary:
 	return d
 
 
-# --- Onboarding flags ------------------------------------------------------------------------
-
-func onb_done(flag: String) -> bool:
-	return onboarding.has(flag)
-
-
-## Sets a flag and writes the profile at once. False if it was already set.
-func mark_onb(flag: String) -> bool:
-	if onboarding.has(flag):
-		return false
-	onboarding[flag] = true
-	onb_known = true
-	save()
-	return true
-
-
-## Replay tutorial (Settings): every lesson and the intro are to be seen again, from the next New
-## Run. Nothing else in the profile changes.
-func reset_onboarding() -> void:
-	onb_epoch += 1
-	onboarding = {}
-	onb_known = true
-	notes.append("onboarding reset (replay tutorial), epoch %d" % onb_epoch)
-	save()
-
-
-## Once, for a profile from before onboarding existed: what the player has already done counts
-## (docs/ONBOARDING.md, Migration). `played` = a run in progress or finished; `past_tutorial` = a
-## saved or finished run past Ball 1's tutorial. Returns the flags set.
-func migrate_onboarding(played: bool, past_tutorial: bool) -> Array:
-	if onb_known:
-		return []
-	onb_known = true
-	var set_now := []
-	var progress := stars() > 0 or skills() > 0 or not foreign_collected.is_empty() or not foreign_purchased.is_empty()
-	if played or past_tutorial or progress:
-		set_now.append("intro")
-	if past_tutorial:
-		set_now.append_array(["feeding", "parasite", "first_frond"])
-	if progress:
-		set_now.append("starfish")
-	for f in set_now:
-		onboarding[f] = true
-	notes.append("onboarding migrated: %s" % (", ".join(set_now) if not set_now.is_empty() else "new player, nothing done"))
-	save()
-	return set_now
-
-
 ## Writes the whole document atomically (tmp, verify, main -> .bak copy, rename over main).
 ## `fail_at` is for tests only: "tmp" stops after writing .tmp, "verify" corrupts it first.
 func save(fail_at := "") -> bool:
@@ -390,10 +339,6 @@ func diagnostics_text() -> String:
 	L.append("  Red Starfish %d/%d  ·  Skills %d/%d  ·  to spend %d" % [stars(), StarfishTable.COUNT, skills(), SkillTree.COUNT, balance()])
 	L.append("  File: %s, format %d, write %d; %s" % [path, FORMAT, seq, origin])
 	L.append("  Last save: %s" % last_save_result)
-	var onb: Array[String] = []
-	for f in ["intro", "feeding", "parasite", "starfish"]:
-		onb.append("%s %s" % [f, "done" if onb_done(f) else "-"])
-	L.append("  Onboarding: %s" % ", ".join(onb))
 	for n in notes:
 		L.append("  Note: " + n)
 	return "\n".join(L)

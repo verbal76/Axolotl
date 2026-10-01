@@ -340,8 +340,8 @@ func _build_room_soon() -> void:
 			aquarium.ensure_room())
 
 
-## Play (with no saved run) and New Run come here: the first new run ever shows the intro screen
-## first (docs/ONBOARDING.md); a Continue never does.
+## Play (with no saved run) and New Run come here: every new run shows the intro screen first while
+## tutorials are on (docs/ONBOARDING.md); a Continue never does.
 func begin_play(immediate := false) -> void:
 	if onboarding != null and onboarding.intro_due(has_run_in_progress()):
 		state = "title"
@@ -458,35 +458,27 @@ func _open_gill() -> void:
 	StartupTrace.mark("progress opened (%s)" % gill.origin.get_slice(";", 0))
 
 
-## Onboarding's flags (docs/ONBOARDING.md). A profile from before onboarding is migrated once from
-## what it shows: any run played or finished counts the intro as seen; a run past Ball 1's
-## tutorial (a parasite cleared, or on a later ball) or finished counts feeding and the parasite
-## as learnt; any starfish or skill counts the starfish lesson. Automated runs: --onboarding=done
-## (the default for unit tests, renders and probes: every lesson done, so nothing else changes) or
-## --onboarding=fresh (the playthrough's default: a brand-new player, the bots dismiss the cards).
+## Onboarding's per-run record (docs/ONBOARDING.md, ruling of 2026-10-01: once per run). A run not
+## yet started (Play with no saved run, or New Run) gets a fresh one: its lessons are to come. A run
+## in progress keeps its own; one saved before the record existed has none and counts every lesson
+## as done (no lesson mid-run, no frond emptied; the next new run plays them). The profile's old
+## onboarding keys are kept as they are and no longer read. Automated runs: --onboarding=done (the
+## default for unit tests, renders and probes: every lesson done, so nothing else changes) or
+## --onboarding=fresh (the playthrough's default: a new run's lessons, the bots dismiss the cards)
+## or --onboarding=player (exactly what a player's launch does with the run save it is given).
 func _setup_onboarding() -> void:
 	if Settings.test_mode != "":
-		# (Given a progress file, a test sees what it holds, migrated as a player's would be.)
-		var mode := str(Settings.test_args.get("onboarding", "" if Settings.test_args.has("gill-save") else
-				("fresh" if Settings.test_mode == "playthrough" else "done")))
+		var mode := str(Settings.test_args.get("onboarding", "fresh" if Settings.test_mode == "playthrough" else "done"))
 		if mode == "done":
-			onboarding.mark_all_done()
+			onboarding.record_all_done()
 			return
 		if mode == "fresh":
-			gill.onb_known = true
+			onboarding.record_for_new_run()
 			return
-	if gill.onb_known:
-		return
-	var e := run_save.earned()
-	var world: Dictionary = run_save.run().get("world", {})
-	var rec := run_save.records()
-	var finished: bool = clock.is_finished() or float(rec.get("best_finish_s", -1.0)) >= 0.0 or not (rec.get("finishes", []) as Array).is_empty()
-	var past := finished or int(world.get("ball", 0)) > 0
-	for b in balls:
-		for par in b.parasites:
-			if e.has(par.get_meta("completion_id", "")):
-				past = true
-	gill.migrate_onboarding(has_run_in_progress() or finished, past)
+	if not has_run_in_progress():
+		onboarding.record_for_new_run()
+	elif not run_save.has_lessons():
+		onboarding.record_all_done()
 
 
 ## Tests and renders only: every starfish collected and these nodes bought (prerequisites ignored).
@@ -560,7 +552,6 @@ func _apply_run() -> void:
 		return
 	for k in world.get("prompts_done", []):
 		prompts_done[k] = true
-	onboarding.run_frond = bool(world.get("onb_frond", false))
 	_tut_framed = bool(world.get("tut_framed", false))
 	all_clear_done = bool(world.get("all_clear_shown", false))
 	var st: Dictionary = world.get("stats", {})
@@ -599,7 +590,6 @@ func _resume_position() -> void:
 func _capture_world() -> Dictionary:
 	return {"ball": player.ball.index, "checkpoint": checkpoint.get_meta("completion_id", "") if checkpoint else "",
 			"prompts_done": prompts_done.keys(), "tut_framed": _tut_framed, "all_clear_shown": all_clear_done,
-			"onb_frond": onboarding != null and onboarding.run_frond,
 			"stats": stats.duplicate(true), "repop": repop.to_dict() if repop != null else {}}
 
 
@@ -731,6 +721,8 @@ func run_diagnostics_text() -> String:
 	L.append("  Last save: %s" % run_save.last_save_result)
 	if repop != null:
 		L.append("  " + repop.summary())
+	if onboarding != null:
+		L.append("  " + onboarding.status_text())
 	if gill != null:
 		L.append(gill.diagnostics_text())
 		if starfish != null:

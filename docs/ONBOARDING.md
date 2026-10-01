@@ -240,26 +240,37 @@ Then implement it at its queued position without disturbing anything already pub
 Continue the autonomous train afterward.
 ```
 
-## Implementation notes (build session; must stay consistent with the text above)
+## Implementation notes (build session; must stay consistent with the text above and the ruling)
 
-- **Persistence:** four independent flags (`intro`, `feeding`, `parasite`, `starfish`) in the profile
-  store that survives New Run (`gill_progress`), saved with its existing backup and recovery. New Run
-  never clears them.
-- **Migration:** existing saves infer completed lessons only where progress proves them:
-  - any saved or finished run, or any Ball 1 progress past the tutorial parasite: `intro`, `feeding`,
-    `parasite`;
-  - any starfish collected or skill bought: `starfish` (and `intro`).
-
-  Nothing else in any save is touched.
-- **The empty frond:** only while `feeding` is not done, at the start of the first-ever run.
-  - One currently UNLOCKED frond starts empty, never a dormant/locked frond.
-  - Later runs never remove health to replay it.
+- **Persistence (once per run, ledger row 24):** four independent flags (`intro`, `feeding`,
+  `parasite`, `starfish`) in the RUN save (`run.onboarding`, `RunSave.lessons`), plus `frond` while
+  the run's empty frond still waits for the feeding lesson. Each flag is written the moment its
+  event happens (an interrupted lesson is never replayed in that run). Continue keeps the record;
+  New Run (and Play with no saved run) starts a run with an empty record, so it plays them again.
+- **Tutorials toggle:** `Settings.tutorials`, saved in `settings.cfg` as `[onboarding] tutorials`.
+  Absent (every file from before it) reads as on. Shown in Settings from the title and in-run. Off:
+  every lesson reads as done without being marked, so no intro, no lesson and no empty frond. Turned
+  off mid-run, an objective or staged lesson ends at once through the normal clean exit (end reason
+  "off"). Turned back on mid-run: no intro; this run's lessons not yet done may still come.
+- **Runs from before the record:** a run in progress with no `onboarding` record counts every lesson
+  as done (no lesson mid-run, no frond emptied); the record is filled in as all done. The next new
+  run plays them. Old run saves are never given an empty record by migration.
+- **Profiles from the once-per-profile builds:** their `onboarding` / `onboarding_epoch` keys load
+  harmlessly, are kept as they were and are no longer read. Nothing new is written to the profile.
+  Replay tutorial and its reset epoch logic are gone.
+- **The empty frond:** at the start of each new run while tutorials are on, and kept empty on Continue
+  until the feeding lesson. One currently UNLOCKED frond, never a dormant/locked frond. Off: full
+  health.
 - **The existing Ball 1 tutorial:** audited and consolidated so that its Tail Swipe and Lunge prompts
   become the lessons' objective prompts, not duplicates.
   - Move, Jump and Water Burst stay.
   - Its parasite healing / bloom step is the parasite lesson's restoration.
+  - With tutorials off (or the lessons done in this run), its own Tail Swipe and Lunge prompts show
+    as before.
 - **Determinism:** presentation draws no gameplay random numbers and changes no simulation result. A
-  test switch marks every lesson done for tests and bots that are about something else.
+  test switch (`--onboarding=done|fresh|player`) marks every lesson done for tests and bots that are
+  about something else (`done`, the unit-test default), gives a new run's lessons (`fresh`, the
+  playthrough default) or does exactly what a player's launch does (`player`).
 
 ## Qualification (rule 7)
 

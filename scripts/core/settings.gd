@@ -17,6 +17,9 @@ var haptics := true
 ## Swim Mode only (owner, 2026-09-30): false = flight-stick pitch (pull down to swim up); true =
 ## push up to swim up. Nothing else is inverted. Absent in older files (default false).
 var swim_invert_y := false
+## Tutorials (docs/ONBOARDING.md, owner ruling 2026-10-01): the intro and the three lessons on every
+## new run. On by default, also for files from before it existed (absent = on).
+var tutorials := true
 var music_volume := 0.8
 var sfx_volume := 0.9
 var input_mode: int = InputMode.TOUCH
@@ -161,6 +164,7 @@ func _load() -> void:
 	show_run_timer = cf.get_value("hud", "run_timer", show_run_timer)
 	haptics = cf.get_value("hud", "haptics", haptics)
 	swim_invert_y = bool(cf.get_value("controls", "swim_invert_y", swim_invert_y))
+	tutorials = bool(cf.get_value("onboarding", "tutorials", tutorials))
 	music_volume = cf.get_value("audio", "music", music_volume)
 	sfx_volume = cf.get_value("audio", "sfx", sfx_volume)
 	# (Added after dev-000024; absent in older files, which keep the original pink.)
@@ -201,6 +205,7 @@ func save() -> void:
 	cf.set_value("hud", "run_timer", show_run_timer)
 	cf.set_value("hud", "haptics", haptics)
 	cf.set_value("controls", "swim_invert_y", swim_invert_y)
+	cf.set_value("onboarding", "tutorials", tutorials)
 	cf.set_value("audio", "music", music_volume)
 	cf.set_value("audio", "sfx", sfx_volume)
 	cf.set_value("gill", "morph", gill_morph)

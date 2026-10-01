@@ -1,5 +1,5 @@
 extends RefCounted
-## Onboarding checks (docs/ONBOARDING.md, ledger row 20). Called from unit_tests.gd, whose helpers
+## Onboarding checks (docs/ONBOARDING.md, ledger rows 20 and 24: once per run, Tutorials toggle). Called from unit_tests.gd, whose helpers
 ## (place_at, press, wait_grounded, _fit_problems ...) they use through `u`.
 
 var u
@@ -19,20 +19,19 @@ func _init(p_u) -> void:
 
 # --- helpers -------------------------------------------------------------------------------------
 
-## Clean slate: these flags done (the rest not), no stage, no objective, no card, Gill well.
+## Clean slate: tutorials on, these of this run's lessons done (the rest not), no stage, no
+## objective, no card, Gill well.
 func reset(done_flags: Array) -> void:
 	if o.stage != "":
 		o.finish("test")
 	o.ui.hide_card()
 	o._set_objective("")
-	g.gill.onboarding = {}
+	Settings.tutorials = true
+	var d := {}
 	for f in done_flags:
-		g.gill.onboarding[f] = true
-	g.gill.onb_known = true
-	# (Twice: the save copies the old main file to .bak, and flags merge across the copies, so one
-	# save would leave the previous test's flags readable from the backup.)
-	g.gill.save()
-	g.gill.save()
+		d[f] = true
+	g.run_save.set_lessons(d)
+	g.save_run()
 	o.run_frond = false
 	if g.cinematic != "":
 		g._end_cinematic()
@@ -47,7 +46,33 @@ func reset(done_flags: Array) -> void:
 
 
 func all_done() -> void:
-	await reset(["intro", "feeding", "parasite", "starfish", "first_frond"])
+	await reset(Onboarding.FLAGS)
+
+
+## This run's record as written on disk.
+func on_disk() -> Dictionary:
+	return RunSave.open(g.run_save.path).lessons()
+
+
+## What a player's launch does with this process's run (Game._setup_onboarding, not the test switch).
+func setup_as_player() -> void:
+	var had: bool = Settings.test_args.has("onboarding")
+	var was = Settings.test_args.get("onboarding")
+	Settings.test_args["onboarding"] = "player"
+	g._setup_onboarding()
+	if had:
+		Settings.test_args["onboarding"] = was
+	else:
+		Settings.test_args.erase("onboarding")
+
+
+## Makes this process's run a new one (no clock, nothing earned, no record) and gives it its record
+## as a launch does (New Run reloads the scene; Play with no saved run opens one like this).
+func new_run() -> void:
+	g.run_save.earned().clear()
+	g.clock = RunClock.from_dict({"state": "not_started", "run_s": 0.0, "play_s": 0.0, "finish_s": -1.0})
+	g.run_save.run().erase("onboarding")
+	setup_as_player()
 
 
 ## A live, visible jellyfish (a drifter) `ahead` m in front of Gill, hovering at his head's height.
@@ -126,78 +151,58 @@ static func img_md5(img: Image) -> String:
 	return hc.finish().hex_encode()
 
 
-# --- Profile flags and migration ---------------------------------------------------------------------
+# --- The per-run record and the legacy profile record ----------------------------------------------
 
 func progress() -> void:
-	var path := "user://onb_progress_test.json"
-	GillProgress.erase(path)
-	var gp := GillProgress.open(path)
-	t.check("onb_new_profile_nothing_known", not gp.onb_known and gp.onboarding.is_empty() and not gp.to_dict().has("onboarding"), str(gp.to_dict().keys()))
-	var set_new := gp.migrate_onboarding(false, false)
-	var reopened := GillProgress.open(path)
-	t.check("onb_brand_new_profile_starts_with_nothing_done", set_new.is_empty() and reopened.onb_known and reopened.onboarding.is_empty(), str(set_new))
-	# Each flag on its own, persisted at once, surviving a reopen; a second mark does nothing.
-	var ok := true
-	for f in Onboarding.FLAGS:
-		ok = ok and reopened.mark_onb(f) and not reopened.mark_onb(f)
-		var again := GillProgress.open(path)
-		ok = ok and again.onb_done(f)
-	t.check("onb_flags_independent_and_persisted", ok and GillProgress.open(path).onboarding.size() == 4, str(GillProgress.open(path).onboarding))
-	# A flag only in the backup (an interrupted write) is still known: the union of every copy.
-	GillProgress.erase(path)
-	var a := GillProgress.open(path)
-	a.migrate_onboarding(false, false)
-	a.mark_onb("starfish")
-	a.mark_onb("intro")   # (the write keeps the previous copy as .bak: starfish only)
-	var main := GillProgress._read(path)["data"] as Dictionary
-	(main["onboarding"] as Dictionary).erase("starfish")
-	var f2 := FileAccess.open(path, FileAccess.WRITE)
-	f2.store_string(JSON.stringify(main))
+	var path := ProjectSettings.globalize_path("user://onb_record_test.json")
+	RunSave.erase(path)
+	var rs := RunSave.open(path)
+	t.check("onb_new_run_save_has_no_record", not rs.has_lessons() and rs.lessons().is_empty(), str(rs.run().keys()))
+	rs.set_lessons({"intro": true, "frond": true})
+	rs.save()
+	var re := RunSave.open(path)
+	t.check("onb_record_persists_in_run_save", re.has_lessons() and re.lessons().has("intro") and bool(re.lessons().get("frond", false))
+			and not re.lessons().has("feeding"), str(re.lessons()))
+	re.start_new_run()
+	t.check("onb_new_run_drops_record", not re.has_lessons(), str(re.run().keys()))
+	# A run saved before the record existed: opening (and migrating) it never adds one.
+	var old := RunSave.new_data({})
+	(old["run"] as Dictionary).erase("onboarding")
+	old["run"]["clock"] = {"state": "running", "run_s": 50.0, "play_s": 50.0, "finish_s": -1.0}
+	RunSave.erase(path)
+	var f := FileAccess.open(path, FileAccess.WRITE)
+	f.store_string(JSON.stringify(old))
+	f.close()
+	t.check("onb_old_run_save_stays_without_record", not RunSave.open(path).has_lessons(), "")
+	RunSave.erase(path)
+	# The once-per-profile builds' keys: loaded harmlessly, kept as they were, never read.
+	var gpath := ProjectSettings.globalize_path("user://onb_legacy_profile.json")
+	GillProgress.erase(gpath)
+	var doc := {"format": GillProgress.FORMAT, "kind": GillProgress.KIND, "seq": 3, "collected": {StarfishTable.ids()[0]: {"t": 1, "v": "1.0.0"}},
+			"purchased": {}, "onboarding": {"intro": true, "feeding": true, "first_frond": true}, "onboarding_epoch": 2}
+	var f2 := FileAccess.open(gpath, FileAccess.WRITE)
+	f2.store_string(JSON.stringify(doc))
 	f2.close()
-	var bak := GillProgress._read(path + ".bak")["data"] as Dictionary
-	var merged := GillProgress.open(path)
-	t.check("onb_flags_merge_across_copies", merged.onb_done("starfish") and merged.onb_done("intro") and not (bak["onboarding"] as Dictionary).has("intro"),
-			"main %s + backup %s -> %s" % [main["onboarding"], bak["onboarding"], merged.onboarding])
-	# Unknown keys a later build wrote are kept, never counted.
-	merged.onboarding["future_lesson"] = true
-	merged.save()
-	t.check("onb_unknown_flags_kept", GillProgress.open(path).onboarding.has("future_lesson"), "")
-	# Migration rules.
-	var cases := [
-		[false, false, 0, 0, []],
-		[true, false, 0, 0, ["intro"]],
-		[true, true, 0, 0, ["intro", "feeding", "parasite"]],
-		[false, false, 2, 0, ["intro", "starfish"]],
-		[true, true, 3, 3, ["intro", "feeding", "parasite", "starfish"]],
-	]
-	var mig_ok := true
-	var why: Array[String] = []
-	for c in cases:
-		GillProgress.erase(path)
-		var gp2 := GillProgress.open(path)
-		var ids := StarfishTable.ids()
-		for i in int(c[2]):
-			gp2.collected[ids[i]] = {"t": 0, "v": "test"}
-		gp2.migrate_onboarding(c[0], c[1])
-		var got: Array[String] = []
-		for fl in Onboarding.FLAGS:
-			if gp2.onb_done(fl):
-				got.append(fl)
-		if got != Array(c[4], TYPE_STRING, "", null):
-			mig_ok = false
-			why.append("%s -> %s" % [str(c), str(got)])
-		# Once only: a profile that has the record is never migrated again.
-		if not gp2.migrate_onboarding(true, true).is_empty():
-			mig_ok = false
-			why.append("migrated twice")
-	t.check("onb_migration_rules", mig_ok, ", ".join(why))
-	GillProgress.erase(path)
+	var gp := GillProgress.open(gpath)
+	var loaded_ok := gp.origin.begins_with("loaded") and gp.stars() == 1 and not gp.read_only
+	gp.save()
+	var back: Dictionary = GillProgress._read(gpath)["data"]
+	t.check("onb_legacy_profile_keys_load_harmlessly", loaded_ok and GillProgress.open(gpath).stars() == 1
+			and JSON.stringify(back.get("onboarding")) == JSON.stringify(doc["onboarding"]) and int(back.get("onboarding_epoch", 0)) == 2,
+			"origin '%s'; written back %s epoch %s" % [gp.origin, back.get("onboarding"), back.get("onboarding_epoch")])
+	GillProgress.erase(gpath)
+	# A profile without them never gains them.
+	var gp2 := GillProgress.open(gpath)
+	gp2.save()
+	t.check("onb_profile_never_gains_onboarding_keys", not (GillProgress._read(gpath)["data"] as Dictionary).has("onboarding"), "")
+	GillProgress.erase(gpath)
 
 
 ## The owner's phone save (2026-10-01): a run in progress at about 46% (184 of the catalog's entries,
 ## 1:12:40 on the clock, not finished), Red Starfish 3/30, Skills 3/15, 0 to spend, format 1 merged
-## with its backup, from before onboarding. After the update: all four flags done, Continue shows no
-## intro and no lesson, the frond is not emptied, and nothing else in the run or profile changes.
+## with its backup, from before the per-run record. After the update: Continue shows no intro and no
+## lesson, the frond is not emptied, the run counts all its lessons as done, and nothing else in the
+## run or the profile changes.
 func owner_save() -> void:
 	var run_path := ProjectSettings.globalize_path("user://onb_owner_run.json")
 	var gill_path := ProjectSettings.globalize_path("user://onb_owner_gill.json")
@@ -240,22 +245,24 @@ func owner_save() -> void:
 	var before_run := RunSave._read(run_path)["data"] as Dictionary
 	var before_gill := GillProgress._read(gill_path)["data"] as Dictionary
 	t.check("onb_owner_fixture", e.size() == 184 and gp.stars() == 3 and gp.skills() == 3 and gp.balance() == 0 and FileAccess.file_exists(gill_path + ".bak")
-			and not before_gill.has("onboarding"), "%d earned (%.2f%% of %d), stars %d, skills %d, balance %d" % [e.size(), pct, g.completion.size(), gp.stars(), gp.skills(), gp.balance()])
-	# The updated game opens it (a fresh process, as on the phone).
-	var res := _child("_phase_onb_owner", ["--run-save=" + run_path, "--gill-save=" + gill_path])
+			and not before_gill.has("onboarding") and not (before_run["run"] as Dictionary).has("onboarding"),
+			"%d earned (%.2f%% of %d), stars %d, skills %d, balance %d" % [e.size(), pct, g.completion.size(), gp.stars(), gp.skills(), gp.balance()])
+	# The updated game opens it (a fresh process, as on the phone; tutorials on, the default).
+	var res := _child("_phase_onb_owner", ["--run-save=" + run_path, "--gill-save=" + gill_path, "--onboarding=player"])
 	t.check("onb_owner_child_ran", res == 0, "exit %d" % res)
 	var after_gill := GillProgress._read(gill_path)["data"] as Dictionary
 	var after_run := RunSave._read(run_path)["data"] as Dictionary
-	var flags: Dictionary = after_gill.get("onboarding", {})
+	var ar: Dictionary = (after_run["run"] as Dictionary)
+	var rec: Dictionary = ar.get("onboarding", {})
 	var all4 := true
 	for f in Onboarding.FLAGS:
-		all4 = all4 and bool(flags.get(f, false))
-	t.check("onb_owner_save_gets_all_four_flags", all4, str(flags))
-	t.check("onb_owner_profile_unchanged_but_flags", JSON.stringify(after_gill["collected"]) == JSON.stringify(before_gill["collected"])
-			and JSON.stringify(after_gill["purchased"]) == JSON.stringify(before_gill["purchased"]) and GillProgress.open(gill_path).balance() == 0,
-			"collected %d, purchased %d" % [(after_gill["collected"] as Dictionary).size(), (after_gill["purchased"] as Dictionary).size()])
+		all4 = all4 and bool(rec.get(f, false))
+	t.check("onb_owner_run_counts_lessons_done", all4 and not rec.has("frond"), str(rec))
+	t.check("onb_owner_profile_unchanged", JSON.stringify(after_gill["collected"]) == JSON.stringify(before_gill["collected"])
+			and JSON.stringify(after_gill["purchased"]) == JSON.stringify(before_gill["purchased"]) and not after_gill.has("onboarding")
+			and GillProgress.open(gill_path).balance() == 0,
+			"collected %d, purchased %d, keys %s" % [(after_gill["collected"] as Dictionary).size(), (after_gill["purchased"] as Dictionary).size(), after_gill.keys()])
 	var br: Dictionary = (before_run["run"] as Dictionary)
-	var ar: Dictionary = (after_run["run"] as Dictionary)
 	var clock_ok := float(ar["clock"]["run_s"]) >= 4360.0 and float(ar["clock"]["run_s"]) < 4360.0 + 30.0 and str(ar["clock"]["state"]) == "running"
 	t.check("onb_owner_run_unchanged", JSON.stringify(ar["earned"]) == JSON.stringify(br["earned"]) and ar["id"] == br["id"]
 			and JSON.stringify(after_run["records"]) == JSON.stringify(before_run["records"]) and clock_ok,
@@ -267,15 +274,16 @@ func owner_save() -> void:
 
 ## In the child: the owner's save as the updated game opens it, then Continue.
 func phase_owner() -> void:
-	var gp := g.gill
-	var all4 := true
+	var rs := g.run_save
+	var all4 := rs.has_lessons()
 	for f in Onboarding.FLAGS:
-		all4 = all4 and gp.onb_done(f)
-	t.check("owner_flags_after_migration", all4, str(gp.onboarding))
-	t.check("owner_profile_intact", gp.stars() == 3 and gp.skills() == 3 and gp.balance() == 0, "%d %d %d" % [gp.stars(), gp.skills(), gp.balance()])
-	var on_disk := RunSave._read(g.run_save.path)["data"]["run"]["earned"] as Dictionary
-	var extra: Array = g.run_save.earned().keys().filter(func(k) -> bool: return not on_disk.has(k))
-	t.check("owner_run_in_progress", g.has_run_in_progress() and on_disk.size() == 184, "%d earned on disk; in memory also %s" % [on_disk.size(), extra])
+		all4 = all4 and rs.lessons().has(f) and o.done(f)
+	t.check("owner_run_counts_all_lessons_done", all4 and Settings.tutorials and not o.run_frond, str(rs.lessons()))
+	var gp := g.gill
+	t.check("owner_profile_intact", gp.stars() == 3 and gp.skills() == 3 and gp.balance() == 0 and not gp.onb_known, "%d %d %d" % [gp.stars(), gp.skills(), gp.balance()])
+	var on_disk_run := RunSave._read(g.run_save.path)["data"]["run"]["earned"] as Dictionary
+	var extra: Array = g.run_save.earned().keys().filter(func(k) -> bool: return not on_disk_run.has(k))
+	t.check("owner_run_in_progress", g.has_run_in_progress() and on_disk_run.size() == 184, "%d earned on disk; in memory also %s" % [on_disk_run.size(), extra])
 	# Continue from the title, as on the phone.
 	g._enter_title()
 	await t.frames(10)
@@ -296,6 +304,209 @@ func phase_owner() -> void:
 	seen = seen or o.stage != "" or g.cinematic == "lesson" or o.ui.card_kind() != ""
 	t.check("owner_no_lesson_on_continue", not seen, "objective '%s' stage '%s'" % [o.objective, o.stage])
 	g.save_run()
+
+
+# --- Once per run ---------------------------------------------------------------------------------
+
+## Every new run (tutorials on) has the intro, the three lessons and the empty frond again; Continue
+## keeps what this run has done; a run with no record counts them all as done.
+func per_run() -> void:
+	await reset([])
+	await home(0)
+	p.invuln_t = 999.0
+	var saved_clock := g.clock.to_dict()
+	var saved_earned: Dictionary = g.run_save.earned().duplicate()
+	var mx := p.max_health
+	var why: Array[String] = []
+	for run_i in 3:
+		new_run()
+		var fresh := o.intro_due(false) and not o.done("intro") and not o.done("feeding") and not o.done("parasite") and not o.done("starfish")
+		p.restore_full()
+		o.on_play_started(false)
+		var frond := p.health == mx - 1 and p.model.health == mx - 1 and o.run_frond and bool(g.run_save.lessons().get("frond", false))
+		if not fresh or not frond:
+			why.append("run %d: lessons fresh %s, frond %s (%d/%d)" % [run_i + 1, fresh, frond, p.health, mx])
+		# Played through: each lesson done in this run.
+		for fl in Onboarding.FLAGS:
+			o._mark(fl)
+		g.run_save.lessons().erase("frond")
+		o.run_frond = false
+		if not o.all_done() or o.intro_due(false):
+			why.append("run %d: not done after marking" % (run_i + 1))
+	t.check("onb_lessons_replay_each_new_run", why.is_empty(), "; ".join(why))
+	# Continue keeps this run's lessons (as written at once) and its pending empty frond.
+	new_run()
+	g.clock = RunClock.from_dict({"state": "running", "run_s": 30.0, "play_s": 30.0, "finish_s": -1.0})
+	p.restore_full()
+	o.on_play_started(false)
+	o._mark("intro")
+	o._mark("parasite")
+	var disk := on_disk()
+	g.run_save.set_lessons(disk.duplicate())
+	p.restore_full()
+	setup_as_player()
+	o.on_play_started(true)
+	t.check("onb_continue_keeps_run_lessons", disk.has("intro") and disk.has("parasite") and not disk.has("feeding") and o.done("parasite")
+			and not o.done("feeding") and not o.done("starfish") and not o.intro_due(true) and p.health == mx - 1 and o.run_frond,
+			"on disk %s; hp %d/%d" % [disk, p.health, mx])
+	# A run with no record (one saved before it existed) counts every lesson as done: no frond.
+	g.run_save.run().erase("onboarding")
+	p.restore_full()
+	setup_as_player()
+	o.on_play_started(true)
+	var f := jelly(4.0)
+	p.health = mx - 1
+	await t.seconds(1.0)
+	t.check("onb_run_without_record_counts_done", o.all_done() and g.run_save.has_lessons() and not o.run_frond and o.objective == ""
+			and o.stage == "", "record %s, objective '%s'" % [g.run_save.lessons(), o.objective])
+	g._eat(p, f)
+	await t.frames(5)
+	t.check("onb_run_without_record_no_lesson", o.stage == "" and g.cinematic == "" and o.ui.card_kind() == "", "stage '%s'" % o.stage)
+	# Tutorials off: a new run has no intro, no lesson and no empty frond (full health).
+	Settings.tutorials = false
+	new_run()
+	p.restore_full()
+	o.on_play_started(false)
+	t.check("onb_off_new_run_nothing", not o.intro_due(false) and o.all_done() and p.health == mx and not o.run_frond
+			and g.run_save.has_lessons() and g.run_save.lessons().is_empty(), "hp %d/%d, record %s" % [p.health, mx, g.run_save.lessons()])
+	# Through the title as a player: Play goes straight into play.
+	g._enter_title()
+	await t.frames(10)
+	g.title._on_play()
+	await t.frames(5)
+	t.check("onb_off_play_straight_in", o.ui.card_kind() == "" and g.state == "play" and p.controls_enabled and p.health == mx,
+			"card '%s', state %s, hp %d/%d" % [o.ui.card_kind(), g.state, p.health, mx])
+	await home(0)
+	p.invuln_t = 999.0
+	p.health = mx - 1
+	var f2 := jelly(5.0)
+	await t.seconds(1.0)
+	t.check("onb_off_no_objective", o.objective == "" and o.ui.card_kind() == "", "objective '%s'" % o.objective)
+	# Back on mid-run: no intro; this run's lessons not yet done may still come.
+	Settings.tutorials = true
+	o.tutorials_changed(true)
+	var on := await wait_until(func() -> bool: return o.objective == "feeding", 2.0)
+	t.check("onb_on_again_mid_run_lessons_may_come", on and o.ui.card_kind() == "" and g.state == "play", "objective '%s'" % o.objective)
+	if is_instance_valid(f2):
+		p.ball.foods.erase(f2)
+		f2.queue_free()
+	# Restore this process's run.
+	g.run_save.earned().clear()
+	for k in saved_earned:
+		g.run_save.earned()[k] = saved_earned[k]
+	g.clock = RunClock.from_dict(saved_clock)
+	await all_done()
+
+
+# --- The Tutorials toggle ----------------------------------------------------------------------------
+
+## Settings' Tutorials toggle: on by default (also for a settings file from before it), shown in-run
+## and from the title, persisted across a restart, and turning it off mid-lesson ends it cleanly.
+func toggle() -> void:
+	var pm := g.pause_menu
+	# An older settings file (no [onboarding] section) reads as on.
+	var keep := FileAccess.get_file_as_string(Settings.SETTINGS_PATH) if FileAccess.file_exists(Settings.SETTINGS_PATH) else ""
+	var cf := ConfigFile.new()
+	cf.load(Settings.SETTINGS_PATH)
+	if cf.has_section("onboarding"):
+		cf.erase_section("onboarding")
+	cf.set_value("hud", "haptics", false)
+	cf.save(Settings.SETTINGS_PATH)
+	var fresh: Node = load("res://scripts/core/settings.gd").new()
+	fresh._load()
+	t.check("tutorials_default_on_for_older_settings", fresh.tutorials == true and fresh.haptics == false, "")
+	fresh.free()
+	if keep != "":
+		var w := FileAccess.open(Settings.SETTINGS_PATH, FileAccess.WRITE)
+		w.store_string(keep)
+		w.close()
+	await reset([])
+	# In-run Settings: the toggle is there and on; turning it off saves it.
+	pm.open()
+	await t.frames(3)
+	var tb := pm._panel.find_child("Tutorials", true, false) as CheckButton
+	t.check("tutorials_toggle_in_run_settings", tb != null and tb.is_visible_in_tree() and tb.button_pressed and tb.get_global_rect().size.y >= 56.0, "")
+	if tb == null:
+		pm.close()
+		return
+	tb.button_pressed = false
+	var cf2 := ConfigFile.new()
+	cf2.load(Settings.SETTINGS_PATH)
+	t.check("tutorials_off_saved", not Settings.tutorials and cf2.get_value("onboarding", "tutorials", true) == false, "")
+	pm.close()
+	await t.frames(2)
+	# A restart (a fresh process, a new run): still off, so no intro, no lesson, full health.
+	var run_path := ProjectSettings.globalize_path("user://onb_toggle_run.json")
+	RunSave.erase(run_path)
+	var code := _child("_phase_onb_toggle", ["--run-save=" + run_path, "--onboarding=player"])
+	t.check("tutorials_off_persists_across_restart", code == 0, "exit %d" % code)
+	RunSave.erase(run_path)
+	# From the title's Settings: there too; back on.
+	g._enter_title()
+	await t.frames(5)
+	pm.open(true)
+	await t.frames(3)
+	t.check("tutorials_toggle_in_title_settings", tb.is_visible_in_tree() and not tb.button_pressed, "")
+	tb.button_pressed = true
+	var cf3 := ConfigFile.new()
+	cf3.load(Settings.SETTINGS_PATH)
+	t.check("tutorials_on_saved", Settings.tutorials and cf3.get_value("onboarding", "tutorials", false) == true, "")
+	pm.close()
+	await t.frames(2)
+	g.title.hide_title()
+	g.start_play(true)
+	await t.frames(3)
+	# Off mid-lesson: the feeding objective ends at once (the target let go, the prompt gone).
+	await reset(["intro", "parasite", "starfish"])
+	await home(0)
+	p.invuln_t = 999.0
+	p.health = p.max_health - 1
+	var f := jelly(5.0)
+	var on := await wait_until(func() -> bool: return o.objective == "feeding", 2.0)
+	pm.open()
+	await t.frames(2)
+	tb.button_pressed = false
+	pm.close()
+	await t.frames(3)
+	t.check("tutorials_off_ends_objective", on and o.objective == "" and o.food_target == null and f.anchor == Vector3.INF
+			and not g.hud.prompts.has("lunge") and p.controls_enabled and g.cinematic == "", "armed %s, objective '%s'" % [on, o.objective])
+	g._eat(p, f)
+	await t.frames(3)
+	t.check("tutorials_off_eating_no_lesson", o.stage == "" and g.cinematic == "" and o.ui.card_kind() == "", "stage '%s'" % o.stage)
+	# Off during the staged restoration: it ends cleanly, the moss as it truly is, control back.
+	await _start_kill_stage()
+	if o.stage == "kill":
+		var b: MossBall = o._kill["ball"]
+		await t.seconds(1.0)
+		Settings.tutorials = false
+		o.tutorials_changed(false)
+		await t.frames(3)
+		t.check("tutorials_off_ends_staged_lesson", o.stage == "" and not b.staging() and g.cinematic == "" and p.controls_enabled
+				and o.last_end == "off" and o.ui.card_kind() == "", "last end '%s'" % o.last_end)
+	else:
+		t.check("tutorials_off_ends_staged_lesson", false, "no kill stage to end (stage '%s')" % o.stage)
+	# Off with a card up.
+	await _start_star_card()
+	Settings.tutorials = false
+	o.tutorials_changed(false)
+	await t.frames(2)
+	t.check("tutorials_off_ends_card", o.stage == "" and o.ui.card_kind() == "" and p.controls_enabled and g.cinematic == "", o.last_end)
+	Settings.tutorials = true
+	Settings.save()
+	await all_done()
+
+
+## In the child: launched with Tutorials off saved; a new run.
+func phase_toggle() -> void:
+	t.check("toggle_child_reads_off", not Settings.tutorials, "")
+	t.check("toggle_child_new_run_nothing", not g.has_run_in_progress() or g.clock.play_s < 5.0, "")
+	t.check("toggle_child_no_intro_no_lessons", not o.intro_due(false) and o.all_done() and p.health == p.max_health and not o.run_frond,
+			"hp %d/%d" % [p.health, p.max_health])
+	g.pause_menu.open()
+	await t.frames(3)
+	var tb := g.pause_menu._panel.find_child("Tutorials", true, false) as CheckButton
+	t.check("toggle_child_shows_off", tb != null and not tb.button_pressed, "")
+	g.pause_menu.close()
 
 
 func _child(phase: String, extra: Array) -> int:
@@ -341,7 +552,7 @@ func intro() -> void:
 			"state %s, controls %s, clock %s" % [g.state, p.controls_enabled, g.clock.state])
 	await layout_checks("intro")
 	# Closing the app on the intro (no Begin): still to be seen.
-	t.check("intro_not_seen_until_begin", not GillProgress.open(g.gill.path).onb_done("intro"), "")
+	t.check("intro_not_seen_until_begin", not on_disk().has("intro"), str(on_disk()))
 	# One large button: Begin starts play.
 	var br := o.ui.button().get_global_rect()
 	t.check("intro_one_large_button", br.size.y >= 80.0 and br.size.x >= 240.0, str(br.size))
@@ -350,17 +561,19 @@ func intro() -> void:
 	await t.frames(5)
 	t.check("intro_begin_starts_play", g.state == "play" and p.controls_enabled and g.clock.state == "running" and o.ui.card_kind() == "",
 			"state %s, clock %s" % [g.state, g.clock.state])
-	t.check("intro_seen_persisted", GillProgress.open(g.gill.path).onb_done("intro"), "")
-	# First new run only (owner ruling): a later new run, lessons still to come, shows no intro.
-	g.run_save.earned().clear()
-	g.clock = RunClock.from_dict({"state": "not_started", "run_s": 0.0, "play_s": 0.0, "finish_s": -1.0})
-	t.check("intro_only_first_new_run", not o.intro_due(false) and not o.done("feeding") and not o.done("parasite"), "")
+	t.check("intro_seen_persisted_in_run", on_disk().has("intro") and not o.intro_due(false), str(on_disk()))
+	# Once per run (owner ruling, 2026-10-01): the next new run shows it again.
+	new_run()
+	t.check("intro_due_again_next_new_run", o.intro_due(false) and not o.done("feeding") and not o.done("parasite"), "")
 	g._enter_title()
 	await t.frames(5)
 	g.title._on_play()
 	await t.frames(5)
-	t.check("intro_later_new_run_straight_to_play", o.ui.card_kind() == "" and g.state == "play", "card '%s'" % o.ui.card_kind())
-	# Continue never shows it, even on a profile that has not seen it.
+	t.check("intro_shows_on_later_new_run", o.ui.card_kind() == "intro" and g.state == "title", "card '%s'" % o.ui.card_kind())
+	o.ui.tap()
+	await t.frames(5)
+	t.check("intro_later_begin_starts_play", o.ui.card_kind() == "" and g.state == "play" and p.controls_enabled, "state %s" % g.state)
+	# Continue never shows it, even in a run that has not seen it.
 	await reset([])
 	t.check("intro_never_on_continue", not o.intro_due(true) and o.intro_due(false), "")
 	# Restore this process's run.
@@ -396,18 +609,15 @@ func feeding() -> void:
 	await reset(["intro", "parasite", "starfish"])
 	await home(0)
 	p.invuln_t = 999.0
-	# A new player's first run: one unlocked frond starts empty (never a locked one).
+	# A new run: one unlocked frond starts empty (never a locked one).
 	o.on_play_started(false)
 	var mx := p.max_health
-	t.check("feed_first_run_one_frond_empty", p.health == mx - 1 and p.model.health == mx - 1 and o.run_frond and g.gill.onb_done("first_frond"),
+	t.check("feed_new_run_one_frond_empty", p.health == mx - 1 and p.model.health == mx - 1 and o.run_frond and bool(g.run_save.lessons().get("frond", false)),
 			"%d/%d" % [p.health, mx])
-	# A later run never removes health.
+	# Continue keeps it empty while the lesson is still to come.
 	p.restore_full()
-	o.run_frond = false
-	o.on_play_started(false)
-	t.check("feed_later_run_no_empty_frond", p.health == mx, "%d/%d" % [p.health, mx])
-	p.health = mx - 1
-	p.model.set_health(p.health, mx, false)
+	o.on_play_started(true)
+	t.check("feed_continue_keeps_frond_empty", p.health == mx - 1 and o.run_frond, "%d/%d" % [p.health, mx])
 	# Not visible (behind him): no objective.
 	var behind := jelly(-4.0)
 	await t.frames(30)
@@ -455,7 +665,7 @@ func feeding() -> void:
 	u.place_at(p.ball.index, p.ball.surface_point(p.ball.up_at(f.global_position - p.facing * 0.8), 0.1), p.facing)
 	var before := p.health
 	g._eat(p, f)
-	t.check("feed_heal_applied_normally", p.health == before + 1 and o.done("feeding") and GillProgress.open(g.gill.path).onb_done("feeding"),
+	t.check("feed_heal_applied_normally", p.health == before + 1 and o.done("feeding") and on_disk().has("feeding") and not on_disk().has("frond"),
 			"%d -> %d" % [before, p.health])
 	t.check("feed_frond_restore_deferred", p.model.health == before and g.cinematic == "lesson" and not p.controls_enabled and o.stage == "feed",
 			"model %d, cinematic '%s'" % [p.model.health, g.cinematic])
@@ -482,6 +692,10 @@ func feeding() -> void:
 	g._eat(p, f2)
 	await t.frames(5)
 	t.check("feed_once_only", o.stage == "" and g.cinematic == "" and o.objective == "", "stage '%s'" % o.stage)
+	# Continue after the lesson: no frond emptied.
+	p.restore_full()
+	o.on_play_started(true)
+	t.check("feed_continue_after_lesson_full_health", p.health == mx and not o.run_frond, "%d/%d" % [p.health, mx])
 	await all_done()
 
 
@@ -506,7 +720,7 @@ func no_input_leak() -> void:
 ## Runs the parasite lesson in a fresh process (a new run and profile) and reports its checks here.
 func _parasite_fresh(name_: String) -> void:
 	var tag := str(Time.get_ticks_usec())
-	var code := _child("_test_onb_parasite", ["--onb-fresh=1", "--run-save=" + ProjectSettings.globalize_path("user://onb_par_run_%s.json" % tag),
+	var code := _child("_test_onb_parasite", ["--onb-fresh=1", "--onboarding=fresh", "--run-save=" + ProjectSettings.globalize_path("user://onb_par_run_%s.json" % tag),
 			"--gill-save=" + ProjectSettings.globalize_path("user://onb_par_gill_%s.json" % tag)])
 	t.check(name_, code == 0, "fresh process exited %d" % code)
 
@@ -542,7 +756,7 @@ func parasite() -> void:
 	var done0 := b.events_done
 	kill(par)
 	t.check("parasite_kill_applied_at_once", not par.is_alive() and b.events_done == done0 + 1 and b.restoration > r0 and o.done("parasite")
-			and GillProgress.open(g.gill.path).onb_done("parasite"), "%.3f -> %.3f" % [r0, b.restoration])
+			and on_disk().has("parasite"), "%.3f -> %.3f" % [r0, b.restoration])
 	t.check("parasite_staged", o.stage == "kill" and b.staging() and g.cinematic == "lesson" and not p.controls_enabled, "stage '%s'" % o.stage)
 	var center: Vector3 = o._kill["center"]
 	var outer: float = o._kill["outer"]
@@ -619,7 +833,7 @@ func starfish() -> void:
 		all_text = all_text and texts.has(w)
 	t.check("starfish_card_copy", o.ui.waiting_for_tap() and all_text and o.ui.button().text == "Got it", ", ".join(texts))
 	t.check("starfish_card_no_camera_staging", not g.cam.cinematic and not cam_before and g.cinematic == "lesson", "")
-	t.check("starfish_flag_persisted", GillProgress.open(g.gill.path).onb_done("starfish"), "")
+	t.check("starfish_flag_persisted", on_disk().has("starfish"), "")
 	await layout_checks("starfish")
 	o.ui.tap()
 	await t.frames(2)
@@ -742,7 +956,7 @@ func relaunch() -> void:
 	RunSave.erase(run_path)
 	GillProgress.erase(gill_path)
 	var a := _child("_phase_onb_write", ["--run-save=" + run_path, "--gill-save=" + gill_path, "--onboarding=fresh"])
-	var b := _child("_phase_onb_read", ["--run-save=" + run_path, "--gill-save=" + gill_path])
+	var b := _child("_phase_onb_read", ["--run-save=" + run_path, "--gill-save=" + gill_path, "--onboarding=player"])
 	t.check("onb_relaunch_children_ran", a == 0 and b == 0, "%d %d" % [a, b])
 	RunSave.erase(run_path)
 	GillProgress.erase(gill_path)

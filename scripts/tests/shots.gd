@@ -2751,10 +2751,10 @@ func _organic_shots(g: Game) -> void:
 # --- Onboarding (docs/ONBOARDING.md) ------------------------------------------------------------
 
 func _onb_flags(g: Game, done: Array) -> void:
-	g.gill.onboarding = {}
+	var d := {}
 	for f in done:
-		g.gill.onboarding[f] = true
-	g.gill.onb_known = true
+		d[f] = true
+	g.run_save.set_lessons(d)
 
 
 ## A drifter `ahead` m in front of Gill that the camera really sees.

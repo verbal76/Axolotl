@@ -27,7 +27,7 @@ var _run_detail: RichTextLabel
 var _haptics: CheckButton
 var _swim_invert: CheckButton
 var _resume: Button
-var _replay: Button
+var _tutorials: CheckButton
 var _music: TouchSlider
 var _sfx: TouchSlider
 var _left: VBoxContainer
@@ -99,12 +99,6 @@ func _ready() -> void:
 	# The skill tree (00036).
 	_skills_button = _action("Skills", _open_skills)
 	_skills_button.name = "Skills"
-	# Replay tutorial (owner, 2026-10-01): the intro and the three lessons again from the next New
-	# Run. From the title only (where a New Run starts; there is room there). Two taps, so a stray
-	# touch never resets it; nothing else in the profile changes.
-	_replay = _action("Replay tutorial", Callable())
-	_replay.name = "ReplayTutorial"
-	_replay.pressed.connect(_on_replay)
 	# --- Right: this run, then the settings ---
 	_right = VBoxContainer.new()
 	_right.name = "Details"
@@ -148,6 +142,11 @@ func _ready() -> void:
 		Settings.save())
 	_swim_invert.name = "SwimInvert"
 	_swim_invert.tooltip_text = "Off: pull the stick down to swim up. On: push it up to swim up. Swim Mode only."
+	# Tutorials (owner ruling 2026-10-01, docs/ONBOARDING.md): the intro and the three lessons on
+	# every new run. Off skips them; turned off mid-lesson, the lesson ends at once.
+	_tutorials = _toggle(toggles, "Tutorials", _on_tutorials)
+	_tutorials.name = "Tutorials"
+	_tutorials.tooltip_text = "On: every new run starts with the intro and the three short lessons. Off: none."
 	# Music | Sound.
 	var levels := HBoxContainer.new()
 	levels.name = "Levels"
@@ -285,19 +284,14 @@ func _slider(parent: Control, text: String) -> TouchSlider:
 	return s
 
 
+func _on_tutorials(on: bool) -> void:
+	Settings.tutorials = on
+	Settings.save()
+	if Game.inst != null and Game.inst.onboarding != null:
+		Game.inst.onboarding.tutorials_changed(on)
+
+
 ## A left-column action: the column's width, 64 px tall.
-func _on_replay() -> void:
-	if _replay.text == "Tap again to replay":
-		Game.inst.gill.reset_onboarding()
-		_replay.text = "Replays on New Run"
-		_replay.disabled = true
-		return
-	_replay.text = "Tap again to replay"
-	get_tree().create_timer(3.0).timeout.connect(func() -> void:
-		if is_instance_valid(_replay) and _replay.text == "Tap again to replay":
-			_replay.text = "Replay tutorial")
-
-
 func _action(text: String, cb: Callable) -> Button:
 	var b := UiStyle.button(text, cb)
 	b.custom_minimum_size = Vector2(LEFT_W, 64)
@@ -380,12 +374,6 @@ func open(from_title := false) -> void:
 		Game.inst.save_run()
 	for r in _session_rows:
 		r.visible = not from_title
-	if _replay != null:
-		_replay.visible = from_title
-		if Game.inst != null and Game.inst.gill != null:
-			var pending: bool = Game.inst.gill.onboarding.is_empty()
-			_replay.text = "Replays on New Run" if pending else "Replay tutorial"
-			_replay.disabled = pending
 	_refresh()
 	visible = true
 	if not from_title:
@@ -434,6 +422,7 @@ func _refresh() -> void:
 		_skills_button.text = "Skills  (%d to spend)" % g.gill.balance() if g.gill.balance() > 0 else "Skills"
 	_haptics.set_pressed_no_signal(Settings.haptics)
 	_swim_invert.set_pressed_no_signal(Settings.swim_invert_y)
+	_tutorials.set_pressed_no_signal(Settings.tutorials)
 	# (From the title it is Settings: back to the title, not "resume" a run that is not running.)
 	_resume.text = "Back" if _from_title else "Resume"
 	_music.set_value_no_signal(Settings.music_volume)

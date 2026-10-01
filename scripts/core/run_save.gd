@@ -122,6 +122,24 @@ func earned() -> Dictionary:
 	return run()["earned"]
 
 
+## This run's tutorial record (docs/ONBOARDING.md, once per run): lesson -> true once done this run
+## ("intro", "feeding", "parasite", "starfish"), and "frond": true while the run's empty frond is
+## still waiting for the feeding lesson. Not in new_run(), and never filled in by migrate(): a run
+## saved before the record existed has none, and Game counts all its lessons as done. Game gives a
+## genuinely new run an empty record when it opens it, so it survives Continue and New Run resets it.
+func has_lessons() -> bool:
+	return run().get("onboarding") is Dictionary
+
+
+## The record itself (a detached empty one when the run has none: check has_lessons()).
+func lessons() -> Dictionary:
+	return run()["onboarding"] if has_lessons() else {}
+
+
+func set_lessons(d: Dictionary) -> void:
+	run()["onboarding"] = d
+
+
 ## A fresh run; records (best time, past finishes) are kept.
 func start_new_run() -> void:
 	data["run"] = new_run()
