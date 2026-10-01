@@ -2,10 +2,10 @@ shader_type spatial;
 render_mode cull_disabled, specular_schlick_ggx;
 // Owner, 2026-10-01: the floor of a ravine (where a fall costs a frond) is a pool of toxic green
 // ooze, styled after a harmful algal bloom (owner's reference photos): bright pea-soup green,
-// marbled "spilled paint" swirls, thick floating scum mats, a wet sheen, slow heave and bubbles.
+// marbled "spilled paint" swirls (the owner liked the pea-soup and thick glossy Florida bloom photos), thick floating scum mats, a wet sheen, slow heave and bubbles.
 // UV.x: metres along the ravine; UV.y: 0..1 across. COLOR.a: how far into the floor (edges cut).
 
-uniform vec4 soup : source_color = vec4(0.30, 0.62, 0.06, 1.0);
+uniform vec4 soup : source_color = vec4(0.36, 0.70, 0.08, 1.0);
 uniform vec4 streak : source_color = vec4(0.62, 0.92, 0.18, 1.0);
 uniform vec4 dark : source_color = vec4(0.10, 0.30, 0.04, 1.0);
 uniform vec4 scum : source_color = vec4(0.70, 0.95, 0.32, 1.0);
@@ -40,7 +40,7 @@ void fragment() {
 	col = mix(col, streak.rgb, smoothstep(0.75, 0.95, swirl) * 0.7);
 	// Thick floating scum mats, drifting slower than the water under them.
 	float mat = fbm(sp * 1.3 + vec2(TIME * flow * 0.6, 0.0));
-	float scum_a = smoothstep(0.58, 0.68, mat);
+	float scum_a = smoothstep(0.52, 0.64, mat);
 	float fleck = step(0.86, noise(sp * 14.0 + vec2(TIME * flow * 0.6, 0.0))) * scum_a;
 	col = mix(col, scum.rgb * (0.85 + 0.3 * fleck), scum_a * 0.85);
 	// Bubbles: one per cell, swelling then popping, each on its own clock.

@@ -3,7 +3,7 @@ extends MeshInstance3D
 ## Owner, 2026-10-01: a pool of glowing, bubbling green ooze on every ravine floor, so a fall into a
 ## valley (one frond, put back on the rim: Game.ravine_fall) reads as landing in something bad.
 ## Purely visual: no collision, the floor and the fall rule are unchanged. One opaque mesh per ball:
-## a ribbon along each ravine just above its floor (the base sphere), wide enough to meet the walls,
+## a ribbon along each ravine just above its floor (wherever that floor is), wide enough to meet the walls,
 ## its edges cut where the ravine's carve fades (vertex alpha; see ravine_ooze.gdshader).
 
 const LEVEL := 0.3      # m above the floor: he lands on it, then sinks in (Game._cine_ravine)
@@ -19,6 +19,7 @@ static func build(b: MossBall) -> RavineOoze:
 	var st_c := PackedColorArray()
 	var st_uv := PackedVector2Array()
 	var st_i := PackedInt32Array()
+	var spots := PackedVector3Array()   # where bubbles may rise: the pool shows and is above the ground
 	var lift := 0.0
 	for cv in b.carves:
 		var pts: Array = cv[0]
@@ -26,7 +27,7 @@ static func build(b: MossBall) -> RavineOoze:
 		var depth: float = cv[2]
 		var wall: float = cv[3]
 		var w := hw + wall * 0.75
-		var r := b.radius + LEVEL + lift
+		var lift_k := lift
 		lift += 0.004   # (overlapping ravines never z-fight)
 		# Samples along the polyline, carried a little past each end (the carve rounds off there).
 		var samples: Array[Vector3] = []
@@ -50,6 +51,10 @@ static func build(b: MossBall) -> RavineOoze:
 			var t := (samples[mini(s + 1, samples.size() - 1)] - samples[maxi(s - 1, 0)])
 			t = (t - d * t.dot(d)).normalized()
 			var side := d.cross(t).normalized()
+			# The floor is the base sphere only where no hill rises under the ravine; elsewhere it
+			# sits higher (hill height minus the carve), so the pool follows the floor along it.
+			var floor_h := b.terrain_height(d)
+			var r := b.radius + floor_h + LEVEL + lift_k
 			if s > 0:
 				along += samples[s - 1].angle_to(d) * b.radius
 			for i in ACROSS + 1:
@@ -57,7 +62,9 @@ static func build(b: MossBall) -> RavineOoze:
 				var dd := d.rotated(t, (u * 2.0 - 1.0) * w / b.radius).normalized()
 				var cut := clampf(b.ravine_carve(dd) / maxf(depth, 0.01), 0.0, 1.0)
 				# (Only where the floor really is low enough for the ooze to show.)
-				var a := smoothstep(0.55, 0.85, cut) if b.terrain_height(dd) < LEVEL + 0.6 else 0.0
+				var a := smoothstep(0.55, 0.85, cut) if b.terrain_height(dd) < floor_h + LEVEL + 0.6 else 0.0
+				if a > 0.3 and b.terrain_height(dd) < floor_h + LEVEL - 0.08:
+					spots.append(dd * (r + 0.02))
 				st_v.append(dd * r)
 				st_n.append(dd)
 				st_c.append(Color(1, 1, 1, a))
@@ -86,4 +93,57 @@ static func build(b: MossBall) -> RavineOoze:
 	mi.material_override = _mat
 	mi.cast_shadow = GeometryInstance3D.SHADOW_CASTING_SETTING_OFF
 	mi.visibility_range_end = b.radius + MossBall.FAR_LOD_M
+	mi.ball = b
+	mi.spots = spots
 	return mi
+
+
+# --- Bubbles (owner, 2026-10-01): little green bubbles rise out of the ooze now and then and pop a
+# little above it. Only near Gill (the pool he can see), through WaterFX's pooled puffs.
+
+const BUBBLE_EVERY_S := 0.07
+const BUBBLE_NEAR_M := 16.0
+const BUBBLE_RISE_S := 1.1
+const BUBBLE_COL := Color(0.9, 1.0, 0.72, 1.0)
+
+var ball: MossBall
+var spots := PackedVector3Array()
+var _rng := RandomNumberGenerator.new()
+var _next := 0.0
+var _pops: Array = []   # [time left, world position]
+var spawned := 0
+
+
+func _process(dt: float) -> void:
+	if ball == null or spots.is_empty() or WaterFX.inst == null or Game.inst == null or Game.inst.player == null:
+		return
+	for k in range(_pops.size() - 1, -1, -1):
+		_pops[k][0] -= dt
+		if _pops[k][0] <= 0.0:
+			WaterFX.inst.sparkle(_pops[k][1], BUBBLE_COL, 5, 0.6, 0.05, 0.3)
+			_pops.remove_at(k)
+	var pl = Game.inst.player
+	if pl.ball != ball:
+		return
+	_next -= dt
+	if _next > 0.0:
+		return
+	_next = BUBBLE_EVERY_S * _rng.randf_range(0.6, 1.4)
+	# A pool point near him where the camera looks.
+	if spots.is_empty():
+		return
+	var cam: Camera3D = Game.inst.cam
+	var here := to_local(pl.global_position)
+	for tries in 16:
+		var p: Vector3 = spots[_rng.randi() % spots.size()]
+		if p.distance_to(here) > BUBBLE_NEAR_M:
+			continue
+		var from := to_global(p)
+		if cam != null and not cam.is_position_in_frustum(from):
+			continue
+		var up := global_basis * p.normalized()
+		var speed := _rng.randf_range(0.35, 0.55)
+		WaterFX.inst._spawn_puff(from, up * speed, BUBBLE_RISE_S, _rng.randf_range(0.11, 0.17), BUBBLE_COL, 0.2)
+		spawned += 1
+		_pops.append([BUBBLE_RISE_S * 0.95, from + up * speed * BUBBLE_RISE_S * 0.85])
+		break
