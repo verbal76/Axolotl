@@ -940,7 +940,17 @@ func _start_kill_stage() -> void:
 	if par == null:
 		par = a_parasite(1)
 	if par == null:
-		return
+		# (Late in the full suite every parasite near the start is gone: a stand-in where one of
+		# ball 1's lived, in its zone, so the staged lesson always has a kill to stage.)
+		var b0: MossBall = g.balls[0]
+		if b0.parasites.is_empty():
+			return
+		var was: Parasite = b0.parasites[0]
+		par = Parasite.new()
+		par.setup(b0, was.kind, was.zone_id, was.spawn_dir, 9.0, was.spawn_h)
+		b0.add_child(par)
+		b0.parasites.append(par)
+		await t.frames(3)
 	await face(par, 5.0)
 	kill(par)
 	await t.frames(2)
