@@ -22,7 +22,7 @@ func _init(p_ut) -> void:
 
 # --- helpers ---------------------------------------------------------------------------------
 
-## A point no spot is near (far above the tank): every spot is "far from Gill".
+## A point no spot is near (far above the tank): every spot is "far from him".
 func _nowhere() -> Vector3:
 	return Vector3(0.0, 100000.0, 0.0)
 
@@ -368,7 +368,7 @@ func _offscreen_and_far() -> void:
 		_clear_returners()
 	ut.place(0, -12, -130, 0.1, 90)
 	t.check("repop_offscreen_and_far", arrivals > 20 and bad.is_empty() and near.is_empty(),
-			"%d arrivals with Gill at 6 spots on each of 7 balls, nearest %.1f m, none on camera; %d authored spots excluded (bloom %.0f m / vortex 12 m) %s %s" % [arrivals, min_d,
+			"%d arrivals with him at 6 spots on each of 7 balls, nearest %.1f m, none on camera; %d authored spots excluded (bloom %.0f m / vortex 12 m) %s %s" % [arrivals, min_d,
 			excluded, r.rules.bloom_clear_m, ", ".join(bad), ", ".join(near)])
 
 

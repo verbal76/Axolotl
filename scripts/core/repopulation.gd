@@ -14,7 +14,7 @@ extends RefCounted
 ## hashed from (run key, ball, zone, n) with no global random draws. At most `Rules.cap_for(authored)`
 ## alive per zone (Normal: about a third, never below one: 3 originals give 1) and `ball_cap` per ball. Each return copies an authored parasite of the
 ## zone (its species, spitter variant, spawn direction and home), so the zone's species mix is kept.
-## Arrivals happen only on Gill's ball, at least `min_gill_m` from him and off camera, and never at an
+## Arrivals happen only on the player's ball, at least `min_gill_m` from him and off camera, and never at an
 ## authored spot within `bloom_clear_m` of a bloom or `vortex_clear_m` of a vortex mouth.
 ##
 ## Hard Mode (queued) reuses this class with its own Rules (rate, cap, grace) and reads the alive
@@ -193,7 +193,7 @@ static func _all_cleared(authored: Array) -> bool:
 
 
 ## One look (Game calls this twice a second in play; `now` = the run's play seconds). Notes newly
-## cleared zones, tidies returners that are gone, and lets at most one returner arrive on Gill's ball.
+## cleared zones, tidies returners that are gone, and lets at most one returner arrive on the player's ball.
 ## Returns the new returner, or null.
 func update(now: float, ball: MossBall, gill_pos: Vector3, cam: Camera3D) -> Parasite:
 	if not enabled:
