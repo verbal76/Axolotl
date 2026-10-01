@@ -509,5 +509,212 @@ func _food_rng_isolated() -> void:
 
 # --- the long simulation ------------------------------------------------------------------------
 
+## Every ball restored (as a finished run continues), then on each ball in turn: Gill roams for
+## --minutes=N of game frames (default 5) while the returners' clock runs --speed=K times faster
+## (default 12, so 5 minutes of frames are an hour of repopulation). Checked: returner timing
+## (none before the grace, gaps >= the minimum), caps, distance and camera at every arrival (no
+## pop-in), kills earning nothing; food healthy near him when he leaves it alone and bounded by
+## the cooldowns when he eats everything he can reach (no exploit); the cost of both systems.
 func sim() -> void:
-	t.check("repop_sim", false, "not written yet")
+	var minutes := float(Settings.test_args.get("minutes", "5"))
+	var speed := float(Settings.test_args.get("speed", "12"))
+	g.repop.enabled = false
+	var r := _fresh(g.rng_key())
+	var rng := RandomNumberGenerator.new()
+	rng.seed = 77
+	# Restore the whole aquarium silently (as _apply_run does for a finished run).
+	for b in g.balls:
+		for par in b.parasites:
+			if par.is_alive():
+				par.restore_cleared()
+				b.restore_event(par.zone_id, b.surface_point(par.spawn_dir))
+		for m in b.motes:
+			if m.state != "done":
+				m.restore_done()
+				b.restore_event(m.zone_id, b.surface_point(m.home_dir()))
+	var restored := g.balls.all(func(b): return b.completed)
+	var earned0: Dictionary = g.run_save.earned().duplicate()
+	var res0 := g.balls.map(func(b): return [b.events_done, b.restoration])
+	p.invuln_t = 1e9
+	var now := 0.0
+	var frames_per_ball := int(minutes * 60.0 * 60.0)
+	var problems: Array[String] = []
+	var lines: Array[String] = []
+	var kills := 0
+	var us_repop := 0
+	var n_repop := 0
+	var us_food := 0
+	var phys_with: Array[float] = []
+	var phys_without: Array[float] = []
+	var total_arrivals := 0
+	var food_on_cam := 0
+	var food_near_min := 999
+	var food_mean_min := 999.0
+	var food_zero := 0
+	var fill_min := 1.0
+	var fill_lines: Array[String] = []
+	var food_samples := 0
+	var exploit_lines: Array[String] = []
+	for b in g.balls:
+		var d0 := b.start_dir
+		p.place(b, b.surface_point(d0, 0.2), -MossBall.frame_at(d0, 0.0).z)
+		g.audio.set_ball(b.index, false)
+		g.cam.snap_behind()
+		var a0 := r.arrivals.size()
+		var f0 := g.food.arrivals.size()
+		var peak := 0
+		var zone_peak := 0
+		var near_sum := 0
+		var near_n := 0
+		var near_min := 999
+		var near_zero := 0
+		var fill_sum := 0.0
+		var ball_min := 999
+		var eaten := 0
+		var eat_from := frames_per_ball / 2
+		var near_at_eat := 0
+		var heading_t := 0.0
+		var t_ball0 := now
+		for fr in frames_per_ball:
+			# Roaming: walk, turning now and then; a fresh spot every 90 s.
+			heading_t -= 1.0 / 60.0
+			if heading_t <= 0.0:
+				heading_t = rng.randf_range(3.0, 9.0)
+				var a := rng.randf_range(-PI, PI)
+				p.bot_input = Vector2(sin(a), cos(a)) * 0.8
+			if fr % (90 * 60) == 0 and fr > 0:
+				var dd := MossBall.dir_ll(rng.randf_range(-60.0, 60.0), rng.randf_range(-180.0, 180.0))
+				p.place(b, b.surface_point(dd, 0.3), -MossBall.frame_at(dd, rng.randf() * 360.0).z)
+				g.cam.snap_behind()
+			await t.frames(1)
+			var pt: float = Performance.get_monitor(Performance.TIME_PHYSICS_PROCESS) * 1000.0
+			var alive := r.alive_on_ball(b)
+			if alive > 0:
+				phys_with.append(pt)
+			else:
+				phys_without.append(pt)
+			if fr % 30 == 0:
+				now += 0.5 * speed
+				var u0 := Time.get_ticks_usec()
+				var rr := r.update(now, b, p.global_position, g.cam)
+				us_repop += Time.get_ticks_usec() - u0
+				n_repop += 1
+				if rr != null:
+					var e: Dictionary = r.arrivals[r.arrivals.size() - 1]
+					if float(e["dist"]) < 35.0 or bool(e["on_camera"]):
+						problems.append("b%d %s arrived %.1f m away%s" % [b.index + 1, e["zone"], e["dist"], " in view" if e["on_camera"] else ""])
+				peak = maxi(peak, r.alive_on_ball(b))
+				for z in _zones_of(r, b.index):
+					zone_peak = maxi(zone_peak, r.alive_in_zone(z) - int(z["cap"]))
+				# He fights back: a returner that reaches him is killed (the game's own path).
+				for q in b.returners:
+					if is_instance_valid(q) and q.is_alive() and q.state not in ["init", "dying"] and q.global_position.distance_to(p.global_position) < 3.0:
+						q.hit_cd = 0.0
+						if q.hit(q.hp, p.global_position):
+							kills += 1
+			# Food health: sampled when he has been where he is for a minute (arrivals keep their
+			# cooldowns, so a place he just reached fills over the next minute or two).
+			if fr % 300 == 0 and fr % (90 * 60) >= 60 * 60:
+				var near := 0
+				for f in b.foods:
+					if is_instance_valid(f) and f.global_position.distance_to(p.global_position) < 55.0:
+						near += 1
+				var any_local := false
+				var want := 0
+				var have := 0
+				var regs := g.food.regions_of(b)
+				for ri in regs.size():
+					if g.food.is_local(b, regs[ri], p.global_position):
+						any_local = true
+						want += int(regs[ri]["target"])
+						have += mini(g.food.count_in(b, ri), int(regs[ri]["target"]))
+				if fr < eat_from and any_local:
+					fill_sum += float(have) / maxf(1.0, want)
+					ball_min = mini(ball_min, b.foods.filter(func(f): return is_instance_valid(f)).size())
+					near_sum += near
+					near_n += 1
+					near_min = mini(near_min, near)
+					if near == 0:
+						near_zero += 1
+			# Second half: he eats everything he can get to, at once (the exploit attempt).
+			if fr == eat_from:
+				for f in b.foods:
+					if is_instance_valid(f) and f.global_position.distance_to(p.global_position) < 80.0:
+						near_at_eat += 1
+			if fr >= eat_from and fr % 120 == 0:
+				for f in b.foods.duplicate():
+					if is_instance_valid(f) and f.is_catchable() and f.catch_point().distance_to(p.global_position) < 25.0:
+						g._eat(p, f)
+						eaten += 1
+		var arrivals := r.arrivals.slice(a0)
+		total_arrivals += arrivals.size()
+		# Timing: per zone, the first after the grace, then gaps of at least the minimum.
+		var last := {}
+		for e in arrivals:
+			var k := Repopulation.zone_key(b.index, e["zone"])
+			var z: Dictionary = r.zones[k]
+			if not last.has(k) and float(e["t"]) - float(z["cleared"]) < r.rules.grace_s - 0.01:
+				problems.append("%s first return %.0f s after clearing" % [k, float(e["t"]) - float(z["cleared"])])
+			if last.has(k) and float(e["t"]) - float(last[k]) < r.rules.every_min_s - 0.01:
+				problems.append("%s returns %.0f s apart" % [k, float(e["t"]) - float(last[k])])
+			last[k] = e["t"]
+		if peak > r.rules.ball_cap or zone_peak > 0:
+			problems.append("b%d over a cap (ball peak %d, zone over by %d)" % [b.index + 1, peak, zone_peak])
+		var foods := g.food.arrivals.slice(f0)
+		for e in foods:
+			if bool(e["on_camera"]) or float(e["dist"]) < FoodDirector.ARRIVE_MIN_M:
+				food_on_cam += 1
+		var eat_min := (frames_per_ball - eat_from) / 3600.0
+		var local := 0
+		for reg in g.food.regions_of(b):
+			if g.food.is_local(b, reg, p.global_position):
+				local += 1
+		food_near_min = mini(food_near_min, near_min)
+		food_mean_min = minf(food_mean_min, float(near_sum) / maxf(1.0, near_n))
+		var fill := fill_sum / maxf(1.0, near_n)
+		# (Where a ball's region targets add up past its cap, the cap shares the food out: that
+		# fraction is the most any place can hold.)
+		var tsum := 0
+		for reg in g.food.regions_of(b):
+			tsum += int(reg["target"])
+		var ceiling := minf(1.0, float(FoodDirector.ball_cap(b)) / maxf(1.0, tsum))
+		fill_min = minf(fill_min, fill / ceiling)
+		fill_lines.append("b%d fill %.0f%% of %.0f%% possible, ball >= %d (old fixed target %d)" % [b.index + 1, fill * 100.0, ceiling * 100.0, ball_min, b.food_target])
+		food_zero += near_zero
+		food_samples += near_n
+		# No exploit: what he can eat is what was there plus one per region per cooldown at most
+		# (the old refill brought one every 1-2.5 s wherever he was).
+		var bound := near_at_eat + g.food.regions_of(b).size() * ceili(eat_min * 60.0 / FoodDirector.COOLDOWN_MIN) + 2
+		if eaten > bound:
+			problems.append("b%d: ate %d, over the cooldown bound %d" % [b.index + 1, eaten, bound])
+		exploit_lines.append("%d<=%d" % [eaten, bound])
+		lines.append("b%d: %.0f min of returns, %d returners (peak %d alive, firsts %s), food near him mean %.1f min %d, ate %d in %.1f min (%.1f/min), %d food arrivals" % [b.index + 1,
+				(now - t_ball0) / 60.0, arrivals.size(), peak, ",".join(arrivals.slice(0, 3).map(func(e): return "%.0f" % (float(e["t"]) - t_ball0))),
+				float(near_sum) / maxf(1.0, near_n), near_min, eaten, eat_min, eaten / maxf(0.01, eat_min), foods.size()])
+		t.log_line("SIM " + lines[lines.size() - 1])
+		# (He leaves the ball: its returners stay and sleep, as parasites on other balls do.)
+	p.bot_input = Vector2.ZERO
+	var earned_ok := true
+	for id in g.run_save.earned():
+		if not earned0.has(id) and (str(id).contains(".parasite") or str(id).contains(".mote")):
+			earned_ok = false
+	var res_ok := g.balls.map(func(b): return [b.events_done, b.restoration]) == res0
+	t.log_line("SIM cost: repopulation update %.1f us per look (%d looks); median physics frame %.2f ms with returners alive (%d frames), %.2f ms without (%d)" % [float(us_repop) / maxi(1, n_repop), n_repop,
+			_median(phys_with), phys_with.size(), _median(phys_without), phys_without.size()])
+	t.log_line("SIM " + r.summary() + "; %d killed by him" % kills)
+	t.check("repop_sim_returners", restored and total_arrivals > 0 and problems.is_empty(), "%d arrivals over 7 balls; %s" % [total_arrivals, "; ".join(problems.slice(0, 6))])
+	t.check("repop_sim_no_restoration_change", earned_ok and res_ok and kills > 0, "%d returners killed; restoration and earned ids unchanged %s" % [kills, earned_ok and res_ok])
+	# Healthy: the regions round him are kept near their targets (how much is within 55 m depends on
+	# where food regions are authored; the ball totals are reported beside the old fixed targets).
+	t.check("repop_sim_food_healthy", food_on_cam == 0 and fill_min >= 0.75 and problems.is_empty(),
+			"local regions filled (lowest per-ball mean, of what the cap allows) %.0f%% [%s]; food within 55 m: lowest per-ball mean %.1f, %d of %d samples empty, min %d; %d arrivals in view or too close; eaten vs bound per ball %s" % [fill_min * 100.0, ", ".join(fill_lines), food_mean_min,
+			food_zero, food_samples, food_near_min, food_on_cam, ", ".join(exploit_lines)])
+	_clear_returners()
+
+
+static func _median(a: Array[float]) -> float:
+	if a.is_empty():
+		return 0.0
+	var c := a.duplicate()
+	c.sort()
+	return c[c.size() / 2]
