@@ -4972,7 +4972,32 @@ func _test_ambient_fish() -> void:
 					paused += 1
 	t.check("fish_stay_in_the_water", worst_out < 0.01 and worst_in < 0.0 and paused > 0, "outside the tank by %.2f, inside a ball by %.2f, paused samples %d" % [worst_out, worst_in, paused])
 	# A bump: Gill right beside a tetra sends it (and its school) darting off; later they regroup.
-	var tet: Dictionary = af.fish.filter(func(f): return f["kind"] == "tetra")[0]
+	# (A fresh school with the shipped seed, so the bump and regroup do not depend on how long the
+	# live fish have swum in earlier suite tests: the result is the same in any test order.)
+	var live_af := af
+	af = AmbientFish.new()
+	g.add_child(af)
+	af.setup(live_af._tank[0], live_af._tank[1], live_af._balls)
+	for i in 60 * 180:
+		af.step(1.0 / 60.0, Vector3.INF)
+	# (The tetra with the most schoolmates nearby: by this point in the full suite the school may have
+	# strung out, and a lone first tetra alarms only itself.)
+	var all_tets: Array = af.fish.filter(func(f): return f["kind"] == "tetra")
+	var tet: Dictionary = all_tets[0]
+	var best_n := -1
+	for a in all_tets:
+		var n := all_tets.filter(func(b): return b != a and (b["pos"] as Vector3).distance_to(a["pos"]) < 6.0).size()
+		if n > best_n:
+			best_n = n
+			tet = a
+	# (How spread the school is before the bump: "regrouped" means back to that, or within 30 m.)
+	var c0 := Vector3.ZERO
+	for f in all_tets:
+		c0 += f["pos"]
+	c0 /= all_tets.size()
+	var spread0 := 0.0
+	for f in all_tets:
+		spread0 = maxf(spread0, c0.distance_to(f["pos"]))
 	var gill: Vector3 = (tet["pos"] as Vector3) + Vector3(0.5, 0, 0)
 	var d0: float = gill.distance_to(tet["pos"])
 	for i in 45:
@@ -4990,7 +5015,10 @@ func _test_ambient_fish() -> void:
 	var spread := 0.0
 	for f in tets:
 		spread = maxf(spread, c.distance_to(f["pos"]))
-	t.check("fish_scatter_then_regroup", d1 > d0 + 3.0 and alarmed >= 2 and calm and spread < 30.0, "darted %.1f -> %.1f m; %d tetras alarmed; calm again %s; school within %.1f m" % [d0, d1, alarmed, calm, spread])
+	t.check("fish_scatter_then_regroup", d1 > d0 + 3.0 and alarmed >= 2 and calm and spread < maxf(30.0, spread0 * 1.15),
+			"darted %.1f -> %.1f m; %d tetras alarmed; calm again %s; school within %.1f m (before the bump %.1f m)" % [d0, d1, alarmed, calm, spread, spread0])
+	af.queue_free()
+	af = live_af
 	# The bala sharks (owner): the largest fish, a skittish trio that bolts together and regroups.
 	var balas := af.fish.filter(func(f): return f["kind"] == "bala")
 	var bl: Dictionary = balas[0]
