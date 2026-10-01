@@ -1,0 +1,843 @@
+extends RefCounted
+## Onboarding checks (docs/ONBOARDING.md, ledger row 20). Called from unit_tests.gd, whose helpers
+## (place_at, press, wait_grounded, _fit_problems ...) they use through `u`.
+
+var u
+var t
+var g: Game
+var p: Axolotl
+var o: Onboarding
+
+
+func _init(p_u) -> void:
+	u = p_u
+	t = u.t
+	g = u.g
+	p = u.p
+	o = g.onboarding
+
+
+# --- helpers -------------------------------------------------------------------------------------
+
+## Clean slate: these flags done (the rest not), no stage, no objective, no card, Gill well.
+func reset(done_flags: Array) -> void:
+	if o.stage != "":
+		o.finish("test")
+	o.ui.hide_card()
+	o._set_objective("")
+	g.gill.onboarding = {}
+	for f in done_flags:
+		g.gill.onboarding[f] = true
+	g.gill.onb_known = true
+	g.gill.save()
+	o.run_frond = false
+	if g.cinematic != "":
+		g._end_cinematic()
+	g.state = "play"
+	p.state = "normal"
+	p.controls_enabled = true
+	p.model.dissolve = 0.0
+	p.restore_full()
+	p.invuln_t = 0.0
+	g.hud.visible_controls(true)
+	await t.frames(2)
+
+
+func all_done() -> void:
+	await reset(["intro", "feeding", "parasite", "starfish", "first_frond"])
+
+
+## A live, visible jellyfish (a drifter) `ahead` m in front of Gill, hovering at his head's height.
+func jelly(ahead := 3.5, side := 0.0) -> Food:
+	var b := p.ball
+	var right := p.facing.cross(p.up).normalized()
+	var at := p.global_position + p.facing * ahead + right * side
+	var d := b.up_at(at)
+	var f := Food.new()
+	f.setup(b, Food.Type.DRIFTER, b.surface_point(d, 0.7), d, 25.0)
+	f.state = "idle"
+	b.add_child(f)
+	b.foods.append(f)
+	# (In front: somewhere the camera really sees it, not behind a stem or a mound.)
+	if ahead > 0.0 and not o.visible_to_player(f.global_position, Onboarding.FOOD_SEE_M):
+		for cand in [[ahead, -1.5], [ahead, 1.5], [ahead - 1.5, 0.0], [ahead + 1.5, 0.0], [ahead - 1.5, -2.0], [ahead - 1.5, 2.0], [ahead + 2.5, -1.0], [ahead + 2.5, 1.0]]:
+			var at2: Vector3 = p.global_position + p.facing * float(cand[0]) + right * float(cand[1])
+			f.global_position = b.surface_point(b.up_at(at2), 0.7)
+			if o.visible_to_player(f.global_position, Onboarding.FOOD_SEE_M):
+				break
+	return f
+
+
+## Somewhere open on ball `bi` (its start), Gill facing along it, camera behind.
+func home(bi := 0) -> void:
+	var b := g.balls[bi]
+	var d := b.start_dir
+	u.place_at(bi, b.surface_point(d, 0.1), -MossBall.frame_at(d, 180.0).z)
+	await t.frames(2)
+	g.cam.snap_behind()
+	await u.wait_grounded()
+	g.cam.snap_behind()
+
+
+## The nearest live parasite to a ball's start (or null).
+func a_parasite(bi: int) -> Parasite:
+	var b := g.balls[bi]
+	var best: Parasite = null
+	for par in b.parasites:
+		if par.is_alive() and (best == null or par.global_position.distance_to(b.surface_point(b.start_dir)) < best.global_position.distance_to(b.surface_point(b.start_dir))):
+			best = par
+	return best
+
+
+## Gill `dist` m from `par`, facing it, camera behind him.
+func face(par: Parasite, dist := 6.0) -> void:
+	var b := par.ball
+	var pp := par.global_position
+	var up := b.up_at(pp)
+	var side := MossBall.frame_at(up, 0.0).z
+	var from := b.surface_point(b.up_at(pp + side * dist), 0.1)
+	u.place_at(b.index, from, pp - from)
+	p.invuln_t = 999.0
+	await t.frames(3)
+	g.cam.snap_behind()
+	await t.frames(2)
+
+
+func wait_until(cond: Callable, secs: float) -> bool:
+	for i in int(secs * 60.0):
+		if cond.call():
+			return true
+		await t.frames(1)
+	return cond.call()
+
+
+func kill(par: Parasite) -> void:
+	par.hit_cd = 0.0
+	par.hit(par.hp, par.global_position)
+
+
+static func img_md5(img: Image) -> String:
+	var hc := HashingContext.new()
+	hc.start(HashingContext.HASH_MD5)
+	hc.update(img.get_data())
+	return hc.finish().hex_encode()
+
+
+# --- Profile flags and migration ---------------------------------------------------------------------
+
+func progress() -> void:
+	var path := "user://onb_progress_test.json"
+	GillProgress.erase(path)
+	var gp := GillProgress.open(path)
+	t.check("onb_new_profile_nothing_known", not gp.onb_known and gp.onboarding.is_empty() and not gp.to_dict().has("onboarding"), str(gp.to_dict().keys()))
+	var set_new := gp.migrate_onboarding(false, false)
+	var reopened := GillProgress.open(path)
+	t.check("onb_brand_new_profile_starts_with_nothing_done", set_new.is_empty() and reopened.onb_known and reopened.onboarding.is_empty(), str(set_new))
+	# Each flag on its own, persisted at once, surviving a reopen; a second mark does nothing.
+	var ok := true
+	for f in Onboarding.FLAGS:
+		ok = ok and reopened.mark_onb(f) and not reopened.mark_onb(f)
+		var again := GillProgress.open(path)
+		ok = ok and again.onb_done(f)
+	t.check("onb_flags_independent_and_persisted", ok and GillProgress.open(path).onboarding.size() == 4, str(GillProgress.open(path).onboarding))
+	# A flag only in the backup (an interrupted write) is still known: the union of every copy.
+	GillProgress.erase(path)
+	var a := GillProgress.open(path)
+	a.migrate_onboarding(false, false)
+	a.mark_onb("starfish")
+	a.mark_onb("intro")   # (the write keeps the previous copy as .bak: starfish only)
+	var main := GillProgress._read(path)["data"] as Dictionary
+	(main["onboarding"] as Dictionary).erase("starfish")
+	var f2 := FileAccess.open(path, FileAccess.WRITE)
+	f2.store_string(JSON.stringify(main))
+	f2.close()
+	var bak := GillProgress._read(path + ".bak")["data"] as Dictionary
+	var merged := GillProgress.open(path)
+	t.check("onb_flags_merge_across_copies", merged.onb_done("starfish") and merged.onb_done("intro") and not (bak["onboarding"] as Dictionary).has("intro"),
+			"main %s + backup %s -> %s" % [main["onboarding"], bak["onboarding"], merged.onboarding])
+	# Unknown keys a later build wrote are kept, never counted.
+	merged.onboarding["future_lesson"] = true
+	merged.save()
+	t.check("onb_unknown_flags_kept", GillProgress.open(path).onboarding.has("future_lesson"), "")
+	# Migration rules.
+	var cases := [
+		[false, false, 0, 0, []],
+		[true, false, 0, 0, ["intro"]],
+		[true, true, 0, 0, ["intro", "feeding", "parasite"]],
+		[false, false, 2, 0, ["intro", "starfish"]],
+		[true, true, 3, 3, ["intro", "feeding", "parasite", "starfish"]],
+	]
+	var mig_ok := true
+	var why: Array[String] = []
+	for c in cases:
+		GillProgress.erase(path)
+		var gp2 := GillProgress.open(path)
+		var ids := StarfishTable.ids()
+		for i in int(c[2]):
+			gp2.collected[ids[i]] = {"t": 0, "v": "test"}
+		gp2.migrate_onboarding(c[0], c[1])
+		var got: Array[String] = []
+		for fl in Onboarding.FLAGS:
+			if gp2.onb_done(fl):
+				got.append(fl)
+		if got != Array(c[4], TYPE_STRING, "", null):
+			mig_ok = false
+			why.append("%s -> %s" % [str(c), str(got)])
+		# Once only: a profile that has the record is never migrated again.
+		if not gp2.migrate_onboarding(true, true).is_empty():
+			mig_ok = false
+			why.append("migrated twice")
+	t.check("onb_migration_rules", mig_ok, ", ".join(why))
+	GillProgress.erase(path)
+
+
+## The owner's phone save (2026-10-01): a run in progress at about 46% (184 of the catalog's entries,
+## 1:12:40 on the clock, not finished), Red Starfish 3/30, Skills 3/15, 0 to spend, format 1 merged
+## with its backup, from before onboarding. After the update: all four flags done, Continue shows no
+## intro and no lesson, the frond is not emptied, and nothing else in the run or profile changes.
+func owner_save() -> void:
+	var run_path := ProjectSettings.globalize_path("user://onb_owner_run.json")
+	var gill_path := ProjectSettings.globalize_path("user://onb_owner_gill.json")
+	RunSave.erase(run_path)
+	GillProgress.erase(gill_path)
+	# The run.
+	var rs := RunSave.open(run_path)
+	var e := rs.earned()
+	# (The vortices this much restoration has opened are earned with it, as in a real save.)
+	var vortices := ["vortex.b1-b2", "vortex.b2-b3", "vortex.b1-b4", "vortex.b2-b5", "vortex.b3-b6"]
+	var n := 0
+	for id in g.completion.order:
+		if n >= 184 - vortices.size():
+			break
+		if id == Completion.ENDING_ID or id.ends_with(".restored") or id.begins_with("vortex."):
+			continue
+		e[id] = 10.0 + n * 23.0
+		n += 1
+	for v in vortices:
+		e[v] = 10.0 + n * 23.0
+		n += 1
+	rs.run()["clock"] = {"state": "running", "run_s": 4360.0, "play_s": 4360.0, "finish_s": -1.0}
+	rs.run()["world"] = {"ball": 2, "checkpoint": "", "prompts_done": ["move", "jump", "burst", "swipe", "lunge", "camera"], "tut_framed": true,
+			"all_clear_shown": false, "stats": {}}
+	rs.save()
+	# The profile: three starfish, three one-starfish skills; written twice so there is a backup.
+	var gp := GillProgress.open(gill_path)
+	var ids := StarfishTable.ids()
+	for i in 3:
+		gp.collected[ids[i]] = {"t": 1759300000 + i, "v": "1.0.0"}
+	gp.save()
+	var bought := 0
+	for pass_ in 4:
+		for sid in SkillTree.ids():
+			if bought < 3 and not gp.owns(sid) and SkillTree.cost(sid) == 1 and SkillTree.missing(sid, gp.purchased).is_empty():
+				gp.purchased[sid] = {"cost": 1, "t": 1759300100 + bought, "n": bought + 1}
+				bought += 1
+	gp.save()
+	var pct := g.completion.percent(e)
+	var before_run := RunSave._read(run_path)["data"] as Dictionary
+	var before_gill := GillProgress._read(gill_path)["data"] as Dictionary
+	t.check("onb_owner_fixture", e.size() == 184 and gp.stars() == 3 and gp.skills() == 3 and gp.balance() == 0 and FileAccess.file_exists(gill_path + ".bak")
+			and not before_gill.has("onboarding"), "%d earned (%.2f%% of %d), stars %d, skills %d, balance %d" % [e.size(), pct, g.completion.size(), gp.stars(), gp.skills(), gp.balance()])
+	# The updated game opens it (a fresh process, as on the phone).
+	var res := _child("_phase_onb_owner", ["--run-save=" + run_path, "--gill-save=" + gill_path])
+	t.check("onb_owner_child_ran", res == 0, "exit %d" % res)
+	var after_gill := GillProgress._read(gill_path)["data"] as Dictionary
+	var after_run := RunSave._read(run_path)["data"] as Dictionary
+	var flags: Dictionary = after_gill.get("onboarding", {})
+	var all4 := true
+	for f in Onboarding.FLAGS:
+		all4 = all4 and bool(flags.get(f, false))
+	t.check("onb_owner_save_gets_all_four_flags", all4, str(flags))
+	t.check("onb_owner_profile_unchanged_but_flags", JSON.stringify(after_gill["collected"]) == JSON.stringify(before_gill["collected"])
+			and JSON.stringify(after_gill["purchased"]) == JSON.stringify(before_gill["purchased"]) and GillProgress.open(gill_path).balance() == 0,
+			"collected %d, purchased %d" % [(after_gill["collected"] as Dictionary).size(), (after_gill["purchased"] as Dictionary).size()])
+	var br: Dictionary = (before_run["run"] as Dictionary)
+	var ar: Dictionary = (after_run["run"] as Dictionary)
+	var clock_ok := float(ar["clock"]["run_s"]) >= 4360.0 and float(ar["clock"]["run_s"]) < 4360.0 + 30.0 and str(ar["clock"]["state"]) == "running"
+	t.check("onb_owner_run_unchanged", JSON.stringify(ar["earned"]) == JSON.stringify(br["earned"]) and ar["id"] == br["id"]
+			and JSON.stringify(after_run["records"]) == JSON.stringify(before_run["records"]) and clock_ok,
+			"earned %d -> %d, run time %.1f -> %.1f (the continued play only)" % [(br["earned"] as Dictionary).size(), (ar["earned"] as Dictionary).size(),
+			float(br["clock"]["run_s"]), float(ar["clock"]["run_s"])])
+	RunSave.erase(run_path)
+	GillProgress.erase(gill_path)
+
+
+## In the child: the owner's save as the updated game opens it, then Continue.
+func phase_owner() -> void:
+	var gp := g.gill
+	var all4 := true
+	for f in Onboarding.FLAGS:
+		all4 = all4 and gp.onb_done(f)
+	t.check("owner_flags_after_migration", all4, str(gp.onboarding))
+	t.check("owner_profile_intact", gp.stars() == 3 and gp.skills() == 3 and gp.balance() == 0, "%d %d %d" % [gp.stars(), gp.skills(), gp.balance()])
+	var on_disk := RunSave._read(g.run_save.path)["data"]["run"]["earned"] as Dictionary
+	var extra: Array = g.run_save.earned().keys().filter(func(k) -> bool: return not on_disk.has(k))
+	t.check("owner_run_in_progress", g.has_run_in_progress() and on_disk.size() == 184, "%d earned on disk; in memory also %s" % [on_disk.size(), extra])
+	# Continue from the title, as on the phone.
+	g._enter_title()
+	await t.frames(10)
+	t.check("owner_title_offers_continue", g.title._play.text == "Continue", g.title._play.text)
+	g.title._on_play()
+	await t.frames(5)
+	t.check("owner_continue_no_intro", o.ui.card_kind() == "" and g.state == "play" and p.controls_enabled, "card '%s', state %s" % [o.ui.card_kind(), g.state])
+	t.check("owner_frond_not_emptied", p.health == p.max_health, "%d/%d" % [p.health, p.max_health])
+	# Play on for a while, with food and parasites about: no lesson, no objective, no card.
+	var f := jelly(3.0)
+	var seen := false
+	for i in 240:
+		await t.frames(1)
+		seen = seen or o.objective != "" or o.stage != "" or o.ui.card_kind() != ""
+	p.health = p.max_health - 1
+	g._eat(p, f)
+	await t.frames(30)
+	seen = seen or o.stage != "" or g.cinematic == "lesson" or o.ui.card_kind() != ""
+	t.check("owner_no_lesson_on_continue", not seen, "objective '%s' stage '%s'" % [o.objective, o.stage])
+	g.save_run()
+
+
+func _child(phase: String, extra: Array) -> int:
+	var base: Array = ["--headless", "--fixed-fps", "60", "--max-fps", "0", "--path", ProjectSettings.globalize_path("res://")]
+	var out := []
+	var cmd: Array = base + ["--", "--test=unit", "--only=" + phase, "--out=" + ProjectSettings.globalize_path("user://onb_child_out")] + extra
+	var code := OS.execute(OS.get_executable_path(), cmd, out, true)
+	for line in str(out[0]).split("\n"):
+		if line.begins_with("[TEST] PASS") or line.begins_with("[TEST] FAIL"):
+			var parts := line.substr(7).split(" ", false, 2)
+			t.check("child/" + parts[1], parts[0] == "PASS", parts[2] if parts.size() > 2 else "")
+	if code != 0:
+		t.log_line("%s exited %d; output:\n%s" % [phase, code, str(out[0]).right(3000)])
+	return code
+
+
+# --- The intro ---------------------------------------------------------------------------------------
+
+func intro() -> void:
+	await reset([])
+	# Make this process's run look new (no clock, nothing earned), as Play with no saved run sees it.
+	var saved_clock := g.clock.to_dict()
+	var saved_earned: Dictionary = g.run_save.earned().duplicate()
+	g.run_save.earned().clear()
+	g.clock = RunClock.from_dict({"state": "not_started", "run_s": 0.0, "play_s": 0.0, "finish_s": -1.0})
+	g._enter_title()
+	await t.frames(10)
+	t.check("intro_title_offers_play", g.title._play.text == "Play", g.title._play.text)
+	g.title._on_play()
+	await t.frames(5)
+	var card := o.ui.panel()
+	var texts: Array[String] = []
+	for l in card.find_children("*", "Label", true, false):
+		texts.append((l as Label).text)
+	t.check("intro_shows_on_first_new_run", o.ui.card_kind() == "intro" and texts.has(Onboarding.INTRO_TITLE) and texts.has(Onboarding.INTRO_BODY[0])
+			and texts.has(Onboarding.INTRO_BODY[1]) and o.ui.button().text == "Begin", ", ".join(texts))
+	t.check("intro_holds_play_and_clock", g.state == "title" and not p.controls_enabled and g.clock.state == "not_started" and not g.title.visible,
+			"state %s, controls %s, clock %s" % [g.state, p.controls_enabled, g.clock.state])
+	await layout_checks("intro")
+	# Closing the app on the intro (no Begin): still to be seen.
+	t.check("intro_not_seen_until_begin", not GillProgress.open(g.gill.path).onb_done("intro"), "")
+	# One large button: Begin starts play.
+	var br := o.ui.button().get_global_rect()
+	t.check("intro_one_large_button", br.size.y >= 80.0 and br.size.x >= 240.0, str(br.size))
+	await t.frames(30)
+	o.ui.tap()
+	await t.frames(5)
+	t.check("intro_begin_starts_play", g.state == "play" and p.controls_enabled and g.clock.state == "running" and o.ui.card_kind() == "",
+			"state %s, clock %s" % [g.state, g.clock.state])
+	t.check("intro_seen_persisted", GillProgress.open(g.gill.path).onb_done("intro"), "")
+	# First new run only (owner ruling): a later new run, lessons still to come, shows no intro.
+	g.run_save.earned().clear()
+	g.clock = RunClock.from_dict({"state": "not_started", "run_s": 0.0, "play_s": 0.0, "finish_s": -1.0})
+	t.check("intro_only_first_new_run", not o.intro_due(false) and not o.done("feeding") and not o.done("parasite"), "")
+	g._enter_title()
+	await t.frames(5)
+	g.title._on_play()
+	await t.frames(5)
+	t.check("intro_later_new_run_straight_to_play", o.ui.card_kind() == "" and g.state == "play", "card '%s'" % o.ui.card_kind())
+	# Continue never shows it, even on a profile that has not seen it.
+	await reset([])
+	t.check("intro_never_on_continue", not o.intro_due(true) and o.intro_due(false), "")
+	# Restore this process's run.
+	for k in saved_earned:
+		g.run_save.earned()[k] = saved_earned[k]
+	g.clock = RunClock.from_dict(saved_clock)
+	await all_done()
+
+
+## The card's layout at three landscape shapes (with a phone's cut-out on the left).
+func layout_checks(tag: String) -> void:
+	var bad: Array[String] = []
+	var vp := g.get_viewport().get_visible_rect().size
+	for sz in [Vector2(1280, 720), Vector2(1600, 720), Vector2(2000, 900)]:
+		# (The design is scaled to the real window; an area of the same shape inside it.)
+		var k := minf(vp.x / sz.x, vp.y / sz.y)
+		var area := Rect2(Vector2(90, 16) * k, (sz - Vector2(90 + 24, 32)) * k)
+		o.ui.layout_in(area, clampf(sz.y / 720.0, 0.75, 1.5) * k)
+		await t.frames(2)
+		o.ui.layout_in(area, clampf(sz.y / 720.0, 0.75, 1.5) * k)
+		await t.frames(1)
+		var why: String = u._fit_problems(o.ui.panel(), area, 72.0 * k)
+		if why != "" or not area.encloses(o.ui.panel().get_global_rect()):
+			bad.append("%s: %s (panel %s, area %s)" % [sz, why, o.ui.panel().get_global_rect(), area])
+	o.ui._layout()
+	await t.frames(2)
+	t.check("onb_card_fits_%s" % tag, bad.is_empty(), "; ".join(bad))
+
+
+# --- Lesson 1: feeding ---------------------------------------------------------------------------
+
+func feeding() -> void:
+	await reset(["intro", "parasite", "starfish"])
+	await home(0)
+	p.invuln_t = 999.0
+	# A new player's first run: one unlocked frond starts empty (never a locked one).
+	o.on_play_started(false)
+	var mx := p.max_health
+	t.check("feed_first_run_one_frond_empty", p.health == mx - 1 and p.model.health == mx - 1 and o.run_frond and g.gill.onb_done("first_frond"),
+			"%d/%d" % [p.health, mx])
+	# A later run never removes health.
+	p.restore_full()
+	o.run_frond = false
+	o.on_play_started(false)
+	t.check("feed_later_run_no_empty_frond", p.health == mx, "%d/%d" % [p.health, mx])
+	p.health = mx - 1
+	p.model.set_health(p.health, mx, false)
+	# Not visible (behind him): no objective.
+	var behind := jelly(-4.0)
+	await t.frames(30)
+	t.check("feed_waits_until_visible", o.objective == "" and o.food_target == null, "objective '%s'" % o.objective)
+	behind.queue_free()
+	p.ball.foods.erase(behind)
+	var f := jelly(5.0)
+	var on := await wait_until(func() -> bool: return o.objective == "feeding", 2.0)
+	if not on:
+		var cam := g.cam
+		var sp := cam.unproject_position(f.global_position)
+		t.log_line("feed dbg: ok %s state %s catch %s ball %s dist %.2f frustum %s screen %s vis %s alt %.2f playing %s hp %d/%d" % [o._food_ok(f), f.state, f.is_catchable(), f.ball == p.ball,
+				f.global_position.distance_to(p.global_position), cam.is_position_in_frustum(f.global_position), sp, o.visible_to_player(f.global_position, 11.0),
+				f.ball.altitude(f.global_position), o._playing(), p.health, p.max_health])
+		var q := PhysicsRayQueryParameters3D.create(cam.global_position, f.global_position, 1 | 2)
+		q.exclude = [p.get_rid()]
+		var hit := cam.get_world_3d().direct_space_state.intersect_ray(q)
+		t.log_line("feed dbg2: vp %s hit %s" % [cam.get_viewport().get_visible_rect().size, str(hit.get("collider")) + " " + str(hit.get("position", Vector3.ZERO).distance_to(f.global_position)) if not hit.is_empty() else "none"])
+	t.check("feed_objective_when_visible", on and o.food_target == f and o.ui.objective_text() == Onboarding.OBJ_FEED and g.hud.prompts.has("lunge")
+			and f.anchor != Vector3.INF, "objective '%s', text '%s'" % [o.objective, o.ui.objective_text()])
+	t.check("feed_gill_never_frozen", p.controls_enabled and g.cinematic == "" and not o.ui.waiting_for_tap(), "")
+	# Repeated misses: lunging the wrong way three times; he can still move and the target stays.
+	for i in 3:
+		p.facing = -p.facing
+		await u.press("lunge")
+		await t.seconds(0.6)
+	t.check("feed_repeated_misses", o.objective == "feeding" and is_instance_valid(f) and o.food_target == f and p.controls_enabled, "")
+	# The target cannot be lost: pushed far off, it comes back toward where it was seen.
+	var anchor := f.anchor
+	f.global_position += MossBall.frame_at(p.up, 0.0).x * 7.0
+	f.vel = Vector3.ZERO
+	await t.seconds(5.0)
+	t.check("feed_target_recovers", is_instance_valid(f) and f.global_position.distance_to(anchor) < 3.0 and o.food_target == f,
+			"%.2f m from where it was seen" % f.global_position.distance_to(anchor))
+	# Damage during the objective: it stays.
+	p.invuln_t = 0.0
+	p.take_damage(1, p.global_position + p.facing)
+	await t.seconds(0.5)
+	t.check("feed_survives_damage", o.objective == "feeding", "hp %d" % p.health)
+	p.health = mx - 1
+	p.model.set_health(p.health, mx, false)
+	# A Mote catch is not food: no bypass.
+	t.check("feed_no_bypass_without_eating", not o.done("feeding"), "")
+	# Eat it (what a lunge's contact does): the healing is the real one, at once.
+	u.place_at(p.ball.index, p.ball.surface_point(p.ball.up_at(f.global_position - p.facing * 0.8), 0.1), p.facing)
+	var before := p.health
+	g._eat(p, f)
+	t.check("feed_heal_applied_normally", p.health == before + 1 and o.done("feeding") and GillProgress.open(g.gill.path).onb_done("feeding"),
+			"%d -> %d" % [before, p.health])
+	t.check("feed_frond_restore_deferred", p.model.health == before and g.cinematic == "lesson" and not p.controls_enabled and o.stage == "feed",
+			"model %d, cinematic '%s'" % [p.model.health, g.cinematic])
+	await t.seconds(Onboarding.CLOSE_S + 0.3)
+	var head := p.head_position()
+	t.check("feed_camera_close_on_fronds", g.cam.global_position.distance_to(head) < 3.0 and g.cam.is_position_in_frustum(head),
+			"camera %.2f m from his head" % g.cam.global_position.distance_to(head))
+	t.check("feed_frond_restores_visibly", p.model.health == p.health and p.model.frond_restore_progress() < 1.0, "progress %.2f" % p.model.frond_restore_progress())
+	var carded := await wait_until(func() -> bool: return o.ui.waiting_for_tap(), 6.0)
+	var texts: Array[String] = []
+	for l in o.ui.panel().find_children("*", "Label", true, false):
+		texts.append((l as Label).text)
+	t.check("feed_card_after_restore", carded and texts.has(Onboarding.FEED_TITLE) and o.ui.button().text == "Got it" and p.model.frond_restore_progress() >= 1.0,
+			", ".join(texts))
+	await layout_checks("feeding")
+	await no_input_leak()
+	o.ui.tap()
+	await t.frames(3)
+	t.check("feed_returns_control", o.stage == "" and g.cinematic == "" and p.controls_enabled and not g.cam.cinematic and o.ui.card_kind() == "", "")
+	# Once only.
+	p.health = mx - 1
+	var f2 := jelly(1.0)
+	await t.frames(20)
+	g._eat(p, f2)
+	await t.frames(5)
+	t.check("feed_once_only", o.stage == "" and g.cinematic == "" and o.objective == "", "stage '%s'" % o.stage)
+	await all_done()
+
+
+## While a card is up, a touch on the HUD's buttons does nothing in the game.
+func no_input_leak() -> void:
+	var b: Dictionary = g.hud.button_info()["jump"]
+	var ev := InputEventScreenTouch.new()
+	ev.index = 3
+	ev.position = b["c"]
+	ev.pressed = true
+	Input.parse_input_event(ev)
+	await t.frames(2)
+	var leaked := Input.is_action_pressed("jump")
+	ev = ev.duplicate()
+	ev.pressed = false
+	Input.parse_input_event(ev)
+	await t.frames(2)
+	t.check("onb_card_no_input_leak", not leaked and o.ui.waiting_for_tap(), "")
+
+
+# --- Lesson 2: the first parasite ------------------------------------------------------------------
+
+func parasite() -> void:
+	await reset(["intro", "feeding", "starfish"])
+	var par := a_parasite(0)
+	if par == null:
+		par = a_parasite(1)
+	if par == null:
+		t.check("parasite_lesson_has_a_parasite", false, "none alive")
+		return
+	await face(par, 6.0)
+	var on := await wait_until(func() -> bool: return o.objective == "parasite", 2.0)
+	t.check("parasite_objective_when_visible", on and o.parasite_target == par and o.ui.objective_text() == Onboarding.OBJ_PARASITE and g.hud.prompts.has("swipe")
+			and o._marker_pos() != Vector3.INF, "objective '%s'" % o.objective)
+	t.check("parasite_gill_never_frozen", p.controls_enabled and g.cinematic == "", "")
+	# The tutorial's own swipe prompt does not show as well.
+	t.check("parasite_no_duplicate_prompt", not g.prompts_active.has("swipe"), str(g.prompts_active))
+	var b := par.ball
+	var r0 := b.restoration
+	var done0 := b.events_done
+	kill(par)
+	t.check("parasite_kill_applied_at_once", not par.is_alive() and b.events_done == done0 + 1 and b.restoration > r0 and o.done("parasite")
+			and GillProgress.open(g.gill.path).onb_done("parasite"), "%.3f -> %.3f" % [r0, b.restoration])
+	t.check("parasite_staged", o.stage == "kill" and b.staging() and g.cinematic == "lesson" and not p.controls_enabled, "stage '%s'" % o.stage)
+	var center: Vector3 = o._kill["center"]
+	var outer: float = o._kill["outer"]
+	# Mid-way: the front has passed the middle but not the edge.
+	await t.seconds(Onboarding.RISE_S + Onboarding.REVEAL_S * 0.4)
+	# Along eight spokes from the kill: inside the front drawn as it truly is, ahead of it still as before.
+	var inside_ok := true
+	var held := 0
+	var fr := MossBall.frame_at(center, 0.0)
+	for k in 8:
+		var axis := fr.x.rotated(center, TAU * k / 8.0)
+		for j in 12:
+			var a := outer * (j + 0.5) / 12.0
+			var dpt := center.rotated(axis, a)
+			if a < b.stage_reveal - 0.05:
+				inside_ok = inside_ok and absf(b.shown_health_at(dpt) - b.health_at(dpt)) < 0.01
+			elif a > b.stage_reveal and b.shown_health_at(dpt) < b.health_at(dpt) - 0.05:
+				held += 1
+	var mid_ok := b.stage_reveal > 0.05 and b.stage_reveal < outer and inside_ok and held > 0
+	t.check("parasite_restoration_spreads", mid_ok, "front %.3f of %.3f rad; inside true %s; %d points ahead still drawn as before" % [b.stage_reveal, outer, inside_ok, held])
+	var gill_seen := g.cam.is_position_in_frustum(p.body_center())
+	var up := b.up_at(p.global_position)
+	var raised := (g.cam.global_position - p.global_position).dot(up) > 4.0
+	t.check("parasite_camera_raised_keeps_gill", gill_seen and raised and g.cam.is_position_in_frustum(b.surface_point(center)),
+			"camera %.1f m above him" % (g.cam.global_position - p.global_position).dot(up))
+	# Damage cannot reach him while the moment has his controls.
+	var hp := p.health
+	p.invuln_t = 0.0
+	p.take_damage(1, p.global_position + p.facing)
+	t.check("parasite_stage_no_damage", p.health == hp, "")
+	var carded := await wait_until(func() -> bool: return o.ui.waiting_for_tap(), Onboarding.REVEAL_S + 3.0)
+	var texts: Array[String] = []
+	for l in o.ui.panel().find_children("*", "Label", true, false):
+		texts.append((l as Label).text)
+	t.check("parasite_card_after_reveal", carded and texts.has(Onboarding.KILL_TITLE) and texts.has(Onboarding.KILL_BODY[0]) and not b.staging(), ", ".join(texts))
+	await layout_checks("parasite")
+	o.ui.tap()
+	await t.frames(2)
+	t.check("parasite_camera_returns", o.stage == "" and g.cinematic == "" and p.controls_enabled and not g.cam.cinematic, "")
+	await t.seconds(1.2)
+	t.check("parasite_camera_back_smoothly", g.cam._cine_weight < 0.05, "%.2f" % g.cam._cine_weight)
+	# Once only: the next kill plays at normal speed.
+	var par2 := a_parasite(b.index)
+	if par2 != null:
+		await face(par2, 5.0)
+		kill(par2)
+		await t.frames(3)
+		t.check("parasite_once_only", o.stage == "" and not b.staging() and g.cinematic != "lesson", "stage '%s'" % o.stage)
+	await all_done()
+
+
+# --- Lesson 3: the first Red Starfish ----------------------------------------------------------------
+
+func starfish() -> void:
+	await reset(["intro", "feeding", "parasite"])
+	await home(0)
+	var s: Starfish = null
+	for st in g.starfish.stars:
+		if not st.collected:
+			s = st
+			break
+	if s == null:
+		t.check("starfish_card_has_a_starfish", false, "none left")
+		return
+	var cam_before := g.cam.cinematic
+	g.starfish.collect(s)
+	await t.frames(3)
+	var texts: Array[String] = []
+	for l in o.ui.panel().find_children("*", "Label", true, false):
+		texts.append((l as Label).text)
+	var want := [Onboarding.STAR_TITLE] + Onboarding.STAR_BODY
+	var all_text := true
+	for w in want:
+		all_text = all_text and texts.has(w)
+	t.check("starfish_card_copy", o.ui.waiting_for_tap() and all_text and o.ui.button().text == "Got it", ", ".join(texts))
+	t.check("starfish_card_no_camera_staging", not g.cam.cinematic and not cam_before and g.cinematic == "lesson", "")
+	t.check("starfish_flag_persisted", GillProgress.open(g.gill.path).onb_done("starfish"), "")
+	await layout_checks("starfish")
+	o.ui.tap()
+	await t.frames(2)
+	t.check("starfish_card_dismissed", o.ui.card_kind() == "" and g.cinematic == "" and p.controls_enabled, "")
+	var s2: Starfish = null
+	for st in g.starfish.stars:
+		if not st.collected and st != s:
+			s2 = st
+			break
+	if s2 != null:
+		g.starfish.collect(s2)
+		await t.frames(3)
+		t.check("starfish_once_only", o.ui.card_kind() == "" and g.cinematic == "", "")
+	await all_done()
+
+
+# --- Soft-lock exits ---------------------------------------------------------------------------------
+
+func softlock() -> void:
+	# Pause during the staged restoration: ends cleanly, moss drawn as it truly is, control back.
+	await _start_kill_stage()
+	if o.stage == "kill":
+		var b: MossBall = o._kill["ball"]
+		await t.seconds(1.5)
+		g.pause_menu.open()
+		await t.frames(3)
+		var ended := o.stage == "" and not b.staging() and g.cinematic == "" and o.last_end == "pause"
+		g.pause_menu.close()
+		await t.frames(3)
+		t.check("softlock_pause_ends_stage", ended and p.controls_enabled and o.done("parasite"), "last end '%s'" % o.last_end)
+	# The app backgrounded during a card.
+	await _start_star_card()
+	if o.ui.waiting_for_tap():
+		g._notification(Node.NOTIFICATION_APPLICATION_FOCUS_OUT)
+		await t.frames(2)
+		g._notification(Node.NOTIFICATION_APPLICATION_FOCUS_IN)
+		await t.frames(2)
+		t.check("softlock_background_ends_card", o.stage == "" and o.ui.card_kind() == "" and p.controls_enabled and o.last_end == "background", o.last_end)
+	# The hard time cap: a card nobody answers is given back.
+	await _start_star_card()
+	if o.stage != "":
+		o.stage_t = Onboarding.STAGE_CAP - 0.1
+		await t.seconds(0.3)
+		t.check("softlock_time_cap", o.stage == "" and o.ui.card_kind() == "" and p.controls_enabled and o.last_end == "cap", o.last_end)
+	# Leaving play (to the title) mid-moment.
+	await _start_feed_stage()
+	if o.stage != "":
+		g.state = "title"
+		await t.frames(3)
+		var ok := o.stage == "" and p.model.health == p.health
+		g.state = "play"
+		g._end_cinematic()
+		t.check("softlock_leaving_play_ends_stage", ok and o.done("feeding"), o.last_end)
+	# Interrupted before its message: the lesson is done and never replayed.
+	await t.frames(2)
+	t.check("softlock_interrupted_is_done", o.done("feeding") and o.done("parasite") and o.done("starfish"), "")
+	# Death during the interactive objective: the objective waits, then returns.
+	await reset(["intro", "feeding", "starfish"])
+	var par := a_parasite(0)
+	if par == null:
+		par = a_parasite(1)
+	if par != null:
+		await face(par, 6.0)
+		await wait_until(func() -> bool: return o.objective == "parasite", 2.0)
+		p.invuln_t = 0.0
+		p.health = 1
+		p.take_damage(1, par.global_position)
+		var hidden := await wait_until(func() -> bool: return o.objective == "", 2.0)
+		var back := await wait_until(func() -> bool: return g.cinematic == "" and p.state == "normal", 8.0)
+		t.check("softlock_death_during_objective", hidden and back and p.controls_enabled and not o.done("parasite"), "cinematic '%s'" % g.cinematic)
+	# Ball change during the feeding objective: the target is let go (it can be found again).
+	await reset(["intro", "parasite", "starfish"])
+	await home(0)
+	p.health = p.max_health - 1
+	var f := jelly(5.0)
+	await wait_until(func() -> bool: return o.objective == "feeding", 2.0)
+	await home(1)
+	await t.seconds(0.5)
+	t.check("softlock_ball_change_releases_target", o.objective != "feeding" or o.food_target != f, "objective '%s'" % o.objective)
+	t.check("softlock_target_released", is_instance_valid(f) and f.anchor == Vector3.INF, "")
+	# Normal repopulation never removes the target: the field refills around it.
+	await all_done()
+
+
+func _start_kill_stage() -> void:
+	await reset(["intro", "feeding", "starfish"])
+	var par := a_parasite(0)
+	if par == null:
+		par = a_parasite(1)
+	if par == null:
+		return
+	await face(par, 5.0)
+	kill(par)
+	await t.frames(2)
+
+
+func _start_star_card() -> void:
+	await reset(["intro", "feeding", "parasite"])
+	o._begin("star", "starfish", false)
+	o._card(Onboarding.STAR_TITLE, Onboarding.STAR_BODY)
+	o._mark("starfish")
+	await t.frames(2)
+
+
+func _start_feed_stage() -> void:
+	await reset(["intro", "parasite", "starfish"])
+	await home(0)
+	p.health = p.max_health - 1
+	var f := jelly(1.0)
+	await t.frames(5)
+	g._eat(p, f)
+	await t.frames(2)
+
+
+# --- Save / load and close / reopen mid-lesson (two processes) -----------------------------------------
+
+func relaunch() -> void:
+	var run_path := ProjectSettings.globalize_path("user://onb_relaunch_run.json")
+	var gill_path := ProjectSettings.globalize_path("user://onb_relaunch_gill.json")
+	RunSave.erase(run_path)
+	GillProgress.erase(gill_path)
+	var a := _child("_phase_onb_write", ["--run-save=" + run_path, "--gill-save=" + gill_path, "--onboarding=fresh"])
+	var b := _child("_phase_onb_read", ["--run-save=" + run_path, "--gill-save=" + gill_path])
+	t.check("onb_relaunch_children_ran", a == 0 and b == 0, "%d %d" % [a, b])
+	RunSave.erase(run_path)
+	GillProgress.erase(gill_path)
+
+
+## First launch: a new player's first run. The feeding objective is up; then the first parasite
+## dies and, mid-way through its staged restoration, the app is closed (the run saved as quitting does).
+func phase_write() -> void:
+	o._mark("starfish")   # (No starfish card in the way of what this phase checks.)
+	t.check("write_new_player", not o.done("feeding") and not o.done("parasite") and o.run_frond and p.health == p.max_health - 1,
+			"hp %d/%d" % [p.health, p.max_health])
+	await home(0)
+	p.invuln_t = 999.0
+	var f := jelly(5.0)
+	var on := await wait_until(func() -> bool: return o.objective == "feeding", 2.0)
+	t.check("write_feeding_objective_up", on, "")
+	var par := g.balls[0].parasites[0] as Parasite
+	await face(par, 5.0)
+	kill(par)
+	await t.seconds(2.0)
+	t.check("write_closed_mid_stage", o.stage == "kill" and g.balls[0].staging(), "stage '%s'" % o.stage)
+	g.save_run()
+
+
+## Second launch: Continue. The interrupted parasite lesson is done and not replayed; its kill and
+## restoration are in the run; the feeding lesson is still to come, the frond still empty for it.
+func phase_read() -> void:
+	t.check("read_parasite_done_not_replayed", o.done("parasite") and o.stage == "" and not g.balls[0].staging(), "")
+	t.check("read_kill_kept", not (g.balls[0].parasites[0] as Parasite).is_alive() and g.run_save.earned().has(g.balls[0].parasites[0].get_meta("completion_id", "")), "")
+	t.check("read_feeding_still_pending", not o.done("feeding") and o.run_frond and p.health == p.max_health - 1, "hp %d/%d" % [p.health, p.max_health])
+	g._enter_title()
+	await t.frames(5)
+	g.title._on_play()
+	await t.frames(5)
+	t.check("read_continue_no_intro", o.ui.card_kind() == "" and g.state == "play", "")
+	await home(0)
+	p.invuln_t = 999.0
+	var f := jelly(5.0)
+	var on := await wait_until(func() -> bool: return o.objective == "feeding", 2.0)
+	t.check("read_feeding_objective_rearms", on and o.food_target == f, "")
+	g._eat(p, f)
+	t.check("read_feeding_lesson_plays", o.stage == "feed" and o.done("feeding"), o.stage)
+
+
+# --- Restoration equality (two processes: staged and not) --------------------------------------------
+
+func restoration_equal() -> void:
+	var dumps := []
+	for mode in ["fresh", "done"]:
+		var path := ProjectSettings.globalize_path("user://onb_kill_%s.json" % mode)
+		if FileAccess.file_exists(path):
+			DirAccess.remove_absolute(path)
+		var code := _child("_phase_onb_kill", ["--onboarding=" + mode, "--dump=" + path])
+		var d: Variant = JSON.parse_string(FileAccess.get_file_as_string(path)) if FileAccess.file_exists(path) else null
+		dumps.append(d if d is Dictionary else {})
+		t.check("onb_kill_child_%s" % mode, code == 0 and d is Dictionary, "exit %d" % code)
+	if dumps[0].is_empty() or dumps[1].is_empty():
+		return
+	var s: Dictionary = dumps[0]
+	var n: Dictionary = dumps[1]
+	t.check("onb_kill_staged_vs_not", bool(s["staged"]) and not bool(n["staged"]), "staged %s / %s" % [s["staged"], n["staged"]])
+	var diff: Array[String] = []
+	for k in s:
+		if k == "staged" or k == "shown":
+			continue
+		if JSON.stringify(s[k]) != JSON.stringify(n.get(k)):
+			diff.append(k)
+	t.check("onb_kill_restoration_identical", diff.is_empty() and s.size() == n.size(),
+			"differs: %s; restoration %s, completion %s, map %s" % [diff, s["after"]["restoration"], s["after"]["completion"], str(s["settled"]["map"]).left(8)])
+	t.check("onb_kill_presentation_differed", float(s["shown"]) < float(n["shown"]) - 0.05,
+			"mean drawn health round the kill 1 s in: staged %.2f, normal %.2f" % [float(s["shown"]), float(n["shown"])])
+
+
+## In the child: the tutorial's parasite killed the same way at the same moment; the true state
+## right after the kill and once everything has settled, written to --dump.
+func phase_kill() -> void:
+	o._mark("starfish")   # (No starfish card in the way: only the kill differs between the two.)
+	p.restore_full()
+	var b := g.balls[0]
+	var par := b.parasites[0] as Parasite
+	await face(par, 5.0)
+	await t.frames(30)
+	var pos := par.global_position
+	kill(par)
+	var out := {"staged": b.staging()}
+	out["after"] = _state(b)
+	# The edge of the restored area as drawn one second in (the presentation, which may differ).
+	await t.seconds(1.0)
+	var up := b.up_at(pos)
+	# The mean drawn health over the area round the kill (eight spokes out to 16 degrees).
+	var sum := 0.0
+	var tru := 0.0
+	var fr := MossBall.frame_at(up, 0.0)
+	for k in 8:
+		var axis := fr.x.rotated(up, TAU * k / 8.0)
+		for j in 8:
+			var dpt := up.rotated(axis, deg_to_rad(2.0 * (j + 1)))
+			sum += b.shown_health_at(dpt)
+			tru += b.health_at(dpt)
+	out["shown"] = sum / 64.0
+	t.check("kill_probe", true, "staging %s, front %.4f of %.4f rad; mean drawn %.3f, true %.3f" % [b.staging(), b.stage_reveal, b.stage_outer, sum / 64.0, tru / 64.0])
+	await t.seconds(14.0)
+	if o.ui.waiting_for_tap():
+		o.ui.tap()
+	await t.seconds(1.0)
+	out["settled"] = _state(b)
+	var f := FileAccess.open(str(Settings.test_args.get("dump", "user://onb_kill.json")), FileAccess.WRITE)
+	f.store_string(JSON.stringify(out))
+	f.close()
+	t.check("kill_dumped", true, "staged %s" % out["staged"])
+
+
+func _state(b: MossBall) -> Dictionary:
+	var heals := []
+	for i in b.heals.size():
+		heals.append([snappedf(b.heals[i].x, 1e-5), snappedf(b.heals[i].y, 1e-5), snappedf(b.heals[i].z, 1e-5), snappedf(b.heal_targets[i], 1e-5), snappedf(b.heal_speed[i], 1e-5)])
+	var zones := {}
+	for z in b.zones:
+		zones[z] = [b.zones[z]["done"], b.zones[z]["total"], b.zones[z]["completed"]]
+	var earned: Array = g.run_save.earned().keys()
+	earned.sort()
+	return {"restoration": snappedf(b.restoration, 1e-6), "events_done": b.events_done, "completed": b.completed, "zones": zones,
+			"heals_growing": heals.size(), "earned": earned, "completion": snappedf(g.completion_percent(), 1e-6),
+			"map": img_md5(b.health_img), "kills": g.stats["kills"]}

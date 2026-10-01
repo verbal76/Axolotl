@@ -575,6 +575,8 @@ func run(runner) -> void:
 		g.title._on_skills()
 		await t.seconds(0.6)
 		await t.shot("skilltitle_page")
+	if only == "onboarding":
+		await _onboarding_shots(g)
 	if only == "skilltree":
 		await _skilltree_shots(g)
 	if only == "starfish":
@@ -2722,3 +2724,112 @@ func _organic_shots(g: Game) -> void:
 			await t.seconds(1.0)
 			await t.shot("org_%s_%02d" % [name_, i])
 	_open(g)
+
+
+# --- Onboarding (docs/ONBOARDING.md) ------------------------------------------------------------
+
+func _onb_flags(g: Game, done: Array) -> void:
+	g.gill.onboarding = {}
+	for f in done:
+		g.gill.onboarding[f] = true
+	g.gill.onb_known = true
+
+
+## A drifter `ahead` m in front of Gill that the camera really sees.
+func _onb_jelly(g: Game, ahead: float) -> Food:
+	var p := g.player
+	var b := p.ball
+	var right := p.facing.cross(p.up).normalized()
+	var f := Food.new()
+	var d := b.up_at(p.global_position + p.facing * ahead)
+	f.setup(b, Food.Type.DRIFTER, b.surface_point(d, 0.7), d, 25.0)
+	f.state = "idle"
+	b.add_child(f)
+	b.foods.append(f)
+	for cand in [[ahead, 0.0], [ahead, -1.5], [ahead, 1.5], [ahead - 1.0, 0.0], [ahead - 1.0, -2.0], [ahead - 1.0, 2.0], [ahead - 2.0, -1.0], [ahead - 2.0, 1.0]]:
+		f.global_position = b.surface_point(b.up_at(p.global_position + p.facing * float(cand[0]) + right * float(cand[1])), 0.7)
+		if g.onboarding.visible_to_player(f.global_position, Onboarding.FOOD_SEE_M):
+			break
+	return f
+
+
+## Renders of the intro screen, the objectives, each card, and the parasite lesson's staged
+## restoration (start, middle, end) for review.
+func _onboarding_shots(g: Game) -> void:
+	var o := g.onboarding
+	var p := g.player
+	p.use_bot_input = true
+	p.invuln_t = 99999.0
+	# The intro over the title, as a first new run starts.
+	_onb_flags(g, [])
+	g.run_save.earned().clear()
+	g.clock = RunClock.from_dict({"state": "not_started"})
+	g._enter_title()
+	await t.seconds(1.5)
+	g.title._on_play()
+	await t.seconds(0.8)
+	await t.shot("onb_intro")
+	o.ui.tap()
+	await t.seconds(0.5)
+	# Feeding: the objective, then the close camera on the frond, then the card.
+	_onb_flags(g, ["intro", "parasite", "starfish"])
+	var b := g.balls[0]
+	var d := b.start_dir
+	p.place(b, b.surface_point(d, 0.1), -MossBall.frame_at(d, 180.0).z)
+	g.cam.snap_behind()
+	await t.seconds(1.0)
+	g.cam.snap_behind()
+	o.run_frond = false
+	o.on_play_started(false)
+	p.health = p.max_health - 1
+	p.model.set_health(p.health, p.max_health, false)
+	var f := _onb_jelly(g, 4.0)
+	await t.seconds(1.0)
+	t.log_line("feeding objective '%s' (%s), target seen %s" % [o.objective, o.ui.objective_text(), o.visible_to_player(f.global_position, Onboarding.FOOD_SEE_M)])
+	await t.shot("onb_feed_objective")
+	g._eat(p, f)
+	await t.seconds(Onboarding.CLOSE_S - 0.05)
+	await t.shot("onb_feed_close_before")
+	await t.seconds(Onboarding.FROND_S * 0.5)
+	await t.shot("onb_feed_close_restoring")
+	await t.seconds(Onboarding.FROND_S * 0.5 + 0.7)
+	await t.shot("onb_feed_card")
+	o.ui.tap()
+	await t.seconds(1.5)
+	# The first parasite: the objective, then the staged restoration, then the card.
+	_onb_flags(g, ["intro", "feeding", "starfish"])
+	var par: Parasite = b.parasites[0]
+	var pp := par.global_position
+	var up := b.up_at(pp)
+	var from := b.surface_point(b.up_at(pp + MossBall.frame_at(up, 0.0).z * 5.5), 0.1)
+	p.place(b, from, pp - from)
+	g.cam.snap_behind()
+	await t.seconds(0.6)
+	g.cam.snap_behind()
+	await t.seconds(0.6)
+	await t.shot("onb_parasite_objective")
+	par.hit_cd = 0.0
+	par.hit(par.hp, par.global_position)
+	await t.seconds(Onboarding.RISE_S + 0.15)
+	await t.shot("onb_kill_1_start")
+	await t.seconds(Onboarding.REVEAL_S * 0.45)
+	await t.shot("onb_kill_2_mid")
+	await t.seconds(Onboarding.REVEAL_S * 0.55 - 0.15)
+	await t.shot("onb_kill_3_end")
+	await t.seconds(Onboarding.HOLD_S + 0.6)
+	await t.shot("onb_kill_card")
+	o.ui.tap()
+	await t.seconds(0.5)
+	await t.shot("onb_kill_camera_returning")
+	await t.seconds(1.5)
+	await t.shot("onb_kill_back_to_play")
+	# The first Red Starfish: the card.
+	_onb_flags(g, ["intro", "feeding", "parasite"])
+	var s: Starfish = g.starfish.find("star.b1.00")
+	if s == null and not g.starfish.stars.is_empty():
+		s = g.starfish.stars[0]
+	if s != null:
+		g.starfish.collect(s)
+		await t.seconds(0.6)
+		await t.shot("onb_star_card")
+		o.ui.tap()

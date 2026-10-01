@@ -6,6 +6,14 @@ uniform sampler2D health_map : hint_default_black, filter_linear, repeat_enable;
 uniform vec4 heals[64];
 uniform int heal_count = 0;
 uniform vec3 ball_center = vec3(0.0);
+// Onboarding's first-parasite lesson (docs/ONBOARDING.md): PRESENTATION ONLY. The health above is
+// already the true, settled result; inside stage_outer (radians round stage_dir) and beyond the
+// reveal front stage_reveal, the moss is still drawn as it looked before the kill (health_base, a
+// snapshot), so the restoration is seen spreading outward. stage_outer <= 0: off.
+uniform sampler2D health_base : hint_default_black, filter_linear, repeat_enable;
+uniform vec3 stage_dir = vec3(0.0, 1.0, 0.0);
+uniform float stage_reveal = 0.0;
+uniform float stage_outer = 0.0;
 
 vec2 health_uv(vec3 dir) {
 	return vec2(atan(dir.x, dir.z) / 6.2831853 + 0.5, 0.5 - asin(clamp(dir.y, -1.0, 1.0)) / 3.1415927);
@@ -17,6 +25,14 @@ float health_at(vec3 dir) {
 		vec4 s = heals[i];
 		float ang = acos(clamp(dot(dir, s.xyz), -1.0, 1.0));
 		h = max(h, 1.0 - smoothstep(s.w * 0.55, s.w, ang));
+	}
+	if (stage_outer > 0.0) {
+		float a = acos(clamp(dot(dir, stage_dir), -1.0, 1.0));
+		if (a < stage_outer) {
+			// 0 inside the restored front, 1 ahead of it (a soft edge about 2.5 degrees wide).
+			float ahead = smoothstep(stage_reveal - 0.045, stage_reveal, a);
+			h = mix(h, min(h, texture(health_base, health_uv(dir)).r), ahead);
+		}
 	}
 	return h;
 }

@@ -40,6 +40,8 @@ var treasure: TreasurePlay
 var gill: GillProgress
 ## The red starfish still in the world.
 var starfish: StarfishField
+## Onboarding (docs/ONBOARDING.md): the intro screen and the three first-discovery lessons.
+var onboarding: Onboarding
 
 var state := "title"          # title | play | aquarium (the experiences; the clock never counts)
 var cinematic := ""
@@ -106,8 +108,10 @@ func _ready() -> void:
 	await _build_world()
 	_open_run()
 	process_mode = Node.PROCESS_MODE_INHERIT
-	if Settings.skip_title or Settings.test_mode != "":
+	if Settings.test_mode != "":
 		start_play(true)
+	elif Settings.skip_title:
+		begin_play(true)
 	else:
 		_enter_title()
 	StartupTrace.mark("world ready (%s); first world frame requested" % state)
@@ -247,6 +251,12 @@ func _build_world() -> void:
 	hud = Hud.new()
 	add_child(hud)
 	StartupTrace.mark("HUD built")
+	onboarding = Onboarding.new()
+	onboarding.name = "Onboarding"
+	onboarding.g = self
+	add_child(onboarding)
+	onboarding.ui = OnboardingUi.new()
+	add_child(onboarding.ui)
 	pause_menu = PauseMenu.new()
 	add_child(pause_menu)
 	StartupTrace.mark("pause menu built")
@@ -316,7 +326,23 @@ func _build_room_soon() -> void:
 			aquarium.ensure_room())
 
 
+## Play (with no saved run) and New Run come here: the first new run ever shows the intro screen
+## first (docs/ONBOARDING.md); a Continue never does.
+func begin_play(immediate := false) -> void:
+	if onboarding != null and onboarding.intro_due(has_run_in_progress()):
+		state = "title"
+		title.hide_title()
+		hud.visible_controls(false)
+		player.controls_enabled = false
+		cam.cinematic = true
+		onboarding.show_intro(func() -> void: start_play(immediate))
+		Boot.report_ready()
+		return
+	start_play(immediate)
+
+
 func start_play(immediate := false) -> void:
+	var continuing := has_run_in_progress()
 	_build_room_soon()
 	state = "play"
 	run_save.note_identity(Boot.identity())
@@ -332,6 +358,8 @@ func start_play(immediate := false) -> void:
 	_show_prompt("move")
 	if treasure != null:
 		treasure.refresh()
+	if onboarding != null:
+		onboarding.on_play_started(continuing)
 	Boot.report_ready()
 
 
@@ -394,7 +422,39 @@ func _open_gill() -> void:
 	if grant != "":
 		grant_skills(SkillTree.ids() if grant == "all" else Array(grant.split(",", false)))
 	player.apply_skills(gill.tiers())
+	_setup_onboarding()
 	StartupTrace.mark("progress opened (%s)" % gill.origin.get_slice(";", 0))
+
+
+## Onboarding's flags (docs/ONBOARDING.md). A profile from before onboarding is migrated once from
+## what it shows: any run played or finished counts the intro as seen; a run past Ball 1's
+## tutorial (a parasite cleared, or on a later ball) or finished counts feeding and the parasite
+## as learnt; any starfish or skill counts the starfish lesson. Automated runs: --onboarding=done
+## (the default for unit tests, renders and probes: every lesson done, so nothing else changes) or
+## --onboarding=fresh (the playthrough's default: a brand-new player, the bots dismiss the cards).
+func _setup_onboarding() -> void:
+	if Settings.test_mode != "":
+		# (Given a progress file, a test sees what it holds, migrated as a player's would be.)
+		var mode := str(Settings.test_args.get("onboarding", "" if Settings.test_args.has("gill-save") else
+				("fresh" if Settings.test_mode == "playthrough" else "done")))
+		if mode == "done":
+			onboarding.mark_all_done()
+			return
+		if mode == "fresh":
+			gill.onb_known = true
+			return
+	if gill.onb_known:
+		return
+	var e := run_save.earned()
+	var world: Dictionary = run_save.run().get("world", {})
+	var rec := run_save.records()
+	var finished: bool = clock.is_finished() or float(rec.get("best_finish_s", -1.0)) >= 0.0 or not (rec.get("finishes", []) as Array).is_empty()
+	var past := finished or int(world.get("ball", 0)) > 0
+	for b in balls:
+		for par in b.parasites:
+			if e.has(par.get_meta("completion_id", "")):
+				past = true
+	gill.migrate_onboarding(has_run_in_progress() or finished, past)
 
 
 ## Tests and renders only: every starfish collected and these nodes bought (prerequisites ignored).
@@ -468,6 +528,7 @@ func _apply_run() -> void:
 		return
 	for k in world.get("prompts_done", []):
 		prompts_done[k] = true
+	onboarding.run_frond = bool(world.get("onb_frond", false))
 	_tut_framed = bool(world.get("tut_framed", false))
 	all_clear_done = bool(world.get("all_clear_shown", false))
 	var st: Dictionary = world.get("stats", {})
@@ -506,6 +567,7 @@ func _resume_position() -> void:
 func _capture_world() -> Dictionary:
 	return {"ball": player.ball.index, "checkpoint": checkpoint.get_meta("completion_id", "") if checkpoint else "",
 			"prompts_done": prompts_done.keys(), "tut_framed": _tut_framed, "all_clear_shown": all_clear_done,
+			"onb_frond": onboarding != null and onboarding.run_frond,
 			"stats": stats.duplicate(true)}
 
 
@@ -593,6 +655,8 @@ func _notification(what: int) -> void:
 		return
 	match what:
 		NOTIFICATION_APPLICATION_PAUSED, NOTIFICATION_APPLICATION_FOCUS_OUT:
+			if onboarding != null:
+				onboarding.interrupt("background")
 			clock.suspend()
 			save_run()
 		NOTIFICATION_APPLICATION_RESUMED, NOTIFICATION_APPLICATION_FOCUS_IN:
@@ -921,6 +985,7 @@ func lunge_miss(p: Axolotl) -> void:
 
 func _eat(p: Axolotl, f: Food) -> void:
 	var amount := f.heal_amount(p.max_health)
+	var before := p.health
 	p.heal(amount)
 	stats["eaten"][f.type] += 1
 	WaterFX.inst.sparkle(f.catch_point(), Color(1.0, 0.8, 0.6, 0.8), 8, 1.0, 0.05, 0.6)
@@ -929,6 +994,8 @@ func _eat(p: Axolotl, f: Food) -> void:
 	p.ball.foods.erase(f)
 	f.eaten()
 	_hide_prompt("lunge", true)
+	# (The healing above is the real one; the lesson only paces how the frond is SHOWN coming back.)
+	onboarding.on_food_eaten(before)
 
 
 func parasite_killed(par: Parasite) -> void:
@@ -938,8 +1005,18 @@ func parasite_killed(par: Parasite) -> void:
 	# Stolen vitality returns to the moss.
 	WaterFX.inst.sparkle(par.global_position, Color(0.45, 1.0, 0.45, 0.9), 22, 2.2, 0.08, 1.2)
 	Sfx.play("drain", par.global_position)
+	# Onboarding's first-parasite lesson stages how this restoration is SHOWN; the kill itself is
+	# applied here exactly as always (the snapshot and the record only read).
+	var staged := onboarding != null and onboarding.wants_kill_stage()
+	var base: Image = ball.health_snapshot() if staged else null
+	if staged:
+		ball.record_heals_begin()
 	ball.complete_event(par.zone_id, par.global_position, 12.0)
 	_hide_prompt("swipe", true)
+	if staged:
+		onboarding.begin_kill(par, ball, base, ball.record_heals_end())
+	elif onboarding != null:
+		onboarding.kill_unstaged()
 
 
 ## A creature defeated by the axolotl (crab guardians and cave eels are completion entries).
@@ -1006,6 +1083,9 @@ func _on_zone_completed(ball: MossBall, zone_id: String) -> void:
 	Sfx.play("zone_bloom", player.global_position, -4.0)
 	if ball.index == 0 and zone_id == "tut" and not _tut_framed:
 		_tut_framed = true
+		# (The parasite lesson's raised shot shows the same thing: it plays instead, once.)
+		if onboarding != null and onboarding.claims_frame():
+			return
 		get_tree().create_timer(1.3).timeout.connect(func(): _start_cinematic("frame", {}))
 
 
@@ -1188,6 +1268,7 @@ func _update_cinematic(dt: float) -> void:
 		"travel": _cine_travel(dt)
 		"regen": _cine_regen()
 		"ravine": _cine_ravine()
+		"lesson": pass    # (Onboarding drives its own staged moments.)
 
 
 func _cine_frame() -> void:
@@ -1479,7 +1560,9 @@ func _update_tutorial(_dt: float) -> void:
 		var m1 := balls[0].surface_point(Levels.tut_dir(Levels.TUT_M1_M), Levels.TUT_M1_TOP)
 		if b.index == 0 and player.global_position.distance_to(m1) < 2.6:
 			_show_prompt("burst")
-	if not prompts_done.has("swipe"):
+	# (While the parasite and feeding lessons are still to come, they show the Tail Swipe and Lunge
+	# prompts themselves, as their objectives: never twice.)
+	if not prompts_done.has("swipe") and onboarding.done("parasite"):
 		for par in b.parasites:
 			if par.is_alive() and par.global_position.distance_to(player.global_position) < 5.0:
 				_show_prompt("swipe")
@@ -1490,6 +1573,8 @@ func _update_tutorial(_dt: float) -> void:
 				_show_prompt("lunge")
 				break
 		for f in b.foods:
+			if not onboarding.done("feeding"):
+				break
 			if is_instance_valid(f) and f.is_catchable() and f.catch_point().distance_to(player.global_position) < 4.0:
 				_show_prompt("lunge")
 				break

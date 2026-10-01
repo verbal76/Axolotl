@@ -873,6 +873,26 @@ func set_health(h: int, mx: int, flash := true) -> void:
 		_flash = 0.6
 
 
+## Onboarding's feeding lesson: fronds [from, to) come back slowly from grey to colour and light
+## over `dur` seconds (presentation only; his health is already restored).
+var _slow_from := 0
+var _slow_to := 0
+var _slow_k := 1.0
+var _slow_dur := 1.0
+
+
+func restore_fronds_slowly(from_h: int, to_h: int, dur: float) -> void:
+	_slow_from = from_h
+	_slow_to = to_h
+	_slow_dur = maxf(0.05, dur)
+	_slow_k = 0.0
+
+
+## How far the slow frond restore has come (1 when none is running).
+func frond_restore_progress() -> float:
+	return _slow_k
+
+
 func fall_flicker() -> void:
 	_fall_flicker = 1.2
 
@@ -882,6 +902,7 @@ func fall_flicker() -> void:
 func _update_gills(dt: float, back: float, flap: float, flare: float) -> void:
 	_flash = maxf(0.0, _flash - dt)
 	_fall_flicker = maxf(0.0, _fall_flicker - dt)
+	_slow_k = minf(1.0, _slow_k + dt / _slow_dur)
 	for i in gills.size():
 		var side: float = GILL_SLOTS[i][0]
 		var k: int = GILL_SLOTS[i][1]
@@ -903,9 +924,12 @@ func _update_gills(dt: float, back: float, flap: float, flare: float) -> void:
 			e += _flash * 1.6
 			if _fall_flicker > 0.0 and i == health - 1:
 				e *= 0.2 + 1.8 * float(int(_t * 24.0) % 2)
-			m.set_shader_parameter("glow", e)
-			m.set_shader_parameter("desat", 0.0)
-			m.set_shader_parameter("flutter", 1.0 + flap)
+			var slow := smoothstep(0.0, 1.0, _slow_k) if _slow_k < 1.0 and i >= _slow_from and i < _slow_to else 1.0
+			# (A frond coming back brightens as it fills with colour, then settles.)
+			var bloom := 0.0 if _slow_k >= 1.0 or i < _slow_from or i >= _slow_to else sin(slow * PI) * 1.4
+			m.set_shader_parameter("glow", e * slow + bloom)
+			m.set_shader_parameter("desat", 0.88 * (1.0 - slow))
+			m.set_shader_parameter("flutter", lerpf(0.35, 1.0 + flap, slow))
 		else:
 			# Lost (or not yet grown by a cave upgrade): dull and faded.
 			m.set_shader_parameter("glow", 0.0)

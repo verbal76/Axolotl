@@ -75,6 +75,9 @@ func collect(s: Starfish) -> void:
 	Settings.haptic("mote")
 	g.hud.star_collected(g.gill.stars(), StarfishTable.COUNT, g.gill.balance())
 	stars.erase(s)
+	# (The first one ever: Onboarding's informational card about Skills.)
+	if g.onboarding != null:
+		g.onboarding.on_starfish()
 
 
 func find(id: String) -> Starfish:
