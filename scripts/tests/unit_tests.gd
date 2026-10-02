@@ -2363,9 +2363,13 @@ func _test_view_clearances() -> void:
 	t.log_line("tank blades shortened %d (hidden %d) of %d" % [trimmed, hidden, aq._blade_xfs.size()])
 	t.check("tank_blades_clear_balls_and_tunnels", worst >= aq.BLADE_MARGIN - 0.5, "swaying blades stay %.1f m outside %s" % [worst, where])
 	# Looking as far down as he can, on a crest and on flat ground: the camera stays above the terrain.
+	# (Put back where he was afterwards: later tests read the world round him.)
+	var home := [p.ball.index, p.global_position, p.facing]
 	var lowest := INF
 	for bi in [0, 2, 4]:
 		var b: MossBall = g.balls[bi]
+		# (Its creatures held still: later tests pick sleeping parasites on these balls.)
+		var release := _hold_threats(b)
 		for k in 6:
 			var d := MossBall.dir_ll(-30.0 + k * 12.0, k * 55.0)
 			place_at(bi, b.surface_point(d, 0.1), MossBall.frame_at(d, 0).z)
@@ -2375,7 +2379,11 @@ func _test_view_clearances() -> void:
 				await t.frames(1)
 			var cd: Vector3 = g.cam.global_position - b.global_position
 			lowest = minf(lowest, cd.length() - b.radius - b.terrain_height(cd.normalized()))
+		release.call()
 	t.check("camera_never_under_ground", lowest >= FollowCam.GROUND_CLEAR - 0.01, "lowest %.2f m above the terrain" % lowest)
+	g.cam.pitch = 0.32
+	place_at(home[0], home[1], home[2])
+	await t.frames(2)
 
 
 func _test_ravines() -> void:
