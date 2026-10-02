@@ -110,7 +110,6 @@ var _landing_speed := 0.0
 var _jumped_this_frame := false
 var _stream_t := 0.0
 var _acted := false               # a jump, swipe or lunge was pressed this frame
-var _fell_at := Vector3.ZERO      # where he last came down in a ravine
 var _in_column := false            # being carried by a bubble column
 var mantles := 0                   # crawls over steep transitions (tests and diagnostics)
 var _mantle_t := -1.0              # time into a crawl, -1 when not crawling
@@ -631,7 +630,6 @@ func _physics_process(dt: float) -> void:
 			_on_land(-pre_vup, r)
 		# Down on a ravine's floor: one frond, and he is put back at its edge (world expansion).
 		if on_ravine_floor():
-			_fell_at = global_position
 			Game.inst.ravine_fall(self)
 			return
 		apex_r = r
@@ -876,7 +874,7 @@ func _on_land(impact: float, r: float) -> void:
 	burst_available = true
 	glide_t = -1.0
 	_carry_t = 0.0
-	# (A ravine floor is its own penalty, one frond, handled by Game.ravine_fall.)
+	# (A ravine floor is a death of its own, handled by Game.ravine_fall.)
 	if on_ravine_floor():
 		return
 	var fall := apex_r - r
@@ -979,6 +977,13 @@ func heal(amount: int) -> void:
 		health_changed.emit(health, max_health)
 
 
+## Re-formed after a death (Game.respawn_health): `n` fronds, never more than he has.
+func revive(n: int) -> void:
+	health = clampi(n, 1, max_health)
+	model.set_health(health, max_health, true)
+	health_changed.emit(health, max_health)
+
+
 func restore_full() -> void:
 	health = max_health
 	model.set_health(health, max_health, true)
@@ -1061,26 +1066,6 @@ func _update_current_brace(dt: float) -> void:
 		return
 	var want := brace_for_push(current_push.length())
 	current_brace = move_toward(current_brace, want, dt * (BRACE_RISE if want > current_brace else BRACE_FALL))
-
-
-## Where to put him back after a ravine fall: his last safe footing, stepped a little further from
-## the ravine (away from where he came down), on ground that is not itself in a ravine.
-func ravine_return_point() -> Array:
-	var b: MossBall = last_safe_ball if last_safe_ball else ball
-	var safe := last_safe_pos
-	var away := safe - _fell_at
-	var u := b.up_at(safe)
-	away -= u * away.dot(u)
-	if away.length() > 0.01:
-		# Out to untouched ground (clear of the ravine's cut), then a little more.
-		for k in range(1, 12):
-			var d := b.up_at(safe + away.normalized() * 0.4 * k)
-			if b.ravine_carve(d) < 0.02 and b.ravine_at(d) == "":
-				var d2 := b.up_at(safe + away.normalized() * (0.4 * k + 0.6))
-				if b.ravine_carve(d2) < 0.02:
-					d = d2
-				return [b, b.surface_point(d, 0.3)]
-	return [b, safe + u * 0.3]
 
 
 ## Whether the model may play an idle: he is standing still on the ground under the player's

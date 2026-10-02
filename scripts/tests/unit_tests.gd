@@ -19,7 +19,7 @@ func run(runner) -> void:
 		g.hints.enabled = false
 	await t.seconds(0.5)
 	var only: String = Settings.test_args.get("only", "")
-	for name_ in ["_test_startup", "_test_ota_and_version", "_test_mesh_winding", "_test_terrain", "_test_ravines", "_test_ooze_bubbles", "_test_view_clearances", "_test_camera_rises_over", "_test_restore_hints", "_test_terrain_grounded", "_test_no_floating_platforms", "_test_parasite_locomotion", "_test_parasite_body_and_death", "_test_parasite_combat", "_test_organic_motion", "_test_gill_look", "_test_gill_idles", "_test_gill_colours", "_test_gill_patterns", "_test_tail_whip", "_test_gill_traction", "_test_gill_incline_transitions", "_test_traction_no_shortcuts", "_test_gill_body_follow", "_test_swim_body_follow", "_test_ambient_sway", "_test_placements", "_test_tutorial_route", "_test_sphere_walk", "_test_jump_and_burst", "_test_coyote_and_buffer", "_test_swipe_direction_and_stages", "_test_hard_landing", "_test_food", "_test_food_reach", "_test_darter_and_burrower", "_test_food_repopulates", "_test_motes", "_test_checkpoint_and_regen", "_test_crumble", "_test_restoration_gates", "_test_retract_gates_gone", "_test_bubble_columns", "_test_restoration_continuity", "_test_health_map", "_test_vortex", "_test_vortex_tints", "_test_vortex_currents", "_test_vortex_currents_travel", "_test_current", "_test_current_brace", "_test_canopy", "_test_canopy_plain_jumps", "_test_climbs_physical", "_test_jungle_ladders_physical", "_test_leaf_geometry", "_test_leaf_footing", "_test_caves", "_test_mounds", "_test_vegetation", "_test_vortex_mouths_clear", "_test_route_audit", "_test_new_areas", "_test_ecosystem", "_test_music", "_test_opening_audio", "_test_run_clock", "_test_completion_catalog", "_test_completion_frozen", "_test_run_save_file", "_test_run_timer_live", "_test_run_continue", "_test_timer_integrity", "_test_resume_points_safe", "_phase_continue_write", "_phase_continue_read", "_test_upgrades", "_test_ui", "_test_menus_no_scroll", "_test_menu_touch", "_test_tier2_rules", "_test_tier2_world", "_test_ambient_fish", "_test_parasite_never_buried", "_test_tier2_loadout", "_test_aquarium_experiences", "_test_aquarium_polish", "_test_all_clear", "_test_treasure_unlock", "_test_treasure_generation", "_test_treasure_play", "_phase_treasure_stress", "_phase_live_fish_diag", "_phase_cpu_probe", "_phase_incline_survey", "_phase_loco_diag", "_phase_crawl_trace", "_phase_mouth_crawls", "_phase_organic_trace", "_test_skilltree_graph", "_test_progress_store", "_test_starfish_spots", "_test_starfish_pickup", "_test_skill_ui", "_test_quick_gill", "_test_lunge_skills", "_test_burst_skills", "_test_glide_control", "_test_glide_transfers", "_test_mote_magnet", "_phase_starfish_survey", "_phase_starfish_sweep", "_phase_glide_probe", "_test_plants_terminal_growth", "_test_sea_fan_depth", "_test_repopulation", "_phase_repop_survey", "_phase_repop_sim", "_test_aquarium_gill", "_phase_aq_nav", "_test_tutorials_and_title", "_test_onb_progress", "_test_onb_owner_save", "_test_onb_per_run", "_test_onb_toggle", "_test_onb_intro", "_test_onb_feeding", "_test_onb_parasite", "_test_onb_feed_first", "_test_onb_tunnel", "_test_onb_starfish", "_test_onb_softlock", "_test_onb_relaunch", "_test_onb_restoration_equal", "_test_hard_mode", "_test_hard_mode_save", "_test_polish_a", "_test_leaf_motion", "_phase_world_hash", "_phase_th_bench", "_phase_hard_write", "_phase_hard_read", "_phase_hard_newrun", "_phase_hard_finish", "_phase_hard_sim", "_phase_hard_intervals", "_phase_onb_owner", "_phase_onb_write", "_phase_onb_read", "_phase_onb_kill", "_phase_onb_toggle"]:
+	for name_ in ["_test_startup", "_test_ota_and_version", "_test_mesh_winding", "_test_terrain", "_test_ravines", "_test_ooze_bubbles", "_test_view_clearances", "_test_camera_rises_over", "_test_restore_hints", "_test_terrain_grounded", "_test_no_floating_platforms", "_test_parasite_locomotion", "_test_parasite_body_and_death", "_test_parasite_combat", "_test_organic_motion", "_test_gill_look", "_test_gill_idles", "_test_gill_colours", "_test_gill_patterns", "_test_tail_whip", "_test_gill_traction", "_test_gill_incline_transitions", "_test_traction_no_shortcuts", "_test_gill_body_follow", "_test_swim_body_follow", "_test_ambient_sway", "_test_placements", "_test_tutorial_route", "_test_sphere_walk", "_test_jump_and_burst", "_test_coyote_and_buffer", "_test_swipe_direction_and_stages", "_test_hard_landing", "_test_food", "_test_food_reach", "_test_darter_and_burrower", "_test_food_repopulates", "_test_motes", "_test_checkpoint_and_regen", "_test_crumble", "_test_restoration_gates", "_test_retract_gates_gone", "_test_bubble_columns", "_test_restoration_continuity", "_test_health_map", "_test_vortex", "_test_vortex_tints", "_test_vortex_currents", "_test_vortex_currents_travel", "_test_current", "_test_current_brace", "_test_canopy", "_test_canopy_plain_jumps", "_test_climbs_physical", "_test_jungle_ladders_physical", "_test_leaf_geometry", "_test_leaf_footing", "_test_caves", "_test_mounds", "_test_vegetation", "_test_vortex_mouths_clear", "_test_route_audit", "_test_new_areas", "_test_ecosystem", "_test_music", "_test_opening_audio", "_test_run_clock", "_test_completion_catalog", "_test_completion_frozen", "_test_run_save_file", "_test_run_timer_live", "_test_run_continue", "_test_timer_integrity", "_test_resume_points_safe", "_phase_continue_write", "_phase_continue_read", "_test_upgrades", "_test_ui", "_test_menus_no_scroll", "_test_menu_touch", "_test_tier2_rules", "_test_tier2_world", "_test_ambient_fish", "_test_parasite_never_buried", "_test_tier2_loadout", "_test_aquarium_experiences", "_test_aquarium_polish", "_test_all_clear", "_test_treasure_unlock", "_test_treasure_generation", "_test_treasure_play", "_phase_treasure_stress", "_phase_live_fish_diag", "_phase_cpu_probe", "_phase_incline_survey", "_phase_loco_diag", "_phase_crawl_trace", "_phase_mouth_crawls", "_phase_organic_trace", "_test_skilltree_graph", "_test_progress_store", "_test_starfish_spots", "_test_starfish_pickup", "_test_skill_ui", "_test_quick_gill", "_test_lunge_skills", "_test_burst_skills", "_test_glide_control", "_test_glide_transfers", "_test_mote_magnet", "_phase_starfish_survey", "_phase_starfish_sweep", "_phase_glide_probe", "_test_plants_terminal_growth", "_test_sea_fan_depth", "_test_repopulation", "_phase_repop_survey", "_phase_repop_sim", "_test_aquarium_gill", "_phase_aq_nav", "_test_tutorials_and_title", "_test_onb_progress", "_test_onb_owner_save", "_test_onb_per_run", "_test_onb_toggle", "_test_onb_intro", "_test_onb_feeding", "_test_onb_parasite", "_test_onb_feed_first", "_test_onb_tunnel", "_test_onb_starfish", "_test_onb_softlock", "_test_onb_relaunch", "_test_onb_restoration_equal", "_test_hard_mode", "_test_hard_mode_save", "_test_polish_a", "_test_leaf_motion", "_test_death_and_arrival", "_phase_world_hash", "_phase_th_bench", "_phase_hard_write", "_phase_hard_read", "_phase_hard_newrun", "_phase_hard_finish", "_phase_hard_sim", "_phase_hard_intervals", "_phase_onb_owner", "_phase_onb_write", "_phase_onb_read", "_phase_onb_kill", "_phase_onb_toggle"]:
 		# "_phase_*" tests are halves of a relaunch test: they run only when asked for by name
 		# (in a child process started by _test_run_continue).
 		if name_.begins_with("_phase") and not only.split(",", false).has(name_):
@@ -2426,6 +2426,7 @@ func _test_ravines() -> void:
 	var earned_before := g.run_save.earned().size()
 	var fall := func(hp: int) -> Array:
 		place_at(0, b.surface_point(side, 0.3), -fr.x)
+		var want: Vector3 = g.respawn_target()[1]
 		p.invuln_t = 0.0
 		p.health = hp
 		p.model.set_health(hp, p.max_health, false)
@@ -2445,18 +2446,20 @@ func _test_ravines() -> void:
 		p.bot_input = Vector2.ZERO
 		var kind := g.cinematic
 		var sank := 0.0
-		for i in 60 * 5:
+		for i in 60 * 8:
 			await t.frames(1)
 			sank = minf(sank, p.model.position.y)
 			if g.cinematic == "" and p.state == "normal":
 				break
 		await t.seconds(0.5)
-		return [kind, int(g.stats.get("ravine_falls", 0)) - falls0, g.stats["deaths"] - deaths0, rim, safe_in_ravine, sank]
+		return [kind, int(g.stats.get("ravine_falls", 0)) - falls0, g.stats["deaths"] - deaths0, want, safe_in_ravine, sank]
+	# Owner, 2026-10-02: a fall into the ooze is a death at any health: his checkpoint, a third of
+	# his fronds.
 	var r: Array = await fall.call(3)
 	var back := p.global_position
-	var back_ok: bool = b.ravine_carve(b.up_at(back)) < 0.05 and b.altitude(back) < 0.3 and b.terrain_height(b.up_at(back)) > 2.9 and back.distance_to(r[3]) < 4.0
-	t.check("ravine_fall_costs_one_frond_back_to_rim", r[0] == "ravine" and r[1] == 1 and r[2] == 0 and p.health == 2 and back_ok and p.state == "normal" and not r[4],
-			"shot %s; falls %d, deaths %d; health %d of 3; back on the rim %s (%.1f m from where he left it; ground %.2f m up, %.2f m above it, ravine '%s'); safe spot ever in the ravine %s" % [r[0], r[1], r[2], p.health, back_ok, back.distance_to(r[3]), b.terrain_height(b.up_at(back)), b.altitude(back), b.ravine_at(b.up_at(back)), r[4]])
+	t.check("ravine_fall_at_full_health_is_a_death", r[0] == "ravine" and r[1] == 1 and r[2] == 1 and p.health == Game.respawn_health(p.max_health)
+			and back.distance_to(r[3]) < 1.0 and p.state == "normal" and not r[4],
+			"shot %s; falls %d, deaths %d; health %d of %d; %.2f m from his checkpoint; safe spot ever in the ravine %s" % [r[0], r[1], r[2], p.health, p.max_health, back.distance_to(r[3]), r[4]])
 	# Owner, 2026-10-01: he sinks into the ooze and is gone before he reforms on the rim, upright.
 	t.check("ravine_fall_sinks_into_ooze", r[5] < -Game.OOZE_SINK_M * 0.9 and p.model.position.y == 0.0 and p.model.dissolve < 0.01,
 			"sank %.2f m; model y now %.2f, dissolve %.2f" % [-r[5], p.model.position.y, p.model.dissolve])
@@ -2468,8 +2471,9 @@ func _test_ravines() -> void:
 			oozed.append("ball %d" % (bb.index + 1))
 	t.check("ravine_ooze_on_every_ravine_ball", oozed.is_empty(), "missing on %s" % str(oozed))
 	var r2: Array = await fall.call(1)
-	t.check("ravine_fall_on_last_frond_is_a_death", r2[0] == "regen" and r2[2] == 1 and p.state == "normal" and p.health == p.max_health
-			and g.run_save.earned().size() >= earned_before, "shot %s; deaths %d; re-formed with %d of %d" % [r2[0], r2[2], p.health, p.max_health])
+	t.check("ravine_fall_on_last_frond_is_a_death", r2[0] == "ravine" and r2[2] == 1 and p.state == "normal" and p.health == Game.respawn_health(p.max_health)
+			and p.global_position.distance_to(r2[3]) < 1.0 and g.run_save.earned().size() >= earned_before,
+			"shot %s; deaths %d; re-formed with %d of %d, %.2f m from his checkpoint" % [r2[0], r2[2], p.health, p.max_health, p.global_position.distance_to(r2[3])])
 	release.call()
 	# Take the test ground away again.
 	b.hills.resize(n_hills)
@@ -3506,7 +3510,7 @@ func _test_checkpoint_and_regen() -> void:
 		if g.cinematic == "":
 			break
 	t.check("regenerates_at_last_bloom", p.global_position.distance_to(bloom.respawn_point()) < 1.5 and p.state == "normal", "dist %.2f" % p.global_position.distance_to(bloom.respawn_point()))
-	t.check("regeneration_restores_health", p.health == p.max_health, "health %d/%d" % [p.health, p.max_health])
+	t.check("regeneration_with_a_third_of_health", p.health == Game.respawn_health(p.max_health), "health %d/%d" % [p.health, p.max_health])
 	t.check("restoration_survives_regeneration", is_equal_approx(b.restoration, r_before) and g.stats["kills"] == kills_before, "")
 
 
@@ -3780,6 +3784,11 @@ func _test_vortex_currents_travel() -> void:
 					worst_inside = maxf(worst_inside, inside)
 					max_carry = maxf(max_carry, (vis - (v.sample(tt)[0] as Vector3)).length())
 			frames_[mode] = n
+			# (Then the assisted landing sets him down on the arrival point.)
+			for i in 60 * 3:
+				if g.cinematic == "":
+					break
+				await t.frames(1)
 			land[mode] = p.global_position
 			var ok: bool = p.ball == dest and g.cinematic == "" and g.stats["travels"].size() == n0 + 1 and g.stats["travels"][n0] == [v.ball_a.index, rev]
 			all_ok = all_ok and ok
@@ -9434,3 +9443,199 @@ func _test_camera_rises_over() -> void:
 	t.check("camera_rises_over_what_is_behind", float(low[1]) > 0.05 and float(low[2]) > 3.5 and float(high[1]) > 0.5 and float(high[2]) > 1.8 and not low[3] and not high[3]
 			and float(out[1][1]) < 0.01 and float(out[3][1]) < 0.01 and float(out[3][2]) > 4.3,
 			"low wall: rise %.2f rad, %.1f m from him; tall pillar: rise %.2f rad, %.1f m; after each: rise %.2f / %.2f, distance %.1f m" % [low[1], low[2], high[1], high[2], out[1][1], out[3][1], out[3][2]])
+## Owner, 2026-10-02: every death costs the same (back to his checkpoint with a third of his
+## fronds, nothing earned lost); a tunnel's arrival is the checkpoint on a new ball until a bloom;
+## the ride ends in a soft assisted landing that his buttons can decorate but never derail.
+func _test_death_and_arrival() -> void:
+	var hs := []
+	for m in [3, 4, 5, 6]:
+		hs.append(Game.respawn_health(m))
+	t.check("death_health_third_of_max", hs == [1, 2, 2, 2], "max 3/4/5/6 -> %s" % str(hs))
+	var release := _hold_threats(g.balls[0])
+	var b0: MossBall = g.balls[0]
+	var keep := [g.checkpoint, g.arrival.duplicate(), p.max_health]
+	var earned0 := g.run_save.earned().size()
+	var stars0 := g.gill.collected.size()
+	var rest0: Array = []
+	for b in g.balls:
+		rest0.append(b.restoration)
+	var away := MossBall.dir_ll(10, 40)
+	var die := func(how: String) -> Array:
+		place_at(p.ball.index, p.ball.surface_point(away if p.ball == b0 else p.ball.start_dir, 0.2), MossBall.frame_at(away, 0).z)
+		await t.frames(2)
+		var d0: int = g.stats["deaths"]
+		p.invuln_t = 0.0
+		if how == "ooze":
+			g.ravine_fall(p)
+		else:
+			p.health = 0
+			p.died.emit()
+		for i in 60 * 8:
+			await t.frames(1)
+			if g.cinematic == "" and p.state == "normal":
+				break
+		var near := INF
+		for par in p.ball.hostiles():
+			if par.is_alive() and par.state in ["windup", "attack"]:
+				near = minf(near, par.global_position.distance_to(p.global_position))
+		return [p.global_position, p.health, int(g.stats["deaths"]) - d0, p.state, near, p.invuln_t]
+	# A new run before any bloom: the safe start.
+	g.checkpoint = null
+	g.arrival = {}
+	var r: Array = await die.call("hurt")
+	var start := b0.surface_point(b0.start_dir, 0.2)
+	t.check("death_before_any_bloom_goes_to_start", r[0].distance_to(start) < 1.0 and r[1] == Game.respawn_health(p.max_health) and r[2] == 1,
+			"%.2f m from the start, %d fronds" % [r[0].distance_to(start), r[1]])
+	# With a bloom: hurt and ooze deaths alike, at max 3..6, again and again.
+	var bl: Bloom = null
+	for x in b0.blooms:
+		if x.is_placed():
+			bl = x
+			break
+	g.checkpoint = bl
+	var log := []
+	var ok := true
+	var i := 0
+	for m in [3, 4, 5, 6, 6]:
+		p.max_health = m
+		p.health = m
+		var how: String = ["hurt", "ooze"][i % 2]
+		r = await die.call(how)
+		var dist: float = r[0].distance_to(bl.respawn_point())
+		var safe: bool = r[3] == "normal" and r[5] > 0.5 and r[4] > 6.5
+		ok = ok and dist < 1.0 and r[1] == Game.respawn_health(m) and r[2] == 1 and safe
+		log.append("%s max %d -> %d fronds, %.2f m, attacker %.1f m, invuln %.1f s" % [how, m, r[1], dist, r[4], r[5]])
+		i += 1
+	t.check("death_any_cause_to_bloom_with_third", ok, "; ".join(log))
+	var rest_ok := true
+	for k in g.balls.size():
+		rest_ok = rest_ok and g.balls[k].restoration >= rest0[k]
+	t.check("death_loses_nothing_earned", g.run_save.earned().size() >= earned0 and g.gill.collected.size() == stars0 and rest_ok,
+			"earned %d -> %d, starfish %d -> %d, restoration kept %s" % [earned0, g.run_save.earned().size(), stars0, g.gill.collected.size(), rest_ok])
+	# Every re-form spot is clear of the ooze and on top of the ground.
+	var bad := []
+	for b in g.balls:
+		for x in b.blooms:
+			var rp: Vector3 = x.respawn_point()
+			if b.ravine_at(b.up_at(rp)) != "" or b.altitude(rp) < -0.05:
+				bad.append("ball %d bloom" % (b.index + 1))
+	for v in g.vortices:
+		for rev in [false, true]:
+			var a: Array = g.arrival_point(v, rev)
+			var ab: MossBall = a[0]
+			if ab.ravine_at(ab.up_at(a[1])) != "" or ab.altitude(a[1]) < -0.05:
+				bad.append("arrival on ball %d" % (ab.index + 1))
+	t.check("respawn_spots_safe", bad.is_empty(), str(bad))
+	# Rides: each tunnel both ways, with the buttons mashed in turn.
+	var modes := ["none", "swipe", "lunge", "jump", "stick", "mash"]
+	var space := g.get_world_3d().direct_space_state
+	var rides := []
+	var worst := {"clip": 0, "turn": 0.0, "hand": 0.0, "level": 0.0, "off": 0.0, "up": 1.0, "walk": INF}
+	var anims := {"swipe": false, "lunge": false, "burst": false}
+	var n := 0
+	for v in g.vortices:
+		var was: bool = v.connected
+		v.connected = true
+		for rev in [false, true]:
+			var mode: String = modes[n % modes.size()]
+			n += 1
+			var src: MossBall = v.ball_b if rev else v.ball_a
+			place_at(src.index, src.surface_point(src.start_dir, 0.2), MossBall.frame_at(src.start_dir, 0).z)
+			g._start_cinematic("travel", {"v": v, "reverse": rev})
+			var prev := Vector3.INF
+			var prev_q := Quaternion.IDENTITY
+			var last_travel := Vector3.ZERO
+			var f := 0
+			while g.cinematic != "" and f < 60 * 12:
+				var landing: bool = g.cinematic == "land"
+				if landing:
+					var press := ""
+					match mode:
+						"swipe": press = "swipe" if f % 6 == 0 else ""
+						"lunge": press = "lunge" if f % 20 == 0 else ""
+						"jump": press = "jump" if f % 10 == 0 else ""
+						"mash": press = ["swipe", "lunge", "jump"][f % 3]
+					if press != "":
+						Input.action_press(press)
+					if mode in ["stick", "mash"]:
+						Input.action_press("move_left")
+				await t.frames(1)
+				for a in ["swipe", "lunge", "jump", "move_left"]:
+					Input.action_release(a)
+				f += 1
+				if g.cinematic == "travel":
+					last_travel = p.global_position
+					continue
+				if g.cinematic != "land":
+					continue
+				anims["swipe"] = anims["swipe"] or p.model.swipe_t >= 0.0
+				anims["lunge"] = anims["lunge"] or p.model.lunge_t >= 0.0
+				anims["burst"] = anims["burst"] or p.model.burst_t >= 0.0
+				var pos := p.global_position
+				var q := p.global_basis.orthonormalized().get_rotation_quaternion()
+				if prev == Vector3.INF:
+					worst["hand"] = maxf(worst["hand"], pos.distance_to(last_travel))
+				else:
+					var qq := PhysicsRayQueryParameters3D.create(prev, pos, 1)
+					qq.exclude = [p.get_rid()]
+					var to_end: float = pos.distance_to(g.cine_data["to"])
+					if to_end > 0.15 and not space.intersect_ray(qq).is_empty():
+						worst["clip"] += 1
+					worst["turn"] = maxf(worst["turn"], prev_q.angle_to(q))
+				prev = pos
+				prev_q = q
+			var a: Array = g.arrival_point(v, rev)
+			var nrm: Vector3 = a[2]
+			worst["off"] = maxf(worst["off"], p.global_position.distance_to(a[1]))
+			worst["up"] = minf(worst["up"], p.up.dot(nrm))
+			worst["level"] = maxf(worst["level"], absf((-p.global_basis.z).normalized().dot(nrm)))
+			var ok_end: bool = g.cinematic == "" and p.state == "normal" and p.controls_enabled and p.ball == a[0] and not g.arrival.is_empty() and g.arrival["v"] == v and g.arrival["rev"] == rev
+			# Straight back in his hands: he walks off at once.
+			var at := p.global_position
+			p.bot_input = Vector2(0, 1)
+			await t.seconds(0.6)
+			p.bot_input = Vector2.ZERO
+			worst["walk"] = minf(worst["walk"], p.global_position.distance_to(at))
+			rides.append("%d%s %s %s" % [vortices_index(v), "r" if rev else "", mode, "ok" if ok_end else "NOT DONE"])
+		v.connected = was
+	var all_done := true
+	for x in rides:
+		all_done = all_done and not x.ends_with("NOT DONE")
+	t.check("vortex_lands_softly_on_the_ground", all_done and worst["clip"] == 0 and worst["turn"] < 0.12 and worst["hand"] < 0.5 and worst["off"] < 0.3 and worst["up"] > 0.98 and worst["level"] < 0.15,
+			"%d rides; clipping frames %d, largest turn in a frame %.3f rad, hand-over jump %.2f m, off the spot %.2f m, up . ground %.3f, nose . ground %.3f; %s" % [rides.size(), worst["clip"], worst["turn"], worst["hand"], worst["off"], worst["up"], worst["level"], ", ".join(rides)])
+	t.check("vortex_landing_actions_show_and_control_returns", anims["swipe"] and anims["lunge"] and anims["burst"] and worst["walk"] > 1.0,
+			"seen swipe %s, lunge %s, burst %s; walked %.2f m in 0.6 s after touchdown" % [anims["swipe"], anims["lunge"], anims["burst"], worst["walk"]])
+	# On the new ball before any bloom: a death goes back to the arrival point, not to another ball.
+	var v0: Vortex = g.vortices[0]
+	var land: Array = g.arrival_point(v0, false)
+	var lb: MossBall = land[0]
+	g.arrival = {"v": v0, "rev": false}
+	place_at(lb.index, lb.surface_point(lb.start_dir, 0.2), MossBall.frame_at(lb.start_dir, 0).z)
+	r = await die.call("hurt")
+	t.check("death_after_arrival_goes_to_arrival", p.ball == lb and r[0].distance_to(land[1]) < 1.0, "ball %d, %.2f m from the arrival point" % [p.ball.index + 1, r[0].distance_to(land[1])])
+	# Saved and continued: the arrival is in the run's world and leads back to the same point.
+	var w: Dictionary = g._capture_world()
+	var saved: Dictionary = w.get("arrival", {})
+	t.check("arrival_checkpoint_saved", int(saved.get("v", -1)) == 0 and saved.get("rev", true) == false, str(saved))
+	# A bloom touched there supersedes it.
+	var nb: Bloom = null
+	for x in lb.blooms:
+		if x.is_placed():
+			nb = x
+			break
+	if nb != null:
+		place_at(lb.index, nb.global_position, MossBall.frame_at(lb.up_at(nb.global_position), 0).z)
+		await t.frames(10)
+		r = await die.call("ooze")
+		t.check("bloom_supersedes_arrival", g.arrival.is_empty() and g.checkpoint == nb and r[0].distance_to(nb.respawn_point()) < 1.0,
+				"arrival %s, checkpoint is that bloom %s, %.2f m from it" % [str(g.arrival), g.checkpoint == nb, r[0].distance_to(nb.respawn_point())])
+	g.checkpoint = keep[0]
+	g.arrival = keep[1]
+	p.max_health = keep[2]
+	p.restore_full()
+	release.call()
+	place_at(0, b0.surface_point(b0.start_dir, 0.2), MossBall.frame_at(b0.start_dir, 0).z)
+
+
+func vortices_index(v: Vortex) -> int:
+	return g.vortices.find(v)

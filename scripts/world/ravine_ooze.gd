@@ -1,7 +1,7 @@
 class_name RavineOoze
 extends MeshInstance3D
 ## Owner, 2026-10-01: a pool of bubbling, tie-dyed orange-and-purple ooze on every ravine floor, so a fall into a
-## valley (one frond, put back on the rim: Game.ravine_fall) reads as landing in something bad.
+## valley (a death: Game.ravine_fall) reads as landing in something bad.
 ## Purely visual: no collision, the floor and the fall rule are unchanged. One opaque mesh per ball:
 ## a ribbon along each ravine just above its floor (wherever that floor is), wide enough to meet the walls,
 ## its edges cut where the ravine's carve fades (vertex alpha; see ravine_ooze.gdshader).

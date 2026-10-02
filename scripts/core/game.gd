@@ -48,6 +48,9 @@ var cinematic := ""
 var cine_t := 0.0
 var cine_data := {}
 var checkpoint: Bloom = null
+## The provisional checkpoint (owner, 2026-10-02): {"v": Vortex, "rev": bool} once Gill has come
+## out of a water tunnel, until he touches a bloom on that ball. Empty: the bloom (or the start).
+var arrival := {}
 var g_target := 0.0
 var g_disp := 0.0
 var ball_disp: Array[float] = []
@@ -617,6 +620,9 @@ func _apply_run() -> void:
 		total += b.restoration
 	g_target = total / balls.size()
 	g_disp = g_target
+	var arr: Dictionary = world.get("arrival", {})
+	var vi := int(arr.get("v", -1))
+	arrival = {"v": vortices[vi], "rev": bool(arr.get("rev", false))} if vi >= 0 and vi < vortices.size() else {}
 	_resume_ball = clampi(int(world.get("ball", 0)), 0, balls.size() - 1)
 	var b := balls[_resume_ball]
 	player.place(b, b.surface_point(b.start_dir, 0.1))
@@ -643,6 +649,7 @@ func _resume_position() -> void:
 
 func _capture_world() -> Dictionary:
 	return {"ball": player.ball.index, "checkpoint": checkpoint.get_meta("completion_id", "") if checkpoint else "",
+			"arrival": {"v": vortices.find(arrival["v"]), "rev": arrival["rev"]} if not arrival.is_empty() else {},
 			"prompts_done": prompts_done.keys(), "tut_framed": _tut_framed, "all_clear_shown": all_clear_done,
 			"stats": stats.duplicate(true), "repop": repop.to_dict() if repop != null else {}}.merged(
 			{"vitality": hard.to_dict()} if hard != null else {})
@@ -1283,12 +1290,15 @@ func _check_blooms() -> void:
 		if not bl.is_placed():
 			continue
 		if bl.global_position.distance_to(player.body_center()) < 1.35:
-			if checkpoint != bl:
-				bl.activate()
+			if checkpoint != bl or not arrival.is_empty():
+				# (A bloom touched supersedes the tunnel arrival as his checkpoint.)
+				if checkpoint != bl:
+					bl.activate()
+					_earn(bl.get_meta("completion_id", ""))
+					Settings.haptic("tap")
 				checkpoint = bl
-				_earn(bl.get_meta("completion_id", ""))
+				arrival = {}
 				save_run()
-				Settings.haptic("tap")
 
 
 ## Tier-2 shrines (docs/TIER2.md): touching one in normal play gives Gill its ability for this run.
@@ -1322,7 +1332,15 @@ func take_shrine(s: Tier2Shrine) -> void:
 	save_run()
 
 
+## Where Gill re-forms after a death, and where a continued run resumes: [ball, point, bloom or
+## null]. Owner, 2026-10-02: the new run's safe start, then the arrival point of the last tunnel he
+## came out of, then the last bloom he touched (each supersedes the one before; a bloom supersedes
+## an arrival on its ball). Never another ball than the one he is on.
 func respawn_target() -> Array:
+	if not arrival.is_empty():
+		var a := arrival_point(arrival["v"], arrival["rev"])
+		if a[0] == player.ball:
+			return [a[0], a[1], null]
 	if checkpoint and checkpoint.ball == player.ball:
 		return [checkpoint.ball, checkpoint.respawn_point(), checkpoint]
 	var b := player.ball
@@ -1335,31 +1353,61 @@ func respawn_target() -> Array:
 	return [checkpoint.ball, checkpoint.respawn_point(), checkpoint]
 
 
-## Gill came down on a ravine's floor (world expansion): one frond, then a quick dissolve and he
-## re-forms at the edge he fell from (Axolotl.ravine_return_point). On his last frond it is a
-## death like any other: he re-forms at the last bloom, progress kept.
+## Where Gill lands coming out of tunnel `v` (at its b end, or its a end when `rev`): on the ground
+## just beside the mouth, on whatever is actually there (the tidal pool's rim or the moss), with that
+## ground's normal and the way out from the mouth. [ball, point, normal, forward].
+func arrival_point(v: Vortex, rev: bool) -> Array:
+	var dest: MossBall = v.ball_a if rev else v.ball_b
+	var ddir: Vector3 = v.dir_a if rev else v.dir_b
+	var out_dir := ddir.rotated(MossBall.frame_at(ddir, 0).x, deg_to_rad(5.5)).normalized()
+	var p := dest.surface_point(out_dir)
+	var n := out_dir
+	if is_inside_tree():
+		var q := PhysicsRayQueryParameters3D.create(p + out_dir * 6.0, p - out_dir * 2.0, 1)
+		if player != null:
+			q.exclude = [player.get_rid()]
+		var hit := get_world_3d().direct_space_state.intersect_ray(q)
+		if not hit.is_empty():
+			p = hit.position
+			if (hit.normal as Vector3).dot(out_dir) > 0.5:
+				n = (hit.normal as Vector3).normalized()
+	var fwd := p - dest.surface_point(ddir)
+	fwd = (fwd - n * fwd.dot(n)).normalized()
+	return [dest, p, n, fwd]
+
+
+## Owner, 2026-10-02: every death costs the same, whatever caused it: Gill re-forms at his
+## checkpoint (respawn_target) with a third of his fronds, rounded up and at least one, and eats to
+## heal. Nothing earned, restored, collected or bought is lost and the clock simply runs on.
+static func respawn_health(max_h: int) -> int:
+	return maxi(1, ceili(max_h / 3.0))
+
+
+## The one way Gill dies. `cause` only picks how it looks: "ooze" sinks him into a ravine's ooze
+## first; anything else dissolves him where he is. Both then travel to the checkpoint (_cine_regen).
+func _die(cause: String) -> void:
+	stats["deaths"] += 1
+	if cause == "ooze":
+		stats["ooze_deaths"] = int(stats.get("ooze_deaths", 0)) + 1
+	_start_cinematic("ravine" if cause == "ooze" else "regen", {})
+
+
+## Gill came down on a ravine's floor (world expansion): owner, 2026-10-02, a fall into the ooze is
+## a death at any health; he sinks into it (the approved look) and re-forms at his checkpoint.
 func ravine_fall(p: Axolotl) -> void:
 	if cinematic != "" or p.state != "normal":
 		return
 	stats["ravine_falls"] = int(stats.get("ravine_falls", 0)) + 1
-	if p.health <= 1:
-		p.health = 0
-		p.model.set_health(0, p.max_health, true)
-		p.health_changed.emit(0, p.max_health)
-		p.died.emit()
-		return
-	p.health -= 1
-	p.model.set_health(p.health, p.max_health, true)
-	p.health_changed.emit(p.health, p.max_health)
+	p.health = 0
+	p.model.set_health(0, p.max_health, true)
+	p.health_changed.emit(0, p.max_health)
 	Settings.haptic("hurt")
-	Sfx.play("hurt", p.global_position)
 	WaterFX.inst.impulse(p.global_position, 1.5, 0.5)
-	_start_cinematic("ravine", {"to": p.ravine_return_point()})
+	_die("ooze")
 
 
 func _on_player_died() -> void:
-	stats["deaths"] += 1
-	_start_cinematic("regen", {})
+	_die("hurt")
 
 
 # --- Vortex ------------------------------------------------------------------------------
@@ -1453,6 +1501,7 @@ func _update_cinematic(dt: float) -> void:
 		"travel": _cine_travel(dt)
 		"regen": _cine_regen()
 		"ravine": _cine_ravine()
+		"land": _cine_land(dt)
 		"lesson": pass    # (Onboarding drives its own staged moments.)
 
 
@@ -1532,56 +1581,141 @@ func _cine_travel(dt: float) -> void:
 	cam.cine_pos = cam.cine_pos.lerp(cp, minf(1.0, dt * 4.0)) if cine_t > 0.05 else cp
 	cam.cine_look = look
 	cam.cine_up = cam_up
-	if k >= 1.0:
-		var dest: MossBall = v.ball_a if rev else v.ball_b
-		var ddir: Vector3 = v.dir_a if rev else v.dir_b
-		var tang := MossBall.frame_at(ddir, 0).x
-		var out_dir := ddir.rotated(tang, deg_to_rad(5.5))
-		player.state = "normal"
+	if k >= LAND_AT:
+		# (The ride's velocity at the hand-over, along the same easing.)
+		var k2 := minf(1.0, k + 0.01)
+		var e2 := k2 * k2 * (3.0 - 2.0 * k2)
+		var p2: Vector3 = v.ride_pose(1.0 - e2 if rev else e2)[0]
+		_begin_landing(v, rev, pos, (p2 - pos) / (0.01 * dur))
+
+
+## Owner, 2026-10-02: the ride's tumbling hands over to a soft assisted landing (_cine_land) before
+## the spiral reaches the pool, rather than carrying him head-first into the platform.
+const LAND_AT := 0.86      # (of the ride)
+const LAND_S := 1.1
+const LAND_HOVER_M := 2.2  # the last stretch comes straight down onto the ground from this high
+
+
+## Starts the landing from where the ride has him (`p0`, moving at `v0`). The arrival point is his
+## checkpoint from here on (the known spot, never his place mid-flight).
+func _begin_landing(v: Vortex, rev: bool, p0: Vector3, v0: Vector3) -> void:
+	var a := arrival_point(v, rev)
+	var dest: MossBall = a[0]
+	cinematic = "land"
+	cine_t = 0.0
+	cine_data = {"v": v, "rev": rev, "dest": dest, "p0": p0, "v0": v0, "to": a[1], "n": a[2], "fwd": a[3],
+			"q0": player.global_basis.orthonormalized().get_rotation_quaternion(), "bank": player.model.surf_bank,
+			"swipe": -1.0, "lunge": -1.0, "burst": false, "side": 1.0}
+	player.ball = dest
+	arrival = {"v": v, "rev": rev}
+	_vortex_block = v
+	stats["travels"].append([v.ball_a.index, rev])
+	audio.set_ball(dest.index, true)
+	audio.travel_whoosh(false)
+	Sfx.play("vortex_exit", p0)
+	# His buttons are back: what he does shows, while the landing keeps his path.
+	hud.set_cinematic(false)
+
+
+static func _bezier(a: Vector3, b: Vector3, c: Vector3, d: Vector3, s: float) -> Vector3:
+	var r := 1.0 - s
+	return a * r * r * r + b * 3.0 * r * r * s + c * 3.0 * r * s * s + d * s * s * s
+
+
+## The landing owns his path and how he is turned (onto the actual ground under the arrival point,
+## whichever way up it is on the ball); the buttons own what his body does on the way: a tail swipe,
+## a lunge's dart or a burst's bubbles play as usual and move nothing. Ends the moment he is down.
+func _cine_land(dt: float) -> void:
+	var d := cine_data
+	var u := clampf(cine_t / LAND_S, 0.0, 1.0)
+	var s := 1.0 - (1.0 - u) * (1.0 - u)   # eases out: he arrives with no speed left
+	var p0: Vector3 = d["p0"]
+	var to: Vector3 = d["to"]
+	var n: Vector3 = d["n"]
+	var fwd: Vector3 = d["fwd"]
+	# (The first handle matches the ride's speed at the hand-over: no jolt.)
+	var pos := _bezier(p0, p0 + (d["v0"] as Vector3) * LAND_S / 6.0, to + n * LAND_HOVER_M, to, s)
+	var w := smoothstep(0.0, 0.75, u)      # level with the ground well before touchdown
+	var q1 := Basis(fwd.cross(n).normalized(), n, -fwd).orthonormalized().get_rotation_quaternion()
+	var bs := Basis((d["q0"] as Quaternion).slerp(q1, w))
+	player.global_position = pos
+	player.global_basis = bs
+	player.up = bs.y
+	player.facing = -bs.z
+	player.model.surf = 1.0 - w
+	player.model.surf_bank = float(d["bank"]) * (1.0 - w)
+	player.model.speed = 1.3 * (1.0 - s)
+	player.model.grounded = u > 0.95
+	# Actions: shown, not done.
+	if Input.is_action_just_pressed("swipe") and float(d["swipe"]) < 0.0 and float(d["lunge"]) < 0.0:
+		d["swipe"] = 0.0
+		d["side"] = -float(d["side"])
+		player.model.swipe_side = d["side"]
+		WaterFX.inst.impulse(pos - fwd * 0.6, 1.3, 0.5)
+	if Input.is_action_just_pressed("lunge") and float(d["lunge"]) < 0.0 and float(d["swipe"]) < 0.0:
+		d["lunge"] = 0.0
+	if Input.is_action_just_pressed("jump") and not d["burst"]:
+		d["burst"] = true
+		player.model.burst_t = 0.0
+		WaterFX.inst.burst_fx(pos + n * 0.2, -n, n)
+		Sfx.play("burst", pos)
+	if float(d["swipe"]) >= 0.0:
+		d["swipe"] = float(d["swipe"]) + dt / Axolotl.SWIPE_TIME
+		if float(d["swipe"]) >= 1.0:
+			d["swipe"] = -1.0
+	if float(d["lunge"]) >= 0.0:
+		d["lunge"] = float(d["lunge"]) + dt / player._lunge_time
+		if float(d["lunge"]) >= 1.0:
+			d["lunge"] = -1.0
+	player.model.swipe_t = d["swipe"]
+	player.model.lunge_t = d["lunge"]
+	# (The lunge's dart is the body's: forward and back over the path, which it never changes.)
+	player.model.position = Vector3(0, 0, -0.45 * sin(PI * float(d["lunge"]))) if float(d["lunge"]) >= 0.0 else Vector3.ZERO
+	var cp := pos - fwd * 3.6 + n * 1.7
+	cam.cine_pos = cam.cine_pos.lerp(cp, minf(1.0, dt * 4.0))
+	cam.cine_look = pos
+	cam.cine_up = cam.cine_up.slerp(n, minf(1.0, dt * 3.0)).normalized()
+	if u >= 1.0:
+		player.model.position = Vector3.ZERO
+		player.model.swipe_t = -1.0
+		player.model.lunge_t = -1.0
 		player.model.surf = 0.0
-		player.place(dest, dest.surface_point(out_dir, 1.2), (dest.surface_point(out_dir) - dest.surface_point(ddir)))
-		player.velocity = dest.up_at(player.global_position) * 3.0
-		player.grounded = false
-		_vortex_block = v
-		stats["travels"].append([v.ball_a.index, rev])
-		audio.set_ball(dest.index, true)
-		audio.travel_whoosh(false)
-		Sfx.play("vortex_exit", player.global_position)
+		player.model.surf_bank = 0.0
+		player.place(d["dest"], to, fwd)
+		player.velocity = Vector3.ZERO
+		player.grounded = true
+		player.state = "normal"
 		cam.snap_behind()
 		_end_cinematic()
+		save_run()
 
 
-## A quick fade out of the ravine and back in at its edge (about 0.9 s; the camera follows).
-## Owner, 2026-10-01: he lands in the ravine's ooze (RavineOoze), sinks slowly into it and is gone,
-## then reforms on the rim as before.
+## Owner, 2026-10-01: he lands in the ravine's ooze (RavineOoze) and sinks slowly into it until he
+## is gone (the camera follows); 2026-10-02: that is a death, so he then re-forms at his checkpoint.
 const OOZE_SINK_S := 1.5
 const OOZE_SINK_M := 0.9
 
 
 func _cine_ravine() -> void:
-	if cine_t < OOZE_SINK_S:
-		if not cine_data.has("sinking"):
-			cine_data["sinking"] = true
-			Sfx.play("ooze_sink", player.global_position, -2.0)
-		var k := cine_t / OOZE_SINK_S
-		player.model.position.y = -OOZE_SINK_M * k * k * (3.0 - 2.0 * k)
-		player.model.dissolve = smoothstep(0.65, 1.0, k)
-		if int(cine_t * 30.0) % 4 == 0:
-			WaterFX.inst.sparkle(player.global_position + player.up * RavineOoze.LEVEL, RavineOoze.BUBBLE_COLS[int(cine_t * 7.0) % 2], 2, 0.6, 0.08, 0.7)
-	elif not cine_data.has("placed"):
-		cine_data["placed"] = true
-		var to: Array = cine_data["to"]
+	if not cine_data.has("sinking"):
+		cine_data["sinking"] = true
+		Sfx.play("ooze_sink", player.global_position, -2.0)
+	var k := minf(1.0, cine_t / OOZE_SINK_S)
+	player.model.position.y = -OOZE_SINK_M * k * k * (3.0 - 2.0 * k)
+	player.model.dissolve = smoothstep(0.65, 1.0, k)
+	if int(cine_t * 30.0) % 4 == 0:
+		WaterFX.inst.sparkle(player.global_position + player.up * RavineOoze.LEVEL, RavineOoze.BUBBLE_COLS[int(cine_t * 7.0) % 2], 2, 0.6, 0.08, 0.7)
+	if cine_t >= OOZE_SINK_S:
+		# Gone: from here it is the same journey to the checkpoint as any death.
 		player.model.position.y = 0.0
-		player.place(to[0], to[1])
-		Sfx.play("reform", to[1], -6.0)
-		cam.snap_behind()
-	else:
-		var k := clampf((cine_t - OOZE_SINK_S) / 0.55, 0.0, 1.0)
-		player.model.dissolve = 1.0 - k
-		if k >= 1.0:
-			player.state = "normal"
-			player.invuln_t = 1.2
-			_end_cinematic()
+		player.state = "dead"
+		_regen_from = player.global_position
+		cinematic = "regen"
+		cine_t = 0.8
+		cine_data = {}
+		cam.cinematic = true
+		cam.cine_pos = cam.global_position
+		cam.cine_look = player.global_position
 
 
 func _cine_regen() -> void:
@@ -1614,11 +1748,11 @@ func _cine_regen() -> void:
 		player.place(b, dest_pos)
 		if target[2]:
 			(target[2] as Bloom).brighten()
-			# The bloom's pulse startles parasites off (Expansion 6): he never re-forms into an
-			# attack he cannot answer.
-			for par in b.hostiles():
-				if par.is_alive() and par.global_position.distance_to(dest_pos) < Parasite.STARTLE_R:
-					par.startle(dest_pos)
+		# The re-forming pulse startles parasites off (Expansion 6), at a bloom or a tunnel's
+		# arrival point alike: he never re-forms into an attack he cannot answer.
+		for par in b.hostiles():
+			if par.is_alive() and par.global_position.distance_to(dest_pos) < Parasite.STARTLE_R:
+				par.startle(dest_pos)
 		audio.set_ball(b.index, true)
 		Sfx.play("reform", dest_pos)
 		cine_data["t_placed"] = cine_t
@@ -1631,7 +1765,7 @@ func _cine_regen() -> void:
 		cam.cine_up = up
 		if k >= 1.0:
 			player.state = "normal"
-			player.restore_full()
+			player.revive(respawn_health(player.max_health))
 			player.invuln_t = 1.5
 			cam.snap_behind()
 			_end_cinematic()

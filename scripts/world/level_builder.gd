@@ -479,7 +479,7 @@ func m2deg(m: float) -> float:
 
 ## A ravine along the (lat, lon) points (Vector2): `width_m` across its floor, `depth_m` deep,
 ## walls `wall_m` wide. It must lie inside raised ground (a plateau) with its ends closed: its
-## floor is the base sphere and standing on it costs a frond (Game.ravine_fall).
+## floor is the base sphere and falling onto it is a death (Game.ravine_fall).
 func ravine(points_ll: Array, width_m: float, depth_m: float, wall_m: float, id: String) -> void:
 	var dirs := []
 	for q in points_ll:
