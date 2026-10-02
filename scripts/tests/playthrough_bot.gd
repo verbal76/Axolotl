@@ -799,6 +799,11 @@ func goto(target: Variant, radius := 0.9, timeout := 45.0, allow_vortex: Vortex 
 		if allow_vortex != null and (g.cinematic == "travel" or p.ball != ball0):
 			set_stick(Vector2.ZERO)
 			return true
+		# (Carried off to another ball by an open whirlpool it wandered into: this walk is over; the
+		# caller takes him back. Run on 2026-10-02 sat on ball 1 for 3000 s chasing ball 2's mesa.)
+		if allow_vortex == null and p.ball != ball0:
+			set_stick(Vector2.ZERO)
+			return false
 		var tgt: Vector3 = target.call() if target is Callable else target
 		var flat := tangent_to(tgt)
 		# (Off a crossing and put back on a rim, maybe not at its end: that leg is over.)
@@ -1595,6 +1600,11 @@ func clear_ball(bi: int, target: float, skip_zones: Array) -> void:
 				break
 			# Nearest-first.
 			tasks.sort_custom(func(a, c): return a["pos"].call().distance_to(p.global_position) < c["pos"].call().distance_to(p.global_position))
+			if p.ball != b:
+				mark("swept off ball %d by a whirlpool; going back" % (bi + 1))
+				await travel_to(bi)
+				if p.ball != b:
+					break
 			var task: Dictionary = tasks.pop_front()
 			await _do_task(b, task, routines_done)
 	# Caves (optional content, but the bot verifies every upgrade and pearl).
