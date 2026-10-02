@@ -76,7 +76,7 @@ func _test_startup() -> void:
 ## Startup speed-ups (2026-10-02, docs/research/startup-2026-10-01/RESULTS-2026-10-02.md) must build
 ## exactly the same world: each ball's ground rebuilt with its tiles on worker threads is
 ## bit-identical (vertices, normals, indices, collision faces, far mesh, extremes) to the same
-## ground built one tile at a time on this thread.
+## ground built one tile at a time on this thread; Levels.NearSet answers exactly as _near_any.
 func _test_startup_build_identical() -> void:
 	var same := 0
 	var detail := []
@@ -94,6 +94,44 @@ func _test_startup_build_identical() -> void:
 			detail.append("ball %d differs" % (mb.index + 1))
 	await t.frames(1)
 	t.check("startup_terrain_parallel_identical", same == g.balls.size(), "%d of %d balls identical %s" % [same, g.balls.size(), ", ".join(detail)])
+	# Keep-clear checks through Levels.NearSet answer exactly as Levels._near_any over the same list:
+	# random lists (tiny, wide, zero, negative, whole-sphere and integer radii, unnormalised and
+	# zero directions) against random directions and directions just either side of each edge.
+	var rng := RandomNumberGenerator.new()
+	rng.seed = 9
+	# (Counters in a dictionary: a lambda captures plain locals by value.)
+	var n := {"queries": 0, "near": 0, "mismatches": 0}
+	for li in 12:
+		var list := []
+		for k in rng.randi_range(1, 90):
+			var c := Vector3(rng.randfn(), rng.randfn(), rng.randfn()) * (rng.randf_range(0.2, 3.0) if k % 5 == 0 else 1.0)
+			var deg: Variant = rng.randf_range(0.5, 20.0)
+			match k % 17:
+				3: deg = rng.randi_range(1, 30)
+				5: deg = 0.0
+				7: deg = -4.0
+				11: deg = rng.randf_range(40.0, 200.0)
+				13: c = Vector3.ZERO
+			list.append([c, deg])
+		var ns := Levels.NearSet.new(list)
+		var probe := func(d: Vector3) -> void:
+			var a := Levels._near_any(d, list)
+			if a != ns.near(d):
+				n["mismatches"] += 1
+			n["queries"] += 1
+			n["near"] += 1 if a else 0
+		for q in 4000:
+			probe.call(Vector3(rng.randfn(), rng.randfn(), rng.randfn()).normalized())
+		for e in list:
+			var c: Vector3 = e[0]
+			if c == Vector3.ZERO:
+				probe.call(Vector3.ZERO)
+				continue
+			var axis := c.cross(Vector3(rng.randfn(), rng.randfn(), rng.randfn())).normalized()
+			for eps in [-1e-4, -1e-6, 0.0, 1e-6, 1e-4]:
+				probe.call(c.normalized().rotated(axis, deg_to_rad(float(e[1])) + eps))
+	t.check("startup_near_set_exact", n["mismatches"] == 0 and n["near"] > 1000 and n["near"] < n["queries"],
+			"%d queries, %d near, %d mismatches" % [n["queries"], n["near"], n["mismatches"]])
 
 
 static func _terrain_hash(b: MossBall) -> String:
