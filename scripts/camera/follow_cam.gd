@@ -14,7 +14,7 @@ extends Camera3D
 ## other node's _process (process_priority) and so right before the frame is drawn: never under any
 ## moss ball's ground (measured radially on that ball's own terrain, whichever way up it is) and
 ## never inside a solid (leaf, stem, rock, mound, cave wall). In test runs `_audit` re-checks the
-## transform actually drawn (at the start of the next frame) and counts any frame that breaks it.
+## transform about to be drawn (after every writer) and counts any frame that breaks it.
 
 var target: Axolotl
 var cam_up := Vector3.UP
@@ -64,9 +64,13 @@ func _ready() -> void:
 	# (Last of all: after the game, the tutorial, the presentation and anything else has placed it.)
 	process_priority = 1000
 	if Settings.test_mode != "":
-		# (The start of the next frame: after every writer of the frame just drawn, deferred calls
-		# included. frame_pre_draw would be exact but headless runs never draw.)
-		get_tree().process_frame.connect(_audit)
+		# (After every node's _process, this one's safety stage included, as the frame is drawn:
+		# frame_pre_draw would be exact but headless runs never draw.)
+		var a := _Auditor.new()
+		a.cam = self
+		a.process_priority = 2000
+		a.process_mode = Node.PROCESS_MODE_ALWAYS
+		add_child(a)
 
 
 func snap_behind() -> void:
@@ -77,6 +81,7 @@ func snap_behind() -> void:
 	pitch = 0.32
 	_cur_dist = distance
 	_place(1.0)
+	_enforce_safe()
 
 
 func shake(amount: float) -> void:
@@ -257,7 +262,13 @@ func _out_of_solids(p: Vector3, anchor: Vector3) -> Vector3:
 	return (h2.position as Vector3) + to.normalized() * 0.3
 
 
-## Test runs: the transform last drawn, checked against the invariant (any writer, any order).
+class _Auditor extends Node:
+	var cam: FollowCam
+	func _process(_dt: float) -> void:
+		cam._audit()
+
+
+## Test runs: the transform about to be drawn, checked against the invariant (any writer, any order).
 func _audit() -> void:
 	if not is_inside_tree():
 		return
