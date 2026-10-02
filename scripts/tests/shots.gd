@@ -795,6 +795,8 @@ func run(runner) -> void:
 		await _sea_fan_shots(g, "restored")
 	if only == "plantperf":
 		await _plant_perf(g)
+	if only == "look":
+		await _look_shots(g)
 	if only == "" or only == "moments":
 		await _moments(g)
 	if only == "" or only == "restored":
@@ -3054,6 +3056,63 @@ func _stem_meshes(b: MossBall) -> Array:
 			if not seen:
 				into.append([mmi.multimesh.mesh, m])
 	return [tall, medium]
+
+
+## World materials and geometry (E6f): fixed views of every ball's ground and the first of each
+## kind of formation on it (mound, ridge, terrace, arch, shelf, stone column, stem), a cave from
+## inside and the tank floor, so a material change can be judged before and after. `look_ball=N`
+## limits it to one ball.
+func _look_shots(g: Game) -> void:
+	g.player.invuln_t = 9999
+	var only_b := int(Settings.test_args.get("look_ball", "0")) - 1
+	var b0 := g.balls[0]
+	if only_b < 0:
+		var m0 := b0.surface_point(MossBall.dir_ll(66, 0), 0.1)
+		_look(g, 0, m0, b0.surface_point(MossBall.dir_ll(50, 0)) - m0, 0.2)
+		await t.seconds(1.5)
+		await t.shot("lk_murky_b1_meadow")
+	_heal_all(g)
+	await t.seconds(1.0)
+	for bi in g.balls.size():
+		if only_b >= 0 and bi != only_b:
+			continue
+		var b := g.balls[bi]
+		var lb: LevelBuilder = b.get_meta("builder")
+		_look(g, bi, b.surface_point(MossBall.dir_ll(10, 30 + bi * 40), 0.2), Vector3.FORWARD, 0.25)
+		await t.seconds(1.2)
+		await t.shot("lk_b%d_ground" % (bi + 1))
+		var seen := {}
+		for c in lb.root.get_children():
+			if not c is Node3D:
+				continue
+			var kind := ""
+			if c.has_meta("terrain_kind"):
+				kind = str(c.get_meta("terrain_kind"))
+			elif str(c.get_meta("grounded", "")) == "stem":
+				kind = "stem"
+			elif str(c.get_meta("grounded", "")) == "cushion":
+				kind = "mound"
+			if kind == "" or kind == "terrace tier" or seen.has(kind):
+				continue
+			seen[kind] = true
+			var o: Vector3 = (c as Node3D).global_position
+			var up := b.up_at(o)
+			var fr := MossBall.frame_at(up, 0.0)
+			var top := float(c.get_meta("top", 2.5))
+			var dist := clampf(float(c.get_meta("radius", 1.5)) * 2.0 + 3.0, 4.0, 11.0)
+			_close(g, o + up * (top * 0.6 + 1.2) + fr.x * dist, o + up * top * 0.45, up)
+			await t.seconds(0.8)
+			await t.shot("lk_b%d_%s" % [bi + 1, kind.replace(" ", "_")])
+		_open(g)
+		for h in lb.bot_hints:
+			if h.has("cave"):
+				g.player.place(b, b.surface_point(b.up_at(h["door"]), 0.2), (h["door"] as Vector3) - (h["entry"] as Vector3))
+				g.cam.snap_behind()
+				await t.seconds(1.0)
+				await t.shot("lk_b%d_cave" % (bi + 1))
+				break
+	if only_b < 0:
+		await _gravel_shots(g, "lk_tank")
 
 
 func _heal_all(g: Game) -> void:
