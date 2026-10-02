@@ -218,9 +218,22 @@ func _enforce_safe() -> void:
 ## from its own terrain: slopes, ridges, ravines, plateaus alike). While he is himself under a ball's
 ## ground surface (a cave or hollow inside it) that ball is left to the solid check.
 func safe_point(p: Vector3, anchor: Vector3, solids := true) -> Vector3:
+	# (The two rules can move it into each other's way, e.g. pushed up out of the ground into a
+	# leaf: applied in turn until it settles, so the place is valid under both.)
 	var out := p
-	if solids and is_inside_tree():
-		out = _out_of_solids(out, anchor)
+	for i in 4:
+		var prev := out
+		out = _off_ground(out)
+		if solids and is_inside_tree():
+			out = _out_of_solids(out, anchor)
+		out = _off_ground(out)
+		if out.distance_squared_to(prev) < 1e-6:
+			break
+	return out
+
+
+func _off_ground(p: Vector3) -> Vector3:
+	var out := p
 	var g := Game.inst
 	if g == null:
 		return out
@@ -289,4 +302,6 @@ func _audit() -> void:
 		unsafe_drawn += 1
 		if unsafe_worst == "":
 			var g := Game.inst
-			unsafe_worst = "%s at %s (state %s, cinematic '%s')" % ["presentation" if target == null else ("cinematic" if cinematic else "follow"), p.round(), g.state if g else "?", g.cinematic if g else "?"]
+			var dg := _off_ground(p).distance_to(p)
+			var ds := _out_of_solids(p, anchor).distance_to(p) if target != null else 0.0
+			unsafe_worst = "%s at %s (state %s, cinematic '%s'; ground off by %.2f m, solid off by %.2f m)" % ["presentation" if target == null else ("cinematic" if cinematic else "follow"), p.round(), g.state if g else "?", g.cinematic if g else "?", dg, ds]
