@@ -1232,12 +1232,18 @@ func _test_stalker() -> void:
 	t.check("stalker_moves_the_reeds_unseen", bend > 0.2 and away > st.seen_radius and st.state == "prowl", "bend %.2f beside it, %.1f m from him" % [bend, away])
 	# In its patch, close: it stalks, then telegraphs (rears, hisses, reeds thrash) before pouncing
 	# along a locked line. A sidestep during the telegraph avoids the pounce.
-	# (Standing on the patch side of it, so he is in its patch.)
+	# (Standing on the patch side of it, in its patch and in plain sight of it: where it has prowled
+	# to by now depends on how long the suite ran before, so the spot is chosen round it.)
 	var up := b.up_at(st.global_position)
 	var off := centre - st.global_position
 	off -= up * off.dot(up)
 	off = off.normalized() if off.length() > 0.5 else MossBall.frame_at(up, 0.0).z
 	var near := b.surface_point(b.up_at(st.global_position + off * 3.2), 0.2)
+	for k in 12:
+		var cand := b.surface_point(b.up_at(st.global_position + off.rotated(up, k * TAU / 12.0) * 3.2), 0.2)
+		if st._in_patch(cand, 1.0) and not st.line_blocked(st.global_position + up * 0.3, cand + b.up_at(cand) * 0.25):
+			near = cand
+			break
 	place_at(b.index, near, st.global_position - near)
 	var tt: float = await _until(func(): return st.state == "telegraph", 6.0)
 	var h0 := p.health
@@ -9453,6 +9459,9 @@ func _test_death_and_arrival() -> void:
 	t.check("death_health_third_of_max", hs == [1, 2, 2, 2], "max 3/4/5/6 -> %s" % str(hs))
 	var release := _hold_threats(g.balls[0])
 	var b0: MossBall = g.balls[0]
+	# (On the first ball: earlier tests may have left him anywhere.)
+	place_at(0, b0.surface_point(b0.start_dir, 0.2), MossBall.frame_at(b0.start_dir, 0).z)
+	await t.frames(2)
 	var keep := [g.checkpoint, g.arrival.duplicate(), p.max_health]
 	var earned0 := g.run_save.earned().size()
 	var stars0 := g.gill.collected.size()
