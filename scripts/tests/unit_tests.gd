@@ -9354,6 +9354,21 @@ func _test_restore_hints() -> void:
 	var st: float = h.stuck[h.zone]
 	h.update(30.0, b, gp, true)
 	var quiet_ok: bool = h.stage == 0 and is_equal_approx(h.stuck[h.zone], st)
-	b.complete_event(zid, left[0])
+	# Real progress (a kill or a capture, so the zone's tally stays true for later tests).
+	var progressed := false
+	for q in b.parasites:
+		if q.zone_id == zid and q.hp > 0 and not q.returner:
+			q.hp = 1
+			q.hit_cd = 0.0
+			if q.state == "init":
+				q.state = "graze"
+			progressed = q.hit(1, q.global_position + Vector3.UP)
+			break
+	if not progressed:
+		for m in b.motes:
+			if m.zone_id == zid and m.state in ["init", "wander"]:
+				m.state = "done"
+				g.mote_restored(m)
+				break
 	h.update(1.0, b, gp, false)
 	t.check("hints_quiet_in_tutorial_and_reset_on_progress", quiet_ok and h.stage == 0 and h.stuck[h.zone] <= 1.01, "after progress: stage %d, %.0f s searched" % [h.stage, h.stuck[h.zone]])
