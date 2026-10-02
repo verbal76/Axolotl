@@ -60,6 +60,19 @@ func run(runner) -> void:
 		top.make_current()
 		await t.seconds(0.5)
 		await t.shot("ooze_ball1_b")
+		# Each end of each ravine, from above and a little back along it (owner, 2026-10-02: the
+		# pool ended square, climbing the slope).
+		for ci in b.carves.size():
+			var cp: Array = b.carves[ci][0]
+			for e in [0, cp.size() - 1]:
+				var end_d: Vector3 = (cp[e] as Vector3).normalized()
+				var inward: Vector3 = (cp[1 if e == 0 else cp.size() - 2] as Vector3).normalized()
+				var back := (inward - end_d).normalized()
+				var end_w := b.surface_point(end_d)
+				top.global_position = end_w + end_d * 9.0 + back * 6.0
+				top.look_at(end_w - back * 1.5, end_d)
+				await t.seconds(0.4)
+				await t.shot("ooze_end_c%d_%d" % [ci, e])
 		top.queue_free()
 	if only == "hud":
 		# Touch controls over bright moss: idle, then the stick pushed and lunge held.

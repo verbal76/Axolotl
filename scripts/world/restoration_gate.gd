@@ -6,8 +6,8 @@ extends AnimatableBody3D
 ##              curtain draws up out of a doorway);
 ##   "grow"     grows from a bud at `closed_xf` to full size at `open_xf`; solid only once grown
 ##              (leaves unfurling into stepping stones);
-##   "retract"  shrinks away from `closed_xf` into `open_xf`; stops blocking at once (debris
-##              clearing from a tunnel);
+##   "retract"  shrinks away from `closed_xf` into `open_xf` and is gone; stops blocking at once
+##              (debris clearing from a tunnel, a root curtain drawing up);
 ##   "column"   a bubble column that starts flowing (its bubbles appear, it lifts) once healed.
 ## Healed live it plays out over `duration`; resumed from a save it is simply open. It never moves
 ## into him: it waits while he stands where it is going. Children (meshes, collision shapes) are
@@ -91,6 +91,9 @@ func _apply(k: float) -> void:
 			var s2 := lerpf(1.0, 0.1, k)
 			xf.basis = xf.basis.scaled(Vector3(s2, s2, s2))
 			_set_solid(k <= 0.0)
+			# Gone once cleared (owner, 2026-10-02: a shrunken curtain was left floating over its
+			# doorway).
+			visible = k < 1.0
 		"column":
 			visible = k > 0.0
 			flow = k

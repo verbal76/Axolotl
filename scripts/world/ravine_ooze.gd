@@ -30,21 +30,32 @@ static func build(b: MossBall) -> RavineOoze:
 		var w := hw + wall * 0.75
 		var lift_k := lift
 		lift += 0.004   # (overlapping ravines never z-fight)
-		# Samples along the polyline, carried a little past each end (the carve rounds off there).
+		# Samples along the polyline, carried on past each end over the carve's rounded end wall. There
+		# the pool keeps the floor's level at that end (`level_at`), so the end wall cuts it on the same
+		# smooth curve as the side walls (owner, 2026-10-02: it ended square, climbing the slope).
 		var samples: Array[Vector3] = []
+		var level_at: Array[Vector3] = []
 		var first: Vector3 = (pts[0] as Vector3).normalized()
 		var second: Vector3 = (pts[1] as Vector3).normalized()
-		samples.append(first.slerp(second, -w / maxf(0.001, first.angle_to(second) * b.radius)).normalized())
+		var ext := w + wall
+		var n_ext := maxi(2, int(ceil(ext / STEP_M)))
+		for e in range(n_ext, 0, -1):
+			samples.append(first.slerp(second, -ext * e / n_ext / maxf(0.001, first.angle_to(second) * b.radius)).normalized())
+			level_at.append(first)
 		for k in pts.size() - 1:
 			var a: Vector3 = (pts[k] as Vector3).normalized()
 			var c: Vector3 = (pts[k + 1] as Vector3).normalized()
 			var n := maxi(1, int(ceil(a.angle_to(c) * b.radius / STEP_M)))
 			for j in n:
 				samples.append(a.slerp(c, float(j) / n).normalized())
+				level_at.append(samples[samples.size() - 1])
 		var last: Vector3 = (pts[pts.size() - 1] as Vector3).normalized()
 		var prev: Vector3 = (pts[pts.size() - 2] as Vector3).normalized()
 		samples.append(last)
-		samples.append(prev.slerp(last, 1.0 + w / maxf(0.001, prev.angle_to(last) * b.radius)).normalized())
+		level_at.append(last)
+		for e in range(1, n_ext + 1):
+			samples.append(prev.slerp(last, 1.0 + ext * e / n_ext / maxf(0.001, prev.angle_to(last) * b.radius)).normalized())
+			level_at.append(last)
 		var base := st_v.size()
 		var along := 0.0
 		for s in samples.size():
@@ -54,7 +65,7 @@ static func build(b: MossBall) -> RavineOoze:
 			var side := d.cross(t).normalized()
 			# The floor is the base sphere only where no hill rises under the ravine; elsewhere it
 			# sits higher (hill height minus the carve), so the pool follows the floor along it.
-			var floor_h := b.terrain_height(d)
+			var floor_h := b.terrain_height(level_at[s])
 			var r := b.radius + floor_h + LEVEL + lift_k
 			# The rim here: the lower of the two banks just outside the walls.
 			var reach := (hw + wall + 0.5) / b.radius
