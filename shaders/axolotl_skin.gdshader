@@ -1,5 +1,6 @@
 shader_type spatial;
 render_mode diffuse_burley, specular_schlick_ggx, cull_disabled;
+#include "res://shaders/creature_light.gdshaderinc"
 
 // Gill's skin (Expansion 6): soft, moist axolotl skin rather than shiny pink plastic.
 // - Tone: a warmer, slightly deeper pink along the back, a pale peach belly, and a faint mottle.
@@ -141,4 +142,6 @@ void fragment() {
 	RIM = 0.12;
 	RIM_TINT = 0.6;
 	EMISSION = c * glow;
+	// The tank's caustic light on him/it (creature_light).
+	EMISSION += creature_caustics(ALBEDO, VERTEX, NORMAL, INV_VIEW_MATRIX);
 }

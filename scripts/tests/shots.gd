@@ -576,6 +576,27 @@ func run(runner) -> void:
 			e.fog_density = v[5]
 			await t.seconds(0.3)
 			await t.shot("light_side_%s" % v[0])
+	if only == "rays":
+		# Light through the water (owner, 2026-10-02): soft beams, and the ripple light moving over
+		# the ground and Gill. A clear tank (two moments half a second apart, to see it move), then murky.
+		for clean in [1.0, 0.15]:
+			for b in g.balls:
+				b.add_heal(Vector3.UP, 340.0 if clean > 0.5 else 0.0, 0.0)
+			g.g_disp = clean
+			g.aquarium.apply(clean)
+			var tag := "clear" if clean > 0.5 else "murky"
+			# Low, looking out across the ball toward open water and its beams.
+			_look(g, 0, g.balls[0].surface_point(MossBall.dir_ll(84, 0), 0.2), Aquarium.light_params["lamp_dir"], -0.2)
+			await t.seconds(1.5)
+			await t.shot("rays_%s_beams" % tag)
+			# Close over Gill on open ground: the moving web on the moss and on him.
+			_look(g, 0, g.balls[0].surface_point(MossBall.dir_ll(84, 40), 0.2), Vector3.FORWARD, 0.9)
+			g.cam.distance = 2.6
+			await t.seconds(1.0)
+			await t.shot("rays_%s_ground_a" % tag)
+			await t.seconds(0.5)
+			await t.shot("rays_%s_ground_b" % tag)
+			g.cam.distance = 4.4
 	if only == "worldr":
 		# The terrain vocabulary (ridges, terraces, arch, bridge, shelves), healed, from further back.
 		for b in g.balls:

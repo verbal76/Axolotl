@@ -97,6 +97,7 @@ func _build_light() -> void:
 	sun.light_cull_mask = 0xFFFFF & ~(1 << (ROOM_LAYER - 1))
 	add_child(sun)
 	light_params["lamp_dir"] = Basis.from_euler(sun.rotation).z.normalized()
+	RenderingServer.global_shader_parameter_set("mote_lamp_dir", light_params["lamp_dir"])
 	window_light = DirectionalLight3D.new()
 	# From the window side of the room (+x), a little from above.
 	window_light.rotation = Vector3(deg_to_rad(-16), deg_to_rad(72), 0)
@@ -472,19 +473,29 @@ func _build_surface() -> void:
 			through.append((Levels.CENTERS[i] as Vector3) + side * (float(Levels.RADII[i]) + rng.randf_range(10.0, 26.0)))
 	for k in 5:
 		through.append(Vector3(rng.randf_range(-190, 190), 0, rng.randf_range(-160, 110)))
+	# (Each beam soft across, with a wide faint halo round it so the light reads as diffused:
+	# owner, 2026-10-02.)
+	var beams := []
 	for p in through:
+		var r_top := rng.randf_range(5, 9)
+		var r_bot := rng.randf_range(15, 26)
+		beams.append([p, r_top, r_bot, 1.0])
+		beams.append([p, r_top * 2.0, r_bot * 1.9, 0.35])
+	for bm in beams:
+		var p: Vector3 = bm[0]
 		var s := MeshInstance3D.new()
 		var cm := CylinderMesh.new()
-		cm.top_radius = rng.randf_range(4, 8)
-		cm.bottom_radius = rng.randf_range(12, 22)
+		cm.top_radius = bm[1]
+		cm.bottom_radius = bm[2]
 		cm.height = 300
 		cm.cap_top = false
 		cm.cap_bottom = false
-		cm.radial_segments = 12
+		cm.radial_segments = 16
 		s.mesh = cm
 		var m := ShaderMaterial.new()
 		m.shader = preload("res://shaders/light_shaft.gdshader")
 		m.set_shader_parameter("noise_tex", NOISE)
+		m.set_shader_parameter("gain", bm[3])
 		s.material_override = m
 		# Its axis along the light, crossing the surface above `p`.
 		var y_axis := lamp.normalized()
@@ -929,6 +940,7 @@ func apply(g: float) -> void:
 	sun.shadow_opacity = lerpf(0.4, 0.78, e)
 	window_light.light_energy = lerpf(0.0, 0.5, e * e)
 	light_params["clarity"] = e
+	RenderingServer.global_shader_parameter_set("mote_clarity", e)
 	if absf(e - _pushed_clarity) > 0.004 or (e >= 1.0 and _pushed_clarity < 1.0):
 		_pushed_clarity = e
 		var gm := Game.inst

@@ -3,6 +3,7 @@ shader_type spatial;
 // from the snout (0) to the tail tip (1+) and drives a travelling side-to-side swimming wave that
 // grows toward the tail. `swim` (0.2..2.5) is how hard it is swimming; `phase` desynchronises fish.
 render_mode cull_disabled;
+#include "res://shaders/creature_light.gdshaderinc"
 
 instance uniform float phase = 0.0;
 instance uniform float wag = 5.0;
@@ -32,4 +33,6 @@ void fragment() {
 	SPECULAR = 0.35 + 0.2 * pop;
 	RIM = 0.35 + 0.3 * pop;
 	RIM_TINT = 0.4;
+	// The tank's caustic light on him/it (creature_light).
+	EMISSION += creature_caustics(ALBEDO, VERTEX, NORMAL, INV_VIEW_MATRIX);
 }

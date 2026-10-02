@@ -1,5 +1,6 @@
 shader_type spatial;
 render_mode diffuse_lambert;
+#include "res://shaders/creature_light.gdshaderinc"
 
 // Parasite body (Expansion 6): one continuous, flexible, tapering body instead of a chain of
 // beads. A shared tube mesh (UV.x round the body, UV.y head to tail with rounded caps beyond both
@@ -98,4 +99,6 @@ void fragment() {
 	ROUGHNESS = mix(mix(0.45, 0.3, leech), 0.9, g);
 	float glow = (1.0 - g) * (0.25 + spots * 0.8 + windup * 1.5) * glow_gain;
 	EMISSION = vivid * glow + vec3(flash * 0.8);
+	// The tank's caustic light on him/it (creature_light).
+	EMISSION += creature_caustics(ALBEDO, VERTEX, NORMAL, INV_VIEW_MATRIX);
 }
