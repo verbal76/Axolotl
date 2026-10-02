@@ -587,6 +587,56 @@ func _build_snail() -> void:
 		snail.add_child(e)
 
 
+var _blades: MultiMesh
+var _blade_xfs: Array = []
+var _blade_h := PackedFloat32Array()   # each blade's height after trimming (0: hidden)
+## How far a blade's sway (up to ~6 m) and leaves keep clear of a ball or a tunnel.
+const BLADE_CLEAR := 9.0
+
+
+## Owner, 2026-10-02: the tall floor blades must not poke into the moss balls or the water tunnels.
+## Called once the world is built: each blade that would reach one is cut short below it (or hidden
+## when too little would be left). Spheres: [centre, radius].
+func trim_plants(spheres: Array) -> void:
+	if _blades == null:
+		return
+	_blade_h.resize(_blade_xfs.size())
+	for i in _blade_xfs.size():
+		var xf: Transform3D = _blade_xfs[i]
+		var base := xf.origin
+		var h := xf.basis.get_scale().y   # (the blade mesh is 1 m tall)
+		var top := h
+		for sp in spheres:
+			var c: Vector3 = sp[0]
+			var r: float = float(sp[1]) + BLADE_CLEAR
+			var dh := Vector2(c.x - base.x, c.z - base.z).length()
+			if dh >= r:
+				continue
+			var under := c.y - sqrt(r * r - dh * dh) - base.y
+			if under < top and base.y + h > c.y - r:
+				top = under
+		_blade_h[i] = h if top >= h else (top if top >= 20.0 else 0.0)
+		if top < h:
+			var b := xf.basis
+			var sc := b.get_scale()
+			var nb := b.orthonormalized().scaled(Vector3(sc.x, maxf(top, 0.001), sc.z))
+			_blades.set_instance_transform(i, Transform3D(nb, base) if top >= 20.0 else Transform3D(Basis().scaled(Vector3.ONE * 0.0001), base))
+
+
+## The highest point of each blade now (for tests).
+func blade_tops() -> PackedVector3Array:
+	var out := PackedVector3Array()
+	for i in _blade_xfs.size():
+		var base: Vector3 = (_blade_xfs[i] as Transform3D).origin
+		out.append(base + Vector3.UP * (_blade_h[i] if i < _blade_h.size() else (_blade_xfs[i] as Transform3D).basis.get_scale().y))
+	return out
+
+
+## Each blade's base (for tests).
+func blade_base(i: int) -> Vector3:
+	return (_blade_xfs[i] as Transform3D).origin
+
+
 func _build_plants() -> void:
 	var sh := Shader.new()
 	sh.code = """
@@ -627,6 +677,8 @@ void fragment() {
 	mm.instance_count = xfs.size()
 	for i in xfs.size():
 		mm.set_instance_transform(i, xfs[i])
+	_blades = mm
+	_blade_xfs = xfs
 	var mmi := MultiMeshInstance3D.new()
 	mmi.multimesh = mm
 	mmi.material_override = plant_mat

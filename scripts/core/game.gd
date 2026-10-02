@@ -265,6 +265,14 @@ func _build_world() -> void:
 		add_child(l)
 		_mote_lights.append(l)
 
+	# The tall floor blades stay clear of the balls and the tunnels (owner, 2026-10-02).
+	var keep_clear: Array = []
+	for b in balls:
+		keep_clear.append([b.global_position, b.radius + 6.0])
+	for v in vortices:
+		for k in 25:
+			keep_clear.append([v.visual_point(k / 24.0), Vortex.TUBE_RADIUS + 1.5])
+	aquarium.trim_plants(keep_clear)
 	StartupTrace.mark("vortices, axolotl, camera, lights")
 	ecosystem = Ecosystem.new()
 	add_child(ecosystem)

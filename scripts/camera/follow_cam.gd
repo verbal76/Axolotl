@@ -27,6 +27,7 @@ var _cine_weight := 0.0
 const PITCH_MIN := -0.25
 const PITCH_MAX := 1.1
 const SENS := 0.0055
+const GROUND_CLEAR := 0.45   # m the camera keeps above the terrain
 
 
 func _ready() -> void:
@@ -108,6 +109,14 @@ func _place(dt: float) -> void:
 		want = maxf(0.6, pivot.distance_to(hit.position) - 0.35)
 	_cur_dist = want if want < _cur_dist else lerpf(_cur_dist, want, minf(1.0, dt * 3.0))
 	var pos := pivot + (desired - pivot).normalized() * _cur_dist
+	# Never under the ground (owner, 2026-10-02: looking down from a crest dipped it below the
+	# terrain): kept a little above the ball's surface, whatever the ray found.
+	var gb = target.get("ball")
+	if gb is MossBall:
+		var gd: Vector3 = (pos - gb.global_position).normalized()
+		var floor_r: float = gb.radius + gb.terrain_height(gd) + GROUND_CLEAR
+		if (pos - gb.global_position).length() < floor_r:
+			pos = gb.global_position + gd * floor_r
 	var look := pivot + yaw_dir * 1.6 + right * shoulder * 0.6
 	if _shake > 0.0:
 		pos += Vector3(randf() - 0.5, randf() - 0.5, randf() - 0.5) * _shake * 0.4
