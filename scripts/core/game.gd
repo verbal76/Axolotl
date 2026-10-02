@@ -62,6 +62,8 @@ var food: FoodDirector
 ## Parasites returning to cleared zones (Repopulation); Normal rules.
 var repop: Repopulation
 var _repop_t := 0.0
+## Gentle help finding what is left in an area he has searched a while (RestoreHints).
+var hints := RestoreHints.new()
 ## Hard Mode's tug of war (HardMode; ledger row 12): null in a Normal run.
 var hard: HardMode
 var _hard_t := 0.0
@@ -917,6 +919,7 @@ func _process(dt: float) -> void:
 	_update_mote_lights()
 	_update_food(dt)
 	_update_repop(dt)
+	_update_hints(dt)
 	_update_hard(dt)
 	_update_all_clear(dt)
 
@@ -1178,7 +1181,7 @@ func parasite_killed(par: Parasite) -> void:
 	var base: Image = ball.health_snapshot() if staged else null
 	if staged:
 		ball.record_heals_begin()
-	ball.complete_event(par.zone_id, par.global_position, 12.0)
+	ball.complete_event(par.zone_id, restore_spot(par), 12.0)
 	_hide_prompt("swipe", true)
 	if staged:
 		onboarding.begin_kill(par, ball, base, ball.record_heals_end())
@@ -1203,6 +1206,19 @@ func discover_species(sp: String) -> void:
 	if _earn("species." + sp):
 		hud.show_discovery("New species: %s" % Ecosystem.SPECIES.get(sp, sp))
 		Sfx.play("discover", null, -4.0)
+
+
+## Where an authored parasite's kill regrows moss: where it died when that is in its own area, else
+## at its home (owner, 2026-10-02: one that chased Gill into a live area and died there restores its
+## own dead area; the zone tally was always its own). A wisp carries the vitality home.
+func restore_spot(par: Parasite) -> Vector3:
+	var b := par.ball
+	var z: Dictionary = b.zones[par.zone_id]
+	if b.up_at(par.global_position).angle_to(z["dir"]) <= deg_to_rad(float(z["radius"])):
+		return par.global_position
+	var home := b.surface_point(par.spawn_dir)
+	WaterFX.inst.wisp(par.global_position, home, 1.4, Color(0.45, 1.0, 0.45, 0.8), 18)
+	return home
 
 
 func mote_restored(m: Mote) -> void:
@@ -1663,6 +1679,12 @@ func _update_repop(dt: float) -> void:
 		return
 	_repop_t = 0.5
 	repop.update(clock.play_s, player.ball, player.global_position, cam)
+
+
+func _update_hints(dt: float) -> void:
+	if state != "play" or player == null or not (player.ball is MossBall):
+		return
+	hints.update(dt, player.ball, player.global_position, onboarding != null and (onboarding.objective != "" or onboarding.stage != ""))
 
 
 ## Four times a second of play: Hard Mode's tug of war (HardMode). Only in play (the clock's play
