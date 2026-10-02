@@ -931,7 +931,7 @@ func _process(dt: float) -> void:
 	_update_all_clear(dt)
 
 
-## The title's orbit camera, kept in front of any wall between it and him and above the ground
+## The title's orbit camera, kept in front of any wall between it and him, so he stays in view
 ## (owner, 2026-10-02: swinging round him in a ravine it went through the cliff, which showed hollow).
 func title_cam_pos(look: Vector3, want: Vector3) -> Vector3:
 	var q := PhysicsRayQueryParameters3D.create(look, want, 1)
@@ -940,11 +940,7 @@ func title_cam_pos(look: Vector3, want: Vector3) -> Vector3:
 	var hit := get_world_3d().direct_space_state.intersect_ray(q)
 	if not hit.is_empty():
 		want = look + (want - look).normalized() * maxf(1.0, look.distance_to(hit.position) - 0.4)
-	var b := player.ball
-	var gd := (want - b.global_position).normalized()
-	var floor_r := b.radius + b.terrain_height(gd) + FollowCam.GROUND_CLEAR
-	if (want - b.global_position).length() < floor_r:
-		want = b.global_position + gd * floor_r
+	# (Ground and solids: the camera's own safety stage, FollowCam._enforce_safe, as for every shot.)
 	return want
 
 
@@ -1753,8 +1749,10 @@ func _cine_regen() -> void:
 		WaterFX.inst.wisp(player.body_center(), dest_pos, travel, Color(0.45, 1.0, 0.85, 0.95), 40)
 	elif cine_t < 0.8 + float(cine_data["travel"]):
 		var k := (cine_t - 0.8) / float(cine_data["travel"])
-		var p := _regen_from.lerp(dest_pos, k)
 		var b: MossBall = target[0]
+		# (Over the ball's surface, never the straight line through it.)
+		var p := b.surface_point(b.up_at(_regen_from).slerp(b.up_at(dest_pos), k).normalized(),
+				lerpf(b.altitude(_regen_from), b.altitude(dest_pos), k) + 1.5 * sin(PI * k))
 		var up := b.up_at(p)
 		cam.cine_pos = p + up * 5.0 + (dest_pos - _regen_from).normalized() * -5.0
 		cam.cine_look = p

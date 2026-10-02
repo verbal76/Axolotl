@@ -19,7 +19,7 @@ func run(runner) -> void:
 		g.hints.enabled = false
 	await t.seconds(0.5)
 	var only: String = Settings.test_args.get("only", "")
-	for name_ in ["_test_startup", "_test_ota_and_version", "_test_mesh_winding", "_test_terrain", "_test_ravines", "_test_ooze_bubbles", "_test_view_clearances", "_test_camera_rises_over", "_test_title_safe", "_test_restore_hints", "_test_terrain_grounded", "_test_no_floating_platforms", "_test_parasite_locomotion", "_test_parasite_body_and_death", "_test_parasite_combat", "_test_organic_motion", "_test_gill_look", "_test_gill_idles", "_test_gill_colours", "_test_gill_patterns", "_test_tail_whip", "_test_gill_traction", "_test_gill_incline_transitions", "_test_traction_no_shortcuts", "_test_gill_body_follow", "_test_swim_body_follow", "_test_ambient_sway", "_test_placements", "_test_tutorial_route", "_test_sphere_walk", "_test_jump_and_burst", "_test_coyote_and_buffer", "_test_swipe_direction_and_stages", "_test_hard_landing", "_test_food", "_test_food_reach", "_test_darter_and_burrower", "_test_food_repopulates", "_test_motes", "_test_checkpoint_and_regen", "_test_crumble", "_test_restoration_gates", "_test_retract_gates_gone", "_test_bubble_columns", "_test_restoration_continuity", "_test_health_map", "_test_vortex", "_test_vortex_tints", "_test_vortex_currents", "_test_vortex_currents_travel", "_test_current", "_test_current_brace", "_test_canopy", "_test_canopy_plain_jumps", "_test_climbs_physical", "_test_jungle_ladders_physical", "_test_leaf_geometry", "_test_leaf_footing", "_test_caves", "_test_mounds", "_test_vegetation", "_test_vortex_mouths_clear", "_test_route_audit", "_test_new_areas", "_test_ecosystem", "_test_music", "_test_opening_audio", "_test_run_clock", "_test_completion_catalog", "_test_completion_frozen", "_test_run_save_file", "_test_run_timer_live", "_test_run_continue", "_test_timer_integrity", "_test_resume_points_safe", "_phase_continue_write", "_phase_continue_read", "_test_upgrades", "_test_ui", "_test_menus_no_scroll", "_test_menu_touch", "_test_tier2_rules", "_test_tier2_world", "_test_ambient_fish", "_test_parasite_never_buried", "_test_tier2_loadout", "_test_aquarium_experiences", "_test_aquarium_polish", "_test_all_clear", "_test_treasure_unlock", "_test_treasure_generation", "_test_treasure_play", "_phase_treasure_stress", "_phase_live_fish_diag", "_phase_cpu_probe", "_phase_incline_survey", "_phase_loco_diag", "_phase_crawl_trace", "_phase_mouth_crawls", "_phase_organic_trace", "_test_skilltree_graph", "_test_progress_store", "_test_starfish_spots", "_test_starfish_pickup", "_test_skill_ui", "_test_quick_gill", "_test_lunge_skills", "_test_burst_skills", "_test_glide_control", "_test_glide_transfers", "_test_mote_magnet", "_phase_starfish_survey", "_phase_starfish_sweep", "_phase_glide_probe", "_test_plants_terminal_growth", "_test_sea_fan_depth", "_test_repopulation", "_phase_repop_survey", "_phase_repop_sim", "_test_aquarium_gill", "_phase_aq_nav", "_test_tutorials_and_title", "_test_onb_progress", "_test_onb_owner_save", "_test_onb_per_run", "_test_onb_toggle", "_test_onb_intro", "_test_onb_feeding", "_test_onb_parasite", "_test_onb_feed_first", "_test_onb_tunnel", "_test_onb_starfish", "_test_onb_softlock", "_test_onb_relaunch", "_test_onb_restoration_equal", "_test_hard_mode", "_test_hard_mode_save", "_test_polish_a", "_test_leaf_motion", "_test_death_and_arrival", "_phase_world_hash", "_phase_th_bench", "_phase_hard_write", "_phase_hard_read", "_phase_hard_newrun", "_phase_hard_finish", "_phase_hard_sim", "_phase_hard_intervals", "_phase_onb_owner", "_phase_onb_write", "_phase_onb_read", "_phase_onb_kill", "_phase_onb_toggle"]:
+	for name_ in ["_test_startup", "_test_ota_and_version", "_test_mesh_winding", "_test_terrain", "_test_ravines", "_test_ooze_bubbles", "_test_view_clearances", "_test_camera_rises_over", "_test_title_safe", "_test_camera_invariant", "_test_restore_hints", "_test_terrain_grounded", "_test_no_floating_platforms", "_test_parasite_locomotion", "_test_parasite_body_and_death", "_test_parasite_combat", "_test_organic_motion", "_test_gill_look", "_test_gill_idles", "_test_gill_colours", "_test_gill_patterns", "_test_tail_whip", "_test_gill_traction", "_test_gill_incline_transitions", "_test_traction_no_shortcuts", "_test_gill_body_follow", "_test_swim_body_follow", "_test_ambient_sway", "_test_placements", "_test_tutorial_route", "_test_sphere_walk", "_test_jump_and_burst", "_test_coyote_and_buffer", "_test_swipe_direction_and_stages", "_test_hard_landing", "_test_food", "_test_food_reach", "_test_darter_and_burrower", "_test_food_repopulates", "_test_motes", "_test_checkpoint_and_regen", "_test_crumble", "_test_restoration_gates", "_test_retract_gates_gone", "_test_bubble_columns", "_test_restoration_continuity", "_test_health_map", "_test_vortex", "_test_vortex_tints", "_test_vortex_currents", "_test_vortex_currents_travel", "_test_current", "_test_current_brace", "_test_canopy", "_test_canopy_plain_jumps", "_test_climbs_physical", "_test_jungle_ladders_physical", "_test_leaf_geometry", "_test_leaf_footing", "_test_caves", "_test_mounds", "_test_vegetation", "_test_vortex_mouths_clear", "_test_route_audit", "_test_new_areas", "_test_ecosystem", "_test_music", "_test_opening_audio", "_test_run_clock", "_test_completion_catalog", "_test_completion_frozen", "_test_run_save_file", "_test_run_timer_live", "_test_run_continue", "_test_timer_integrity", "_test_resume_points_safe", "_phase_continue_write", "_phase_continue_read", "_test_upgrades", "_test_ui", "_test_menus_no_scroll", "_test_menu_touch", "_test_tier2_rules", "_test_tier2_world", "_test_ambient_fish", "_test_parasite_never_buried", "_test_tier2_loadout", "_test_aquarium_experiences", "_test_aquarium_polish", "_test_all_clear", "_test_treasure_unlock", "_test_treasure_generation", "_test_treasure_play", "_phase_treasure_stress", "_phase_live_fish_diag", "_phase_cpu_probe", "_phase_incline_survey", "_phase_loco_diag", "_phase_crawl_trace", "_phase_mouth_crawls", "_phase_organic_trace", "_test_skilltree_graph", "_test_progress_store", "_test_starfish_spots", "_test_starfish_pickup", "_test_skill_ui", "_test_quick_gill", "_test_lunge_skills", "_test_burst_skills", "_test_glide_control", "_test_glide_transfers", "_test_mote_magnet", "_phase_starfish_survey", "_phase_starfish_sweep", "_phase_glide_probe", "_test_plants_terminal_growth", "_test_sea_fan_depth", "_test_repopulation", "_phase_repop_survey", "_phase_repop_sim", "_test_aquarium_gill", "_phase_aq_nav", "_test_tutorials_and_title", "_test_onb_progress", "_test_onb_owner_save", "_test_onb_per_run", "_test_onb_toggle", "_test_onb_intro", "_test_onb_feeding", "_test_onb_parasite", "_test_onb_feed_first", "_test_onb_tunnel", "_test_onb_starfish", "_test_onb_softlock", "_test_onb_relaunch", "_test_onb_restoration_equal", "_test_hard_mode", "_test_hard_mode_save", "_test_polish_a", "_test_leaf_motion", "_test_death_and_arrival", "_test_camera_never_drawn_unsafe", "_phase_world_hash", "_phase_th_bench", "_phase_hard_write", "_phase_hard_read", "_phase_hard_newrun", "_phase_hard_finish", "_phase_hard_sim", "_phase_hard_intervals", "_phase_onb_owner", "_phase_onb_write", "_phase_onb_read", "_phase_onb_kill", "_phase_onb_toggle"]:
 		# "_phase_*" tests are halves of a relaunch test: they run only when asked for by name
 		# (in a child process started by _test_run_continue).
 		if name_.begins_with("_phase") and not only.split(",", false).has(name_):
@@ -9714,3 +9714,191 @@ func _test_title_safe() -> void:
 	t.check("title_camera_clear_round_him", lowest >= FollowCam.GROUND_CLEAR - 0.05 and blocked == 0,
 			"lowest %.2f m above the ground, view blocked %d times over a full turn in a ravine" % [lowest, blocked])
 	place_at(0, b0.surface_point(b0.start_dir, 0.2), MossBall.frame_at(b0.start_dir, 0).z)
+
+
+## THE CAMERA SAFETY INVARIANT, attacked (owner, 2026-10-02: a class defect). Every kind of camera
+## writer and transition, driven to its extremes; the frames actually drawn are audited
+## (FollowCam._audit). First with the safety stage off on the death path, to prove the harness
+## sees the class; then everything with it on: no drawn frame may be under a ball's ground or
+## inside a solid. `corrected` counts the frames whose requested place was unsafe and was resolved.
+func _test_camera_invariant() -> void:
+	var cam: FollowCam = g.cam
+	if cam.audited_frames == 0:
+		t.check("camera_audit_runs", false, "no frame was audited (frame_pre_draw)")
+		return
+	var rows := []
+	var b0: MossBall = g.balls[0]
+	var hold := []
+	for b in g.balls:
+		hold.append(_hold_threats(b))
+	# A slope with rising ground behind him: where a hill on ball 1 meets the flat.
+	var slope_sites := []
+	for bi in [0, 2, 4]:
+		var b: MossBall = g.balls[bi]
+		for h in b.hills.slice(0, 2):
+			var fr := MossBall.frame_at(h[0], 0)
+			slope_sites.append([bi, (h[0] as Vector3).rotated(fr.x, float(h[1]) * 1.05).normalized(), (h[0] as Vector3)])
+	var face_from := func(site: Array) -> Vector3:
+		var b: MossBall = g.balls[site[0]]
+		var at := b.surface_point(site[1])
+		var hill := b.surface_point(site[2])
+		return at - hill   # (facing away from the hill: the camera behind him is over/into it)
+	var die := func(how: String) -> void:
+		p.invuln_t = 0.0
+		if how == "ooze":
+			g.ravine_fall(p)
+		else:
+			p.health = 1
+			p.take_damage(1, p.global_position + p.facing)
+		for i in 60 * 8:
+			g.cam.pitch = FollowCam.PITCH_MIN
+			await t.frames(1)
+			if g.cinematic == "" and p.state == "normal":
+				break
+	# The harness sees the class: the death path with the stage off draws unsafe frames.
+	var site: Array = slope_sites[0]
+	place_at(site[0], g.balls[site[0]].surface_point(site[1], 0.1), face_from.call(site))
+	await t.frames(5)
+	cam.enforce = false
+	var u0 := cam.unsafe_drawn
+	await die.call("hurt")
+	var off_unsafe := cam.unsafe_drawn - u0
+	cam.enforce = true
+	cam.unsafe_drawn = u0   # (deliberate: not counted against the suite-wide check)
+	cam.unsafe_worst = ""
+	var run := func(name: String, fn: Callable) -> void:
+		var c0 := cam.corrected_frames
+		var d0 := cam.unsafe_drawn
+		var a0 := cam.audited_frames
+		await fn.call()
+		rows.append("%s: %d frames, %d corrected, %d unsafe" % [name, cam.audited_frames - a0, cam.corrected_frames - c0, cam.unsafe_drawn - d0])
+	# 1. Free-look at its extremes: full down, full up, fast spins, walking, on every kind of ground.
+	await run.call("free-look", func() -> void:
+		for bi in [0, 2, 4]:
+			var b: MossBall = g.balls[bi]
+			var dirs := []
+			for h in b.hills.slice(0, 3):
+				dirs.append(h[0])
+				dirs.append((h[0] as Vector3).rotated(MossBall.frame_at(h[0], 0).x, float(h[1]) * 0.8).normalized())
+			for cv in b.carves.slice(0, 2):
+				var pts: Array = cv[0]
+				dirs.append((pts[pts.size() / 2] as Vector3).normalized())
+			for k in 3:
+				dirs.append(MossBall.dir_ll(-40.0 + k * 40.0, k * 100.0))
+			for d in dirs:
+				place_at(bi, b.surface_point(d, 0.2), MossBall.frame_at(d, 0).z)
+				for f in 36:
+					cam.pitch = FollowCam.PITCH_MIN if f % 12 < 8 else FollowCam.PITCH_MAX
+					cam.swipe_delta = Vector2(0.25, 0.0)
+					p.bot_input = Vector2(0, 1) if f % 3 == 0 else Vector2.ZERO
+					await t.frames(1)
+				p.bot_input = Vector2.ZERO)
+	# 2. Deaths with the camera fully down and a slope behind: hurt deaths, repeated.
+	await run.call("hurt deaths on slopes", func() -> void:
+		for st in slope_sites:
+			place_at(st[0], g.balls[st[0]].surface_point(st[1], 0.1), face_from.call(st))
+			await t.frames(10)
+			await die.call("hurt")
+			await die.call("hurt"))
+	# 3. Ooze deaths (any health), on a ravine floor.
+	await run.call("ooze deaths", func() -> void:
+		var pts: Array = b0.carves[0][0]
+		for k in [1, pts.size() / 2]:
+			var d: Vector3 = (pts[k] as Vector3).normalized()
+			place_at(0, b0.surface_point(d, 0.1), MossBall.frame_at(d, 0).z)
+			p.health = p.max_health
+			await t.frames(5)
+			await die.call("ooze"))
+	# 4. Knocked about near ground and walls (not fatal), camera constrained.
+	await run.call("knockback by terrain", func() -> void:
+		for st in slope_sites.slice(0, 3):
+			place_at(st[0], g.balls[st[0]].surface_point(st[1], 0.1), face_from.call(st))
+			for k in 3:
+				p.health = p.max_health
+				p.invuln_t = 0.0
+				p.take_damage(1, p.global_position - (face_from.call(st) as Vector3).normalized())
+				for f in 40:
+					cam.pitch = FollowCam.PITCH_MIN
+					await t.frames(1))
+	# 5. Tunnel rides and assisted landings, buttons mashed on the way down.
+	await run.call("vortex rides + landings", func() -> void:
+		for v in g.vortices:
+			var was: bool = v.connected
+			v.connected = true
+			var src: MossBall = v.ball_a
+			place_at(src.index, src.surface_point(src.start_dir, 0.2), MossBall.frame_at(src.start_dir, 0).z)
+			g._start_cinematic("travel", {"v": v, "reverse": false})
+			for f in 60 * 10:
+				if g.cinematic == "land":
+					Input.action_press(["swipe", "lunge", "jump"][f % 3])
+				await t.frames(1)
+				for a in ["swipe", "lunge", "jump"]:
+					Input.action_release(a)
+				if g.cinematic == "":
+					break
+			v.connected = was)
+	# 6. Story shots: the reveal and a tunnel connection.
+	await run.call("cinematic shots", func() -> void:
+		place_at(0, b0.surface_point(b0.start_dir, 0.2), MossBall.frame_at(b0.start_dir, 0).z)
+		g._start_cinematic("frame", {})
+		for f in 60 * 5:
+			await t.frames(1)
+			if g.cinematic == "":
+				break
+		g._start_cinematic("connect", {"v": g.vortices[0]})
+		for f in 60 * 6:
+			await t.frames(1)
+			if g.cinematic == "":
+				break)
+	# 7. Title orbit round him in a ravine and beside a hill, then back to play.
+	await run.call("title orbit", func() -> void:
+		var was: String = g.state
+		var pts: Array = b0.carves[0][0]
+		for d in [(pts[pts.size() / 2] as Vector3).normalized(), slope_sites[0][1]]:
+			place_at(0, b0.surface_point(d, 0.1), MossBall.frame_at(d, 0).z)
+			g.state = "title"
+			cam.cinematic = true
+			await t.seconds(12.0)
+			g.state = was
+			cam.cinematic = false
+			await t.seconds(1.0))
+	# 8. Pause and resume mid-death; a continued run's resume.
+	await run.call("pause + resume + continue", func() -> void:
+		var st: Array = slope_sites[1]
+		place_at(st[0], g.balls[st[0]].surface_point(st[1], 0.1), face_from.call(st))
+		p.invuln_t = 0.0
+		p.health = 1
+		p.take_damage(1, p.global_position + p.facing)
+		await t.frames(20)
+		g.get_tree().paused = true
+		await t.frames(30)
+		g.get_tree().paused = false
+		for i in 60 * 6:
+			await t.frames(1)
+			if g.cinematic == "" and p.state == "normal":
+				break
+		g._resume_ball = p.ball.index
+		g._resume_position()
+		await t.frames(30))
+	for r in hold:
+		r.call()
+	p.restore_full()
+	place_at(0, b0.surface_point(b0.start_dir, 0.2), MossBall.frame_at(b0.start_dir, 0).z)
+	await t.frames(2)
+	var corrected := 0
+	var unsafe := 0
+	for r in rows:
+		var parts := (r as String).split(", ")
+		corrected += int(parts[1].split(" ")[0])
+		unsafe += int(parts[2].split(" ")[0])
+	t.check("camera_invariant_harness_sees_the_class", off_unsafe > 0, "with the safety stage off, the death path drew %d unsafe frames" % off_unsafe)
+	t.check("camera_invariant_holds_everywhere", unsafe == 0 and corrected > 0,
+			"%d requested places corrected, %d unsafe frames drawn; %s%s" % [corrected, unsafe, "; ".join(rows), "" if cam.unsafe_worst == "" else " | first: " + cam.unsafe_worst])
+
+
+## The whole suite, every test's camera: no frame drawn under a ball's ground or inside a solid, and
+## play never drawn through another camera.
+func _test_camera_never_drawn_unsafe() -> void:
+	var cam: FollowCam = g.cam
+	t.check("camera_never_drawn_unsafe_suite_wide", cam.audited_frames > 1000 and cam.unsafe_drawn == 0,
+			"%d frames audited, %d unsafe%s" % [cam.audited_frames, cam.unsafe_drawn, "" if cam.unsafe_worst == "" else ": first " + cam.unsafe_worst])
