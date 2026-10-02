@@ -632,7 +632,7 @@ func _physics_process(dt: float) -> void:
 			fc.stepped()
 		if not was_grounded:
 			_on_land(-pre_vup, r)
-		# Down on a ravine's floor: one frond, and he is put back at its edge (world expansion).
+		# Down on a ravine's floor (the ooze): a death, re-formed at his checkpoint (ledger row 32).
 		if on_ravine_floor():
 			Game.inst.ravine_fall(self)
 			return

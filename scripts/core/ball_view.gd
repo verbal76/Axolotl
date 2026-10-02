@@ -78,13 +78,23 @@ func open() -> bool:
 	g.hud.visible = false
 	if _saved["onb"]:
 		g.onboarding.ui.visible = false
-	var b := g.player.ball
-	var pct := int(round(b.restoration * 100.0))
 	var how := "Press any button to return" if Settings.input_mode == Settings.InputMode.PAD else "Tap anywhere to return"
-	_label.text = "%s  ·  %d%% restored\n%s" % [b.display_name if b.display_name != "" else "Moss ball %d" % (b.index + 1), pct, how]
+	_label.text = "%s\n%s" % [caption(g.player.ball, g.vortices), how]
 	visible = true
 	_aim(0.0)
 	return true
+
+
+## The ball's name and how restored it is, and, while a tunnel out of it is still shut, when it
+## opens (cohesion audit 2026-10-02: nowhere else tells the player how near that is).
+static func caption(b: MossBall, vortices: Array) -> String:
+	var pct := int(floor(b.restoration * 100.0 + 0.0001))
+	var out := "%s  ·  %d%% restored" % [b.display_name if b.display_name != "" else "Moss ball %d" % (b.index + 1), pct]
+	for v: Vortex in vortices:
+		if v.ball_a == b and not v.connected:
+			out += "  ·  a water tunnel opens at %d%%" % int(round(Vortex.CONNECT_AT * 100.0))
+			break
+	return out
 
 
 ## Starts the return (any input). The run is let go once the camera is home (_process).
