@@ -1927,10 +1927,26 @@ func travel_to(bi: int) -> void:
 				break
 
 
+## Whether the ground ahead along `dir` (to 3.5 m) is clear of any ravine.
+func _wander_clear(dir: Vector3) -> bool:
+	var b := p.ball
+	for dist in [1.0, 2.0, 3.5]:
+		var d := b.up_at(p.global_position + dir * dist)
+		if b.ravine_carve(d) > 0.02 or b.ravine_at(d) != "":
+			return false
+	return true
+
+
 func wander(time: float) -> void:
 	var el := 0.0
 	var dir := p.facing
 	while el < time:
+		# (Never off a ravine's rim: run 77 wandered into one three times in a row after ALL CLEAR.)
+		if not _wander_clear(dir):
+			for turn in [PI, PI * 0.5, -PI * 0.5, PI * 0.75, -PI * 0.75]:
+				if _wander_clear(dir.rotated(p.up, turn)):
+					dir = dir.rotated(p.up, turn)
+					break
 		set_stick(stick_for(dir))
 		await wait(0.5)
 		el += 0.5
