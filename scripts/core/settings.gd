@@ -44,6 +44,20 @@ var test_args := {}
 var _pad_connected := false
 
 
+## Shader globals used by the light code (caustic_web / creature_light). Registered here, not in
+## project.godot: that file is part of the native layer and cannot reach installed APKs by OTA.
+## Settings is the first OTA-delivered autoload, so this runs before any scene compiles a shader.
+func _init() -> void:
+	var g := {
+		"mote_clarity": [RenderingServer.GLOBAL_VAR_TYPE_FLOAT, 0.0],
+		"mote_lamp_dir": [RenderingServer.GLOBAL_VAR_TYPE_VEC3, Vector3(0.29, 0.95, -0.1)],
+		"mote_caustic_tex": [RenderingServer.GLOBAL_VAR_TYPE_SAMPLER2D,
+			load("res://assets/textures/noise_rgb.png")],
+	}
+	for n in g:
+		RenderingServer.global_shader_parameter_add(n, g[n][0], g[n][1])
+
+
 func _enter_tree() -> void:
 	StartupTrace.mark("autoload Settings")
 	_setup_input_map()
