@@ -603,6 +603,10 @@ func _physics_process(dt: float) -> void:
 	# (Inside a bubble column its upflow shelters him from the ball's current.)
 	var ball_cur := ball.current_at(global_position)
 	var cur := ball_cur * (0.0 if _in_column else (0.45 if grounded else 1.0)) + ext_vel + stream
+	# (Behind the title menu he only idles: no current carries him off (owner, 2026-10-02: it
+	# pushed him over a cliff into a ravine's ooze while the menu was up).)
+	if Game.inst != null and Game.inst.state == "title":
+		cur = Vector3.ZERO
 	# (The ground push the brace answers: read only, for the model.)
 	current_push = ball_cur * 0.45 if grounded and not _in_column else Vector3.ZERO
 	velocity = vh + up * vup + cur

@@ -909,7 +909,7 @@ func _process(dt: float) -> void:
 		var right := player.facing.cross(up)
 		var a := _title_t * 0.12
 		var off := (player.facing * cos(a) + right * sin(a)) * 5.5 + up * 2.2
-		cam.cine_pos = player.global_position + off
+		cam.cine_pos = title_cam_pos(player.global_position + up * 0.4, player.global_position + off)
 		cam.cine_look = player.global_position + up * 0.4
 		cam.cine_up = up
 		return
@@ -929,6 +929,23 @@ func _process(dt: float) -> void:
 	_update_hints(dt)
 	_update_hard(dt)
 	_update_all_clear(dt)
+
+
+## The title's orbit camera, kept in front of any wall between it and him and above the ground
+## (owner, 2026-10-02: swinging round him in a ravine it went through the cliff, which showed hollow).
+func title_cam_pos(look: Vector3, want: Vector3) -> Vector3:
+	var q := PhysicsRayQueryParameters3D.create(look, want, 1)
+	q.exclude = [player.get_rid()]
+	q.hit_back_faces = true
+	var hit := get_world_3d().direct_space_state.intersect_ray(q)
+	if not hit.is_empty():
+		want = look + (want - look).normalized() * maxf(1.0, look.distance_to(hit.position) - 0.4)
+	var b := player.ball
+	var gd := (want - b.global_position).normalized()
+	var floor_r := b.radius + b.terrain_height(gd) + FollowCam.GROUND_CLEAR
+	if (want - b.global_position).length() < floor_r:
+		want = b.global_position + gd * floor_r
+	return want
 
 
 func _update_restoration(dt: float) -> void:
@@ -1395,7 +1412,7 @@ func _die(cause: String) -> void:
 ## Gill came down on a ravine's floor (world expansion): owner, 2026-10-02, a fall into the ooze is
 ## a death at any health; he sinks into it (the approved look) and re-forms at his checkpoint.
 func ravine_fall(p: Axolotl) -> void:
-	if cinematic != "" or p.state != "normal":
+	if cinematic != "" or p.state != "normal" or state != "play":
 		return
 	stats["ravine_falls"] = int(stats.get("ravine_falls", 0)) + 1
 	p.health = 0
