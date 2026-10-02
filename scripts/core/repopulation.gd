@@ -292,6 +292,14 @@ func _arrive(z: Dictionary, now: float, b: MossBall, gill_pos: Vector3, cam: Cam
 			par.make_spitter()
 		par.name = "Returner_%s_%d" % [z["zone"], n]
 		b.add_child(par)
+		# (Where it really stands once placed: a spot can settle it elsewhere, e.g. off a terrace's
+		# edge. That must be out of view and far from him too, or it does not come this time.)
+		var real := par.global_position
+		if real.distance_to(gill_pos) < rules.min_gill_m or on_camera(cam, real, b.up_at(real)):
+			b.remove_child(par)
+			par.free()
+			continue
+		dist = real.distance_to(gill_pos)
 		b.returners.append(par)
 		b.returners_changed()
 		z["n"] = n + 1
@@ -302,7 +310,7 @@ func _arrive(z: Dictionary, now: float, b: MossBall, gill_pos: Vector3, cam: Cam
 			z["next"] = now + interval(z, n + 1)
 		_last_arrival[b.index] = now
 		arrivals.append({"t": now, "ball": b.index, "zone": z["zone"], "n": n, "kind": tpl.kind, "variant": tpl.variant,
-				"dist": dist, "on_camera": on_camera(cam, at, up)})
+				"dist": dist, "on_camera": on_camera(cam, par.global_position, b.up_at(par.global_position))})
 		return par
 	return null
 
