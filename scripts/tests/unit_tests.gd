@@ -9421,7 +9421,7 @@ func _test_camera_rises_over() -> void:
 		var cam_d: float = g.cam.global_position.distance_to(p.global_position + up * 0.85)
 		var rel: Vector3 = g.cam.global_position - body.global_position
 		var horiz := (rel - up * rel.dot(up)).length()
-		var inside := horiz < 0.7 and absf(rel.dot(up)) < tall * 0.5
+		var inside: bool = horiz < 0.7 and absf(rel.dot(up)) < float(tall) * 0.5
 		out.append([tall, g.cam._rise, cam_d, inside])
 		body.queue_free()
 		await t.seconds(3.0)
