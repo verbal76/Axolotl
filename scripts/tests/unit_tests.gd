@@ -2323,33 +2323,44 @@ func _test_ooze_bubbles() -> void:
 ## Owner, 2026-10-02: the tall tank-floor blades keep clear of every moss ball and water tunnel, and
 ## the camera never dips under the ground however far he looks down.
 func _test_view_clearances() -> void:
-	var tops := g.aquarium.blade_tops()
+	# The tank blades at their widest, swung to every extreme of their sway: none reaches into a
+	# ball or a tunnel (owner, 2026-10-02: giant stretched strips across the view).
+	var aq := g.aquarium
+	var arr: Array = (aq._blades.mesh as Mesh).surface_get_arrays(0)
+	var vs: PackedVector3Array = arr[Mesh.ARRAY_VERTEX]
+	var uvs: PackedVector2Array = arr[Mesh.ARRAY_TEX_UV]
+	var spheres: Array = []
+	for b in g.balls:
+		spheres.append([b.global_position, b.radius, "ball %d" % (b.index + 1)])
+	for v in g.vortices:
+		for k in 121:
+			spheres.append([v.visual_point(k / 120.0), Vortex.TUBE_RADIUS, "a tunnel"])
 	var worst := INF
 	var where := ""
-	for i in tops.size():
-		var base := g.aquarium.blade_base(i)
-		var top: Vector3 = tops[i]
-		if top.y - base.y < 0.01:
-			continue   # (hidden)
-		var spheres: Array = []
-		for b in g.balls:
-			spheres.append([b.global_position, b.radius + 6.0, "ball %d" % (b.index + 1)])
-		for v in g.vortices:
-			for k in 49:
-				spheres.append([v.visual_point(k / 48.0), Vortex.TUBE_RADIUS + 1.5, "a tunnel"])
-		for sp in spheres:
-			var c: Vector3 = sp[0]
-			var y := clampf(c.y, base.y, top.y)
-			var gap := Vector3(base.x, y, base.z).distance_to(c) - float(sp[1])
-			if gap < worst:
-				worst = gap
-				where = "%s (blade %d base %s top %s, centre %s)" % [sp[2], i, base.round(), top.round(), c.round()]
 	var trimmed := 0
-	for i in tops.size():
-		if tops[i].y - g.aquarium.blade_base(i).y < (g.aquarium._blade_xfs[i] as Transform3D).basis.get_scale().y - 0.01:
+	var hidden := 0
+	for i in aq._blade_xfs.size():
+		var xf: Transform3D = aq._blade_xfs[i]
+		var sc := xf.basis.get_scale()
+		var h: float = aq._blade_h[i]
+		if h < sc.y - 0.01:
 			trimmed += 1
-	t.log_line("tank blades shortened or hidden: %d of %d" % [trimmed, tops.size()])
-	t.check("tank_blades_clear_balls_and_tunnels", worst >= 0.0, "closest blade %.1f m outside %s's keep-clear" % [worst, where])
+		if h <= 0.0:
+			hidden += 1
+			continue
+		var tx := Transform3D(xf.basis.orthonormalized().scaled(Vector3(sc.x, h, sc.z)), xf.origin)
+		for j in vs.size():
+			var tt := uvs[j].y
+			for sx in [-1.0, 1.0]:
+				for sz in [-1.0, 1.0]:
+					var w: Vector3 = tx * (vs[j] + Vector3(sx * aq.BLADE_SWAY.x, 0, sz * aq.BLADE_SWAY.y) * tt * tt)
+					for sp in spheres:
+						var gap: float = w.distance_to(sp[0]) - float(sp[1])
+						if gap < worst:
+							worst = gap
+							where = "%s (blade %d)" % [sp[2], i]
+	t.log_line("tank blades shortened %d (hidden %d) of %d" % [trimmed, hidden, aq._blade_xfs.size()])
+	t.check("tank_blades_clear_balls_and_tunnels", worst >= aq.BLADE_MARGIN - 0.5, "swaying blades stay %.1f m outside %s" % [worst, where])
 	# Looking as far down as he can, on a crest and on flat ground: the camera stays above the terrain.
 	var lowest := INF
 	for bi in [0, 2, 4]:
@@ -9279,3 +9290,4 @@ func _phase_onb_read() -> void:
 
 func _phase_onb_kill() -> void:
 	await _onboarding().phase_kill()
+

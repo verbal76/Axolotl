@@ -590,8 +590,18 @@ func _build_snail() -> void:
 var _blades: MultiMesh
 var _blade_xfs: Array = []
 var _blade_h := PackedFloat32Array()   # each blade's height after trimming (0: hidden)
-## How far a blade's sway (up to ~6 m) and leaves keep clear of a ball or a tunnel.
-const BLADE_CLEAR := 9.0
+## The shader's sway at a blade's tip, in mesh units (x, z); the blade's own scale multiplies it.
+const BLADE_SWAY := Vector2(6.0, 4.0)
+## How far a blade's furthest swaying edge keeps clear of a ball or a tunnel.
+const BLADE_MARGIN := 2.0
+
+
+## How far a blade can reach sideways from its base: its half-width plus its sway, at its own scale
+## (a wide blade swings up to ~18 m).
+func blade_reach(i: int) -> float:
+	var a := _blades.mesh.get_aabb()
+	var sc := (_blade_xfs[i] as Transform3D).basis.get_scale()
+	return Vector2((maxf(-a.position.x, a.end.x) + BLADE_SWAY.x) * sc.x, (maxf(-a.position.z, a.end.z) + BLADE_SWAY.y) * sc.z).length()
 
 
 ## Owner, 2026-10-02: the tall floor blades must not poke into the moss balls or the water tunnels.
@@ -606,9 +616,10 @@ func trim_plants(spheres: Array) -> void:
 		var base := xf.origin
 		var h := xf.basis.get_scale().y   # (the blade mesh is 1 m tall)
 		var top := h
+		var reach := blade_reach(i) + BLADE_MARGIN
 		for sp in spheres:
 			var c: Vector3 = sp[0]
-			var r: float = float(sp[1]) + BLADE_CLEAR
+			var r: float = float(sp[1]) + reach
 			var dh := Vector2(c.x - base.x, c.z - base.z).length()
 			if dh >= r:
 				continue
@@ -643,11 +654,12 @@ func _build_plants() -> void:
 shader_type spatial;
 render_mode cull_disabled, diffuse_lambert;
 uniform float health = 0.0;
+uniform vec2 sway = vec2(6.0, 4.0);
 void vertex() {
 	float t = UV.y;
 	vec3 base = MODEL_MATRIX[3].xyz;
-	VERTEX.x += sin(TIME * 0.8 + base.x * 0.05 + t * 2.0) * t * t * 6.0;
-	VERTEX.z += cos(TIME * 0.6 + base.z * 0.05) * t * t * 4.0;
+	VERTEX.x += sin(TIME * 0.8 + base.x * 0.05 + t * 2.0) * t * t * sway.x;
+	VERTEX.z += cos(TIME * 0.6 + base.z * 0.05) * t * t * sway.y;
 }
 void fragment() {
 	vec3 sick = vec3(0.35, 0.33, 0.25);
@@ -658,6 +670,7 @@ void fragment() {
 """
 	plant_mat = ShaderMaterial.new()
 	plant_mat.shader = sh
+	plant_mat.set_shader_parameter("sway", BLADE_SWAY)
 	var blade_mesh := MeshLib.tuft_mesh(1, 4.0, 1.0, 0.0, 1, 6, 0.1)
 	var mm := MultiMesh.new()
 	mm.transform_format = MultiMesh.TRANSFORM_3D
