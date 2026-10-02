@@ -20,11 +20,15 @@ static func mark(label: String) -> void:
 	marks.append([label, t])
 	if _probe:
 		# (Startup probe only: this thread's own CPU time and its time kept waiting for a CPU, so a
-		# measurement on a busy machine still shows the main thread's work.)
+		# measurement on a busy machine still shows the main thread's work; and the whole process's
+		# CPU time, in 10 ms ticks.)
 		var ss := _read_line("/proc/thread-self/schedstat").split(" ")
 		var cpu := float(ss[0]) / 1e6 if ss.size() > 1 else -1.0
 		var wait := float(ss[1]) / 1e6 if ss.size() > 1 else -1.0
-		print("[STARTUP] %9.1f ms  %s  {main cpu %.1f ms, runqueue wait %.1f ms}" % [t / 1000.0, label, cpu, wait])
+		var st := _read_line("/proc/self/stat")
+		var f := st.substr(st.rfind(")") + 2).split(" ") if st.contains(")") else PackedStringArray()
+		var all := (float(f[11]) + float(f[12])) * 10.0 if f.size() > 12 else -1.0
+		print("[STARTUP] %9.1f ms  %s  {main cpu %.1f ms, runqueue wait %.1f ms, all threads cpu %.0f ms}" % [t / 1000.0, label, cpu, wait, all])
 	else:
 		print("[STARTUP] %9.1f ms  %s" % [t / 1000.0, label])
 

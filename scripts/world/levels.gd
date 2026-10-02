@@ -45,12 +45,18 @@ const PALETTES := [
 ]
 
 
+## Stems and ladder leaves built on worker threads during the layout (LevelBuilder.mesh_later);
+## false builds them on this thread (the reference _test_startup_build_identical compares with).
+static var async_meshes := true
+
+
 static func build_ball(i: int, game: Node) -> MossBall:
 	var b := MossBall.new()
 	game.add_child(b)
 	b.position = CENTERS[i]
 	b.setup(i, RADII[i], PALETTES[i])
 	var lb := LevelBuilder.new(b, game)
+	lb.async_meshes = async_meshes
 	b.display_name = NAMES[i]
 	match i:
 		0: _materials(lb, Color(0.14, 0.36, 0.1), Color(0.42, 0.62, 0.22), Color(0.12, 0.4, 0.1), Color(0.45, 0.78, 0.25))
@@ -86,6 +92,7 @@ static func build_ball(i: int, game: Node) -> MossBall:
 				_leaf_shadow(n, shadow_mat)
 		elif n.has_meta("leaves"):
 			_leaf_shadow(n, shadow_mat)
+	lb.finish_meshes()
 	b.set_meta("builder", lb)
 	return b
 

@@ -1070,6 +1070,11 @@ static func cushion_hull(radius: float, height: float, sink: float = 1.2) -> Pac
 ## metres, so the plant material's grain runs up the stem (it banded across it before).
 ## Collision (LevelBuilder.stem_xf) stays within a few centimetres of it.
 static func stem_mesh(r0: float, r1: float, height: float, radial := 10, bend := 0.0) -> ArrayMesh:
+	return stem_surface(r0, r1, height, radial, bend).commit()
+
+
+## stem_mesh's SurfaceTool, ready to commit (safe on a worker thread).
+static func stem_surface(r0: float, r1: float, height: float, radial := 10, bend := 0.0) -> SurfaceTool:
 	var st := SurfaceTool.new()
 	st.begin(Mesh.PRIMITIVE_TRIANGLES)
 	var rings := maxi(8, int(height / 0.6))
@@ -1100,7 +1105,7 @@ static func stem_mesh(r0: float, r1: float, height: float, radial := 10, bend :=
 				st.set_uv(v[1])
 				st.add_vertex(v[0])
 	st.generate_normals()
-	return st.commit()
+	return st
 
 
 ## Hollow dome shell with an entrance gap: the interior moss caves. Returns [mesh, faces].

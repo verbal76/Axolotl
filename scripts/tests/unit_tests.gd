@@ -19,7 +19,7 @@ func run(runner) -> void:
 		g.hints.enabled = false
 	await t.seconds(0.5)
 	var only: String = Settings.test_args.get("only", "")
-	for name_ in ["_test_startup", "_test_startup_build_identical", "_test_ota_and_version", "_test_mesh_winding", "_test_terrain", "_test_ravines", "_test_ooze_bubbles", "_test_view_clearances", "_test_camera_rises_over", "_test_title_safe", "_test_camera_invariant", "_test_restore_hints", "_test_terrain_grounded", "_test_no_floating_platforms", "_test_parasite_locomotion", "_test_parasite_body_and_death", "_test_parasite_combat", "_test_organic_motion", "_test_gill_look", "_test_gill_idles", "_test_gill_colours", "_test_gill_patterns", "_test_tail_whip", "_test_gill_traction", "_test_gill_incline_transitions", "_test_traction_no_shortcuts", "_test_gill_body_follow", "_test_swim_body_follow", "_test_ambient_sway", "_test_placements", "_test_tutorial_route", "_test_sphere_walk", "_test_jump_and_burst", "_test_coyote_and_buffer", "_test_swipe_direction_and_stages", "_test_hard_landing", "_test_food", "_test_food_reach", "_test_darter_and_burrower", "_test_food_repopulates", "_test_motes", "_test_checkpoint_and_regen", "_test_crumble", "_test_restoration_gates", "_test_retract_gates_gone", "_test_bubble_columns", "_test_restoration_continuity", "_test_health_map", "_test_vortex", "_test_vortex_tints", "_test_vortex_currents", "_test_vortex_currents_travel", "_test_current", "_test_current_brace", "_test_canopy", "_test_canopy_plain_jumps", "_test_climbs_physical", "_test_jungle_ladders_physical", "_test_leaf_geometry", "_test_leaf_footing", "_test_caves", "_test_mounds", "_test_vegetation", "_test_vortex_mouths_clear", "_test_route_audit", "_test_new_areas", "_test_ecosystem", "_test_music", "_test_opening_audio", "_test_run_clock", "_test_completion_catalog", "_test_completion_frozen", "_test_run_save_file", "_test_run_timer_live", "_test_run_continue", "_test_timer_integrity", "_test_resume_points_safe", "_phase_continue_write", "_phase_continue_read", "_test_upgrades", "_test_ui", "_test_menus_no_scroll", "_test_menu_touch", "_test_tier2_rules", "_test_tier2_world", "_test_ambient_fish", "_test_parasite_never_buried", "_test_tier2_loadout", "_test_aquarium_experiences", "_test_aquarium_polish", "_test_all_clear", "_test_treasure_unlock", "_test_treasure_generation", "_test_treasure_play", "_phase_treasure_stress", "_phase_live_fish_diag", "_phase_cpu_probe", "_phase_incline_survey", "_phase_loco_diag", "_phase_crawl_trace", "_phase_mouth_crawls", "_phase_organic_trace", "_test_skilltree_graph", "_test_progress_store", "_test_starfish_spots", "_test_starfish_pickup", "_test_skill_ui", "_test_quick_gill", "_test_lunge_skills", "_test_burst_skills", "_test_glide_control", "_test_glide_transfers", "_test_mote_magnet", "_phase_starfish_survey", "_phase_starfish_sweep", "_phase_glide_probe", "_test_plants_terminal_growth", "_test_sea_fan_depth", "_test_repopulation", "_phase_repop_survey", "_phase_repop_sim", "_test_aquarium_gill", "_phase_aq_nav", "_test_tutorials_and_title", "_test_onb_progress", "_test_onb_owner_save", "_test_onb_per_run", "_test_onb_toggle", "_test_onb_intro", "_test_onb_feeding", "_test_onb_parasite", "_test_onb_feed_first", "_test_onb_tunnel", "_test_onb_starfish", "_test_onb_softlock", "_test_onb_relaunch", "_test_onb_restoration_equal", "_test_hard_mode", "_test_hard_mode_save", "_test_polish_a", "_test_leaf_motion", "_test_death_and_arrival", "_test_camera_never_drawn_unsafe", "_phase_world_hash", "_phase_th_bench", "_phase_hard_write", "_phase_hard_read", "_phase_hard_newrun", "_phase_hard_finish", "_phase_hard_sim", "_phase_hard_intervals", "_phase_onb_owner", "_phase_onb_write", "_phase_onb_read", "_phase_onb_kill", "_phase_onb_toggle"]:
+	for name_ in ["_test_startup", "_test_ota_and_version", "_test_mesh_winding", "_test_terrain", "_test_ravines", "_test_ooze_bubbles", "_test_view_clearances", "_test_camera_rises_over", "_test_title_safe", "_test_camera_invariant", "_test_restore_hints", "_test_terrain_grounded", "_test_no_floating_platforms", "_test_parasite_locomotion", "_test_parasite_body_and_death", "_test_parasite_combat", "_test_organic_motion", "_test_gill_look", "_test_gill_idles", "_test_gill_colours", "_test_gill_patterns", "_test_tail_whip", "_test_gill_traction", "_test_gill_incline_transitions", "_test_traction_no_shortcuts", "_test_gill_body_follow", "_test_swim_body_follow", "_test_ambient_sway", "_test_placements", "_test_tutorial_route", "_test_sphere_walk", "_test_jump_and_burst", "_test_coyote_and_buffer", "_test_swipe_direction_and_stages", "_test_hard_landing", "_test_food", "_test_food_reach", "_test_darter_and_burrower", "_test_food_repopulates", "_test_motes", "_test_checkpoint_and_regen", "_test_crumble", "_test_restoration_gates", "_test_retract_gates_gone", "_test_bubble_columns", "_test_restoration_continuity", "_test_health_map", "_test_vortex", "_test_vortex_tints", "_test_vortex_currents", "_test_vortex_currents_travel", "_test_current", "_test_current_brace", "_test_canopy", "_test_canopy_plain_jumps", "_test_climbs_physical", "_test_jungle_ladders_physical", "_test_leaf_geometry", "_test_leaf_footing", "_test_caves", "_test_mounds", "_test_vegetation", "_test_vortex_mouths_clear", "_test_route_audit", "_test_new_areas", "_test_ecosystem", "_test_music", "_test_opening_audio", "_test_run_clock", "_test_completion_catalog", "_test_completion_frozen", "_test_run_save_file", "_test_run_timer_live", "_test_run_continue", "_test_timer_integrity", "_test_resume_points_safe", "_phase_continue_write", "_phase_continue_read", "_test_upgrades", "_test_ui", "_test_menus_no_scroll", "_test_menu_touch", "_test_tier2_rules", "_test_tier2_world", "_test_ambient_fish", "_test_parasite_never_buried", "_test_tier2_loadout", "_test_aquarium_experiences", "_test_aquarium_polish", "_test_all_clear", "_test_treasure_unlock", "_test_treasure_generation", "_test_treasure_play", "_phase_treasure_stress", "_phase_live_fish_diag", "_phase_cpu_probe", "_phase_incline_survey", "_phase_loco_diag", "_phase_crawl_trace", "_phase_mouth_crawls", "_phase_organic_trace", "_test_skilltree_graph", "_test_progress_store", "_test_starfish_spots", "_test_starfish_pickup", "_test_skill_ui", "_test_quick_gill", "_test_lunge_skills", "_test_burst_skills", "_test_glide_control", "_test_glide_transfers", "_test_mote_magnet", "_phase_starfish_survey", "_phase_starfish_sweep", "_phase_glide_probe", "_test_plants_terminal_growth", "_test_sea_fan_depth", "_test_repopulation", "_phase_repop_survey", "_phase_repop_sim", "_test_aquarium_gill", "_phase_aq_nav", "_test_tutorials_and_title", "_test_onb_progress", "_test_onb_owner_save", "_test_onb_per_run", "_test_onb_toggle", "_test_onb_intro", "_test_onb_feeding", "_test_onb_parasite", "_test_onb_feed_first", "_test_onb_tunnel", "_test_onb_starfish", "_test_onb_softlock", "_test_onb_relaunch", "_test_onb_restoration_equal", "_test_hard_mode", "_test_hard_mode_save", "_test_polish_a", "_test_leaf_motion", "_test_death_and_arrival", "_test_camera_never_drawn_unsafe", "_test_startup_build_identical", "_phase_world_hash", "_phase_th_bench", "_phase_hard_write", "_phase_hard_read", "_phase_hard_newrun", "_phase_hard_finish", "_phase_hard_sim", "_phase_hard_intervals", "_phase_onb_owner", "_phase_onb_write", "_phase_onb_read", "_phase_onb_kill", "_phase_onb_toggle"]:
 		# "_phase_*" tests are halves of a relaunch test: they run only when asked for by name
 		# (in a child process started by _test_run_continue).
 		if name_.begins_with("_phase") and not only.split(",", false).has(name_):
@@ -76,7 +76,8 @@ func _test_startup() -> void:
 ## Startup speed-ups (2026-10-02, docs/research/startup-2026-10-01/RESULTS-2026-10-02.md) must build
 ## exactly the same world: each ball's ground rebuilt with its tiles on worker threads is
 ## bit-identical (vertices, normals, indices, collision faces, far mesh, extremes) to the same
-## ground built one tile at a time on this thread; Levels.NearSet answers exactly as _near_any.
+## ground built one tile at a time on this thread; Levels.NearSet answers exactly as _near_any; a
+## ball whose stems and ladder leaves are made on worker threads is the same as one made without.
 func _test_startup_build_identical() -> void:
 	var same := 0
 	var detail := []
@@ -132,6 +133,22 @@ func _test_startup_build_identical() -> void:
 				probe.call(c.normalized().rotated(axis, deg_to_rad(float(e[1])) + eps))
 	t.check("startup_near_set_exact", n["mismatches"] == 0 and n["near"] > 1000 and n["near"] < n["queries"],
 			"%d queries, %d near, %d mismatches" % [n["queries"], n["near"], n["mismatches"]])
+	# Whole balls built again (same random sequence) with their stems and ladder leaves made on
+	# worker threads and on this thread: identical builds. (Last in the suite: it reseeds the global
+	# random sequence. Each copy leaves the tree at once, before any physics or processing.)
+	var ball_same := []
+	for i in [0, 2]:
+		var hashes := []
+		for async in [false, true]:
+			Levels.async_meshes = async
+			seed(7000 + i)
+			var copy := Levels.build_ball(i, g)
+			hashes.append(world_build_hash([copy], false))
+			g.remove_child(copy)
+			copy.queue_free()
+		Levels.async_meshes = true
+		ball_same.append(hashes[0] == hashes[1])
+	t.check("startup_async_meshes_identical", not ball_same.has(false), "balls 1 and 3 rebuilt both ways identical: %s" % str(ball_same))
 
 
 static func _terrain_hash(b: MossBall) -> String:
@@ -6284,7 +6301,7 @@ func _phase_world_hash() -> void:
 ## class, name and transform in tree order, every mesh surface's arrays (vertices, normals, UVs,
 ## custom data, indices), every MultiMesh's instance buffer, every collision shape's data, and each
 ## ball's bot hints and terrain extremes. Used to prove the faster startup builds the same world.
-static func world_build_hash(roots: Array) -> String:
+static func world_build_hash(roots: Array, with_names := true) -> String:
 	var ctx := HashingContext.new()
 	ctx.start(HashingContext.HASH_SHA256)
 	# (Empty data is hashed as nothing: HashingContext refuses empty input.)
@@ -6305,9 +6322,13 @@ static func world_build_hash(roots: Array) -> String:
 			var kids := n.get_children()
 			kids.reverse()
 			stack.append_array(kids)
-			put.call(("%s|%s|" % [n.get_class(), n.name]).to_utf8_buffer())
+			put.call(("%s|%s|" % [n.get_class(), n.name if with_names else ""]).to_utf8_buffer())
 			if n is Node3D:
 				put.call(var_to_bytes((n as Node3D).transform))
+			# (Metadata too: headless runs keep no MultiMesh instance data, but the placements are
+			# kept in "veg_transforms".)
+			for k in n.get_meta_list():
+				put.call(var_to_bytes([k, _plain(n.get_meta(k))]))
 			if n is MeshInstance3D:
 				mesh_bytes.call((n as MeshInstance3D).mesh)
 			if n is MultiMeshInstance3D and (n as MultiMeshInstance3D).multimesh != null:
