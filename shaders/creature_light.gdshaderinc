@@ -13,5 +13,5 @@ vec3 creature_caustics(vec3 alb, vec3 vertex, vec3 normal, mat4 inv_view) {
 	float facing = smoothstep(0.45, 0.9, dot(wn, mote_lamp_dir));
 	float depth = smoothstep(-110.0, 150.0, wpos.y);
 	float c = caustic_web(mote_caustic_tex, wpos, TIME, mote_lamp_dir) * facing * mix(0.15, 1.0, mote_clarity) * mix(0.55, 1.0, depth);
-	return (alb * 0.45 + vec3(0.5, 0.6, 0.55)) * c * 0.9;
+	return (alb * 0.45 + vec3(0.5, 0.6, 0.55)) * c * 0.3;
 }

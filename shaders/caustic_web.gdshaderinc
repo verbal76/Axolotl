@@ -7,7 +7,7 @@ float caustic_layer(sampler2D tex, vec2 uv, float t) {
 	float b = texture(tex, uv * 1.37 + vec2(-t * 0.046, t * 0.061) + vec2(0.37, 0.61)).r;
 	float d = abs(a - b);
 	float line = clamp(1.0 - d * 7.0, 0.0, 1.0);
-	return line * line * line + 0.25 * clamp(1.0 - d * 2.5, 0.0, 1.0);
+	return line * line * 0.7 + 0.2 * clamp(1.0 - d * 2.5, 0.0, 1.0);
 }
 
 float caustic_web(sampler2D tex, vec3 p, float t, vec3 lamp) {

@@ -22,5 +22,6 @@ vec3 aquarium_light(sampler2D tex, vec3 alb, vec3 wpos, vec3 wn, float shade, fl
 	float depth = smoothstep(-110.0, 150.0, wpos.y);
 	float c = caustic_web(tex, wpos, t, lamp_dir) * facing * open_ * mix(0.18, 1.0, clarity) * mix(0.55, 1.0, depth);
 	// (Light, not paint: mostly the light's own pale colour, a little of the surface's, like sun on sand.)
-	return (alb * 0.45 + vec3(0.5, 0.6, 0.55)) * c * 1.05;
+	// (A quiet shimmer in the background, never a pattern that pulls the eye: owner, 2026-10-02.)
+	return (alb * 0.45 + vec3(0.5, 0.6, 0.55)) * c * 0.45;
 }
