@@ -12,6 +12,9 @@ var pitch := 0.32                   # radians above the horizon
 var distance := 4.4
 var shoulder := 0.35
 var _cur_dist := 4.4
+## Extra pitch while something (a pillar, a stem, a wall) stands behind him: the camera rises over
+## it rather than jamming against the back of his head (owner, 2026-10-02).
+var _rise := 0.0
 var _manual_t := 0.0
 var _shake := 0.0
 var swipe_delta := Vector2.ZERO     # accumulated by the HUD each frame
@@ -93,20 +96,38 @@ func _process(dt: float) -> void:
 	_place(dt)
 
 
-func _place(dt: float) -> void:
-	var pivot := target.global_position + cam_up * 0.85
-	var right := yaw_dir.cross(cam_up).normalized()
-	var back := -yaw_dir * cos(pitch) + cam_up * sin(pitch)
-	var desired := pivot + back * distance + right * shoulder
-	# Obstruction handling: pull in toward the pivot.
-	var space := get_world_3d().direct_space_state
-	var q := PhysicsRayQueryParameters3D.create(pivot, desired, 1 | 2)
+const RISE_STEPS := [0.3, 0.6, 0.9]
+const RISE_MAX := 1.0
+
+
+## How far the view line from the pivot runs clear at pitch `p` (to the full distance + margin).
+func _clear_len(space: PhysicsDirectSpaceState3D, pivot: Vector3, p: float, right: Vector3) -> float:
+	var back := -yaw_dir * cos(p) + cam_up * sin(p)
+	var to := pivot + back * (distance + 0.35) + right * shoulder
+	var q := PhysicsRayQueryParameters3D.create(pivot, to, 1 | 2)
 	q.exclude = [target.get_rid()]
 	q.hit_back_faces = true
 	var hit := space.intersect_ray(q)
-	var want := distance
-	if not hit.is_empty():
-		want = maxf(0.6, pivot.distance_to(hit.position) - 0.35)
+	return pivot.distance_to(to) if hit.is_empty() else pivot.distance_to(hit.position)
+
+
+func _place(dt: float) -> void:
+	var pivot := target.global_position + cam_up * 0.85
+	var right := yaw_dir.cross(cam_up).normalized()
+	# Obstruction handling: rise over what blocks the view behind him, then pull in what is left.
+	var space := get_world_3d().direct_space_state
+	var rise_to := 0.0
+	if _clear_len(space, pivot, pitch, right) < distance * 0.6:
+		rise_to = RISE_MAX
+		for r in RISE_STEPS:
+			if _clear_len(space, pivot, minf(pitch + r, PITCH_MAX + 0.25), right) >= distance * 0.85:
+				rise_to = r
+				break
+	_rise = move_toward(_rise, rise_to, dt * (1.6 if rise_to > _rise else 0.6))
+	var p_eff := minf(pitch + _rise, PITCH_MAX + 0.25)
+	var back := -yaw_dir * cos(p_eff) + cam_up * sin(p_eff)
+	var desired := pivot + back * distance + right * shoulder
+	var want := minf(distance, maxf(0.6, _clear_len(space, pivot, p_eff, right) - 0.35))
 	_cur_dist = want if want < _cur_dist else lerpf(_cur_dist, want, minf(1.0, dt * 3.0))
 	var pos := pivot + (desired - pivot).normalized() * _cur_dist
 	# Never under the ground (owner, 2026-10-02: looking down from a crest dipped it below the
