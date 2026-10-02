@@ -29,46 +29,6 @@ func _init(p_ball: MossBall, p_game: Node) -> void:
 	ball.add_child(root)
 
 
-## Startup (2026-10-02): meshes that depend only on their own arguments (stems, ladder leaves) are
-## built on worker threads while the layout goes on, and land on their MeshInstance3D nodes in
-## finish_meshes() (Levels.build_ball, before the ball is used), in the order they were asked for:
-## the same arrays and format SurfaceTool.commit() makes on this thread. Off (the default), each is
-## built at once, as before.
-var async_meshes := false
-var _mesh_jobs: Array = []
-
-
-## `mi`'s mesh from `build` (-> SurfaceTool ready to commit; must read nothing that the layout
-## may change, as it can run later on a worker thread).
-func mesh_later(mi: MeshInstance3D, build: Callable) -> void:
-	if not async_meshes:
-		mi.mesh = (build.call() as SurfaceTool).commit()
-		return
-	var out := []
-	var id := WorkerThreadPool.add_task(func() -> void:
-		var st: SurfaceTool = build.call()
-		# (SurfaceTool.commit's flags: the custom channels' formats.)
-		var flags := 0
-		for c in 4:   # (the four custom channels)
-			if st.get_custom_format(c) != SurfaceTool.CUSTOM_MAX:
-				flags |= st.get_custom_format(c) << (Mesh.ARRAY_FORMAT_CUSTOM_BASE + c * Mesh.ARRAY_FORMAT_CUSTOM_BITS)
-		out.append(st.commit_to_arrays())
-		out.append(flags), true, "level mesh")
-	_mesh_jobs.append([id, mi, out])
-
-
-## Waits for the meshes mesh_later started and puts each on its node.
-func finish_meshes() -> void:
-	for j in _mesh_jobs:
-		WorkerThreadPool.wait_for_task_completion(j[0])
-		var out: Array = j[2]
-		var am := ArrayMesh.new()
-		if not (out[0][Mesh.ARRAY_VERTEX] as PackedVector3Array).is_empty():
-			am.add_surface_from_arrays(Mesh.PRIMITIVE_TRIANGLES, out[0], [], {}, out[1])
-		(j[1] as MeshInstance3D).mesh = am
-	_mesh_jobs.clear()
-
-
 func d(lat: float, lon: float) -> Vector3:
 	return MossBall.dir_ll(lat, lon)
 
@@ -358,7 +318,7 @@ func ladder_stem(stem_xf_: Transform3D, stem_h: float, r0: float, r1: float, ben
 	# Each leaf's placement and size, for the footing and route audits: [world xform, length, width].
 	body.set_meta("leaves", leaves)
 	var mi := MeshInstance3D.new()
-	mesh_later(mi, func() -> SurfaceTool:
+	mi.mesh = MeshLib._commit(func() -> SurfaceTool:
 		var st := MeshLib.leaf_surface()
 		var nv := 0
 		for lf in leaf_xfs:
@@ -411,7 +371,8 @@ func stem_xf(xf: Transform3D, height: float, r0: float, r1: float, collide := tr
 	node.global_transform = xf.translated_local(Vector3(0, -0.5, 0))
 	node.set_meta("grounded", "stem")
 	var mi := MeshInstance3D.new()
-	mesh_later(mi, func() -> SurfaceTool: return MeshLib.stem_surface(r0, r1, height + 0.5, 9, bend))
+	# (Built on a worker thread during a ball's build: MeshLib.deferring.)
+	mi.mesh = MeshLib._commit(func() -> SurfaceTool: return MeshLib.stem_surface(r0, r1, height + 0.5, 9, bend))
 	mi.material_override = stem_mat
 	mi.visibility_range_end = 140.0
 	node.add_child(mi)

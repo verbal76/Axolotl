@@ -77,7 +77,7 @@ func _test_startup() -> void:
 ## exactly the same world: each ball's ground rebuilt with its tiles on worker threads is
 ## bit-identical (vertices, normals, indices, collision faces, far mesh, extremes) to the same
 ## ground built one tile at a time on this thread; Levels.NearSet answers exactly as _near_any; a
-## ball whose stems and ladder leaves are made on worker threads is the same as one made without.
+## ball whose plant, stem and leaf meshes are made on worker threads is the same as one made without.
 func _test_startup_build_identical() -> void:
 	var same := 0
 	var detail := []
@@ -133,11 +133,11 @@ func _test_startup_build_identical() -> void:
 				probe.call(c.normalized().rotated(axis, deg_to_rad(float(e[1])) + eps))
 	t.check("startup_near_set_exact", n["mismatches"] == 0 and n["near"] > 1000 and n["near"] < n["queries"],
 			"%d queries, %d near, %d mismatches" % [n["queries"], n["near"], n["mismatches"]])
-	# Whole balls built again (same random sequence) with their stems and ladder leaves made on
+	# Every ball built again (same random sequence) with its plant, stem and leaf meshes made on
 	# worker threads and on this thread: identical builds. (Last in the suite: it reseeds the global
 	# random sequence. Each copy leaves the tree at once, before any physics or processing.)
 	var ball_same := []
-	for i in [0, 2]:
+	for i in g.balls.size():
 		var hashes := []
 		for async in [false, true]:
 			Levels.async_meshes = async
@@ -148,7 +148,7 @@ func _test_startup_build_identical() -> void:
 			copy.queue_free()
 		Levels.async_meshes = true
 		ball_same.append(hashes[0] == hashes[1])
-	t.check("startup_async_meshes_identical", not ball_same.has(false), "balls 1 and 3 rebuilt both ways identical: %s" % str(ball_same))
+	t.check("startup_async_meshes_identical", not ball_same.has(false), "every ball rebuilt both ways identical: %s" % str(ball_same))
 
 
 static func _terrain_hash(b: MossBall) -> String:
@@ -6315,6 +6315,11 @@ static func world_build_hash(roots: Array, with_names := true) -> String:
 				put.call(var_to_bytes((m as ArrayMesh).surface_get_format(si)))
 		elif m != null:
 			put.call(m.get_class().to_utf8_buffer())
+		if m != null:
+			var meta := {}
+			for k in m.get_meta_list():
+				meta[k] = _plain(m.get_meta(k))
+			put.call(var_to_bytes([m.resource_name, meta]))
 	for r in roots:
 		var stack: Array = [r]
 		while not stack.is_empty():
