@@ -382,6 +382,10 @@ func run(runner) -> void:
 	t.check("all_clear_shown", _all_clear_at >= 0.0, "at %.1fs" % _all_clear_at)
 	await wander(20.0)
 	t.check("free_roam_continues", p.controls_enabled and p.state == "normal" and g.state == "play", "")
+	# The camera safety invariant over a whole game (FollowCam._audit: every frame drawn).
+	var cam: FollowCam = g.cam
+	t.check("camera_never_drawn_unsafe_whole_game", cam.audited_frames > 10000 and cam.unsafe_drawn == 0,
+			"%d frames audited, %d unsafe, %d requested places corrected%s" % [cam.audited_frames, cam.unsafe_drawn, cam.corrected_frames, "" if cam.unsafe_worst == "" else ": first " + cam.unsafe_worst])
 	await t.shot("pt_60_free_roam")
 	# Expansion 6: 100% by legitimate play. The normal finish is below 100%; then the bot goes
 	# after everything the catalog still lists (blooms, species, cave eels...) the way a player
