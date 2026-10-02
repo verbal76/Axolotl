@@ -657,6 +657,25 @@ func run(runner) -> void:
 		await _gill_shots(g, "gill_restored")
 	if only == "menus":
 		await _menus_shots(g)
+	if only == "ballview":
+		# The whole-ball view on demand (ledger row 21): the menu row, then the view on three balls
+		# (Ball 5 sits by the tank's glass), then back.
+		Settings.input_mode = Settings.InputMode.TOUCH
+		g.pause_menu.open()
+		await t.seconds(0.5)
+		await t.shot("ballview_menu")
+		g.pause_menu.close()
+		for bi in [0, 4, 6]:
+			var b: MossBall = g.balls[bi]
+			g.player.place(b, b.surface_point(b.start_dir, 0.2), MossBall.frame_at(b.start_dir, 0).z)
+			g.cam.snap_behind()
+			await t.seconds(1.5)
+			g.ball_view.open()
+			await t.seconds(2.5)
+			await t.shot("ballview_ball%d" % (bi + 1))
+			g.ball_view.close()
+			await t.seconds(1.5)
+		await t.shot("ballview_back")
 	if only == "aqframes":
 		await load("res://scripts/tests/aq_nav_tests.gd").new(t, g).frames_phase()
 	if only == "aqgill":

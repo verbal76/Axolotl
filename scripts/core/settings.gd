@@ -88,6 +88,8 @@ func _setup_input_map() -> void:
 		"lunge": [_key(KEY_K), _btn(JOY_BUTTON_B)],
 		"special": [_key(KEY_L), _btn(JOY_BUTTON_Y)],
 		"pause": [_key(KEY_ESCAPE), _key(KEY_P), _btn(JOY_BUTTON_START)],
+		# The whole-ball view (ledger row 21; BallView): the pad's Back / View / Select button.
+		"view_ball": [_key(KEY_V), _btn(JOY_BUTTON_BACK)],
 	}
 	for action in defs:
 		if not InputMap.has_action(action):
@@ -144,6 +146,8 @@ func controller_status() -> String:
 	var parts := []
 	parts.append("Controller: " + ("connected" if _pad_connected else "none"))
 	parts.append("Active: " + ("controller" if input_mode == InputMode.PAD else "touch"))
+	if _pad_connected:
+		parts.append("Back: whole-ball view")
 	return "   ".join(parts)
 
 
