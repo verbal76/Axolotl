@@ -379,10 +379,11 @@ def sfx():
 
 def ambience():
     # Water: low rumble + soft hiss, seamless (circular reverb / filtering).
+    # (The old noise bed's draws are kept so every sound after it stays byte-identical; the bed
+    # itself is aquarium_bed(), which has its own random stream.)
     L = int(8 * SR)
-    x = lowpass_fast(noise(L), 220) * 0.8 + highpass_fast(noise(L), 3000) * 0.05
-    x *= 0.8 + 0.2 * np.sin(2 * np.pi * np.arange(L) / L * 2)
-    write_wav("amb_water", x, loop=True, peak=0.5)
+    noise(L), noise(L)
+    aquarium_bed()
     L = int(6 * SR)
     b = np.zeros(L)
     for i in range(70):
@@ -518,14 +519,175 @@ def parasites():
     write_wav("sfx_parasite_flee", s)
 
 
+def loopify(x, n, fade):
+    """The first n samples of x (which holds n + fade), crossfaded so the end runs into the start."""
+    out = np.array(x[:n], dtype=np.float64)
+    r = np.linspace(0.0, 1.0, fade)
+    out[:fade] = x[n:n + fade] * (1.0 - r) + x[:fade] * r
+    return out
+
+
+def aquarium_bed():
+    """The household-aquarium bed heard from launch (docs/research/2026-09-30-DEVICE_AUDIT.md §G).
+    Two layers on co-prime loops so the pair repeats only every 221 s:
+    amb_water (17 s): soft water movement pitched where phone speakers play (≈180–750 Hz, slow
+    swells, a few low glugs), nothing hissy above ~1.5 kHz.
+    amb_aerator (13 s): a distant bubbler, irregular trains of small pitched bubbles, rolled off
+    above ~2.6 kHz. The old bed (220 Hz rumble + a >3 kHz hiss band) read as static on phones."""
+    r = np.random.default_rng(4077)
+    fade = int(0.8 * SR)
+    # Water movement.
+    n = int(17 * SR)
+    x = bandpass_fast(r.standard_normal(n + fade), 180, 750)
+    env = lowpass_fast(r.standard_normal(n + fade), 0.35)
+    env = env / (np.max(np.abs(env)) + 1e-9)
+    x *= 0.72 + 0.28 * env
+    for _ in range(9):
+        f0 = r.uniform(170, 380)
+        place(x, r.uniform(0, (n + fade) / SR - 0.3), drop(f0, f0 * 1.5, r.uniform(0.08, 0.16)), r.uniform(0.25, 0.5), wrap=False)
+    w = loopify(x, n, fade)
+    w = lowpass_fast(np.tile(w, 2), 1500)[n:]
+    write_wav("amb_water", w, loop=True, peak=0.5)
+    # Aerator.
+    n = int(13 * SR)
+    b = np.zeros(n)
+    t = r.uniform(0.0, 0.3)
+    while t < 13.0:
+        count = int(r.integers(3, 10))
+        base = r.uniform(650, 1350)
+        tt = t
+        for _ in range(count):
+            f0 = base * r.uniform(0.85, 1.2)
+            place(b, tt, drop(f0, f0 * 1.8, r.uniform(0.03, 0.07)), r.uniform(0.15, 0.6))
+            tt += r.uniform(0.025, 0.09)
+        t += r.exponential(0.55) + 0.12
+    b = reverb(b, 0.35, 0.8, circular=True)
+    b = lowpass_fast(np.tile(b, 2), 2600)[n:]   # (filtered around the loop: no click at the seam)
+    write_wav("amb_aerator", b, loop=True, peak=0.45)
+
+
 def main():
     os.makedirs(OUT, exist_ok=True)
-    sfx()
-    ambience()
-    outside()
-    creatures()
-    parasites()
+    # (--only=skills writes just the skill-tree sounds, leaving every other file untouched.)
+    import sys
+    if "--only=bed" in sys.argv:
+        aquarium_bed()
+        print("audio written to", os.path.abspath(OUT))
+        return
+    if "--only=tunnel" in sys.argv:
+        tunnel_and_ooze()
+        print("audio written to", os.path.abspath(OUT))
+        return
+    if "--only=skills" not in sys.argv:
+        sfx()
+        ambience()
+        outside()
+        creatures()
+        parasites()
+        gill()
+        tunnel_and_ooze()
+    skills()
     print("audio written to", os.path.abspath(OUT))
+
+
+def tunnel_and_ooze():
+    """Owner, 2026-10-01. The water tunnel opening (replaces sfx() 's vortex_connect): a soft swell with
+    rising, twinkly bell sparkles over the whole 4.8 s shot. The ravine ooze: a thick low gurgle as
+    Gill sinks in. Own random generator, so every other sound stays byte-identical."""
+    r = np.random.default_rng(4242)
+    dur = 4.8
+    tt = t_axis(dur)
+    swell = np.sin(np.pi * np.clip(tt / dur, 0, 1)) ** 1.5
+    s = np.zeros(len(tt))
+    for f in (note_f(60), note_f(64), note_f(67), note_f(72)):
+        for det in (-0.004, 0.0, 0.005):
+            s += np.sin(2 * np.pi * f * (1 + det) * tt + r.random() * 6.28) * 0.06
+    s = lowpass_fast(s, 1400) * swell
+    # A rising sparkle arpeggio (C major pentatonic, climbing two octaves), then a scatter of twinkles.
+    scale = [72, 74, 76, 79, 81, 84, 86, 88, 91, 93, 96]
+    for k, m in enumerate(scale):
+        place(s, 0.15 + k * 0.17, bell(note_f(m), 1.4), 0.22, wrap=False)
+    for k in range(34):
+        m = scale[int(r.integers(4, len(scale)))] + 12 * int(r.integers(0, 2))
+        place(s, r.uniform(1.6, dur - 0.9), bell(note_f(min(m, 103)), 0.9), r.uniform(0.06, 0.16), wrap=False)
+    shimmer = highpass_fast(np.array([r.uniform(-1, 1) for _ in range(len(tt))]), 6000) * 0.05 * swell
+    write_wav("sfx_vortex_connect", reverb(s + shimmer, 0.5))
+    # The ooze: slow, thick, low bubbles and a sinking moan.
+    dur = 1.6
+    tt = t_axis(dur)
+    g = np.zeros(len(tt))
+    for k in range(16):
+        f0 = r.uniform(90, 260)
+        place(g, r.uniform(0, dur * 0.8), drop(f0, f0 * 1.6, r.uniform(0.08, 0.16)), r.uniform(0.4, 0.9), wrap=False)
+    f = 160 * (1 - 0.45 * tt / dur)
+    moan = np.sin(2 * np.pi * np.cumsum(f) / SR) * np.sin(np.pi * tt / dur) * 0.25
+    g = lowpass_fast(g, 900) + moan
+    write_wav("sfx_ooze_sink", reverb(g, 0.25))
+
+
+def skills():
+    """The red starfish pickup and the skill-tree unlock (docs/SKILL_TREE.md). No shared random
+    generator is drawn from, so every sound above stays byte-identical.
+
+    Starfish: a quick rising "bloop" (a bubble's upward glide, the transient that carries off-centre)
+    straight into two bright kalimba plucks a fifth apart (E6 then B6) with a soft sparkle on top:
+    plucked, not the Motes' bell (sfx_mote_capture) nor the cave rewards' bell run (sfx_upgrade).
+    Unlock: a warm marimba run up a major chord with a low pluck under it and a small swell: a
+    satisfying 'yes' for the menu, unlike either."""
+    n = lambda d: int(d * SR)
+    s = np.zeros(n(0.95))
+    tt = t_axis(0.075)
+    f = 520 + 1100 * (tt / 0.075) ** 0.6
+    bloop = np.sin(2 * np.pi * np.cumsum(f) / SR) * env_adsr(len(tt), 0.003, 0.02, 0.8, 0.03)
+    place(s, 0.0, bloop, 0.55, wrap=False)
+    place(s, 0.05, kalimba(note_f(88), 0.7), 0.8, wrap=False)
+    place(s, 0.13, kalimba(note_f(95), 0.75), 0.7, wrap=False)
+    shimmer = t_axis(0.5)
+    sh = (np.sin(2 * np.pi * 3950 * shimmer) + 0.6 * np.sin(2 * np.pi * 5270 * shimmer)) * expdecay(len(shimmer), 0.09)
+    sh *= 0.5 + 0.5 * np.sin(2 * np.pi * 22 * shimmer)
+    place(s, 0.14, sh, 0.12, wrap=False)
+    write_wav("sfx_starfish", reverb(s, 0.28), peak=0.8)
+    s = np.zeros(n(1.5))
+    for k, m in enumerate([60, 64, 67, 72, 76]):
+        place(s, k * 0.055, marimba(note_f(m), 1.0), 0.45 + 0.05 * k, wrap=False)
+    place(s, 0.0, pluck_bass(note_f(48), 0.9), 0.5, wrap=False)
+    sw = pad([note_f(72), note_f(76), note_f(79)], 1.2, 0.35, 0.25)
+    place(s, 0.2, sw * env_adsr(len(sw), 0.25, 0.3, 0.5, 0.5), 0.35, wrap=False)
+    write_wav("sfx_skill_unlock", reverb(s, 0.35), peak=0.8)
+
+
+def gill():
+    # After dev-000024 (owner): a tiny, cute yawn for Gill's stretch idle. Own generator, so every
+    # sound above stays the same. A small voice (high pitch) opening "a" then closing to "o",
+    # rising then sighing down, breathy, a soft "mm" as the mouth shuts and a squeak at the end.
+    r = np.random.default_rng(7117)
+    dur = 1.15
+    tt = t_axis(dur)
+    n = len(tt)
+    u = tt / dur
+    # Pitch: a lift into the yawn, a long sigh down, a little squeak at the close.
+    f0 = np.interp(u, [0.0, 0.12, 0.3, 0.6, 0.88, 1.0], [420, 520, 600, 470, 370, 380])
+    f0 = f0 + 520 * np.exp(-((u - 0.93) / 0.025) ** 2)
+    f0 = f0 * (1 + 0.012 * np.sin(2 * np.pi * 5.5 * tt))
+    phase = 2 * np.pi * np.cumsum(f0) / SR
+    # Vowel: "a" (formants 900/1400) closing to "o" (520/900), then to a hum.
+    k_open = np.clip((u - 0.05) / 0.25, 0, 1) * np.clip((0.85 - u) / 0.2, 0, 1)
+    F1 = 520 + 380 * k_open
+    F2 = 900 + 500 * k_open
+    voice = np.zeros(n)
+    for k in range(1, 12):
+        fk = f0 * k
+        w = np.exp(-((fk - F1) / 260) ** 2) + 0.6 * np.exp(-((fk - F2) / 330) ** 2) + 0.25 / k
+        voice += np.sin(k * phase) * w
+    amp = np.clip(u / 0.12, 0, 1) ** 1.5 * np.clip((1.0 - u) / 0.25, 0, 1)
+    breath = bandpass_fast(r.standard_normal(n), 1200, 5000) * 0.18 * k_open
+    hum = np.sin(phase * 0.5) * 0.35 * np.exp(-((u - 0.86) / 0.05) ** 2)
+    s = (voice * 0.5 + breath + hum) * amp
+    # Underwater: a touch muffled, a couple of bubbles after.
+    s = lowpass_fast(s, 3800)
+    s = np.concatenate([s, np.zeros(int(0.25 * SR))])
+    place(s, 1.02, bubbles(0.3, 3, 700, 1500), 0.35, wrap=False)
+    write_wav("sfx_gill_yawn", reverb(s, 0.18), peak=0.7)
 
 
 if __name__ == "__main__":

@@ -3,7 +3,8 @@
 Mote is **offline-capable, not offline-only** (owner ruling). The installed **Mote** app bundles the
 complete game and needs no connection to launch, load, play, save, restore saves or finish. When a
 connection happens to be available it checks for signed, compatible over-the-air (OTA) game updates
-in the background, downloads and verifies them, and runs them after the next restart. You push a
+in the background, downloads and verifies them, and installs them by itself (see *Fully automatic
+updates*: at launch before the title, or at the next safe moment in a session). You push a
 commit, CI tests it and publishes a signed Godot PCK, and the phone picks it up. You only build a new
 APK when the installed **runtime** changes.
 
@@ -29,6 +30,12 @@ app start -> Boot mounts the newest VERIFIED package already on the device (no n
 - **When:** once per launch (after boot health); again when the app returns to the foreground if the
   last automatic attempt was at least 15 minutes ago; and every 60 minutes while it keeps running.
   Failed attempts count, so an offline phone is not hammered. `Boot.auto_check_due()` holds the policy.
+- **Resume gap on the wall clock (game layer, 2026-10-03).** r5 measures the 15-minute resume gap on
+  the engine clock, which stops while the phone sleeps, so a return to the app after a night in the
+  pocket usually counted as "too soon". `AutoUpdate._resume_check()` applies the same gap to the time of
+  the last recorded check (`state.json` event `check`, any outcome) on the wall clock, runs only when the
+  native check did not (never two at once), and tells the native policy it ran. The engine-clock
+  *periodic* hourly check is unchanged (native). See `docs/HOT_ATTIC_INFRA.md` for the full lifecycle audit.
 - **Never while** the game is starting, in baseline mode (OTA disabled), or when a check is already running.
 - **Non-blocking:** requests are polled from the main loop (DNS, TLS and reads are non-blocking);
   15 s timeout for the pointer and manifest, 15 min for the package. Godot 4.7.2's *threaded*
@@ -37,6 +44,62 @@ app start -> Boot mounts the newest VERIFIED package already on the device (no n
   pointer/manifest, bad signature, wrong runtime, bad hash, corrupt or interrupted download.
 
 This is an application-level Godot patch channel, not Google Play updating.
+
+## Fully automatic updates (owner decision, 2026-10-01)
+
+Players should never have to restart the app for an update. Runtime r5 (Android build 22) can only
+mount a package in `Boot._init`, so the **game layer** (`scripts/core/auto_update.gd`,
+`scripts/core/soft_restart.gd`) runs a downloaded update in-process with a *soft restart*, using only
+what the r5 native layer already exposes (`Boot.updater`, `Boot.core`, `Boot.healthy`):
+
+```
+launch -> loading screen; the game layer starts a check (Boot.updater.check) while the world builds
+       -> world built: wait for the check, at most 8 s after it started (offline: it already failed)
+       -> verified update PENDING? loading screen "Updating..." -> soft restart ("Please wait, applying
+          update" modal) -> title of the NEW version
+during a session: update downloaded (native start / resume / periodic check)
+       -> installs at the next safe moment: the title screen, or the app returning from the background
+          (never in play, cinematics, lessons, menus, the aquarium or the ending); run + profile saved first
+          -> soft restart -> title (Continue resumes the run)
+```
+
+The soft restart:
+1. **Native verification and mount.** `Boot.core.boot()` re-selects PENDING, re-checks its signed
+   manifest, runtime, size and SHA-256, counts the start before mounting and mounts the package with
+   `load_resource_pack(path, true)`, exactly as at a cold start. If it does not mount PENDING, nothing
+   else happens and the current version keeps running.
+2. **Game layer swapped.** The main scene and other game nodes are freed, the `Settings` autoload is
+   detached from its script, every cached game-layer script is recompiled in place from the new pack
+   (Godot's GDScript cache re-reads a script loaded with `CACHE_MODE_IGNORE`; `class_name` globals are
+   refreshed by `load_resource_pack`), cached resources are re-read leaves first (`CACHE_MODE_REPLACE`),
+   `Settings` gets the new `settings.gd`, and the main scene loads again. `scripts/boot/` is never
+   recompiled: the APK's native layer stays in charge.
+3. **Health re-armed.** The new version must report ready and keep running 3 s before the native layer
+   makes it CURRENT (the old CURRENT becomes PREVIOUS). A version that never gets there is abandoned
+   after the usual two unhealthy starts and the device falls back, as after a cold start.
+
+**Activation screen (2026-10-03, `scripts/core/update_activation.gd`).** Only the soft restart itself
+shows "Please wait, applying update" (a Mote panel with an indeterminate bar over the loading-screen
+backdrop, input blocked); checking and downloading never do. It goes up when `SoftRestart.apply` starts
+the switch (after the save), is lifted by the new version's loading screen (`AutoUpdate.on_loading_visible`),
+and is removed at once when the native layer does not mount the package (the toast then says the current
+version keeps running). A second activation while one runs is refused. If nothing lifts it within 20 s,
+its own engine-only timer replaces the text with "The update did not finish. Mote will try again on the
+next start." and removes it 3 s later; the activation state expires on the same clock. A cold-start
+activation happens inside `Boot._init` before any game code exists: nothing can be shown there by an OTA
+(native proposal in `docs/HOT_ATTIC_INFRA.md`).
+
+Safety: each OTA id is tried in-process at most once (`user://ota_autoupdate.json`, written before
+anything changes); in a session the running version must itself be healthy first; nothing is applied
+that the native layer would not load; a game layer that does not compile is rejected like a package
+that does not mount, and the version that was running is mounted and recompiled back; a failure at
+any step keeps the current version and the reason is shown in Diagnostics (*Automatic updates*, at
+the end of the Startup section). `--no-auto-update` turns it off for one run; test runs and
+`--ota-quit-after-check` runs never use it.
+
+**First delivery.** The game layer already on a phone decides what happens to the next update. The
+first OTA that carries automatic updates is therefore delivered the old way (downloaded, then run at
+the next cold start); every OTA after it installs automatically.
 
 ## Two layers
 
@@ -118,7 +181,7 @@ The signature is RSA-3072 PKCS#1 v1.5 over SHA-256 of the exact manifest bytes (
 
 ### Workflow `ota-publish.yml`
 
-It runs on every push to `claude/axolotl-aquarium-platformer-3y0qyy`, or manually through **Run workflow** for any commit. In order, it:
+It runs on every push, without `[skip ci]`, to an authorized Mote development branch: currently `claude/mote-game-continuation-bov2x9`, and `claude/axolotl-aquarium-platformer-3y0qyy` (Expansions 1–6). It can also be run manually through **Run workflow** for any commit. A new development branch is added to the workflow's `branches` list, explicitly, in its first release. In order, it:
 
 1. checks out the exact commit and records its SHA;
 2. runs the runtime gate (`ota_runtime.py --check`);

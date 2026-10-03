@@ -6,6 +6,8 @@ const OtaCore := preload("res://scripts/boot/ota_core.gd")
 const OtaUpdater := preload("res://scripts/boot/ota_updater.gd")
 const HttpStub := preload("res://scripts/tests/ota_http_stub.gd")
 const BootScript := preload("res://scripts/boot/boot.gd")
+const SoftRestart := preload("res://scripts/core/soft_restart.gd")
+const UpdateActivationScript := preload("res://scripts/core/update_activation.gd")
 const RUNTIME := "testos-godot-4.7.2-r1"
 
 var t
@@ -75,6 +77,11 @@ func run() -> void:
 	_test_real_pack_mount()
 	_test_runtime_generations()
 	_test_auto_check_policy()
+	_test_auto_update_policy()
+	_test_auto_update_record()
+	_test_soft_restart_health_accounting()
+	await _test_soft_restart_mechanics()
+	await _test_soft_restart_failure_keeps_game()
 	await _test_update_client()
 	await _test_version_identity()
 	await _test_product_identity()
@@ -257,6 +264,216 @@ func _test_auto_check_policy() -> void:
 	t.check("ota_auto_check_policy", ok, "start always; resume after %d min; periodic every %d min" % [BootScript.AUTO_CHECK_MIN_GAP_S / 60, BootScript.AUTO_CHECK_PERIOD_S / 60])
 	# The automatic check never runs before the game is up, nor in baseline mode, nor without OTA.
 	t.check("ota_auto_check_waits_for_health_and_ota", not Boot.auto_check("start") if not Boot.ota_enabled else true, "")
+
+
+# --- fully automatic updates (AutoUpdate policy + SoftRestart) ---------------------------------
+
+func _test_auto_update_policy() -> void:
+	# On/off switches.
+	var none := PackedStringArray()
+	t.check("autoupd_on_for_ota_builds", AutoUpdate.off_reason(true, "", none) == "", "")
+	t.check("autoupd_off_without_ota_client", AutoUpdate.off_reason(false, "", none) != "", "")
+	t.check("autoupd_off_in_test_runs", AutoUpdate.off_reason(true, "unit", none) != "", "")
+	t.check("autoupd_off_for_check_and_quit_runs", AutoUpdate.off_reason(true, "", PackedStringArray(["--ota-quit-after-check"])) != "", "")
+	t.check("autoupd_launch_check_honours_no_autocheck", AutoUpdate.off_reason(true, "", PackedStringArray(["--ota-no-autocheck"])) == ""
+			and AutoUpdate.launch_check_off_reason(true, "", PackedStringArray(["--ota-no-autocheck"])) != "", "")
+
+	# What may be applied: only a verified PENDING the native layer would load, once per id.
+	var c := _core()
+	var ok := func(_p: String) -> bool: return true
+	t.check("autoupd_nothing_waiting", AutoUpdate.applicable(c, {})[1] == "no update waiting", "")
+	var p1 := _payload("a1")
+	_deliver(c, _manifest(1, p1), p1)
+	c.boot(ok)
+	c.mark_healthy()
+	var p2 := _payload("a2")
+	_deliver(c, _manifest(2, p2), p2)
+	var r: Array = AutoUpdate.applicable(c, {})
+	t.check("autoupd_verified_pending_applicable", (r[0] as Dictionary).get("ota_id") == "dev-000002" and r[1] == "", str(r[1]))
+	r = AutoUpdate.applicable(c, {"dev-000002": {"result": "started"}})
+	t.check("autoupd_once_per_ota_id", (r[0] as Dictionary).is_empty() and str(r[1]).contains("already tried"), str(r[1]))
+	c.state["boot"] = {"ota_id": "dev-000002", "starts": OtaCore.MAX_UNHEALTHY_STARTS, "healthy_id": "dev-000001"}
+	r = AutoUpdate.applicable(c, {})
+	t.check("autoupd_not_after_unhealthy_starts", (r[0] as Dictionary).is_empty() and str(r[1]).contains("boot health"), str(r[1]))
+	c.state["boot"] = {"ota_id": "dev-000001", "starts": 0, "healthy_id": "dev-000001"}
+	c.state["disabled"] = true
+	t.check("autoupd_not_in_baseline_mode", (AutoUpdate.applicable(c, {})[0] as Dictionary).is_empty(), "")
+	c.state["disabled"] = false
+	# Tampered after download: the native boot checks would reject it, so it is never applied.
+	var cache := {}
+	t.check("autoupd_cache_holds_verdict", (AutoUpdate.applicable(c, {}, cache)[0] as Dictionary).get("ota_id") == "dev-000002" and cache.size() == 1, str(cache))
+	_write(c.package_path("dev-000002"), _payload("a2-tampered"))
+	r = AutoUpdate.applicable(c, {})
+	t.check("autoupd_never_applies_what_native_rejects", (r[0] as Dictionary).is_empty() and str(r[1]).contains("would not be loaded by the native layer"), str(r[1]))
+	t.check("autoupd_shallow_mode_skips_hash", (AutoUpdate.applicable(c, {}, {}, false)[0] as Dictionary).get("ota_id") == "dev-000002", "")
+	(c.state["bad"] as Array).append("dev-000002")
+	t.check("autoupd_never_applies_rejected", str(AutoUpdate.applicable(c, {})[1]).contains("rejected"), "")
+	var c2 := _core()
+	var p3 := _payload("a3")
+	_deliver(c2, _manifest(3, p3), p3)
+	c2.boot(ok)
+	t.check("autoupd_running_pending_not_reapplied", str(AutoUpdate.applicable(c2, {})[1]).contains("already running"), "")
+
+	# Safe moments.
+	var title := {"ready_done": true, "state": "title", "title_visible": true, "healthy": true}
+	var play := {"ready_done": true, "state": "play", "title_visible": false, "healthy": true}
+	t.check("autoupd_safe_on_title", AutoUpdate.safe_moment("title", title) == "", "")
+	t.check("autoupd_never_mid_play", AutoUpdate.safe_moment("title", play) != "", AutoUpdate.safe_moment("title", play))
+	t.check("autoupd_safe_on_resume_in_play", AutoUpdate.safe_moment("resume", play) == "", "")
+	t.check("autoupd_safe_on_resume_on_title", AutoUpdate.safe_moment("resume", title) == "", "")
+	var blocked := true
+	for k in ["paused", "menu_open", "cinematic", "lesson", "card", "presentation", "ending", "updater_busy"]:
+		for base in [title, play]:
+			for where in ["title", "resume"]:
+				blocked = blocked and AutoUpdate.safe_moment(where, base.merged({k: true}, true)) != ""
+	t.check("autoupd_never_in_menus_cinematics_lessons", blocked, "")
+	t.check("autoupd_running_version_must_be_healthy", AutoUpdate.safe_moment("title", title.merged({"healthy": false}, true)) != ""
+			and AutoUpdate.safe_moment("resume", play.merged({"healthy": false}, true)) != "", "")
+	t.check("autoupd_aquarium_not_safe", AutoUpdate.safe_moment("resume", play.merged({"state": "aquarium"}, true)) != "", "")
+	t.check("autoupd_launch_only_before_ready", AutoUpdate.safe_moment("launch", {"ready_done": false}) == "" and AutoUpdate.safe_moment("launch", title) != "", "")
+	t.check("autoupd_launch_wait_capped", not AutoUpdate.launch_wait_over(0, true) and not AutoUpdate.launch_wait_over(AutoUpdate.LAUNCH_CAP_MS - 1, true)
+			and AutoUpdate.launch_wait_over(AutoUpdate.LAUNCH_CAP_MS, true) and AutoUpdate.launch_wait_over(5, false), "cap %d ms" % AutoUpdate.LAUNCH_CAP_MS)
+	t.check("autoupd_launch_cap_about_8s", AutoUpdate.LAUNCH_CAP_MS <= 8000, "")
+
+
+func _test_auto_update_record() -> void:
+	var saved_path: String = SoftRestart.record_path
+	SoftRestart.record_path = OS.get_user_data_dir().path_join("autoupd_record_%d.json" % Time.get_ticks_usec())
+	t.check("autoupd_record_empty", SoftRestart.record_read()["attempts"].is_empty() and not SoftRestart.was_attempted("dev-000009"), "")
+	SoftRestart.record_attempt("dev-000009", "dev-000008", "title")
+	var a: Dictionary = SoftRestart.record_read()["attempts"]
+	t.check("autoupd_record_attempt_before_change", SoftRestart.was_attempted("dev-000009") and a["dev-000009"]["result"] == "started" and a["dev-000009"]["from"] == "dev-000008", str(a))
+	SoftRestart.record_result("dev-000009", "applied")
+	var d := SoftRestart.record_read()
+	t.check("autoupd_record_result", d["attempts"]["dev-000009"]["result"] == "applied" and d["last"]["ota_id"] == "dev-000009" and d["last"]["result"] == "applied", str(d["last"]))
+	for i in SoftRestart.RECORD_KEEP + 5:
+		SoftRestart.record_attempt("dev-%06d" % (100 + i), "x", "title")
+	d = SoftRestart.record_read()
+	t.check("autoupd_record_bounded", (d["attempts"] as Dictionary).size() == SoftRestart.RECORD_KEEP and (d["order"] as Array).size() == SoftRestart.RECORD_KEEP, "")
+	_write(SoftRestart.record_path, "{broken".to_utf8_buffer())
+	t.check("autoupd_record_corrupt_is_empty", SoftRestart.record_read()["attempts"].is_empty(), "")
+	DirAccess.remove_absolute(SoftRestart.record_path)
+	SoftRestart.record_path = saved_path
+
+
+## The native state machine after an IN-PROCESS mount (what SoftRestart.apply drives through
+## OtaCore.boot): the start is counted before the mount, health promotes PENDING -> CURRENT and
+## CURRENT -> PREVIOUS, an update that never becomes healthy is abandoned after the same number
+## of starts, and rollback still works.
+func _test_soft_restart_health_accounting() -> void:
+	var c := _core()
+	var ok := func(_p: String) -> bool: return true
+	var p1 := _payload("s1")
+	_deliver(c, _manifest(1, p1), p1)
+	c.boot(ok)
+	c.mark_healthy()
+	var p2 := _payload("s2")
+	_deliver(c, _manifest(2, p2), p2)
+	# In-process: the same core object (Boot.core) boots again while dev-000001 runs.
+	var mounted: Array[String] = []
+	var picked := c.boot(func(path: String) -> bool:
+		mounted.append(path.get_file())
+		return true)
+	t.check("autoupd_inprocess_mounts_pending_only", picked.get("ota_id") == "dev-000002" and mounted == ["dev-000002.pck"], str(mounted))
+	t.check("autoupd_inprocess_start_counted_before_health", c.state["boot"]["ota_id"] == "dev-000002" and int(c.state["boot"]["starts"]) == 1 and c.slot("pending")["ota_id"] == "dev-000002", str(c.state["boot"]))
+	c.mark_healthy()
+	t.check("autoupd_inprocess_health_promotes", c.slot("current")["ota_id"] == "dev-000002" and c.slot("previous")["ota_id"] == "dev-000001" and c.slot("pending").is_empty(), "")
+	t.check("autoupd_inprocess_rollback_still_works", c.rollback() == "" and c.slot("current")["ota_id"] == "dev-000001" and c.is_bad("dev-000002"), "")
+	# An update applied in-process that never reaches health: the cold starts that follow count
+	# on from the in-process start and abandon it exactly as before.
+	var p3 := _payload("s3")
+	_deliver(c, _manifest(3, p3), p3)
+	c = _core(false)
+	c.boot(ok)
+	c.mark_healthy()
+	var p4 := _payload("s4")
+	_deliver(c, _manifest(4, p4), p4)
+	c.boot(ok)   # in-process, never healthy
+	var c2 := _core(false)   # cold start 1
+	c2.boot(ok)
+	t.check("autoupd_unhealthy_inprocess_counts", c2.active.get("ota_id") == "dev-000004" and int(c2.state["boot"]["starts"]) == 2, str(c2.state["boot"]))
+	var c3 := _core(false)   # cold start 2
+	c3.boot(ok)
+	t.check("autoupd_unhealthy_inprocess_abandoned", c3.active.get("ota_id") == "dev-000003" and c3.is_bad("dev-000004") and c3.slot("pending").is_empty(), "active %s" % c3.active.get("ota_id", "baseline"))
+
+
+## The engine mechanism, in this process: a script and a preloaded resource cached from one pack
+## are replaced in place by a second pack (same path), class_name-free and with live code paths
+## untouched outside the reloaded directory.
+func _test_soft_restart_mechanics() -> void:
+	var dir := OS.get_user_data_dir().path_join("autoupd_mech_%d" % Time.get_ticks_usec())
+	DirAccess.make_dir_recursive_absolute(dir)
+	var packs: Array[String] = []
+	for v in [1, 2]:
+		var src := dir.path_join("probe_%d.gd" % v)
+		var res := dir.path_join("data_%d.tres" % v)
+		_write(src, ('extends RefCounted\nconst DATA := preload("res://autoupd_probe/data.tres")\nconst V := %d\nstatic var calls := 0\nstatic func describe() -> String:\n\tcalls += 1\n\treturn "v%%d %%s calls=%%d" %% [V, DATA.get_meta("text"), calls]\n%s' % [v, "static func only_v2() -> int:\n\treturn 2\n" if v == 2 else ""]).to_utf8_buffer())
+		_write(res, ('[gd_resource type="Resource" format=3]\n\n[resource]\nmetadata/text = "data-v%d"\n' % v).to_utf8_buffer())
+		var inc := dir.path_join("inc_%d.gdshaderinc" % v)
+		var shd := dir.path_join("probe_%d.gdshader" % v)
+		_write(inc, ("float probe_value() { return %d.0; }\n" % v).to_utf8_buffer())
+		_write(shd, ('shader_type spatial;\n#include "res://autoupd_probe/inc.gdshaderinc"\n// v%d\nvoid fragment() { ALBEDO = vec3(probe_value()); }\n' % v).to_utf8_buffer())
+		var pck := dir.path_join("p%d.pck" % v)
+		var pk := PCKPacker.new()
+		pk.pck_start(pck)
+		pk.add_file("res://autoupd_probe/probe.gd", src)
+		pk.add_file("res://autoupd_probe/data.tres", res)
+		pk.add_file("res://autoupd_probe/inc.gdshaderinc", inc)
+		pk.add_file("res://autoupd_probe/probe.gdshader", shd)
+		pk.flush()
+		packs.append(pck)
+	ProjectSettings.load_resource_pack(packs[0], true)
+	var s: Script = load("res://autoupd_probe/probe.gd")
+	var before: String = s.call("describe")
+	var shader: Shader = load("res://autoupd_probe/probe.gdshader")
+	var include: Resource = load("res://autoupd_probe/inc.gdshaderinc")
+	ProjectSettings.load_resource_pack(packs[1], true)
+	var stale: String = s.call("describe")
+	var r := SoftRestart.reload_game_layer([], "res://autoupd_probe")
+	var s2: Script = load("res://autoupd_probe/probe.gd")
+	var after: String = s2.call("describe")
+	t.check("autoupd_mech_cached_code_is_stale_until_reloaded", before == "v1 data-v1 calls=1" and stale.begins_with("v1 data-v1"), "%s / %s" % [before, stale])
+	# (Static vars restart in export templates; the editor binary used by the tests keeps them.)
+	t.check("autoupd_mech_script_replaced_in_place", s2 == s and after.begins_with("v2 data-v2 calls=") and s.has_method("only_v2"), after)
+	t.check("autoupd_mech_reload_report", int(r["scripts"]) == 1 and int(r["resources"]) == 3 and (r["errors"] as Array).is_empty(), str(r))
+	t.check("autoupd_mech_shader_and_include_updated_in_place", load("res://autoupd_probe/probe.gdshader") == shader and shader.code.contains("// v2")
+			and str(include.get("code")).contains("return 2.0"), shader.code.left(80))
+	t.check("autoupd_mech_native_never_reloaded", SoftRestart.is_native("res://scripts/boot/boot.gd") and SoftRestart.is_native("res://scripts/generated/native_build_info.gd")
+			and not SoftRestart.is_native("res://scripts/core/game.gd"), "")
+
+
+## A soft restart that cannot go ahead leaves the running game exactly as it was: a failed save
+## stops it before anything else, and a package the native layer does not mount stops it before
+## anything is torn down. Both are recorded.
+func _test_soft_restart_failure_keeps_game() -> void:
+	var saved := [Boot.core, Boot.ota_enabled, SoftRestart.record_path]
+	SoftRestart.record_path = OS.get_user_data_dir().path_join("autoupd_fail_%d.json" % Time.get_ticks_usec())
+	var c := _core()
+	var p1 := _payload("f1")
+	_deliver(c, _manifest(1, p1), p1)   # a "package" that is not a real pack: mounting fails
+	Boot.core = c
+	var game: Node = g
+	var why: String = await SoftRestart.apply(c.slot("pending"), "title", func() -> String: return "disk full")
+	t.check("autoupd_save_failure_stops_update", why.contains("progress could not be saved") and c.slot("pending")["ota_id"] == "dev-000001"
+			and int(c.state["boot"]["starts"]) == 0 and SoftRestart.record_read()["last"]["result"].begins_with("not applied"), why)
+	var boot_before: Dictionary = (c.state["boot"] as Dictionary).duplicate()
+	why = await SoftRestart.apply(c.slot("pending"), "title", func() -> String: return "")
+	await t.frames(2)
+	t.check("autoupd_unmountable_keeps_game", why.contains("did not mount") and is_instance_valid(game) and game.is_inside_tree()
+			and get_tree_root().get_node_or_null(SoftRestart.CURTAIN_NAME) == null and Settings.get_script() != null, why)
+	t.check("autoupd_unmountable_native_semantics", c.is_bad("dev-000001") and c.active.is_empty() and c.state["boot"] == boot_before, str(c.state["boot"]))
+	t.check("autoupd_failure_recorded", str(SoftRestart.record_read()["last"]["result"]).contains("not applied"), str(SoftRestart.record_read()["last"]))
+	var act: Dictionary = UpdateActivationScript.state()
+	t.check("autoupd_unmountable_activation_failed", act.get("state", "") == "failed" and act.get("ota_id", "") == "dev-000001"
+			and not UpdateActivationScript.is_applying(), str(act))
+	Boot.core = saved[0]
+	Boot.ota_enabled = saved[1]
+	DirAccess.remove_absolute(SoftRestart.record_path)
+	SoftRestart.record_path = saved[2]
+
+
+func get_tree_root() -> Window:
+	return (Engine.get_main_loop() as SceneTree).root
 
 
 ## Serves a signed update from the local stub and returns its manifest.

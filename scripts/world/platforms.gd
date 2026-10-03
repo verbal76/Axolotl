@@ -97,6 +97,8 @@ class Crumble extends StaticBody3D:
 			_t = 0.0
 
 	func _physics_process(dt: float) -> void:
+		if Game.paused_for_aquarium():
+			return
 		_t += dt
 		match _state:
 			"shaking":
@@ -171,7 +173,7 @@ class FlexLeaf extends AnimatableBody3D:
 			_pending_rebound = clampf(impact * 0.55, 5.0, 11.0)
 			_rebound_player = player
 		if impact > 9.0:
-			for p in ball.parasites:
+			for p in ball.hostiles():
 				if p.standing_on == self and p.is_alive():
 					var up := ball.up_at(p.global_position)
 					var out: Vector3 = (p.global_position - global_position)
@@ -236,6 +238,8 @@ class SwayLeaf extends AnimatableBody3D:
 		add_child(leaf)
 
 	func _physics_process(dt: float) -> void:
+		if Game.paused_for_aquarium():
+			return
 		_t += dt
 		var a := sin(_t * TAU * _freq + _phase) * _amp
 		global_transform = Transform3D(_base.basis * Basis(Vector3.RIGHT, a), _base.origin)

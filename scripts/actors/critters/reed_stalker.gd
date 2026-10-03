@@ -45,6 +45,7 @@ var _near_t := 0.0
 
 func place(p_ball: MossBall, p_patch: Vector3, p_deg: float, seed_v: int) -> void:
 	setup(p_ball, "stalker", "tall reeds", seed_v)
+	org = OrganicMotion.new(rng.seed, OrganicMotion.STALKER)
 	hp = 2
 	seen_radius = 4.5
 	p_ball.add_child(self)
@@ -122,9 +123,20 @@ func tick(dt: float) -> void:
 	var dist := to.length()
 	var hunting := here and _in_patch(p.global_position, 1.5) and dist < NOTICE_R \
 			and not line_blocked(global_position + up * 0.3, p.body_center())
+	# Expression (OrganicMotion): prowling slinks in curves with stop-and-go pauses; stalking keeps a
+	# little of it; the telegraph, pounce and recovery have none.
 	match state:
 		"prowl":
-			_walk_to(_target, 1.0, dt)
+			org.step(dt, 1.0, 1.0, 1.0)
+		"stalk":
+			org.step(dt, 0.3, 0.35, 0.5, false, false)
+		"flee":
+			org.step(dt, 0.0, 0.4, 0.0)
+		_:
+			org.step(dt, 0.0, 0.0, 0.0, true)
+	match state:
+		"prowl":
+			_walk_to(_target, 1.0, dt, true)
 			if global_position.distance_to(_target) < 0.6 or state_t > 8.0:
 				_pick_target()
 				state_t = 0.0
@@ -182,23 +194,44 @@ func _go(s: String) -> void:
 	state_t = 0.0
 
 
-func _walk_to(target: Vector3, speed: float, dt: float) -> void:
+## `glide`: it walks where its head points (prowling: turns are curves, never corners).
+func _walk_to(target: Vector3, speed: float, dt: float, glide := false) -> void:
 	var up := ball.up_at(global_position)
 	var d := target - global_position
 	d -= up * d.dot(up)
 	if d.length() < 0.05:
 		_vel = Vector3.ZERO
 		return
-	var step := d.normalized() * minf(d.length(), speed * dt)
+	var dn := d.normalized()
+	var along := dn
+	var spd := speed
+	if OrganicMotion.enabled and (org.w_path > 0.0005 or org.w_speed > 0.0005):
+		# Expression bends the way it wants to go (straight in at the spot) and its pace.
+		along = dn.rotated(up, org.yaw * smoothstep(0.3, 1.5, d.length()))
+		spd *= org.speed
+		if glide:
+			heading = heading.slerp(along, clampf(dt * 4.0 * org.turn, 0.0, 1.0)).normalized()
+			heading = (heading - up * heading.dot(up)).normalized()
+			along = heading
+	var step := along * minf(d.length(), spd * dt)
 	# Stays in its patch and out of rock.
 	var next := global_position + step
-	if not _in_patch(next, 2.0) or line_blocked(global_position + up * 0.3, next + up * 0.3 + step.normalized() * 0.3):
+	if along != dn and step.length() > 0.0 and _walk_blocked(up, next, step):
+		# (Blocked on its curve: the plain line, as without expression.)
+		step = dn * minf(d.length(), spd * dt)
+		next = global_position + step
+	if step.length() <= 0.0 or _walk_blocked(up, next, step):
 		_pick_target()
 		_vel = Vector3.ZERO
 		return
 	_vel = step / dt
-	heading = heading.slerp(d.normalized(), clampf(dt * 4.0, 0.0, 1.0)).normalized()
+	heading = heading.slerp(dn if along == dn else along, clampf(dt * 4.0, 0.0, 1.0)).normalized()
 	_snap(next)
+
+
+## A step to `nx` would leave its patch or go into rock.
+func _walk_blocked(up: Vector3, nx: Vector3, st: Vector3) -> bool:
+	return not _in_patch(nx, 2.0) or line_blocked(global_position + up * 0.3, nx + up * 0.3 + st.normalized() * 0.3)
 
 
 func _face(dir: Vector3, dt: float) -> void:
@@ -225,7 +258,12 @@ func _update_body(_dt: float) -> void:
 		_mm.set_instance_transform(i, Transform3D(Basis(fwd.cross(u).normalized(), u, -fwd).orthonormalized().scaled(Vector3(sc, sc * 0.7, sc * 1.4)),
 				p + u * (0.16 + rear * 0.25 * maxf(0.0, 1.0 - i * 0.5))))
 	var hp_ := global_position + up * (0.2 + rear * 0.6)
-	_head.global_transform = Transform3D(Basis(heading.cross(up).normalized(), up, -heading).orthonormalized(), hp_)
+	var hb := Basis(heading.cross(up).normalized(), up, -heading).orthonormalized()
+	if org != null and (org.look != 0.0 or org.lift != 0.0):
+		# Expression, visual only: the head bobs and scans (its trail, which hit tests use, does not).
+		hp_ += up * org.lift
+		hb = Basis(up, org.look) * hb * Basis(Vector3.RIGHT, org.nod)
+	_head.global_transform = Transform3D(hb, hp_)
 	_frill.scale = Vector3(1.4, 0.8 + rear * 1.4, 0.2)
 
 

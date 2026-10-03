@@ -1,5 +1,6 @@
 shader_type spatial;
 render_mode diffuse_burley, specular_schlick_ggx, cull_disabled;
+#include "res://shaders/creature_light.gdshaderinc"
 
 // Pufferfish (Expansion 6, owner reference photos): one mesh with two shapes. Calm, it is an
 // elongated porcupinefish with fins and flat-lying spines (VERTEX, NORMAL); puffed, every body
@@ -41,4 +42,6 @@ void fragment() {
 	ALBEDO = c;
 	ROUGHNESS = 0.5;
 	SPECULAR = 0.4;
+	// The tank's caustic light on him/it (creature_light).
+	EMISSION += creature_caustics(ALBEDO, VERTEX, NORMAL, INV_VIEW_MATRIX);
 }

@@ -8,6 +8,11 @@ render_mode unshaded, blend_mix, depth_draw_never, cull_back, shadows_disabled;
 // and the path's direction there (CUSTOM1.xyz) by `spin_phase`, which the script advances so it knows
 // where the jets are (Gill rides beside one). UV.x = round the jet, UV.y = t along the path (0 at A).
 // Water rushes along each jet: bright foam streaks over a glassy aqua body, lighter at the edges.
+// Vortex currents (ledger row 14): after the spin, the whole spiral is carried by the meandering
+// centreline offset D(u) (vortex_current.gdshaderinc), u = UV.y = CUSTOM0.w (0 at A, 0.5 mid, 1 at B).
+
+#include "res://shaders/vortex_current.gdshaderinc"
+#include "res://shaders/vortex_distress.gdshaderinc"
 
 uniform float grow = 0.0;          // visible fraction of the path (the spiral reaches out as it grows)
 uniform float strength = 0.0;      // 0 a faint stir .. 1 a full hurricane
@@ -18,8 +23,11 @@ uniform float flow_speed = 9.0;
 uniform float opacity = 1.0;
 uniform vec3 deep : source_color = vec3(0.16, 0.62, 0.78);
 uniform vec3 foam : source_color = vec3(0.9, 0.98, 1.0);
+// The connection's own faint hue (Vortex.TINTS): the same at both ends, mostly in the bright water.
+uniform vec3 tint : source_color = vec3(1.0);
+uniform float tint_amt = 0.0;
 
-varying float v_t;
+varying float v_t;   // u along the connection (0 = ball A, 0.5 = midpoint, 1 = ball B)
 varying float v_jet;
 
 vec3 turn(vec3 v, vec3 k, float a) {
@@ -52,7 +60,13 @@ void vertex() {
 	float surge = 1.0 + 0.06 * sin(UV.y * length_m * 0.9 - TIME * 5.0 + v_jet * 1.7);
 	rel *= surge;
 	VERTEX = a + turn(rel, k, spin_phase);
-	NORMAL = turn(NORMAL, k, spin_phase);
+	vec3 nrm = turn(NORMAL, k, spin_phase);
+	// The current: the ring moves with the centreline; its normal tilts with the bend (first order).
+	float u = UV.y;
+	vec3 d = current_offset(u);
+	vec3 slope = (current_offset(min(u + 0.01, 1.0)) - current_offset(max(u - 0.01, 0.0))) / max(0.02 * length_m, 0.001);
+	VERTEX += d;
+	NORMAL = normalize(nrm - k * dot(nrm, slope));
 }
 
 void fragment() {
@@ -69,7 +83,20 @@ void fragment() {
 	float n2 = vnoise(vec2(rd.x * 1.4 - v_jet * 1.3, along * 1.3 - TIME * flow_speed * 1.1 + rd.y * 1.4));
 	float streak = smoothstep(0.45, 0.8, n1 * 0.65 + n2 * 0.45);
 	float fres = pow(1.0 - clamp(abs(dot(NORMAL, VIEW)), 0.0, 1.0), 2.0);
-	vec3 col = mix(deep, foam, clamp(streak * 0.85 + fres * 0.45 + pulse * 0.3, 0.0, 1.0));
+	vec3 foam_t = mix(foam, tint, tint_amt);
+	vec3 deep_t = mix(deep, deep * tint * 1.35, tint_amt * 0.7);
+	vec3 ds = vec3(1.0, 0.0, 0.0);
+	if (distress_any()) {
+		// Hard Mode distress on this half (vortex_distress.gdshaderinc): the same hue, pulsing.
+		ds = distress_at(t);
+		foam_t = mix(foam, tint, tint_amt + ds.y) * ds.x;
+		// (The deep body only brightens and darkens: a stronger tint there would turn its hue.)
+		deep_t *= ds.x;
+	}
+	vec3 col = mix(deep_t, foam_t, clamp(streak * 0.85 + fres * 0.45 + pulse * 0.3, 0.0, 1.0));
+	if (ds.z > 0.0) {
+		col = mix(col, vec3(1.0), ds.z);
+	}
 	float end_fade = smoothstep(0.0, 0.015, t) * (1.0 - smoothstep(0.985, 1.0, t));
 	float a = (0.42 + fres * 0.4 + streak * 0.4) * (0.25 + strength * 0.75) * (1.0 + pulse * 0.5);
 	ALBEDO = col;

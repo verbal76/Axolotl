@@ -14,12 +14,12 @@ kept below as history.
 
 | Identity | Value |
 |---|---|
-| Repository / branch | `verbal76/Axolotl`, `claude/axolotl-aquarium-platformer-3y0qyy` (draft PR #1 into `main`) |
+| Repository / branch | `verbal76/Axolotl`. Current development branch: `claude/mote-game-continuation-bov2x9` (draft PR #2 into the E6 branch). Expansions 1–6: `claude/axolotl-aquarium-platformer-3y0qyy` (draft PR #1 into `main`) |
 | **Handoff document commit** | The commit that updates this file (`[skip ci]`, documentation only). It is newer than the release commit. |
 | **Release commit** (APK + OTA source) | `104605727ab2bc48f6b0b6e2d56a0fd44127c5be` (`1046057`) |
 | **The one Android app** | **Mote**, `com.verbal76.axolotl`. The separate Mote Dev app is **retired** (owner, 2026-09-27). |
 | **Current APK** | **`mote-v0.1.0-b22.apk`** (artifact `mote-android-v0.1.0-b22`), Android build 22, bundled baseline `1046057` |
-| **Current OTA / channel pointer** | **`dev-000024`**, built from `6e6f71e` (Expansion 6: final integration pass; includes dev-000015..23). dev-000014 = b22's own game |
+| **Current OTA / channel pointer** | **`dev-000029`**, built from `1ad34ea` (the master held package: Tier 2, the aquarium experiences, the tank, the pufferfish repair; game content validated at `fc08131`; includes dev-000015..28). dev-000028 (`bf46566`) was the world expansion. dev-000026 and dev-000027 were never published. dev-000014 = b22's own game |
 | Runtime | `android-godot-4.7.2-r5` |
 | Game version / save schema | `0.1.0` / `1` |
 | Requirement authority | `docs/REQUIREMENTS_LEDGER.md` (sections G, F, O, V, N, C, A, R, S, P, M, **E1** and the **MOTE OPEN ITEMS EXPANSION LIST**) |
@@ -231,12 +231,69 @@ darters included.
 - **Tail swipe:** a 270° arc (`SWIPE_FRONT_DOT = 0.7071`). Aim assist (`Game.swipe_aim`) turns Gill up
   to 60° so that the nearest parasite falls inside the arc. Parasite wiggle uses a simulated clock,
   so playthroughs are deterministic.
+- **Tail whip animation (dev-000024 playtest polish).** The phone playtest found a huge arc over a
+  barely moving tail. The whip now runs on its own 0.55 s clock (`AxolotlModel.whip_curve`):
+  - a short cock to one side;
+  - the strike: the hips twist (about 0.4 of the sweep) and the bend travels down the tail, each
+    bone a little behind the one before;
+  - an overshoot, a settle, and a recovery to his normal pose.
+
+  The tail tip sweeps about 210° and passes straight behind him on the hit frame.
+  - The water arc is drawn over the real hit area: the 270° behind and beside, out to `SWIPE_REACH`
+    (1.95 m) from his body centre. It was 1.55 m before. Its bright head rides the tail tip.
+  - The gameplay is unchanged:
+    - `SWIPE_TIME` 0.3 s;
+    - the hit on frame 6 (0.09 s);
+    - reach 1.95 m plus the target's body;
+    - one stage of damage;
+    - cooldown 0.38 s;
+    - aim assist 60°/80°.
+  - Tests: `_test_tail_whip`.
+- **Idles (dev-000024 playtest polish).** Standing still, Gill now and then plays one of five
+  (`AxolotlModel.Idle`):
+  - he rises onto his back legs, looks one way then the other, and drops back to all fours;
+  - a little scoot to one side, one to the other, and back to the same spot;
+  - a curious head tilt with a blink;
+  - a long stretch with a tiny yawn (`sfx_gill_yawn`), then a shake from gills to tail;
+  - a look up at something drifting past overhead (the owner asked for this one).
+
+  The first comes 4–8 s after he stops, then one every 7–16 s. The choice is random, never the same
+  one twice running. Any input, action or other animation ends an idle at once. The controller
+  allows idles only when nothing else is going on (`Axolotl.idle_allowed`: no jump, burst, lunge or
+  feeding, swipe, hit, landing, fall, current pull, cinematic, vortex, death or respawn). Idles are
+  cosmetic only:
+  - they move the drawn rig, never the gameplay body, its collision or the camera;
+  - choice and timing use the model's own random generator, which also runs blinks now;
+  - tests: `_test_gill_idles`, `stretch_yawns_once`.
+- **Colours and patterns (owner requests).** "Gill's colours" (`scripts/ui/gill_page.gd`, `GillLook`)
+  opens from the pause menu and straight from the title screen. It has:
+  - seven real axolotl morphs as swatches: Pink (the original), Golden, Wild, Melanoid, Copper,
+    Lavender, Glow;
+  - hue and shade sliders for his body and his freckles;
+  - a Pattern section:
+    - a built-in pattern (Spots, Stripes, Hearts, Stars, Leopard), drawn in code and tileable, or
+      "Upload a picture…";
+    - uploads use the phone's own file picker (`DisplayServer.file_dialog_show`; Godot's file
+      dialog where there is none). The picture's centre square is shrunk to 256 px and kept as
+      `user://gill_pattern.png`;
+    - the pattern replaces his freckles, either as markings in the freckle colour (a stencil: the
+      picture's see-through or dark parts) or in its own colours ("Full colour");
+    - it repeats 1–8 times round his body (whole repeats, so no seam) and as often along it; head and
+      limbs take it by a three-way projection;
+  - a live preview in its own small viewport, drawn only while the page is open.
+
+  Every model updates at once. The choice is kept per device in `user://settings.cfg` under `[gill]`:
+  additive keys, save schema 1 unchanged, and older files keep the pink with freckles. The gill fronds
+  keep their health colours. Tests: `_test_gill_colours`, `_test_gill_patterns`.
 
 ## 7. World
 
-- **Moss balls:** three, with sphere-centred gravity. Moss Ball #2 has current-swept areas (`current_at`)
-  and a mesa reached by sway leaves. Moss Ball #3 has the canopy spiral, and flex leaves cushion
-  falls and rebound.
+- **Moss balls:** seven, with sphere-centred gravity; since the world expansion each is about twice
+  its old radius (Mossy Meadow 48 m) with new regions in its own identity: see
+  `docs/WORLD_EXPANSION.md` (ravines and how Gill recovers from them, bubble columns and the glide
+  shaft, current streams, restoration gates) and `docs/WORLD.md`. Moss Ball #2 has current-swept
+  areas (`current_at`) and a mesa reached by sway leaves (or, once healed, a bubble column). Moss
+  Ball #3 has the canopy spiral, and flex leaves cushion falls and rebound.
 - **Caves and upgrades:** caves with health upgrades raise health to 6.
 - **Platforms:** solid from every side (mesh winding fix). Covered by the tests `cushion_faces_outward`,
   `stem_faces_outward` and `cave_dome_faces_correct_side`.
@@ -346,6 +403,75 @@ is expected; tap **Install anyway**.
 
 ## 11. Current OTA
 
+**Latest: `dev-000029`** (OTA publish #29, run 36602426289, published 2026-09-29 17:23:48 UTC):
+- **Source:** `1ad34ea3c1adfdb5b0dda7623c3b8d131f6d732a`.
+- **Identities:** runtime `android-godot-4.7.2-r5`, game 0.1.0, save schema 1, catalog v4.
+- **PCK:** `a4c1f12a181a7e60a043db49d15a736619d80049da1c53fc40264827a2cdda79`, 10,870,736 bytes, 38 baked shader caches.
+
+**The master held package** (ledger AQ; `docs/TIER2.md`, `docs/AQUARIUM.md`):
+- **Tier 2:** Water Cannon, Bubble Blast and Gill Rush, found at shrines in Worlds 3, 5 and 7, with one button and a pause-menu loadout.
+- **The aquarium experiences** (from the title and the pause menu):
+  - the late-80s / early-90s bedroom;
+  - Aquarium Inspection;
+  - Live Tank;
+  - Swim Mode.
+- **Fish:** 13 ambient fish, including three bala sharks.
+- **Gravel:** the rebuilt gravel floor.
+- **Pufferfish:** it can be beaten.
+- **Found in qualification and fixed:**
+  - a parasite could be left buried in the terrain;
+  - startup went from about 10.4 s to about 8 s (pattern swatches drawn off the main thread; gravel heights computed once).
+
+**Release gates:**
+- **Local, on `fc08131` (the published game content):**
+  - unit suite 446/446;
+  - playthroughs seed 7 and 4242: 23/23 each, 100% by play;
+  - OTA end-to-end 42/42.
+- **CI:** OTA publish #29 and Build & Verify #39 both green.
+
+**Verified from the public URLs:**
+- the pointer (dev-000029, seq 29);
+- the manifest (source `1ad34ea`, runtime r5, game 0.1.0, schema 1);
+- the signature against the pinned key (`a003a45c…0cf2`);
+- the PCK hash and size;
+- the baked shaders;
+- the inspector (INSPECT OK);
+- the new sources in the pack (`tier2_shrine`, `presentation`, `swimmer`, `gravel2_*`, `pufferfish`);
+- 116/116 unit checks run from the published pack;
+- the b22 update client (bundled `1046057`) finds it compatible, downloads it and stages it, with a matching SHA.
+
+**Previous: `dev-000028`** (OTA publish #28, run 36522462374): source `bf46566af05b4ee60387c9afd5cd7f2f239960d4`,
+runtime r5, PCK `a4c5f8dc8d3623adafb0494c98499805c929e8f3a566b601816660c1075a162b` (9,384,212 bytes, 38 baked shader
+caches), save schema 1. **The major world expansion** (ledger WX, `docs/WORLD_EXPANSION.md`): every moss ball about twice
+the radius in a wider tank; ravines with forgiving falls; easy / skilled / exploration routes; bubble columns, a glide
+shaft and current streams; restoration that changes the geography; new regions, creature groups and discoveries in every
+world; catalog v4 (348 ids; v3 saves migrate with nothing lost); the Settings scrollbar touch target. Game content
+validated at `3526b3e`; `bf46566` adds only two unit-test measurement fixes (the publishes of `c0d6cdf` and `05a299f`
+stopped on them before publishing anything, so dev-000026 and dev-000027 do not exist). Verified from the public URLs:
+- signature against the pinned key (`a003a45c…0cf2`);
+- hash and size;
+- baked shaders and inspector (INSPECT OK, game 0.1.0);
+- the new sources in the pack (`world_expansion`, `restoration_gate`, `catalog_frozen`, `bubble_column.gdshader`, …);
+- a b22 client (bundled `1046057`, `scripts/boot` identical) discovers, downloads, verifies and stages it;
+- 71 checks pass run from the pack (ravines, gates, columns, new areas, ecosystem, catalog v4, migration, routes, scrollbar);
+- Build & Verify #38 green, no APK.
+
+**Latest: `dev-000025`** (OTA publish #25, run 36486884032, 8 min 38 s): source `8c92e5b0baae9ab72058b467f4fdea5a4ca47118`,
+runtime r5, PCK `333d6cd69e2b548eff37b16caf5c004d1f29048a542342ec7fd1891325dc52af` (9,285,292 bytes, 38 baked shader caches),
+save schema 1. **Playtest polish** (ledger PT): five idles and a yawn; a tail whip that sweeps the arc, which is drawn over
+the real hit area; ambient plant and leaf sway; "Gill's colours" (morphs, fine-tuning, patterns, the player's own picture)
+from the pause menu and the title screen. `8c92e5b` differs from the validated `969e4bb` only in the publish workflow's
+trigger and a line in `docs/OTA.md`. Verified from the public URLs:
+- signature against the pinned key;
+- hash and size;
+- baked shaders and inspector;
+- the new sources in the pack;
+- a b22 client (bundled `1046057`) discovers, downloads, verifies and stages it;
+- 50 checks pass run from the pack;
+- Build & Verify #33 green, no APK.
+
+Published automatically by the push, now that the publish workflow lists the current development branch (§12).
+
 **Latest: `dev-000024`** (OTA publish #24, run 36465899336): source `6e6f71e368d92379a331c827eb772155ab470224`,
 runtime r5, PCK `6816257c11b12560e66f18e6fc4dd33925cff89734ee658aa6dee37d1ed2e7fa` (9,214,288 bytes, baked),
 save schema 1. **Expansion 6** (ledger E6): leaves grown from their stems with matching collision; Gill's soft
@@ -441,7 +567,7 @@ rejects them ("incompatible runtime"); an r3/r4 app rejects dev-000014 ("native 
 | Workflow | File | Triggers | Does |
 |---|---|---|---|
 | Build & Verify | `.github/workflows/build.yml` | `pull_request`, push to `main`, manual | Script check, unit suite, playthrough bot, version drift, runtime gate; the one Mote APK exported with shaders baked (software Vulkan under xvfb), then verified from the APK itself: package/label/versionCode, INTERNET, certificate pin, OTA-key pin, baked caches, splash, and the bundled game's own identity (`--print-identity`); unsigned iOS simulator build |
-| OTA publish (dev channel) | `.github/workflows/ota-publish.yml` | push to `claude/axolotl-aquarium-platformer-3y0qyy`, manual | Runtime gate, tests, PCK export (`Android` preset, shaders baked; fails without them), manifest, signing, inspection, immutable release, re-download and verify, pointer move, receipt artifact `ota-receipt-*` |
+| OTA publish (dev channel) | `.github/workflows/ota-publish.yml` | push to an authorized Mote development branch (`claude/mote-game-continuation-bov2x9`, `claude/axolotl-aquarium-platformer-3y0qyy`; listed explicitly, new ones added in their first release), manual | Runtime gate, tests, PCK export (`Android` preset, shaders baked; fails without them), manifest, signing, inspection, immutable release, re-download and verify, pointer move, receipt artifact `ota-receipt-*` |
 
 Every push to the branch runs both workflows (the second through the PR). A commit message
 containing `[skip ci]` skips both.
@@ -585,6 +711,71 @@ These are implemented but lack automated evidence. They are **not** unimplemente
     - **Frame rate:** watch for stutter in the restored tank, especially with light shafts in view.
     - **100%:** after finishing, the pause menu's completion keeps counting. Everything (blooms, caves, crabs, eels, species) can be earned, and the finish time never changes.
 
+16. **After the playtest-polish OTA (ledger PT) is active:**
+    - **Idles:** put the controller down for half a minute. Now and then, with no fixed order and never the same one twice running, Gill:
+      - rises onto his back legs and looks one way, then the other;
+      - scoots a little to each side and back;
+      - tilts his head and blinks;
+      - stretches with a tiny yawn (listen for it), then shakes;
+      - looks up at something drifting past.
+
+      Touch the stick or a button during any of them: he responds at once, with no delay.
+    - **Tail whip:** swipe near a parasite. His hips twist and the tail visibly sweeps round behind him, under the water arc. The arc now reaches as far as the swipe really hits (a little bigger than before). Hits, damage and timing feel exactly as before.
+    - **Plants:** stand still somewhere quiet (a reed bed, a jungle ladder, a healed ball's crown). Everything that should bend moves a little, each plant and leaf in its own time, never all together. Stems, rock and moss stay still. Walk through: plants still part round you, then settle back into their own sway.
+    - **Gill's colours:** from the title screen and from the pause menu:
+      - try each morph and the four sliders;
+      - try each pattern, "Full colour" on and off, and the repeats slider;
+      - Upload a picture: the phone's picker opens, and the picture ends up on Gill;
+      - close and reopen Mote: his colours and pattern are kept;
+      - check the page shows his face in the little preview.
+    - **Frame rate:** jungle, terraces and a healed ball, with the plants moving.
+
+17. **After the world-expansion OTA (ledger WX, dev-000028) is active:**
+    - **Settings scrollbar:** in Settings, drag the scrollbar on the right with a thumb, from its
+      middle and from its edge: easy to grab; swiping the list still scrolls it; the sliders and
+      switches beside it still work.
+    - **Old save:** Continue the run that was in progress before the update. Nothing earned is lost
+      (the percentage drops, because there is much more to find); Gill resumes at his last bloom or
+      the arrival point, standing on solid ground; the timer and any finish are unchanged.
+    - **Continue with a raised bridge:** heal the Meadow's tutorial glade (the stem bridge rises),
+      leave to the title screen, Continue, and walk across the stem bridge: it must be solid (a
+      bridge opened on Continue once kept its collision on the ravine floor; fixed before release).
+    - **Mossy Meadow:** the tutorial feels exactly as before; after it, the Great Ravine lies across
+      the upland (the fallen stem rises into a bridge when the tutorial parasite is cleared). Walk
+      off a rim into it once: one frond, and he is back on the rim. Try the stepping stones and a
+      burst straight across. The bubble pocket by the glade lifts him up.
+    - **Each world:** play a while in each and say whether it feels bigger and fuller, not emptier:
+      Current Hollows (the current bridge over the Cut, a bubble column in the current), Giant Stems
+      (the Great Trunk to the High Crown), Terrace Steps (the Stone Field's rising stones after the
+      landing heals), Reed Canyon (the hidden ravines in the Reed Maze, the Secret Clearing), Canopy
+      Spire (the Sky Spire, then drift down the glide shaft), Hollow Grotto (the Glow Chamber once
+      its boulder rolls away).
+    - **Time:** roughly how long a world takes you (the aim is 15–25 minutes for a first visit).
+    - **Frame rate:** anywhere busy, especially Mossy Meadow's glade looking over the ravine and a
+      healed Current Hollows.
+
+18. **After the master held package (ledger AQ, dev-000029) is active:**
+    - **Startup:** from a cold start to the title should feel quicker than dev-000028.
+    - **Pufferfish:** swipe one three times: it puffs, sinks toward you, and is beaten; it comes
+      back to its patch later.
+    - **Tier 2:** touch the glowing shell at World 3's High Crown (Water Cannon), World 5's Secret
+      Clearing (Bubble Blast) and World 7's Glow Chamber (Gill Rush). Check:
+      - the new button above-left of Jump, and its glyph;
+      - the cooldown ring and ready flash;
+      - the practice targets;
+      - swapping in the pause menu's Tier 2 row.
+      Say whether each ability feels good and reads clearly on the phone.
+    - **Aquarium:** from the title ("Aquarium") and from the pause menu. Try:
+      - the bedroom view, then tap the tank for Inspection and drag round the glass;
+      - Live Tank (touch to show Back and View, then cycle the views);
+      - Swim Mode (stick, drag to look, Up / Down / Faster).
+      Android back steps out one level at a time. Coming back from the pause menu, Gill is exactly
+      where he was and the run timer has not moved.
+    - **The tank:** the fish, including the three bala sharks (the biggest, a skittish trio); the
+      new gravel up close; the dirty glass from the room while the tank is murky.
+    - **Frame rate:** in the worlds (about +9% frame time on the software-renderer proxy) and in
+      each aquarium mode.
+
 Record results in the ledger (O-19, A-05, R-01, R-14, R-19, S-03, S-06, S-14, F-07, F-09, P-01, P-03, P-06, M-01, M-03, E1-01, E1-07, E1-09, E2-01, E2-02, E2-04, E2-05, E3-01, E3-02, E3-04, E4-01..E4-05, E5-02..E5-06, E6) only with the owner's evidence.
 
 ## 17. Repository isolation
@@ -596,7 +787,7 @@ repository. Do not name, open or use any other game repository in Mote developme
 
 - **Released:** one Mote APK (b22, r5) with everything approved bundled, OTA on `dev`, channel pointer
   reconciled to dev-000014 (the APK's own game). CI green on `1046057`.
-- **Delivered after b22:** dev-000015 (phone-playtest fixes, ledger P) and dev-000016 (ball 3 canopy climb, P-06) and dev-000017 (owner's music, M) and dev-000018 (Expansion 1: timer + completion foundation, E1; music finish, M-03) and dev-000019 (Expansion 2: living terrain + cave repair, E2) and dev-000020 (Expansion 3: reactive vegetation, E3) and dev-000021/22 (Expansion 4: world expansion, E4) and dev-000023 (Expansion 5: ecosystem, E5) and dev-000024 (Expansion 6: final integration pass, E6), by OTA only.
+- **Delivered after b22:** dev-000015 (phone-playtest fixes, ledger P) and dev-000016 (ball 3 canopy climb, P-06) and dev-000017 (owner's music, M) and dev-000018 (Expansion 1: timer + completion foundation, E1; music finish, M-03) and dev-000019 (Expansion 2: living terrain + cave repair, E2) and dev-000020 (Expansion 3: reactive vegetation, E3) and dev-000021/22 (Expansion 4: world expansion, E4) and dev-000023 (Expansion 5: ecosystem, E5) and dev-000024 (Expansion 6: final integration pass, E6) and dev-000025 (playtest polish and his colours, PT) and dev-000028 (the major world expansion, WX), by OTA only. Then dev-000029..dev-000033 (Tier 2, aquarium, Treasure Hunt, aquarium polish, locomotion) and **`00034-locomotion-fix` (dev-000034, 2026-09-30: crawl over steep-footed inclines, visible body follow-through, vortex connection tints; published and verified, pack tests 193/0, b22 staged)**. Then **`00035-enemy-movement` (dev-000035, 2026-09-30: organic enemy movement; published and verified, pack tests 230/0, b22 staged; owner phone: active and healthy, 0 rollbacks; movement verdict pending)**. Next: `00036-skill-tree` (approved, ledger row 6). Queued after that, in order (audit accepted, owner rulings recorded; spec `docs/research/2026-09-30-DEVICE_AUDIT.md`): `00037-opening-audio` (row 13), `00038-menus-landscape` (rows 7–8), `00039-aquarium-gill` (row 9), `00040-plants` (rows 10 and 15: tall-plant tops and the golden-pothos look for climbable leaves), `00041-repopulation` (row 11), `00042-vortex-currents` (row 14, organic vortex tunnels; own OTA, before Hard Mode). Then the current brace + drag marks (row 19), then the starfish progression/placement redesign (row 17, locked), then Hard Mode automatically. Feature order is authoritative; OTA numbers may shift when a publication attempt consumes one. **Hard Mode (row 12): APPROVED / QUEUED LAST / SPECIFICATION COMPLETE / IMPLEMENTATION NOT YET STARTED; HARD MODE AUTONOMOUS BUILD: READY**; built only on the owner's exact words "Build Hard Mode", then autonomously: implement, test, simulate, validate, repair, qualify, publish. **Authorized in advance (owner confirmed 2026-09-30 evening): start Hard Mode automatically once 00037–00042 are done; do not wait for a reply. A "requires Build Hard Mode" line in later prompts is a stale template rule in the owner's prompt maker, not a revocation.**
 - **MOTE OPEN ITEMS EXPANSION LIST** (also in the ledger; each item is one dev OTA, authorised separately):
 
   [x] 1. Timer + completion foundation (dev-000018)
@@ -608,9 +799,213 @@ repository. Do not name, open or use any other game repository in Mote developme
 
   New completion-bearing content must extend the catalog as `docs/COMPLETION.md` describes.
 - **Expansion list:** all six items are done (dev-000018, dev-000019, dev-000020, dev-000021/22, dev-000023, dev-000024). Do not begin Expansion 7 unless the owner asks for it.
-- **Next task:** the owner's phone checks (§16), including the Expansion 6 items (15) and the frame rate.
+- **Next task:** the owner's phone checks (§16), including items 15 (Expansion 6), 16 (dev-000025), 17 (the world expansion, dev-000028) and 18 (the master held package, dev-000029).
+- **World expansion:** done and shipped as one OTA (dev-000028). Per the brief's stop condition: no further expansion, no eighth moss ball, no RPG systems and no new polish pass unless the owner asks.
+- **Master held package (ledger AQ):**
+  - Contents:
+    - Tier 2 (Water Cannon, Bubble Blast, Gill Rush) at shrines in Worlds 3, 5 and 7;
+    - the pufferfish repair;
+    - the aquarium experiences (Room, Inspection, Live Tank, Swim Mode) from the title and the pause menu;
+    - 13 ambient fish, including the owner's 3 bala sharks;
+    - the rebuilt gravel;
+    - the late-80s / early-90s bedroom.
+  - Docs: `docs/TIER2.md` and `docs/AQUARIUM.md`.
+  - Shipped as **dev-000029** (source `1ad34ea`, verified; §11).
+  - Per the brief: STOP after it; start nothing new unless the owner asks.
 - **After that:** continue from the owner's feedback. Game-layer changes reach b22 by OTA on push
   (that push is also the first OTA a b22 phone downloads). Native changes need `--bump` and a new APK.
+- **Treasure Hunt (ledger TH):** the postgame search, **dev-000030** (source `9547061`). Its
+  published-pack check found hunts that could not be finished (objects on tower tops with no room
+  beside them); fixed in **dev-000031** (source `c2f3126`, PCK `8dc85f64…c8623`; published, verified from the public URLs and staged by a b22 client; ledger TH-B3). The owner's phone ran
+  dev-000030 healthily (diagnostics 2026-09-29).
+
+### Standing working rules (owner, 2026-09-29) — these replace every earlier "STOP after it"
+
+1. **Physical playtesting is continuous feedback, not a gate.** Never wait for a playtest before
+   continuing. "Requires physical playtest" names an evidence boundary only. Record every phone
+   finding at once, triage it by what it is (defect, regression, polish, design change, old issue newly
+   noticed, new request) and by its real origin (not the OTA the owner happened to be on), and queue it.
+   Fold it into work in progress only if that does not destabilise a release already in final
+   qualification, publishing or verification. Stop only for: a genuine product decision the
+   requirements cannot settle, a destructive or irreversible action, information only on the owner's
+   phone, contradictory requirements, or an explicit stop.
+2. **Qualification depth follows the risk surface of the change.** Correctness and artifact checks
+   always run: focused tests, unit suite, both canonical playthroughs, OTA end-to-end, CI, public
+   manifest/signature/hash/pack checks, published-pack tests, b22 staging. Expensive measurements the
+   change cannot plausibly affect (for example repeated A-B-A-B performance passes for a change outside
+   gameplay loops, rendering, startup and world building) are cut to a sanity check. Document what was
+   reduced and why; do not ask each time. Keep removing unnecessary serial duplication between local
+   qualification and CI (see the pipeline audit's recommendations).
+3. **Release policy: evidence reuse, not ritual repetition** (owner, 2026-09-30). Before running
+   anything, ask: *what new failure can this run detect that the existing evidence for this
+   candidate does not already cover?* If there is no meaningful answer, do not run it.
+   - **Evidence is cached, with dependencies.** A passed result stays valid until something it
+     depends on changes. Track the qualified source/content identity.
+     - Placement changes invalidate placement, collection and recovery tests.
+     - Lunge changes invalidate lunge, food and collection tests.
+     - Locomotion changes invalidate movement, traversal, combat, playthrough integration and
+       performance.
+     - Rendering or world-building changes invalidate visuals, performance and startup.
+     - Docs and a ledger-only publishing commit invalidate nothing.
+   - **Randomised systems** get multi-seed stress/property coverage (for example
+     `_phase_treasure_stress`), not repeats of the same two seeds.
+   - **Always unique, always run:**
+     - targeted tests for what changed;
+     - game-wide integration evidence when gameplay changed;
+     - exact candidate identity;
+     - required CI (it satisfies duplicated evidence; do not also run an identical local copy just
+       beforehand);
+     - package, signature and hash integrity;
+     - tests against the downloaded published pack;
+     - real b22 discovery, download, verification and staging.
+   - **Only when the change touches the surface:** OTA end-to-end (the OTA client, bootstrap or
+     packaging changed), performance/startup campaigns (rendering, startup, simulation, continuous
+     gameplay, memory).
+   - Small fixes move fast; large changes (the aquarium overhaul, Gill locomotion) get deeper
+     qualification.
+
+4. **Background task / waiter hygiene** (owner, 2026-09-30). **One asynchronous job = one
+   authoritative completion watcher.** Do not create several waiter, polling or background shell
+   tasks for the same worker, result file, completion sentinel, test run, render job or agent unless
+   a specific technical reason genuinely needs more than one.
+   - **Before creating a waiter:**
+     1. Check whether an existing waiter already monitors that worker/result/sentinel. If one exists
+        and is healthy, reuse it.
+     2. Never add a waiter just because the worker has been running a long time.
+     3. Check the process, log and progress directly before assuming a stall. A quiet log is not by
+        itself evidence of a stall, especially during known long tests (for example
+        `jungle_ladders_climbed_with_plain_jumps`, or a full unit suite of 27–32 min under load).
+     4. Never start a duplicate test/run because a watcher looks quiet.
+     5. Track which waiter owns which worker/result, so the relationship can be audited.
+   - **Replacing a waiter:** verify the worker first, preserve its work, retire the obsolete waiter
+     cleanly, then create exactly one replacement.
+   - **Accidental duplicates:** do not blindly terminate them if that would report false failures to
+     an active parent agent. First decide whether termination could trigger retries or repeat
+     expensive work. Clean up only if harmless; otherwise let them finish naturally and prevent a
+     recurrence. (2026-09-30 audit: two duplicate waiters on the locomotion agent's full-suite log
+     were left to finish for this reason.)
+   - **The goal is not a tidy Background Tasks screen.** It is to prevent duplicate monitoring,
+     misleading failure notifications, unnecessary agent wake-ups, duplicate test runs, and wasted
+     compute and tokens, and to keep clear which task owns which work.
+   - **Worker design:** prefer workers with one unambiguous status/result/exit marker, for example the
+     final `EXIT n` / `exit n` line written by the unit/playthrough wrappers. The state (RUNNING,
+     COMPLETED, FAILED, STALLED) should be readable from the process and that marker without
+     spawning more watchers. Give each brief to a subagent this rule too.
+   - **Known cause of duplicates** (2026-09-30, 12:26 EDT audit; inferred from the staggered start times): the agents most likely repeated a long foreground
+     `until grep` wait. Each one hit the Bash timeout, was moved to the background and stayed alive.
+     8 waiters built up on 2 test runs (5 on one, 3 on the other). Keep foreground checks short (one
+     look at the log or `ps`), and after a timeout, look at the log instead of waiting again.
+   - **Background waiters default to a 30-minute limit.** A waiter on a job that can run longer (a full
+     suite, a playthrough) must be started with an explicit long timeout (up to 2 h). If one is stopped
+     at the limit, check that the detached worker is still alive and making progress, then create
+     exactly one replacement and record it.
+
+5. **OTA release names** (owner, 2026-09-30). Every published OTA is named by its sequence plus a SHORT
+   description of the release's primary purpose: `00033-locomotion`, `00034-locomotion-fix`,
+   `00035-enemy-movement`, `00036-skill-tree`. Do not list every minor fix in the name; the name is for
+   reading the OTA history at a glance.
+   - **Where the name appears:** the ledger, this handoff, release reports and the phone checklist
+     (and the GitHub release title, once `ota-publish.yml` carries it; see below).
+   - **What does NOT change:** the machine OTA id stays `dev-NNNNNN` (`printf "%s-%06d"` in
+     `ota-publish.yml`). It is inside the signed manifest, the channel pointer and the release tag, and
+     the phone's OTA client reads it, so renaming it would be a signed-format change. The readable
+     name sits beside it: "00034-locomotion-fix (dev-000034)".
+   - **Pending seam:** putting the name in the release title needs a small workflow change: read a
+     one-line purpose from the publishing commit and fall back to today's title. Make it in a
+     publishing commit, never in a docs-only one.
+
+6. **Blocked items do not stop the queue** (owner, 2026-09-30 evening). If a queued item fails in a way
+   that genuinely needs the owner (a product or feel decision, phone-only evidence, a contradiction), record
+   it in the ledger (what failed, the evidence, the exact question) and move on to the next staged item.
+   - Never publish a red, unqualified or unverified candidate; a blocked item stays unpublished.
+   - Anything Claude can fix itself is fixed, not skipped.
+   - If a later item depends on the blocked one, carry the dependency with it: build the needed piece
+     inside the later item (for example Hard Mode builds its own returners if 00041 is blocked), or
+     skip that item too and record why.
+   - A skipped item keeps its place for when the owner answers; release numbers are assigned at
+     publish, so the names shift.
+
+7. **Minimum sufficient, non-redundant evidence** (owner, 2026-09-30; applies from 00037 on). Keep the
+   same quality bar; remove the waste around it.
+   - **Impact map first** (a decision aid, not a report): what changed, what it can plausibly affect,
+     which evidence stays valid, which is invalidated, and the smallest test set that catches the
+     credible regressions. Run that set; never default up to the full suite. A docs, ledger or stamp
+     commit, or an unrelated asset, invalidates nothing.
+   - **Levels:**
+     - **L1 presentation** (audio, visuals, plant meshes, isolated UI): targeted tests, load/script
+       validation, render/audio/interaction proof, a performance check if relevant, artifact integrity.
+       No story playthrough.
+     - **L2 bounded behaviour** (aquarium Gill, vortex visuals and traversal): targeted tests, focused
+       runtime simulation, affected-world coverage, visual and performance evidence. No 100% playthrough.
+     - **L3 systemic** (repopulation, progression, persistence): broader integration and simulation where
+       the system really reaches.
+     - **L4 foundational** (Hard Mode, save architecture, native/runtime): heavy qualification as
+       specified; never weakened to save usage.
+   - **Smoke before any long run:** scripts load, the class cache is current (`godot --headless --import`
+     after merges that add `class_name` scripts), the world starts, new content validates, no fatal
+     errors. Then launch the long jobs.
+   - **On failure, triage first** (product, test, harness, stale cache, pre-existing). Fix the cause, then
+     rerun only the failing test, its neighbours, and the evidence the repair invalidated.
+   - **Logs:** write progress markers and a concise summary with a final marker; read the summary on
+     success and the failing region on failure.
+   - **Narration:** report only at milestones (implementation done, qualification started, a notable
+     repair, qualification passed, published, verified, skipped under rule 6, overnight summary).
+   - **Docs:** update at state transitions only, with concise entries; reference evidence files rather
+     than copying them.
+   - **Agents:** only for real parallelism or specialised investigation, with minimal briefs that point
+     at repository docs.
+   - **Delivery proof stays:** source and OTA identity, signature and hash, changed content present,
+     b22 discover/download/stage, and targeted checks against the published pack.
+   - **No APK** without a native reason. Parallelise only independent checks without contention.
+   - **Engineering difficulty is never a rule 6 blocker.**
+   - **Queue levels:**
+     - 00037 audio: L1
+     - 00038 menus: L1, plus UI interaction and Settings persistence
+     - 00039 aquarium Gill: L2
+     - 00040 plants: L1, plus rendering and performance
+     - 00041 repopulation: L3
+     - 00042 vortex currents: L2, plus all-connection traversal
+     - Hard Mode: L4
+
+8. **"Pushed" means downloadable** (owner, 2026-09-30). In conversation with the owner, "pushed" (or
+   "published", "out") means the OTA has cleared all testing, has its OTA number, has gone through
+   GitHub Actions and is live on the channel, so the owner can download and play it on the phone NOW.
+   Never call a git push "pushed" to the owner, and never say an OTA was "pushed at <time>" when that
+   was only when publication started: say "publication started at <time>". "Pushed" = publication
+   completed and the dev channel serves it so the b22 client can discover and download it. Use plain states instead: built (local only), qualifying,
+   publishing (Actions running, not downloadable yet), **downloadable** (live on the channel), verified.
+
+**Automatic updates (ledger row 22, 2026-10-01):** next after the onboarding + plants OTA, before repopulation. **Owner reorder (2026-10-01, later):** Onboarding (row 20, `docs/ONBOARDING.md`) is SECOND, right after the Skills-page fix; everything below moves back one. **Owner reorder (2026-10-01):** after the Skills-page fix, publish Plants (rows 10, 15, 18), then Repopulation (row 11), THEN Aquarium Gill (row 9), then Vortex currents, current brace, starfish redesign, Hard Mode. Aquarium Gill is built and qualified and waits its turn.
+
+### Work queue (owner order, 2026-09-29)
+
+1. ~~dev-000031 (Treasure Hunt fix)~~: published and verified.
+2. **Aquarium / UI / Bedroom / exterior / fish / Swim package** (one OTA), including the owner's
+   **Settings gear** (the supplied transparent PNG, added to `assets/ui/` in that package, used as supplied) and **direct Settings
+   access from the title screen** with the build/OTA diagnostics before Start or Continue. Owner-locked:
+   keep the restoration-driven murk; fix the presentation around it.
+3. **Mote Open Issue #1: Gill fluid body locomotion and terrain traversal** (ledger), straight after,
+   with no playtest wait. Mote Open Issue #2 (elevated content reachability) is investigated alongside it.
+   (Owner, 2026-09-29: started in parallel on a separate worktree while the aquarium package qualifies;
+   the Open Issue #2 bubble-column fix ships with it.)
+4. **Organic Enemy Movement** (owner-authorized 2026-09-30; ledger, Mote Open Issue #3), straight
+   after locomotion is published and verified, with no wait for the owner. "Deterministic underneath,
+   apparently spontaneous to the observer" (the Data-blinking principle): the existing AI keeps
+   deciding intent; several smooth deterministic rhythms at unrelated frequencies and phases shape
+   how each creature expresses it (wander, weave, vertical drift, speed, body motion), with per-species
+   personality and per-individual phase, never at the cost of combat readability or collision.
+   Read-only research may run now without competing with the active work. Acceptance is visual:
+   "their little movements are difficult to consciously predict, yet smooth, purposeful and
+   believable."
+5. Then the next authorized work, without waiting for physical playtests.
+
+**Owner's combined morning handoff (2026-09-30), superseding the order above where they differ:**
+(1) root-cause and correct locomotion on the phone (Open Issue #4: Gill not visibly flowing; face-
+planting and sliding sideways at ordinary moss inclines), proven on real authored terrain and against
+dev-000032 from the gameplay camera; (2) subtle per-connection vortex tints (Open Issue #5) riding
+with it if clean; (3) one corrective OTA, verified; (4) then Organic Enemy Movement (its read-only
+research and self-contained work may continue meanwhile, but nothing built on body-follow
+assumptions until locomotion is sound), as its own OTA; (5) continue. No waiting for playtests.
 
 ---
 
@@ -625,7 +1020,7 @@ You are continuing an existing game called **Mote** (protagonist **Gill**).
 
 **Before editing:**
 
-1. Verify the repository (`verbal76/Axolotl`), the remote, the branch (`claude/axolotl-aquarium-platformer-3y0qyy`) and HEAD.
+1. Verify the repository (`verbal76/Axolotl`), the remote, the development branch (currently `claude/mote-game-continuation-bov2x9`) and HEAD.
 2. Read this file (`MOTE_HANDOFF.md`) completely.
 3. Read `docs/REQUIREMENTS_LEDGER.md`.
 4. Inspect the current source.
@@ -634,9 +1029,10 @@ You are continuing an existing game called **Mote** (protagonist **Gill**).
    - the handoff commit is documentation only.
 6. Report any drift.
 7. Report the current APK (Mote b22; the Mote Dev app is retired).
-8. Report the current OTA (`dev-000014`, or newer if the channel pointer has moved).
+8. Report the current OTA (the channel pointer; `dev-000025` at this handoff).
 9. Report the physical-device verification state (none unless the owner has supplied evidence).
 10. Continue from the documented stopping point (§18).
+11. Follow the standing working rules in §18, including rule 4 (one async job = one completion watcher).
 
 **Preserve:**
 

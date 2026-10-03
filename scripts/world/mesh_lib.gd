@@ -4,6 +4,88 @@ class_name MeshLib
 ## UV.y = 0 at the base and 1 at the tip (used by vegetation.gdshader for bending).
 
 
+## Startup (2026-10-02): while `deferring` (Levels.build_ball turns it on while it builds a ball),
+## the meshes made through _commit are built on worker threads while the layout goes on: the caller
+## gets its ArrayMesh at once, empty, and finish_deferred() (at the end of the ball) gives each its
+## surface, name and metadata, in order, exactly as SurfaceTool.commit() makes them on this thread.
+## Only for meshes nothing reads before then and no MultiMesh instances (drawn by a MeshInstance3D), built from
+## their own arguments alone. Off, each is built at once, as before.
+static var deferring := false
+static var _deferred: Array = []
+
+
+## As _commit, but always built at once. For meshes MultiMeshes instance: a MultiMesh given a mesh
+## whose surface comes later keeps bounds that change what is drawn (a title render differed by 505
+## pixels), so the vegetation meshes are never deferred.
+static func _commit_now(build: Callable) -> ArrayMesh:
+	return _filled(null, _committed(build.call(), false))
+
+
+## A mesh from `build` (-> SurfaceTool ready to commit, or [SurfaceTool, resource name, {meta}]).
+static func _commit(build: Callable) -> ArrayMesh:
+	if not deferring:
+		return _filled(null, _committed(build.call(), false))
+	var am := ArrayMesh.new()
+	var out := []
+	var id := WorkerThreadPool.add_task(func() -> void: out.append(_committed(build.call(), true)), true, "mesh")
+	_deferred.append([id, am, out])
+	return am
+
+
+## What `build` made: the committed mesh (on this thread), or its arrays and commit()'s custom-format
+## flags (`arrays`, safe on a worker thread); then its name and metadata.
+static func _committed(r: Variant, arrays: bool) -> Array:
+	var st: SurfaceTool = r[0] if r is Array else r
+	var out := []
+	if arrays:
+		var flags := 0
+		for c in 4:   # (the four custom channels)
+			if st.get_custom_format(c) != SurfaceTool.CUSTOM_MAX:
+				flags |= st.get_custom_format(c) << (Mesh.ARRAY_FORMAT_CUSTOM_BASE + c * Mesh.ARRAY_FORMAT_CUSTOM_BITS)
+		out = [st.commit_to_arrays(), flags]
+	else:
+		out = [st.commit(), 0]
+	out.append(r[1] if r is Array else "")
+	out.append(r[2] if r is Array else {})
+	return out
+
+
+static func _filled(am: ArrayMesh, c: Array) -> ArrayMesh:
+	if c[0] is ArrayMesh:
+		am = c[0]
+	elif not (c[0][Mesh.ARRAY_VERTEX] as PackedVector3Array).is_empty():
+		am.add_surface_from_arrays(Mesh.PRIMITIVE_TRIANGLES, c[0], [], {}, c[1])
+	if c[2] != "":
+		am.resource_name = c[2]
+	for k in c[3]:
+		am.set_meta(k, c[3][k])
+	return am
+
+
+## Waits for the deferred meshes and fills each in.
+static func finish_deferred() -> void:
+	for j in _deferred:
+		WorkerThreadPool.wait_for_task_completion(j[0])
+		_filled(j[1], j[2][0])
+	_deferred.clear()
+
+
+## A mesh of plain triangles, `verts` in order, each with its UV (`uvs`, or (0, its height) when
+## none are given), normals generated: what adding each to a SurfaceTool (set_uv, add_vertex), then
+## generate_normals() and commit() makes. Deferred like _commit.
+static func _triangles(verts: PackedVector3Array, uvs := PackedVector2Array()) -> ArrayMesh:
+	var vs := verts.duplicate()
+	var us := uvs.duplicate()
+	return _commit(func() -> SurfaceTool:
+		var st := SurfaceTool.new()
+		st.begin(Mesh.PRIMITIVE_TRIANGLES)
+		for k in vs.size():
+			st.set_uv(us[k] if not us.is_empty() else Vector2(0.0, vs[k].y))
+			st.add_vertex(vs[k])
+		st.generate_normals()
+		return st)
+
+
 ## A tapered, slightly curved grass blade standing on +Y.
 static func blade(st: SurfaceTool, xf: Transform3D, width: float, height: float, segs: int, curve: float, tint: Color) -> void:
 	var prev_l := Vector3.ZERO
@@ -27,6 +109,11 @@ static func blade(st: SurfaceTool, xf: Transform3D, width: float, height: float,
 
 
 static func tuft_mesh(blades: int, width: float, height: float, spread: float, seed_v: int, segs := 3, curve := 0.35) -> ArrayMesh:
+	return _commit_now(func() -> Variant: return _tuft_mesh_surface(blades, width, height, spread, seed_v, segs, curve))
+
+
+## tuft_mesh's SurfaceTool (safe on a worker thread).
+static func _tuft_mesh_surface(blades: int, width: float, height: float, spread: float, seed_v: int, segs := 3, curve := 0.35) -> Variant:
 	var rng := RandomNumberGenerator.new()
 	rng.seed = seed_v
 	var st := SurfaceTool.new()
@@ -37,7 +124,7 @@ static func tuft_mesh(blades: int, width: float, height: float, spread: float, s
 		var b := Basis(Vector3.UP, rng.randf() * TAU) * Basis(Vector3.RIGHT, rng.randf_range(-0.25, 0.25))
 		var tint := Color.WHITE.darkened(rng.randf() * 0.25)
 		blade(st, Transform3D(b, p), width * rng.randf_range(0.7, 1.2), height * rng.randf_range(0.6, 1.2), segs, curve * rng.randf_range(0.5, 1.3), tint)
-	return st.commit()
+	return st
 
 
 ## A creased blade (a shallow V with a midrib, so it is not a flat card), curved and tapered, with a
@@ -71,6 +158,11 @@ static func reed(st: SurfaceTool, xf: Transform3D, width: float, height: float, 
 ## A clump of reeds (medium/tall vegetation): `blades` creased blades from a small base spread,
 ## leaning out a little, heights and curves varied.
 static func reed_clump(blades: int, width: float, height: float, spread: float, seed_v: int, segs := 5, curve := 0.25) -> ArrayMesh:
+	return _commit_now(func() -> Variant: return _reed_clump_surface(blades, width, height, spread, seed_v, segs, curve))
+
+
+## reed_clump's SurfaceTool (safe on a worker thread).
+static func _reed_clump_surface(blades: int, width: float, height: float, spread: float, seed_v: int, segs := 5, curve := 0.25) -> Variant:
 	var rng := RandomNumberGenerator.new()
 	rng.seed = seed_v
 	var st := SurfaceTool.new()
@@ -82,7 +174,7 @@ static func reed_clump(blades: int, width: float, height: float, spread: float, 
 		var tint := Color.WHITE.darkened(rng.randf() * 0.3)
 		reed(st, Transform3D(bs, p), width * rng.randf_range(0.7, 1.25), height * rng.randf_range(0.6, 1.15), segs,
 				curve * rng.randf_range(0.4, 1.4), rng.randf_range(-0.8, 0.8), tint)
-	return st.commit()
+	return st
 
 
 ## Broad-leaf aquatic plant: a rosette of wide, rounded leaves (Expansion 6, owner: they read as
@@ -90,6 +182,11 @@ static func reed_clump(blades: int, width: float, height: float, spread: float, 
 ## under its own weight, its edges cupped a little, with smooth shading. UV.y runs base to tip, so
 ## the vegetation material sways the outer leaf most in the current.
 static func broadleaf_mesh(leaves: int, size: float, seed_v: int) -> ArrayMesh:
+	return _commit_now(func() -> Variant: return _broadleaf_mesh_surface(leaves, size, seed_v))
+
+
+## broadleaf_mesh's SurfaceTool (safe on a worker thread).
+static func _broadleaf_mesh_surface(leaves: int, size: float, seed_v: int) -> Variant:
 	var rng := RandomNumberGenerator.new()
 	rng.seed = seed_v
 	var st := SurfaceTool.new()
@@ -102,76 +199,187 @@ static func broadleaf_mesh(leaves: int, size: float, seed_v: int) -> ArrayMesh:
 		var half_w := size * rng.randf_range(0.3, 0.42)
 		base = _broad_leaf(st, Basis(Vector3.UP, a), rise, half_w, length, Color.WHITE.darkened(rng.randf() * 0.2), base)
 	st.generate_normals()
-	return st.commit()
+	return st
 
 
 ## A cluster of stem plants (Expansion 6, owner reference "a sprouted moss ball": Rotala-like red
-## stems crowning the healed moss). `stems` thin upright stems of up to `height`, leaning a little
-## outward, each with pairs of narrow leaves turning a quarter turn up the stem, longer below and
-## shorter toward the tip. UV.y runs base to tip (the material's colour runs green to red by it).
-static func stem_plant_mesh(stems: int, height: float, seed_v: int, pairs := 10) -> ArrayMesh:
+## stems crowning the healed moss), rebuilt to end in foliage (00040-plants, ledger row 10;
+## docs/research/2026-09-30-DEVICE_AUDIT.md §C, owner's office-plant reference). Each of `stems`
+## stems has `nodes` (±1) nodes whose internodes shorten geometrically toward the top; the stem
+## kinks a little away from each leaf (a zigzag) and tapers to a fifth of its base width. One leaf
+## per node, most in two ranks (alternate sides), some in a spiral; the leaves shrink, rise and fold
+## toward the top, and a terminal cluster of three young folded leaves encloses the tip, so no bare
+## stick ends the stem. Different seeds give the per-ball variants (no clones). UV.y runs base to
+## tip along each stem (the vegetation material's sway and green-to-red colour follow it; every
+## vertex of a leaf takes its node's value, so a leaf moves with its node). The mesh records each
+## stem's tip and axis in meta "tips" ([[tip, axis, leaf size], ...]) for the no-bare-tip audit.
+## Triangle budget (the old mesh: 3-sided tube plus 2-triangle kites): the tube has a ring per
+## node in the lower stem and every other node above; leaves are 6-triangle lances low down and
+## 4-triangle folded lances higher up (2-triangle folded kites with `light`).
+static func stem_plant_mesh(stems: int, height: float, seed_v: int, nodes := 9, light := false) -> ArrayMesh:
+	return _commit_now(func() -> Variant: return _stem_plant_mesh_surface(stems, height, seed_v, nodes, light))
+
+
+## stem_plant_mesh's SurfaceTool (safe on a worker thread).
+static func _stem_plant_mesh_surface(stems: int, height: float, seed_v: int, nodes := 9, light := false) -> Variant:
 	var rng := RandomNumberGenerator.new()
 	rng.seed = seed_v
 	var st := SurfaceTool.new()
 	st.begin(Mesh.PRIMITIVE_TRIANGLES)
-	var base := 0
+	var vb := [0]
+	var tips := []
 	for i in stems:
-		var a := TAU * i / stems + rng.randf() * 0.8
-		var lean := rng.randf_range(0.04, 0.3)
-		var dirv := Vector3(sin(a) * sin(lean), cos(lean), cos(a) * sin(lean))
-		var bow := Vector3(cos(a), 0, -sin(a)) * rng.randf_range(-0.08, 0.08)
-		var root := Vector3(sin(a), 0, cos(a)) * height * rng.randf_range(0.0, 0.12)
+		var a0 := TAU * i / stems + rng.randf() * 0.8
+		var lean := rng.randf_range(0.04, 0.28)
+		var axis := Vector3(sin(a0) * sin(lean), cos(lean), cos(a0) * sin(lean))
+		var bow := Vector3(cos(a0), 0, -sin(a0)) * rng.randf_range(-0.08, 0.08)
+		var root := Vector3(sin(a0), 0, cos(a0)) * height * rng.randf_range(0.0, 0.12)
 		var len := height * rng.randf_range(0.6, 1.0)
 		var tint := Color.WHITE.darkened(rng.randf() * 0.15)
-		var at := func(t: float) -> Vector3: return root + dirv * len * t + bow * len * t * t
-		# The stem: a thin three-sided tube.
-		var r0 := height * 0.012
-		var rings := 3
-		var start := base
-		var x := dirv.cross(Vector3.RIGHT if absf(dirv.x) < 0.9 else Vector3.FORWARD).normalized()
-		var y := dirv.cross(x).normalized()
-		for j in rings:
-			var t := float(j) / (rings - 1)
-			var c: Vector3 = at.call(t)
-			for k in 3:
-				var ang := TAU * k / 3.0
+		var n := maxi(6, nodes + rng.randi_range(-1, 1))
+		var q := rng.randf_range(0.8, 0.9)
+		# Phyllotaxis: mostly two-ranked (alternate sides, 180 deg +- 20), some spiral (137 deg).
+		var div := (PI + rng.randf_range(-0.35, 0.35)) if rng.randf() < 0.7 else deg_to_rad(137.5 + rng.randf_range(-6.0, 6.0))
+		var zig := rng.randf_range(0.08, 0.16)
+		var leaf0 := height * rng.randf_range(0.28, 0.33)
+		var az := rng.randf() * TAU
+		var sum := 0.0
+		for k in n:
+			sum += pow(q, k)
+		# The nodes: node 0 at the root, node n the tip. Above each leaf the stem leans a little
+		# away from it, so the stem zigzags.
+		var pts: Array[Vector3] = [root]
+		var ts: Array[float] = [0.0]
+		var outs: Array[Vector3] = [Vector3.ZERO]
+		for k in n:
+			var lk := len * pow(q, k) / sum
+			var t0: float = ts[k]
+			var along := (axis + bow * 2.0 * t0).normalized()
+			var dir := along
+			if k > 0:
+				dir = (along * cos(zig) - outs[k] * sin(zig)).normalized()
+			pts.append(pts[k] + dir * lk)
+			ts.append(t0 + lk / len)
+			var o := Vector3(sin(az + (k + 1) * div), 0, cos(az + (k + 1) * div))
+			outs.append((o - along * o.dot(along)).normalized())
+		ts[n] = 1.0
+		# The stem: a thin 3-sided tube tapering to 20 %, a ring per node low down, every other
+		# node higher up (short internodes there; the leaves hide the difference).
+		var r0 := height * 0.011
+		var ring_at: Array[int] = []
+		for k in n + 1:
+			if k <= 1 or k == n or (k % 2 == 1 and k < n - 1):
+				ring_at.append(k)
+		var start: int = vb[0]
+		for k in ring_at:
+			var d := (pts[mini(k + 1, n)] - pts[maxi(k - 1, 0)]).normalized()
+			var x := d.cross(Vector3.RIGHT if absf(d.x) < 0.9 else Vector3.FORWARD).normalized()
+			var y := d.cross(x).normalized()
+			for s in 3:
+				var ang := TAU * s / 3.0
 				st.set_color(tint)
-				st.set_uv(Vector2(float(k) / 3.0, t))
-				st.add_vertex(c + (x * cos(ang) + y * sin(ang)) * r0 * (1.0 - 0.6 * t))
-				base += 1
-		for j in rings - 1:
-			for k in 3:
-				var i0 := start + j * 3 + k
-				var i1 := start + j * 3 + (k + 1) % 3
-				for q in [i0, i1, i0 + 3, i1, i1 + 3, i0 + 3]:
-					st.add_index(q)
-		# Leaf pairs: narrow lance-shaped leaves, arching out and a little down.
-		for j in pairs:
-			var t := 0.12 + 0.86 * float(j) / (pairs - 1)
-			var c: Vector3 = at.call(t)
-			var ll := height * lerpf(0.2, 0.11, t)
-			var lw := ll * 0.3
-			for side in [-1.0, 1.0]:
-				var la := a + j * PI * 0.5 + (0.0 if side > 0.0 else PI) + rng.randf_range(-0.2, 0.2)
-				var out := Vector3(sin(la), 0, cos(la))
-				var tip: Vector3 = c + out * ll * 0.85 + dirv * ll * lerpf(0.45, 0.1, t) - Vector3.UP * ll * 0.1
-				var mid: Vector3 = c + out * ll * 0.45 + dirv * ll * 0.35
-				var wv := out.cross(dirv).normalized() * lw
-				for v in [c, mid + wv, tip, mid - wv]:
-					st.set_color(tint.lightened(0.05))
-					st.set_uv(Vector2(0.5, t))
-					st.add_vertex(v)
-				for q in [base, base + 1, base + 2, base, base + 2, base + 3]:
-					st.add_index(q)
-				base += 4
+				st.set_uv(Vector2(s / 3.0, ts[k]))
+				st.add_vertex(pts[k] + (x * cos(ang) + y * sin(ang)) * r0 * (1.0 - 0.8 * ts[k]))
+				vb[0] += 1
+		for j in ring_at.size() - 1:
+			for s in 3:
+				var i0 := start + j * 3 + s
+				var i1 := start + j * 3 + (s + 1) % 3
+				for qq in [i0, i1, i0 + 3, i1, i1 + 3, i0 + 3]:
+					st.add_index(qq)
+		# One leaf per node: big, low and spreading below; smaller, steeper and more folded above.
+		for k in range(1, n):
+			var tn := float(k) / n
+			var out := (outs[k].rotated(axis, rng.randf_range(-0.12, 0.12))).normalized()
+			var size := leaf0 * lerpf(1.0, 0.5, pow(tn, 1.4)) * rng.randf_range(0.9, 1.1)
+			var elev := deg_to_rad(lerpf(30.0, 62.0, tn))
+			var droop := lerpf(0.45, 0.12, tn)
+			var fold := deg_to_rad(lerpf(12.0, 45.0, tn))
+			var form := (0 if tn < 0.45 else 1) if not light else (1 if tn < 0.5 else 2)
+			var r := r0 * (1.0 - 0.8 * ts[k])
+			_stem_leaf(st, vb, pts[k] + out * r, axis, out, size, elev, droop, fold, form, ts[k], tint.lightened(0.05 + 0.02 * (k % 3)))
+		# The terminal cluster: three young leaves, steep and folded, set a quarter of their
+		# length below the tip so they enclose it.
+		var tip: Vector3 = pts[n]
+		var csize := 0.0
+		for c in 3:
+			var o := Vector3(sin(az + n * div + c * TAU / 3.0 + rng.randf_range(-0.3, 0.3)), 0, cos(az + n * div + c * TAU / 3.0))
+			o = (o - axis * o.dot(axis)).normalized()
+			var size := leaf0 * rng.randf_range(0.26, 0.36)
+			csize = maxf(csize, size)
+			_stem_leaf(st, vb, tip - axis * size * 0.25, axis, o, size, deg_to_rad(rng.randf_range(68.0, 80.0)), 0.04, deg_to_rad(55.0),
+					1 if not light else 2, 1.0, tint.lightened(0.12))
+		tips.append([tip, axis, csize])
 	st.generate_normals()
-	return st.commit()
+	return [st, "stem_plant", {"tips": tips}]
+
+
+## One stem-plant leaf from `at`, pointing along `out` (perpendicular to the stem `axis`), raised
+## `elev` from it, its tip drooping by `droop` of its length, its halves folded up `fold` along the
+## midrib. form 0: a lance (5 stations, 6 triangles, a narrow stalk-like base and sin^0.8 width);
+## 1: a folded lance with one midrib point (4 triangles); 2: a folded kite (2 triangles). Every
+## vertex takes UV.y = `t` (its node: the leaf sways with it); UV.x runs 0..1 across.
+static func _stem_leaf(st: SurfaceTool, vb: Array, at: Vector3, axis: Vector3, out: Vector3, size: float, elev: float, droop: float,
+		fold: float, form: int, t: float, col: Color) -> void:
+	var side := axis.cross(out).normalized()
+	var fwd := out * cos(elev) + axis * sin(elev)
+	var up := fwd.cross(side).normalized()
+	if up.dot(axis) < 0.0:
+		up = -up
+	var mid := func(u: float) -> Vector3: return at + fwd * size * u - axis * size * droop * u * u
+	var half := func(u: float) -> float: return size * 0.235 * pow(sin(PI * clampf(u * 0.94 + 0.03, 0.0, 1.0)), 0.8) * (0.35 if u < 0.12 else 1.0)
+	var put := func(p: Vector3, x: float) -> void:
+		st.set_color(col)
+		st.set_uv(Vector2(x, t))
+		st.add_vertex(p)
+		vb[0] += 1
+	var b: int = vb[0]
+	if form == 0:
+		# base, 3 x (left, right), tip
+		put.call(mid.call(0.0), 0.5)
+		for u in [0.25, 0.5, 0.75]:
+			var w: float = half.call(u)
+			var c: Vector3 = mid.call(u)
+			var lift := up * w * sin(fold)
+			put.call(c - side * w * cos(fold) + lift, 0.0)
+			put.call(c + side * w * cos(fold) + lift, 1.0)
+		put.call(mid.call(1.0), 0.5)
+		for qq in [b, b + 1, b + 2, b + 1, b + 3, b + 2, b + 2, b + 3, b + 4, b + 3, b + 5, b + 4, b + 4, b + 5, b + 6, b + 5, b + 7, b + 6]:
+			st.add_index(qq)
+	elif form == 1:
+		# base, left, midrib, right (at 0.45), tip: folded along the midrib
+		var w: float = half.call(0.45) * 1.08
+		var c: Vector3 = mid.call(0.45)
+		var lift := up * w * sin(fold)
+		put.call(mid.call(0.0), 0.5)
+		put.call(c - side * w * cos(fold) + lift, 0.0)
+		put.call(c, 0.5)
+		put.call(c + side * w * cos(fold) + lift, 1.0)
+		put.call(mid.call(1.0), 0.5)
+		for qq in [b, b + 1, b + 2, b, b + 2, b + 3, b + 1, b + 4, b + 2, b + 2, b + 4, b + 3]:
+			st.add_index(qq)
+	else:
+		# base, left, right, tip: folded along the base-tip diagonal
+		var w: float = half.call(0.45)
+		var c: Vector3 = mid.call(0.45)
+		var lift := up * w * sin(fold)
+		put.call(mid.call(0.0), 0.5)
+		put.call(c - side * w * cos(fold) + lift, 0.0)
+		put.call(c + side * w * cos(fold) + lift, 1.0)
+		put.call(mid.call(1.0), 0.5)
+		for qq in [b, b + 1, b + 3, b, b + 3, b + 2]:
+			st.add_index(qq)
 
 
 ## Fine roots and strands trailing from the underside of a healed moss ball (Expansion 6, the
 ## "sprouted moss ball" reference): `n` thin wavering ribbons of up to `length`, crossed in pairs so
 ## they read from any side. UV.y runs from the moss to the free end.
 static func root_strands_mesh(n: int, length: float, seed_v: int) -> ArrayMesh:
+	return _commit_now(func() -> Variant: return _root_strands_mesh_surface(n, length, seed_v))
+
+
+## root_strands_mesh's SurfaceTool (safe on a worker thread).
+static func _root_strands_mesh_surface(n: int, length: float, seed_v: int) -> Variant:
 	var rng := RandomNumberGenerator.new()
 	rng.seed = seed_v
 	var st := SurfaceTool.new()
@@ -202,13 +410,18 @@ static func root_strands_mesh(n: int, length: float, seed_v: int) -> ArrayMesh:
 				for q in [i0, i0 + 1, i0 + 2, i0 + 1, i0 + 3, i0 + 2]:
 					st.add_index(q)
 	st.generate_normals()
-	return st.commit()
+	return st
 
 
 ## Tube coral / anemone cluster (Expansion 6, the healed tank's colour): `tubes` soft tapering
 ## tubes rising from one spot, leaning outward, each ending in a flared rounded mouth. UV.y runs base
 ## to tip (the vegetation material colours and sways by it).
 static func coral_mesh(tubes: int, height: float, seed_v: int) -> ArrayMesh:
+	return _commit_now(func() -> Variant: return _coral_mesh_surface(tubes, height, seed_v))
+
+
+## coral_mesh's SurfaceTool (safe on a worker thread).
+static func _coral_mesh_surface(tubes: int, height: float, seed_v: int) -> Variant:
 	var rng := RandomNumberGenerator.new()
 	rng.seed = seed_v
 	var st := SurfaceTool.new()
@@ -244,7 +457,225 @@ static func coral_mesh(tubes: int, height: float, seed_v: int) -> ArrayMesh:
 				for q in [i0, i1, i0 + sides, i1, i1 + sides, i0 + sides]:
 					st.add_index(q)
 	st.generate_normals()
-	return st.commit()
+	return st
+
+
+## A gorgonian sea fan (00040-plants, owner phone report: the old fan was flat strips that crossed
+## without joining). Real branching 3D geometry, `height` tall and `width` across, its broad face
+## in the local XY plane, standing on the origin. A trunk rises to a hub; a few main limbs leave it
+## and fork again and again (each fork divides its parent's share of the fan, so branches never
+## cross); every child starts inside its parent's end, at the parent's radius, and tapers toward
+## the tips (low-poly tubes: 6 sides on the thick limbs down to 3 on twigs). Short cross-links
+## join neighbouring branches in the outer fan, the ends buried in both. The outline is irregular
+## and the sheet gently cupped and rippled (fore/aft depth, never coplanar). Colour: deep at the
+## base, paler toward the tips. Returns [ArrayMesh, collision faces (the drawn triangles),
+## {"tris", "depth", "width", "min_radius"}].
+static func sea_fan_mesh(height: float, width: float, color: Color, seed_v: int) -> Array:
+	var rng := RandomNumberGenerator.new()
+	rng.seed = seed_v
+	var hub := Vector3(0, height * 0.09, 0)
+	var reach := height - hub.y
+	var half_w := width * 0.5
+	# An irregular outline: how far out (0..1) the fan reaches at each angle.
+	var ph := [rng.randf() * TAU, rng.randf() * TAU, rng.randf() * TAU]
+	var edge := func(th: float) -> float:
+		return 0.84 + 0.06 * sin(th * 5.0 + ph[0]) + 0.05 * sin(th * 9.0 + ph[1]) + 0.04 * sin(th * 15.0 + ph[2])
+	var zph := [rng.randf() * TAU, rng.randf() * TAU]
+	var cup := width * rng.randf_range(0.08, 0.1)
+	# A point of the fan at angle th (radians, 0 = right, PI = left) and s (0 hub .. 1 outline):
+	# the face slightly cupped toward +Z at the sides and rippled.
+	var at := func(th: float, s: float) -> Vector3:
+		var p: Vector3 = hub + Vector3(cos(th) * half_w, sin(th) * reach, 0.0) * s
+		var sx := p.x / half_w
+		p.z = cup * sx * sx * s + 0.28 * sin(p.x * 0.75 + p.y * 0.35 + zph[0]) * s + 0.18 * sin(th * 3.0 + zph[1]) * s * s
+		return p
+	var r_of := func(sector: float, s: float) -> float:
+		return maxf(0.035, 0.17 * sqrt(sector / PI) * (1.0 - 0.35 * s))
+	# Branches as polylines of [point, radius, s]; terminal ones kept in angular order for links.
+	var branches := []
+	var tips := []
+	var min_sector := deg_to_rad(2.7)
+	var stack := []
+	# The trunk: from below the ground up to the hub, leaning a touch.
+	var trunk := []
+	var lean := Vector3(rng.randf_range(-0.12, 0.12), 0, rng.randf_range(-0.08, 0.08))
+	for j in 4:
+		var u := float(j) / 3.0
+		var tp: Vector3 = Vector3(0, -0.4, 0).lerp(hub, u) + lean * sin(PI * u)
+		trunk.append([tp, lerpf(0.26, 0.2, u) * clampf(height / 7.5, 0.6, 1.6), 0.0])
+	branches.append(trunk)
+	# The main limbs: the fan's span split unevenly among three or four.
+	var lo0 := deg_to_rad(rng.randf_range(6.0, 12.0))
+	var hi0 := deg_to_rad(rng.randf_range(168.0, 174.0))
+	var limbs := rng.randi_range(4, 5)
+	var cuts := [lo0]
+	for k in range(1, limbs):
+		cuts.append(lerpf(lo0, hi0, (k + rng.randf_range(-0.25, 0.25)) / limbs))
+	cuts.append(hi0)
+	var r_hub: float = trunk[3][1]
+	for k in limbs:
+		stack.append([cuts[k], cuts[k + 1], 0.0, hub, r_hub, 0])
+	while not stack.is_empty():
+		var b: Array = stack.pop_back()
+		var lo: float = b[0]
+		var hi: float = b[1]
+		var s: float = b[2]
+		var start: Vector3 = b[3]
+		var r_start: float = b[4]
+		var level: int = b[5]
+		var sector := hi - lo
+		var th := lerpf(lo, hi, rng.randf_range(0.4, 0.6))
+		var pts := [[start, r_start, s]]
+		var fork_at := s + rng.randf_range(0.09, 0.2) * (1.15 if level == 0 else 1.0)
+		var can_fork := sector > min_sector * 2.0
+		var limit: float = edge.call(lerpf(lo, hi, 0.5))
+		var forked := false
+		while true:
+			s += rng.randf_range(0.06, 0.085)
+			th = clampf(th + (lerpf(lo, hi, 0.5) - th) * 0.3 + rng.randf_range(-0.035, 0.035), lo + sector * 0.12, hi - sector * 0.12)
+			var r: float = r_of.call(sector, s)
+			if s >= limit:
+				pts.append([at.call(th, limit), maxf(r * 0.7, 0.028), limit])
+				break
+			var p: Vector3 = at.call(th, s)
+			# (The first stretch eases from the shared junction radius to its own.)
+			pts.append([p, lerpf(r_start, r, 0.65) if pts.size() == 1 else r, s])
+			if can_fork and s >= fork_at:
+				var f := rng.randf_range(0.36, 0.64)
+				var mid := lerpf(lo, hi, f)
+				# Children start inside this branch's end, at its radius.
+				var back: Vector3 = p.lerp(pts[pts.size() - 2][0], 0.3)
+				stack.append([lo, mid, s, back, r, level + 1])
+				stack.append([mid, hi, s, back, r, level + 1])
+				# This branch ends just past the fork, closing over the junction.
+				pts.append([p + (p - pts[pts.size() - 2][0]).normalized() * r * 0.8, maxf(r * 0.5, 0.028), s])
+				forked = true
+				break
+		branches.append(pts)
+		if not forked:
+			tips.append([lo, pts])
+	# Cross-links between angular neighbours among the twigs, in the outer fan.
+	tips.sort_custom(func(a, b2): return a[0] < b2[0])
+	var links := 0
+	var link_ids := []
+	for kk in (tips.size() - 1) * 2:
+		var k := kk / 2
+		if rng.randf() < 0.35:
+			continue
+		var pa: Array = tips[k][1]
+		var pb: Array = tips[k + 1][1]
+		var want := rng.randf_range(0.42, 0.64) if kk % 2 == 0 else rng.randf_range(0.66, 0.9)
+		var best_a: Array = pa[0]
+		var best_b: Array = pb[0]
+		for q in pa:
+			if absf(float(q[2]) - want) < absf(float(best_a[2]) - want):
+				best_a = q
+		for q in pb:
+			if absf(float(q[2]) - want) < absf(float(best_b[2]) - want):
+				best_b = q
+		var d: float = (best_a[0] as Vector3).distance_to(best_b[0])
+		if d < 0.15 or d > 1.1 or float(best_a[2]) < 0.4 or float(best_b[2]) < 0.4:
+			continue
+		var r := maxf(minf(float(best_a[1]), float(best_b[1])) * 0.8, 0.03)
+		var m: Vector3 = (best_a[0] as Vector3).lerp(best_b[0], 0.5) + Vector3(0, rng.randf_range(-0.06, 0.06), 0)
+		branches.append([[best_a[0], r, best_a[2]], [m, r * 0.9, best_a[2]], [best_b[0], r, best_b[2]]])
+		link_ids.append(branches.size() - 1)
+		links += 1
+	# The tubes.
+	var st := SurfaceTool.new()
+	st.begin(Mesh.PRIMITIVE_TRIANGLES)
+	var faces := PackedVector3Array()
+	var min_r := INF
+	var lo_z := INF
+	var hi_z := -INF
+	var tip_col := color.lerp(Color(1.0, 0.8, 0.7), 0.28)
+	var base_col := color.darkened(0.18)
+	for pts in branches:
+		var sides: int = 6 if float(pts[0][1]) >= 0.1 else (5 if float(pts[0][1]) >= 0.05 else 4)
+		var rings := []
+		var prev_x := Vector3.ZERO
+		for j in pts.size():
+			var c: Vector3 = pts[j][0]
+			var dvec: Vector3 = ((pts[mini(j + 1, pts.size() - 1)][0] as Vector3) - (pts[maxi(j - 1, 0)][0] as Vector3)).normalized()
+			# A frame carried along the branch (no twist between rings).
+			var xv := prev_x - dvec * prev_x.dot(dvec)
+			if xv.length_squared() < 1e-6:
+				xv = dvec.cross(Vector3.FORWARD if absf(dvec.z) < 0.9 else Vector3.RIGHT)
+			xv = xv.normalized()
+			prev_x = xv
+			var yv := dvec.cross(xv).normalized()
+			var r: float = pts[j][1]
+			min_r = minf(min_r, r)
+			var ring := []
+			for k in sides:
+				var a: float = TAU * (k + 0.5 * (j % 2)) / sides
+				var nrm := xv * cos(a) + yv * sin(a)
+				ring.append([c + nrm * r, nrm])
+			rings.append(ring)
+			lo_z = minf(lo_z, c.z - r)
+			hi_z = maxf(hi_z, c.z + r)
+		for j in pts.size() - 1:
+			var s0: float = clampf(float(pts[j][2]), 0.0, 1.0)
+			var s1: float = clampf(float(pts[j + 1][2]), 0.0, 1.0)
+			for k in sides:
+				var a0: Array = rings[j][k]
+				var a1: Array = rings[j][(k + 1) % sides]
+				var b0: Array = rings[j + 1][k]
+				var b1: Array = rings[j + 1][(k + 1) % sides]
+				for tri in [[a0, b0, a1], [a1, b0, b1]]:
+					# Wound to face outward (front faces out, as Godot reads them).
+					var v0: Vector3 = tri[0][0]
+					var v1: Vector3 = tri[1][0]
+					var v2: Vector3 = tri[2][0]
+					var out_n: Vector3 = tri[0][1] + tri[1][1] + tri[2][1]
+					var order := [tri[0], tri[1], tri[2]] if (v2 - v0).cross(v1 - v0).dot(out_n) > 0.0 else [tri[0], tri[2], tri[1]]
+					for v in order:
+						var sv := s0 if v in [a0, a1] else s1
+						st.set_color(base_col.lerp(tip_col, sv * sv))
+						st.set_normal(v[1])
+						st.add_vertex(v[0])
+						faces.append(v[0])
+		# Close the free tip with a short point.
+		var last: Array = pts[pts.size() - 1]
+		var lp: Vector3 = last[0]
+		var ldir: Vector3 = (lp - (pts[pts.size() - 2][0] as Vector3)).normalized()
+		var apex: Vector3 = lp + ldir * float(last[1]) * 1.2
+		for k in sides:
+			var a0: Array = rings[pts.size() - 1][k]
+			var a1: Array = rings[pts.size() - 1][(k + 1) % sides]
+			var order := [a0, a1, [apex, ldir]] if (apex - a0[0]).cross(a1[0] - a0[0]).dot(a0[1] + a1[1]) > 0.0 else [a0, [apex, ldir], a1]
+			for v in order:
+				st.set_color(tip_col if float(last[2]) > 0.5 else base_col)
+				st.set_normal(v[1])
+				st.add_vertex(v[0])
+				faces.append(v[0])
+	# Connectivity: every branch but the trunk starts inside another branch's tube, and every
+	# cross-link ends inside one too (nothing floats).
+	var detached := 0
+	for bi in range(1, branches.size()):
+		var ends := [branches[bi][0][0]]
+		if bi in link_ids:
+			ends.append(branches[bi][branches[bi].size() - 1][0])
+		for e in ends:
+			var inside := false
+			for bj in branches.size():
+				if bj == bi or inside:
+					continue
+				var q: Array = branches[bj]
+				for j in q.size() - 1:
+					var a0: Vector3 = q[j][0]
+					var a1: Vector3 = q[j + 1][0]
+					var seg := a1 - a0
+					var f := clampf((e - a0).dot(seg) / maxf(seg.length_squared(), 1e-9), 0.0, 1.0)
+					if (a0 + seg * f).distance_to(e) <= lerpf(float(q[j][1]), float(q[j + 1][1]), f) + 0.002:
+						inside = true
+						break
+			if not inside:
+				detached += 1
+	var mesh := st.commit()
+	mesh.resource_name = "sea_fan"
+	return [mesh, faces, {"tris": faces.size() / 3, "depth": hi_z - lo_z, "width": mesh.get_aabb().size.x, "min_radius": min_r,
+			"branches": branches.size(), "links": links, "tips": tips.size(), "detached": detached}]
 
 
 ## One rosette leaf pointing out along the basis' +Z: `rise` radians up from level at the base,
@@ -310,22 +741,35 @@ static func leaf_shadow_proxy(leaves: Array) -> ArrayMesh:
 	return st.commit()
 
 
+## Half-width (0..1) of a platform leaf at t along it (0 base, 1 tip): the golden-pothos outline of
+## the owner's reference (2026-10-01): a narrow neck at the stalk (as before, so the base stays clear
+## of the stem it grows from), a broad rounded (heart-like) body
+## widest about a third of the way along, then a long taper to a pointed tip.
 static func leaf_profile(t: float) -> float:
 	var tc := clampf(t, 0.0, 1.0)
-	var neck := 0.22 + 0.78 * smoothstep(0.0, 0.2, tc)
-	return neck * pow(sin(PI * tc), 0.42) * (1.0 - 0.12 * tc)
+	var neck := 0.22 + 0.78 * smoothstep(0.0, 0.3, tc)
+	return neck * pow(1.0 - tc, 0.85) * (1.0 + 2.41 * tc) / 1.278
 
 
 ## Height of a platform leaf's upper surface above its base plane at (t along, s across in -1..1):
-## a gentle crown along the midrib, edges curling a little down, the tip drooping slightly. Nearly
-## level where the axolotl stands (the middle).
+## a gentle arch along the blade with the tip drooping, and a soft V fold about the midrib whose halves
+## rise a little before the edges curl down. Within a few centimetres of level where the axolotl
+## stands (the broad middle).
 static func leaf_top_y(t: float, s: float, width: float) -> float:
-	return 0.06 - 0.15 * pow(clampf(t, 0.0, 1.0), 2.4) - 0.08 * s * s * minf(width / 2.2, 1.4)
+	var tc := clampf(t, 0.0, 1.0)
+	var a := absf(s)
+	return 0.05 + 0.06 * sin(PI * tc * 0.9) - 0.22 * pow(tc, 2.6) + (0.09 * a - 0.12 * s * s) * minf(width / 2.2, 1.4)
 
 
-## Visual thickness of a platform leaf at s across (thickest at the midrib, a thin edge).
+## Visual thickness of a platform leaf at s across: a thin blade with a fuller midrib.
 static func leaf_thickness(s: float) -> float:
-	return 0.02 + 0.07 * (1.0 - s * s)
+	return 0.012 + 0.03 * (1.0 - s * s)
+
+
+## How deep the collision reaches below the upper surface (kept as before the blade was thinned, so
+## nothing that landed safely before can pass through now; the upper surface is the drawn one).
+static func leaf_collision_depth(s: float) -> float:
+	return 0.02 + 0.07 * (1.0 - s * s) + 0.03
 
 
 ## A large leaf used as a platform, lying in the XZ plane, pointing along -Z from the origin (where
@@ -333,19 +777,41 @@ static func leaf_thickness(s: float) -> float:
 ## card. With `petiole`, a curved stalk runs from the leaf's base back into the stem it grows from
 ## (+Z, rising slightly as it enters the stem), so the leaf is seen to grow out of it: nothing but
 ## the drawn leaf collides (MeshLib.leaf_collision_shapes); the stalk never snags.
-static func platform_leaf_mesh(length: float, width: float, petiole := false) -> ArrayMesh:
+static func platform_leaf_mesh(length: float, width: float, petiole := false, stalk := 0.55) -> ArrayMesh:
+	return _commit(func() -> Variant: return _platform_leaf_mesh_surface(length, width, petiole, stalk))
+
+
+## platform_leaf_mesh's SurfaceTool (safe on a worker thread).
+static func _platform_leaf_mesh_surface(length: float, width: float, petiole := false, stalk := 0.55) -> Variant:
+	var st := leaf_surface()
+	_leaf_into(st, Transform3D.IDENTITY, length, width, petiole, 0, stalk)
+	st.generate_normals()
+	return st
+
+
+## A SurfaceTool for platform leaves: each leaf's vertices carry, in CUSTOM0, the leaf's up and its
+## own phase for the plant shader's ambient flutter (so leaves merged into one mesh still move
+## independently).
+static func leaf_surface() -> SurfaceTool:
 	var st := SurfaceTool.new()
 	st.begin(Mesh.PRIMITIVE_TRIANGLES)
-	_leaf_into(st, Transform3D.IDENTITY, length, width, petiole, 0)
-	st.generate_normals()
-	return st.commit()
+	st.set_custom_format(0, SurfaceTool.CUSTOM_RGBA_FLOAT)
+	return st
+
+
+## A leaf's flutter phase (0..1) from where it sits: steady, and never the gameplay random sequence.
+static func leaf_phase(at: Vector3) -> float:
+	return fposmod(sin(at.dot(Vector3(12.9898, 78.233, 37.719))) * 43758.5453, 1.0)
 
 
 ## Appends a platform leaf (as platform_leaf_mesh) transformed by `xf` to `st` (indexed), whose
 ## vertices so far number `base`; returns the new count. Call generate_normals() once at the end.
-static func _leaf_into(st: SurfaceTool, xf: Transform3D, length: float, width: float, petiole: bool, p_base: int) -> int:
+## `stalk`: how far back (+Z) the stalk reaches into its stem.
+static func _leaf_into(st: SurfaceTool, xf: Transform3D, length: float, width: float, petiole: bool, p_base: int, stalk := 0.55) -> int:
+	var lup := xf.basis.y.normalized()
+	st.set_custom(0, Color(lup.x, lup.y, lup.z, leaf_phase(xf.origin)))
 	var rows := 10
-	var cols := [-1.0, -0.55, 0.0, 0.55, 1.0]
+	var cols := [-1.0, -0.68, -0.34, 0.0, 0.34, 0.68, 1.0]
 	var base := p_base
 	var top := []
 	for i in rows + 1:
@@ -394,8 +860,8 @@ static func _leaf_into(st: SurfaceTool, xf: Transform3D, length: float, width: f
 		# The stalk: from inside the stem (0.55 m back, a little higher) arcing down and out into
 		# the leaf's narrow base, thickest where it leaves the stem.
 		var r_scale := clampf(width / 2.2, 0.8, 1.5)
-		var p0 := Vector3(0, 0.3, 0.55)
-		var p1 := Vector3(0, 0.28, 0.12)
+		var p0 := Vector3(0, 0.3, stalk)
+		var p1 := Vector3(0, 0.28, stalk * 0.22)
 		var p2 := Vector3(0, 0.1, -0.08)
 		var p3 := Vector3(0, 0.02, -0.34)
 		var rings := 6
@@ -447,7 +913,7 @@ static func leaf_collision_shapes(length: float, width: float) -> Array:
 			for s in [-1.0, -0.5, 0.0, 0.5, 1.0]:
 				var y := leaf_top_y(t, s, width)
 				pts.append(Vector3(s * hw, y, -t * length))
-				pts.append(Vector3(s * hw, y - leaf_thickness(s) - 0.03, -t * length))
+				pts.append(Vector3(s * hw, y - leaf_collision_depth(s), -t * length))
 		var shape := ConvexPolygonShape3D.new()
 		shape.points = pts
 		out.append(shape)
@@ -528,9 +994,8 @@ static func mound(radius: float, height: float, sink: float, seed_v: int, radial
 		var a := PI * 0.5 * i / 5.0
 		prof.append([radius - r_edge + cos(a) * r_edge, height - r_edge + sin(a) * r_edge, 1.0 - float(i) / 5.0])
 	prof.append([0.0, height + 0.05, 0.0])
-	var st := SurfaceTool.new()
-	st.begin(Mesh.PRIMITIVE_TRIANGLES)
 	var faces := PackedVector3Array()
+	var uvs := PackedVector2Array()
 	var ring := func(j: int, s: int) -> Vector3:
 		var pr: Array = prof[j]
 		var a := TAU * s / radial
@@ -546,19 +1011,24 @@ static func mound(radius: float, height: float, sink: float, seed_v: int, radial
 			var gy: float = ground.call(d.x * r, d.z * r)
 			y += gy * (1.0 - clampf(y / wall_top, 0.0, 1.0))
 		return Vector3(d.x * r, y, d.z * r)
+	# (Each grid point is worked out once, the first time a quad needs it: four quads share it.)
+	var pts := {}
+	var point := func(j: int, s: int) -> Vector3:
+		var k := j * (radial + 1) + s
+		if not pts.has(k):
+			pts[k] = ring.call(j, s)
+		return pts[k]
 	for s in radial:
 		for j in prof.size() - 1:
-			var v00: Vector3 = ring.call(j, s)
-			var v01: Vector3 = ring.call(j, s + 1)
-			var v10: Vector3 = ring.call(j + 1, s)
-			var v11: Vector3 = ring.call(j + 1, s + 1)
+			var v00: Vector3 = point.call(j, s)
+			var v01: Vector3 = point.call(j, s + 1)
+			var v10: Vector3 = point.call(j + 1, s)
+			var v11: Vector3 = point.call(j + 1, s + 1)
 			# Godot front faces wind clockwise seen from outside.
 			for v in [v00, v11, v10, v00, v01, v11]:
-				st.set_uv(Vector2(float(s) / radial, (v as Vector3).y / height))
-				st.add_vertex(v)
+				uvs.append(Vector2(float(s) / radial, (v as Vector3).y / height))
 				faces.append(v)
-	st.generate_normals()
-	return [st.commit(), faces]
+	return [_triangles(faces, uvs), faces]
 
 
 ## Sweeps a cross-section along a path (ridges, arches, bridges). `place(i, x, y)` gives the
@@ -567,8 +1037,6 @@ static func mound(radius: float, height: float, sink: float, seed_v: int, radial
 ## `profile` runs across the section; `closed` joins its last point back to its first (a tube).
 ## Returns [ArrayMesh, faces]: the collision is exactly the drawn triangles.
 static func sweep(stations: int, profile: PackedVector2Array, closed: bool, place: Callable, inside: Callable) -> Array:
-	var st := SurfaceTool.new()
-	st.begin(Mesh.PRIMITIVE_TRIANGLES)
 	var faces := PackedVector3Array()
 	var rows := []
 	for i in stations:
@@ -596,11 +1064,8 @@ static func sweep(stations: int, profile: PackedVector2Array, closed: bool, plac
 					bb = c
 					c = tmp
 				for v in [a, bb, c]:
-					st.set_uv(Vector2(0.0, v.y))
-					st.add_vertex(v)
 					faces.append(v)
-	st.generate_normals()
-	return [st.commit(), faces]
+	return [_triangles(faces), faces]
 
 
 ## Cross-section of a ridge (x across, y up, at full height 1.0): a flat crest `crest` wide, a
@@ -659,10 +1124,8 @@ static func shelf(r_top: float, r_stem: float, height: float, sink: float, seed_
 	prof.append([r_top - 0.25, height])
 	prof.append([0.0, height + 0.04])
 	var radial := 26
-	var st := SurfaceTool.new()
-	st.begin(Mesh.PRIMITIVE_TRIANGLES)
 	var faces := PackedVector3Array()
-	var pt := func(j: int, s: int) -> Vector3:
+	var pt0 := func(j: int, s: int) -> Vector3:
 		var a := TAU * s / radial
 		var d := Vector3(cos(a), 0.0, sin(a))
 		var r: float = prof[j][0] * (1.0 + absf(noise.get_noise_2d(cos(a) * 1.3, sin(a) * 1.3)) * 0.14)
@@ -670,6 +1133,13 @@ static func shelf(r_top: float, r_stem: float, height: float, sink: float, seed_
 		if ground.is_valid() and y < 1.0:
 			y += float(ground.call(d.x * r, d.z * r)) * (1.0 - clampf(y, 0.0, 1.0))
 		return Vector3(d.x * r, y, d.z * r)
+	# (Each grid point is worked out once, the first time a quad needs it: four quads share it.)
+	var pts := {}
+	var pt := func(j: int, s: int) -> Vector3:
+		var k := j * (radial + 1) + s
+		if not pts.has(k):
+			pts[k] = pt0.call(j, s)
+		return pts[k]
 	for s in radial:
 		for j in prof.size() - 1:
 			var v00: Vector3 = pt.call(j, s)
@@ -691,11 +1161,8 @@ static func shelf(r_top: float, r_stem: float, height: float, sink: float, seed_
 					bb = c
 					c = tmp
 				for v in [a, bb, c]:
-					st.set_uv(Vector2(0.0, v.y))
-					st.add_vertex(v)
 					faces.append(v)
-	st.generate_normals()
-	return [st.commit(), faces]
+	return [_triangles(faces), faces]
 
 
 ## Collision hull points for a cushion (convex).
@@ -718,6 +1185,11 @@ static func cushion_hull(radius: float, height: float, sink: float = 1.2) -> Pac
 ## metres, so the plant material's grain runs up the stem (it banded across it before).
 ## Collision (LevelBuilder.stem_xf) stays within a few centimetres of it.
 static func stem_mesh(r0: float, r1: float, height: float, radial := 10, bend := 0.0) -> ArrayMesh:
+	return stem_surface(r0, r1, height, radial, bend).commit()
+
+
+## stem_mesh's SurfaceTool, ready to commit (safe on a worker thread).
+static func stem_surface(r0: float, r1: float, height: float, radial := 10, bend := 0.0) -> SurfaceTool:
 	var st := SurfaceTool.new()
 	st.begin(Mesh.PRIMITIVE_TRIANGLES)
 	var rings := maxi(8, int(height / 0.6))
@@ -748,7 +1220,7 @@ static func stem_mesh(r0: float, r1: float, height: float, radial := 10, bend :=
 				st.set_uv(v[1])
 				st.add_vertex(v[0])
 	st.generate_normals()
-	return st.commit()
+	return st
 
 
 ## Hollow dome shell with an entrance gap: the interior moss caves. Returns [mesh, faces].
@@ -865,13 +1337,9 @@ static func cave_mound(p: Dictionary) -> Array:
 				ring[cols] = ring[0]
 			grid.append(ring)
 		surfaces.append(grid)
-	var st := SurfaceTool.new()
-	st.begin(Mesh.PRIMITIVE_TRIANGLES)
 	var faces := PackedVector3Array()
 	var tri := func(a: Vector3, b: Vector3, c: Vector3) -> void:
 		for v in [a, b, c]:
-			st.set_uv(Vector2(0.0, v.y))
-			st.add_vertex(v)
 			faces.append(v)
 	var counts := []
 	for layer in [0, 1]:
@@ -917,9 +1385,8 @@ static func cave_mound(p: Dictionary) -> Array:
 				else:
 					tri.call(p00, p11, p10)
 					tri.call(p00, p01, p11)
-	st.generate_normals()
 	# Triangle index where each part starts: outer, inner, jambs (for tests).
-	return [st.commit(), faces, {"inner": counts[1], "jamb": counts[2], "total": faces.size() / 3, "outline": outline,
+	return [_triangles(faces), faces, {"inner": counts[1], "jamb": counts[2], "total": faces.size() / 3, "outline": outline,
 			"interior_radius": ri, "wall_h": wall_h, "door_w": dw, "door_h": dh}]
 
 

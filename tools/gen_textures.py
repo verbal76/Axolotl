@@ -83,25 +83,7 @@ def main():
     c = 1.0 - np.abs(fbm(256, 1.8, 3) * 2 - 1)
     save_png(os.path.join(OUT, "noise_rgb.png"), (np.dstack([a, b, c]) * 255).astype(np.uint8))
 
-    # 2. Aquarium gravel: colourful pebbles (purple, pink, green, orange) + natural stones.
-    n = 512
-    f1, f2, idx = worley(n, 400, 11)
-    palette = np.array([
-        [150, 90, 200], [236, 120, 170], [90, 200, 120], [245, 150, 60],
-        [120, 110, 210], [250, 170, 200], [200, 190, 170], [170, 160, 150],
-    ], np.float32)
-    choice = np.random.default_rng(12).integers(0, len(palette), 400)
-    base = palette[choice[idx]]
-    t = f1 / (0.5 * (f1 + f2) + 1e-6)  # 0 at pebble centre, 1 at the cell border
-    pebble = np.clip((0.93 - t) / 0.08, 0, 1)
-    dome = np.sqrt(np.clip(1.0 - (t / 0.93) ** 2, 0, 1))
-    speck = fbm(n, 0.6, 13)
-    sand = np.array([70, 62, 54], np.float32) * (0.6 + 0.6 * speck)[..., None]
-    lit = base * (0.35 + 0.75 * dome)[..., None] * (0.9 + 0.2 * speck)[..., None]
-    lit += (dome ** 12)[..., None] * 60.0  # soft specular highlight
-    shade_rgb = lit * pebble[..., None] + sand * (1 - pebble[..., None])
-    gravel = np.clip(shade_rgb, 0, 255).astype(np.uint8)
-    save_png(os.path.join(OUT, "gravel.png"), gravel)
+    # 2. Aquarium gravel: now tools/gen_gravel.py (gravel2_albedo / gravel2_normal).
 
     # 3. Algae mask for glass: high values survive longest. Corners/edges biased high so a
     #    little healthy algae detail remains at full restoration.

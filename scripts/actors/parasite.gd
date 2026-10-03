@@ -113,6 +113,28 @@ var _pushed := Vector3.ZERO
 var _wave_phase := 0.0
 var _wave_amp := 0.0
 var _last_head := Vector3.ZERO
+## Leech gait (owner 2026-10-01: "slides and stays stiff"): a stretch-and-gather cycle whose phase
+## advances with the distance crawled; the body bunches with a hump, then reaches forward (body
+## only: where it goes, and how fast, are unchanged).
+var _crawl := 0.0
+var _gait := 0.0
+## Expression layer (Open Issue #3): drift, weave, pace and look on top of its intent; seeded from
+## `_rng.seed` (read, never drawn from). See OrganicMotion.
+var _org := OrganicMotion.new(0)
+## Which way it turns away from an obstacle while grazing (kept while it is blocked).
+var _turn_side := 1.0
+## Near its home's edge the expression fades (1 inside, 0 at the edge): it turns back as briskly as ever.
+var _edge := 1.0
+
+
+## The middle of the visible body (all segments), for markers that should sit on the whole leech.
+func body_center() -> Vector3:
+	if _segs.is_empty():
+		return global_position
+	var c := Vector3.ZERO
+	for sg in _segs:
+		c += sg.global_position
+	return c / _segs.size()
 
 
 ## `register`: counts toward its zone's restoration (false only for test stand-ins never killed).
@@ -142,6 +164,73 @@ func setup(p_ball: MossBall, p_kind: int, p_zone: String, dir: Vector3, home_deg
 	_rng.seed = hash([roundi(spawn_dir.x * 1000.0), roundi(spawn_dir.y * 1000.0), roundi(spawn_dir.z * 1000.0), kind, zone_id])
 	_brave = kind == Kind.SMALL or _rng.randf() < 0.35
 	_circle_dir = 1.0 if _rng.randf() < 0.5 else -1.0
+	_org = OrganicMotion.new(_rng.seed, [OrganicMotion.PARASITE_SMALL, OrganicMotion.PARASITE_MEDIUM, OrganicMotion.PARASITE_LARGE][kind - 1])
+
+
+## Home-area coherence (owner, 2026-10-02; ledger row 36): a required (authored) parasite stays with
+## the area it keeps dead. Chases may run past the edge (up to ~2.3 home radii) and it walks back;
+## beyond STRAY_K home radii it counts as strayed and is returned home where nobody sees it.
+const STRAY_K := 2.6
+const STRAY_CHECK_S := 2.0
+const STRAY_GRAZE_S := 20.0
+const STRAY_UNSEEN_M := 12.0
+var _stray_check := 0.0
+var _away_t := 0.0
+
+
+## Whether this required parasite is alive, settled and far outside its home area.
+func strayed() -> bool:
+	if returner or hp <= 0 or state not in ["graze", "chase", "recover"]:
+		return false
+	return _angle_from_home(global_position) > home_radius * STRAY_K
+
+
+## Puts it back at its home spot, unless it or the spot is on camera (then it waits for the next
+## check). Returns whether it moved. Nothing random is drawn: gameplay sequences stay the same.
+func return_home_unseen() -> bool:
+	var cam := get_viewport().get_camera_3d()
+	var spot := ball.surface_point(home_dir)
+	if Repopulation.on_camera(cam, global_position, up) or Repopulation.on_camera(cam, spot, home_dir):
+		return false
+	var h := spawn_h if home_dir.angle_to(spawn_dir) < 0.01 else 0.0
+	var q := PhysicsRayQueryParameters3D.create(ball.surface_point(home_dir, h + 3.0), ball.global_position, 1 | 2)
+	var hit := get_world_3d().direct_space_state.intersect_ray(q)
+	up = home_dir
+	standing_on = null
+	if hit.is_empty():
+		global_position = ball.surface_point(home_dir, _ground_offset)
+	else:
+		global_position = hit.position + up * _ground_offset
+		standing_on = hit.collider
+	heading = heading - up * heading.dot(up)
+	if heading.length() < 0.01:
+		heading = MossBall.frame_at(up, 0.0).z * -1.0
+	heading = heading.normalized()
+	_trail.clear()
+	_trail_up.clear()
+	for i in 12:
+		_trail.push_back(global_position - heading * spacing * i * 0.5)
+		_trail_up.push_back(up)
+	_set_state("graze")
+	_graze_target = global_position
+	_away_t = 0.0
+	_update_segments(0.0)
+	return true
+
+
+## Repopulation: a parasite that came back to a cleared zone (Repopulation). It is never in
+## `ball.parasites`, has no completion id, and killing it earns and restores nothing.
+var returner := false
+
+
+## Makes this a returner, its behaviour seeded from `seed_v` (call after setup, before make_spitter).
+func make_returner(seed_v: int) -> void:
+	returner = true
+	set_meta("completion_id", "")
+	_rng.seed = seed_v
+	_brave = kind == Kind.SMALL or _rng.randf() < 0.35
+	_circle_dir = 1.0 if _rng.randf() < 0.5 else -1.0
+	_org = OrganicMotion.new(_rng.seed, [OrganicMotion.PARASITE_SMALL, OrganicMotion.PARASITE_MEDIUM, OrganicMotion.PARASITE_LARGE][kind - 1])
 
 
 ## Makes this a spitter (a medium parasite that keeps its distance and spits globs).
@@ -149,6 +238,7 @@ func make_spitter() -> void:
 	variant = "spitter"
 	attack_reach = 1.6
 	windup_time = 0.85
+	_org.set_profile(OrganicMotion.PARASITE_SPITTER)
 
 
 func _ready() -> void:
@@ -167,6 +257,7 @@ func _ready() -> void:
 		m.set_shader_parameter("color_b", p[1])
 		m.set_shader_parameter("spot", p[2])
 	_body_mat.set_shader_parameter("npts", seg_count)
+	_body_mat.set_shader_parameter("leech", 1.0)
 	for i in seg_count:
 		var mi := MeshInstance3D.new()
 		mi.set_instance_shader_parameter("seg_t", (float(i) + 0.5) / seg_count)
@@ -210,23 +301,6 @@ func _ready() -> void:
 		m.rotation = Vector3(-PI / 2 + 0.3, 0, side * -0.4)
 		m.name = "Mandible"
 		_segs[0].add_child(m)
-	# Tiny bristly legs on larger bodies, merged into one mesh per segment.
-	if kind > Kind.SMALL:
-		var leg := CylinderMesh.new()
-		leg.top_radius = 0.0
-		leg.bottom_radius = seg_radius * 0.12
-		leg.height = seg_radius * 1.2
-		leg.radial_segments = 4
-		for i in range(1, seg_count - 1):
-			var parts := []
-			for side in [-1.0, 1.0]:
-				parts.append([leg, Transform3D(Basis.from_euler(Vector3(0, 0, side * 1.1)), Vector3(side * seg_radius * 0.8, -seg_radius * 0.35, 0))])
-			var l := MeshInstance3D.new()
-			l.mesh = MeshLib.merge(parts)
-			l.material_override = _mat
-			l.set_instance_shader_parameter("seg_t", (float(i) + 0.5) / seg_count)
-			l.visibility_range_end = 40.0
-			_segs[i].add_child(l)
 	for sgi in _segs:
 		for c in sgi.get_children():
 			if c is GeometryInstance3D:
@@ -250,7 +324,7 @@ static func _body_tube() -> ArrayMesh:
 	if _tube != null:
 		return _tube
 	var rings := 34
-	var sides := 10
+	var sides := 14
 	var verts := PackedVector3Array()
 	var uvs := PackedVector2Array()
 	var nrm := PackedVector3Array()
@@ -313,16 +387,31 @@ func body_extent() -> float:
 # --- Update ------------------------------------------------------------------------------
 
 func _physics_process(dt: float) -> void:
-	if state == "gone":
+	if state == "gone" or Game.paused_for_aquarium():
 		return
 	var g := Game.inst
 	if state == "init":
 		_init_on_ground()
 		return
-	# Parasites on other moss balls sleep (they don't respawn and keep their state).
-	if state != "drifting" and g.player.ball != ball:
+	# Parasites on other moss balls sleep (they don't respawn and keep their state). Far from him on
+	# his own ball they pause too (world expansion: only his region runs). A required one asleep away
+	# from its home is put back there, unseen (ledger row 36).
+	if (state != "drifting" and g.player.ball != ball) or (state not in ["drifting", "dying"] and not g.near_player(global_position)):
+		_stray_check -= dt
+		if _stray_check <= 0.0:
+			_stray_check = STRAY_CHECK_S
+			if strayed():
+				return_home_unseen()
 		return
 	state_t += dt
+	# Awake and grazing far from home for a while (stranded below a ledge it will not crawl off, say):
+	# it goes home as soon as neither it nor its home spot is in view.
+	if state == "graze" and strayed():
+		_away_t += dt
+		if _away_t >= STRAY_GRAZE_S and g.player.global_position.distance_to(global_position) > STRAY_UNSEEN_M:
+			return_home_unseen()
+	else:
+		_away_t = 0.0
 	hit_cd = maxf(0.0, hit_cd - dt)
 	_shaken = maxf(0.0, _shaken - dt)
 	_alerted_t = maxf(0.0, _alerted_t - dt)
@@ -335,6 +424,7 @@ func _physics_process(dt: float) -> void:
 	var target_windup := 1.0 if state == "windup" else 0.0
 	_windup_v = move_toward(_windup_v, target_windup, dt * 4.0)
 	set_look(_gray, _flash, _windup_v * (0.6 + 0.4 * sin(state_t * 30.0)))
+	_express(dt, g.player)
 
 	match state:
 		"graze", "chase":
@@ -417,6 +507,10 @@ func _physics_process(dt: float) -> void:
 		"drifting":
 			_update_drift(dt)
 	_update_segments(dt)
+	# Its head looks about a little as it goes (visual only: the segment's position, which hit tests
+	# use, is unchanged).
+	if _org.look != 0.0 and state != "drifting":
+		_segs[0].global_basis = Basis(up, _org.look) * _segs[0].global_basis
 
 
 func _init_on_ground() -> void:
@@ -429,7 +523,8 @@ func _init_on_ground() -> void:
 	else:
 		global_position = hit.position + up * _ground_offset
 		standing_on = hit.collider
-	heading = MossBall.frame_at(up, randf() * 360.0).z * -1.0
+	# (A returner draws from its own generator: repopulation never moves the gameplay sequence.)
+	heading = MossBall.frame_at(up, (_rng.randf() if returner else randf()) * 360.0).z * -1.0
 	for i in 12:
 		_trail.push_back(global_position + heading * -spacing * i * 0.5)
 		_trail_up.push_back(up)
@@ -448,21 +543,23 @@ func _update_crawl(dt: float, pl: Axolotl) -> void:
 	var to_player := pl.global_position - global_position
 	var d := to_player.length()
 	var player_here := pl.ball == ball and pl.state == "normal"
-	var in_home := _angle_from_home(pl.global_position) < home_radius * 1.7
+	# (Owner 2026-10-01, "pursue and lunge": they notice sooner, follow further from home and keep
+	# after him longer; damage per hit unchanged.)
+	var in_home := _angle_from_home(pl.global_position) < home_radius * 2.3
 	# Sight (never through rock): checked a few times a second, and only when he is near.
 	_los_check -= dt
 	if _los_check <= 0.0:
 		_los_check = 0.2
-		_los = player_here and d < 12.0 and _sees(pl)
-	var aggro := 7.5 if kind == Kind.LARGE else 6.5
+		_los = player_here and d < 14.0 and _sees(pl)
+	var aggro := 10.0 if kind == Kind.LARGE else 8.5
 	if variant == "spitter":
-		aggro = 9.0
+		aggro = 11.0
 	if _wary_t > 0.0:
 		aggro *= 0.5
 	var alerted := _alerted_t > 0.0
 	var engaged := state == "chase"
-	var noticed := player_here and in_home and absf(to_player.dot(up)) < 2.2 and (d < aggro or (alerted and d < 12.0))
-	var keep := _los or (engaged and _unseen_t < (2.5 if alerted else 1.5))
+	var noticed := player_here and in_home and absf(to_player.dot(up)) < 2.2 and (d < aggro or (alerted and d < 14.0))
+	var keep := _los or (engaged and _unseen_t < (4.0 if alerted else 3.0))
 	if noticed and keep:
 		if not engaged:
 			_set_state("chase")
@@ -472,7 +569,7 @@ func _update_crawl(dt: float, pl: Axolotl) -> void:
 				_alert_nearby(pl)
 				# Joining a fight already under way: it takes its own side.
 				var others := 0
-				for q in ball.parasites:
+				for q in ball.hostiles():
 					if q != self and q.is_alive() and q.state in ["chase", "windup", "attack"] and q.global_position.distance_to(pl.global_position) < 6.0:
 						others += 1
 				if others > 0:
@@ -490,8 +587,8 @@ func _update_crawl(dt: float, pl: Axolotl) -> void:
 			var r: Array = _spitter_move(dt, pl, flat, d)
 			if r.is_empty():
 				return
-			dir = r[0]
-			spd = r[1]
+			dir = _expressed(r[0])
+			spd = r[1] * _org.speed
 		else:
 			if d < attack_reach and hit_cd <= 0.0 and _shaken <= 0.0 and _mode != "circle":
 				if _may_commit():
@@ -512,7 +609,8 @@ func _update_crawl(dt: float, pl: Axolotl) -> void:
 			match kind:
 				Kind.SMALL:
 					# Darting: quick bursts and pauses, zig-zagging in.
-					var ph := fmod(_clock * 1.7 + _rng.seed % 97 * 0.01, 1.0)
+					# (Its rhythm's tempo drifts a little: bursts never come on a metronome.)
+					var ph := fmod(_org.warp(_clock, 1.7) + _rng.seed % 97 * 0.01, 1.0)
 					spd = speed * (1.75 if ph < 0.55 else 0.3)
 					dir = dir.rotated(up, sin(ph * TAU) * 0.45)
 				Kind.MEDIUM:
@@ -538,18 +636,26 @@ func _update_crawl(dt: float, pl: Axolotl) -> void:
 			if sep.length() > 0.001 and dir.length() > 0.001:
 				dir = dir.normalized() + sep * 2.0
 			_spread_apart(dt)
+			# Expression (fading out as it comes within reach: see _express).
+			dir = _expressed(dir)
+			spd *= _org.speed
 	else:
 		spd = speed * 0.35
 		_graze_t -= dt
 		if _graze_t <= 0.0 or global_position.distance_to(_graze_target) < 0.4:
-			_graze_t = randf_range(1.5, 3.5)
-			var b := MossBall.frame_at(home_dir, randf() * 360.0)
-			var a := randf() * home_radius * 0.8
-			var gd := home_dir.rotated(b.x, a).rotated(home_dir, randf() * TAU)
+			# (Its own generator: since Open Issue #3 grazing paths depend on the expression layer,
+			# so draws here must never shift the gameplay random sequence the test bot relies on.)
+			_graze_t = _rng.randf_range(1.5, 3.5)
+			var b := MossBall.frame_at(home_dir, _rng.randf() * 360.0)
+			var a := _rng.randf() * home_radius * 0.8
+			var gd := home_dir.rotated(b.x, a).rotated(home_dir, _rng.randf() * TAU)
 			_graze_target = ball.surface_point(gd, 0.0)
 		dir = _graze_target - global_position
 		dir -= up * dir.dot(up)
 		dir = _avoid_blooms(dir)
+		# Wandering between grazing spots in arcs, not straight lines (straight in at the spot).
+		dir = _expressed(dir, smoothstep(0.25, 1.2, global_position.distance_to(_graze_target)))
+		spd *= _org.speed
 		_try_recover()
 	# Stay inside the home area.
 	if _angle_from_home(global_position) > home_radius:
@@ -561,18 +667,56 @@ func _update_crawl(dt: float, pl: Axolotl) -> void:
 ## Walks along `dir` at `spd`, gripping the moss (never off a ledge on its own).
 func _move(dir: Vector3, spd: float, dt: float) -> void:
 	if dir.length() > 0.01:
-		_face(dir.normalized(), dt * 5.0)
+		var dn := dir.normalized()
+		if _org.w_path > 0.3 and OrganicMotion.enabled and heading.dot(dn - up * dn.dot(up)) < -0.95 * (dn - up * dn.dot(up)).length():
+			# (Sent straight back, e.g. by its home's edge: it comes round in a curve, never a snap.)
+			dn = heading.rotated(up, _turn_side * 2.0)
+		# (Expression: heavier ones turn with more momentum.)
+		_face(dn, dt * 5.0 * lerpf(1.0, _org.turn, _edge))
 	var step := heading * spd * dt + _pushed * dt
 	_pushed = _pushed.move_toward(Vector3.ZERO, dt * 6.0)
 	# Parasites grip the moss: they never crawl off a ledge on their own, and never into a wall
 	# (a stem, rock, a cave's side).
-	if step.length() > 0.0001 and (not _ground_ahead(global_position + step * 4.0) or _wall_ahead(step)):
-		_graze_target = global_position - heading * 1.0
+	if step.length() > 0.0001 and (not _ground_ahead(global_position + step * 4.0) or _wall_ahead(step) or _ravine_ahead(step)):
+		if state == "graze" and _org.w_path > 0.5 and OrganicMotion.enabled:
+			# Grazing, it turns away in a curve (holding still until clear) instead of snapping round.
+			_graze_target = global_position + heading.rotated(up, _turn_side * 2.0)
+		else:
+			_graze_target = global_position - heading * 1.0
+			heading = -heading
 		_graze_t = 1.0
-		heading = -heading
 		step = Vector3.ZERO
+	elif _org.yaw != 0.0:
+		_turn_side = signf(_org.yaw)
 	global_position += step
 	_snap_ground()
+
+
+## How much expression each state allows (OrganicMotion): all of it grazing; some while it closes
+## in, fading to none as it comes within reach; pace only while fleeing; none at all from the
+## wind-up on (a committed attack goes exactly where the intent sends it).
+func _express(dt: float, pl: Axolotl) -> void:
+	_edge = 1.0 - smoothstep(0.7, 1.0, _angle_from_home(global_position) / home_radius) if state == "graze" else 1.0
+	match state:
+		"graze":
+			_org.step(dt, 1.0, 1.0, 1.0)
+		"chase":
+			var d := pl.global_position.distance_to(global_position)
+			var near := smoothstep(attack_reach * 1.2, attack_reach * 2.6, d)
+			# (Circling for his side is itself the intent's flourish: it keeps its line.)
+			var wp := 0.0 if _mode == "circle" else 0.45
+			_org.step(dt, wp * near, 0.5 * near, 0.35 * near, false, false)
+		"retreat":
+			_org.step(dt, 0.0, 0.5, 0.0)
+		_:
+			_org.step(dt, 0.0, 0.0, 0.0, true)
+
+
+## `dir` bent by the expression's heading offset (scaled by `k`), about its own up.
+func _expressed(dir: Vector3, k := 1.0) -> Vector3:
+	if _org.yaw == 0.0 or dir.length() < 0.001:
+		return dir
+	return dir.rotated(up, _org.yaw * k * _edge)
 
 
 ## A spitter's footwork: back off when he is close, close in when he is far, sidle in between;
@@ -663,7 +807,7 @@ func _may_commit() -> bool:
 	if Game.inst.cinematic != "":
 		return false
 	var n := ParasiteGlob.incoming_on(ball)
-	for q in ball.parasites:
+	for q in ball.hostiles():
 		if q != self and q.is_alive() and q.state in ["windup", "attack"]:
 			n += 1
 	if n >= MAX_COMMITTED:
@@ -693,7 +837,7 @@ func _on_screen() -> bool:
 ## own side. Only a parasite that saw him itself raises the alarm (no chain across the ball).
 func _alert_nearby(pl: Axolotl) -> void:
 	var k := 0
-	for q in ball.parasites:
+	for q in ball.hostiles():
 		if q == self or not q.is_alive() or q.state != "graze":
 			continue
 		if q.global_position.distance_to(global_position) > ALERT_R:
@@ -721,7 +865,7 @@ func alert(k: int) -> void:
 ## A push away from other engaged parasites close by (they spread round him, not stack).
 func _separation() -> Vector3:
 	var push := Vector3.ZERO
-	for q in ball.parasites:
+	for q in ball.hostiles():
 		if q == self or not q.is_alive() or not q.state in ["chase", "windup", "retreat"]:
 			continue
 		var off: Vector3 = global_position - q.global_position
@@ -782,7 +926,7 @@ func _update_retreat(dt: float, pl: Axolotl) -> void:
 			dir += inward * 1.5
 		dir = dir.normalized()
 	dir = _avoid_blooms(dir)
-	_move(dir, speed * 1.35, dt)
+	_move(dir, speed * 1.35 * _org.speed, dt)
 	if state != "retreat":
 		return
 	if state_t > 4.0 or away.length() > 7.5 or pl.ball != ball:
@@ -813,6 +957,14 @@ func _face(dir: Vector3, t: float) -> void:
 		return
 	heading = heading.slerp(d.normalized(), clampf(t, 0.0, 1.0)).normalized() if heading.dot(d.normalized()) > -0.99 else d.normalized()
 	heading = (heading - up * heading.dot(up)).normalized()
+
+
+## A ravine's edge just ahead along `step` (they never go down into one on their own).
+func _ravine_ahead(step: Vector3) -> bool:
+	if ball.carves.is_empty():
+		return false
+	var ahead := ball.ravine_carve(ball.up_at(global_position + step.normalized() * (seg_radius * 2.0 + 0.6)))
+	return ahead > 0.15 and ahead > ball.ravine_carve(up) + 0.01
 
 
 ## Rock or a stem just ahead along `step`, at body height.
@@ -853,6 +1005,21 @@ func _snap_ground() -> void:
 		return
 	global_position = hit.position + up * _ground_offset
 	standing_on = hit.collider
+	# Never down on a ravine's floor, and never buried inside the terrain, however it got there
+	# (walking, knocked or flung, e.g. through an upland's steep wall, where this snap from just
+	# above its feet then held it under the ground out of reach): back to where it last stood on
+	# open ground (world expansion; AQ qualification). Every parasite lives above the surface.
+	var alt := ball.altitude(global_position)
+	var in_ravine := not ball.carves.is_empty() and ball.ravine_carve(ball.up_at(global_position)) > 0.3 and alt < 1.0
+	var buried := alt < -0.8
+	if in_ravine or buried:
+		if _clear_pos != Vector3.ZERO:
+			global_position = _clear_pos
+	else:
+		_clear_pos = global_position
+
+
+var _clear_pos := Vector3.ZERO
 
 
 func _update_segments(dt: float) -> void:
@@ -898,10 +1065,16 @@ func _update_segments(dt: float) -> void:
 	_wave_phase = fmod(_wave_phase + moved / wavelength * TAU + dt * 1.1, TAU * 64.0)
 	var pace := clampf(moved / maxf(dt * speed, 0.0001), 0.0, 1.2) if dt > 0.0 else 0.0
 	_wave_amp = lerpf(_wave_amp, seg_radius * (0.1 + 0.34 * pace), 1.0 - exp(-dt * 6.0))
+	var crawling := state in ["graze", "chase", "retreat"]
+	_crawl = fmod(_crawl + moved / maxf(body_len * 0.85, 0.05) * TAU, TAU * 64.0)
+	_gait = lerpf(_gait, clampf(pace, 0.0, 1.0) if crawling else 0.0, 1.0 - exp(-dt * 5.0))
+	var stretch_now := _stretch_v * (1.0 + 0.13 * _gait * sin(_crawl))
+	# (Kept below 0.6 of the spacing so neighbouring segments stay evenly apart on short bodies.)
+	var hump := minf(seg_radius * 1.4, spacing * 0.6) * _gait * maxf(0.0, -sin(_crawl))
 	var base: Array[Vector3] = []
 	var ups: Array[Vector3] = []
 	for i in seg_count:
-		var dist := spacing * i * _stretch_v
+		var dist := spacing * i * stretch_now
 		base.append(_sample_trail(dist))
 		ups.append(_trail_up[mini(_trail_up.size() - 1, int(dist / (spacing * 0.35)))])
 	var limp: Array[Vector3] = []
@@ -921,6 +1094,7 @@ func _update_segments(dt: float) -> void:
 				ax -= u * ax.dot(u)
 				if ax.length() > 0.0001:
 					p += ax.normalized().cross(u) * tw * sin(state_t * 34.0 - float(i) * 1.2) * lerpf(0.4, 1.0, float(i) / maxf(1.0, seg_count - 1))
+			p += u * hump * sin(PI * float(i) / maxf(1.0, seg_count - 1))
 			if i == 0:
 				p += u * rear_lift * seg_radius * 1.6
 			elif i == 1:
@@ -961,7 +1135,8 @@ func _push_body() -> void:
 	ups.resize(MAX_SEGS)
 	for i in seg_count:
 		var t := float(i) / maxf(1.0, seg_count - 1)
-		var r := seg_radius * (1.0 - 0.5 * pow(t, 1.4)) * (1.08 if i == 0 else 1.0)
+		# (A leech's taper: a narrower head, widest a third of the way back, a long thin tail.)
+		var r := seg_radius * lerpf(0.78, 1.1, smoothstep(0.0, 0.35, t)) * (1.0 - 0.6 * smoothstep(0.35, 1.0, t))
 		var sp := _segs[i].global_position
 		pts[i] = Vector4(sp.x, sp.y, sp.z, r)
 		var su := _segs[i].global_basis.y.normalized()
@@ -984,7 +1159,9 @@ func _limp_chain() -> Array[Vector3]:
 	for i in seg_count:
 		out.append(p)
 		var tt := float(i) / maxf(1.0, seg_count - 1)
-		var bend := 0.16 * (1.0 - relax * 0.6) + sin(_drift_t * 6.5 - float(i) * 1.1) * 0.42 * relax * (0.3 + tt)
+		# (Owner 2026-10-01: a little ragdoll first, a loose flop that settles into a soft droop.)
+		var bend := 0.22 * (1.0 - relax * 0.5) + sin(_drift_t * 6.5 - float(i) * 1.1) * 0.7 * relax * (0.3 + tt) \
+				+ sin(_drift_t * 1.7 + float(i) * 0.6) * 0.08 * (1.0 - relax)
 		dir = dir.rotated(ax, bend).rotated(ax2, 0.07 * (1.0 - relax * 0.5)).normalized()
 		p += dir * spacing
 	return out
@@ -1037,10 +1214,23 @@ func hit(stages: int, from_pos: Vector3, knock := 1.0) -> bool:
 	return true
 
 
+## Within this of the bloom's pulse a parasite is knocked back; within STARTLE_R only shaken.
+const STARTLE_KNOCK_R := 6.0
+## (Past every size's notice range, 6.5 to 9 m.)
+const STARTLE_R := 10.0
+
+
 ## Startled back from `from_pos` (the bloom's pulse when the axolotl re-forms there), unhurt: it
 ## scuttles a few metres off, then carries on.
 func startle(from_pos: Vector3) -> void:
 	if not state in ["graze", "chase", "windup", "attack", "recover"]:
+		return
+	if global_position.distance_to(from_pos) > STARTLE_KNOCK_R:
+		# Further off (but within reach of noticing him), it is only shaken: it holds off attacking
+		# for a while (Open Issue #3's re-seeded grazing put one just outside the knock radius,
+		# and it struck as the re-formed axolotl's grace ran out).
+		if state in ["graze", "chase"]:
+			_shaken = 3.5
 		return
 	var away := global_position - from_pos
 	away -= up * away.dot(up)
@@ -1077,14 +1267,17 @@ func _update_flung(dt: float) -> void:
 	if not hit.is_empty() and state_t > 0.2 and vel.dot(up) <= 0.5:
 		global_position = hit.position + up * _ground_offset
 		standing_on = hit.collider
-		# Re-latch: its home is now wherever it grabbed on.
-		home_dir = ball.up_at(global_position)
+		# Re-latch. A returner makes its home wherever it grabbed on; an authored parasite keeps its
+		# own home (the area it keeps dead) and walks back to it (ledger row 36).
+		if returner:
+			home_dir = ball.up_at(global_position)
 		_set_state("recover")
 		return
 	global_position = to
 	if (global_position - ball.global_position).length() < ball.radius:
 		global_position = ball.surface_point(ball.up_at(global_position), _ground_offset)
-		home_dir = ball.up_at(global_position)
+		if returner:
+			home_dir = ball.up_at(global_position)
 		_set_state("recover")
 
 
@@ -1095,16 +1288,25 @@ func _detach() -> void:
 	var u := up
 	global_transform = Transform3D(Basis(heading.cross(u).normalized(), u, -heading), global_position)
 	vel = u * 2.6 + Game.inst.tank_flow() * 0.6 + ball.current_at(global_position)
-	_spin = Vector3(randf_range(-1, 1), randf_range(-1, 1), randf_range(-1, 1)) * 0.35
+	if returner:
+		_spin = Vector3(_rng.randf_range(-1, 1), _rng.randf_range(-1, 1), _rng.randf_range(-1, 1)) * 0.35
+	else:
+		_spin = Vector3(randf_range(-1, 1), randf_range(-1, 1), randf_range(-1, 1)) * 0.35
 
 
 func _update_drift(dt: float) -> void:
 	_drift_t += dt
 	var away := ball.up_at(global_position)
-	var target_v := away * 1.6 + Game.inst.tank_flow()
-	vel = vel.lerp(target_v, minf(1.0, dt * 0.3))
+	# Rising like a leaf falls (owner 2026-10-01): slowly, swinging side to side and tilting with each
+	# swing, carried by the ball's current and the tank's flow all the way up.
+	var side := global_basis.x - away * global_basis.x.dot(away)
+	side = side.normalized() if side.length() > 0.01 else away.cross(Vector3.FORWARD).normalized()
+	var swing := sin(_drift_t * 1.5 + float(get_instance_id() % 17))
+	var target_v := away * 0.95 + side * swing * 1.1 + Game.inst.tank_flow() + ball.current_at(global_position) * 0.8
+	vel = vel.lerp(target_v, minf(1.0, dt * 0.9))
 	global_position += vel * dt
-	global_basis = (global_basis * Basis.from_euler(_spin * dt)).orthonormalized()
+	var roll := Basis(-global_basis.z.normalized(), swing * 0.5 * dt)
+	global_basis = (roll * global_basis * Basis.from_euler(_spin * 0.4 * dt)).orthonormalized()
 	_update_segments(dt)
 	var cam := get_viewport().get_camera_3d()
 	var far := cam == null or cam.global_position.distance_to(global_position) > 45.0

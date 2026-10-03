@@ -36,6 +36,7 @@ var _trail_t := 0.0
 var _last_body := Vector3.ZERO
 var _has_last := false
 var _speed_s := 0.0      # smoothed speed factor 0..1
+var _blasts: Array = []  # [pos, radius, life, age] (Bubble Blast)
 
 
 func _ready() -> void:
@@ -117,7 +118,7 @@ func update(dt: float) -> void:
 		_add(t[0], 0.42 + 0.25 * age, t[1] * (1.0 - age), s)
 	# Nearby parasites disturb vegetation too: head and tail.
 	var near := []
-	for par in p.ball.parasites:
+	for par in p.ball.hostiles():
 		if par.is_alive() and par.visible and par.global_position.distance_to(p.global_position) < 30.0:
 			near.append([par.global_position.distance_squared_to(p.global_position), par])
 	near.sort_custom(func(a, b): return a[0] < b[0])
@@ -134,6 +135,25 @@ func update(dt: float) -> void:
 	if g.ecosystem:
 		for w in g.ecosystem.wake_points(p.global_position, MAX_CRITTER_POINTS):
 			_add(w[0], w[1], w[2], w[3])
+	# A Bubble Blast: the plants round it thrown radially outward, settling over its life with a
+	# small rebound (a wide point at the centre pushes everything away; a ring of points runs out
+	# with the shockwave front).
+	for bl in _blasts:
+		bl[3] += dt
+	_blasts = _blasts.filter(func(bl): return bl[3] < bl[2])
+	for bl in _blasts:
+		var c0: Vector3 = bl[0]
+		var br: float = bl[1]
+		var k: float = bl[3] / bl[2]
+		var s0 := 2.4 * pow(1.0 - k, 1.6) * (1.0 + 0.3 * sin(k * 14.0))
+		_add(c0, br / 2.2, Vector3.ZERO, s0)
+		var front := minf(1.0, bl[3] / 0.35)
+		if front < 1.0:
+			var fr := MossBall.frame_at(p.ball.up_at(c0), 0.0)
+			for i in 6:
+				var a := TAU * i / 6.0
+				var d := fr.x * cos(a) + fr.z * sin(a)
+				_add(c0 + d * br * front, 0.9, d * br / 0.35, 1.6 * (1.0 - front))
 	# Bounds for the shader's quick reject.
 	var c := Vector3.ZERO
 	for i in count:
@@ -144,6 +164,12 @@ func update(dt: float) -> void:
 	for i in count:
 		rad = maxf(rad, Vector3(points_a[i].x, points_a[i].y, points_a[i].z).distance_to(c) + points_a[i].w * 2.5)
 	bounds = Vector4(c.x, c.y, c.z, rad)
+
+
+## A Bubble Blast at `pos`: plants within `radius` are blown outward and settle over `life` s.
+## Cosmetic only (nothing in gameplay reads the wake).
+func add_blast(pos: Vector3, radius: float, life := 2.6) -> void:
+	_blasts.append([pos, radius, life, 0.0])
 
 
 func _add(pos: Vector3, radius: float, vel: Vector3, strength: float) -> void:

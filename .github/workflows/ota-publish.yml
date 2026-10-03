@@ -6,15 +6,22 @@ name: OTA publish (dev channel)
 #   -> client-side inspection -> immutable release -> re-download + re-verify
 #   -> channel pointer moved forward -> receipt.
 
+# The authorized Mote development branches. A push to one of them without [skip ci] publishes that
+# exact commit (GitHub itself skips push runs whose head commit says [skip ci]). A new development
+# branch is added here, explicitly, in its first release; nothing else can publish.
+#   claude/axolotl-aquarium-platformer-3y0qyy   Expansions 1-6 (dev-000015..dev-000024)
+#   claude/mote-game-continuation-bov2x9        from the dev-000024 playtest polish on
 on:
   push:
-    branches: [claude/axolotl-aquarium-platformer-3y0qyy]
+    branches:
+      - claude/axolotl-aquarium-platformer-3y0qyy
+      - claude/mote-game-continuation-bov2x9
   workflow_dispatch:
     inputs:
       ref:
         description: Commit SHA (or branch) to publish to the dev channel
         required: true
-        default: claude/axolotl-aquarium-platformer-3y0qyy
+        default: claude/mote-game-continuation-bov2x9
 
 permissions:
   contents: write

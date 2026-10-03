@@ -68,7 +68,7 @@ func _ready() -> void:
 
 
 func _physics_process(dt: float) -> void:
-	if _done:
+	if _done or Game.paused_for_aquarium():
 		return
 	_t += dt
 	var from := global_position
@@ -88,7 +88,7 @@ func _physics_process(dt: float) -> void:
 			_splat()
 			return
 	else:
-		for par in ball.parasites:
+		for par in ball.hostiles():
 			if par.is_alive() and par.closest_body_point(to).distance_to(to) < RADIUS + par.body_extent() + 0.15:
 				par.hit(1, from)
 				global_position = to

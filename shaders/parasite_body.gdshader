@@ -1,5 +1,6 @@
 shader_type spatial;
 render_mode diffuse_lambert;
+#include "res://shaders/creature_light.gdshaderinc"
 
 // Parasite body (Expansion 6): one continuous, flexible, tapering body instead of a chain of
 // beads. A shared tube mesh (UV.x round the body, UV.y head to tail with rounded caps beyond both
@@ -22,6 +23,9 @@ uniform float windup = 0.0;
 uniform float spot_lo = 0.62;
 // Self-glow of stolen vitality (parasites); low for creatures that do not glow.
 uniform float glow_gain = 1.0;
+// Parasites only (owner 2026-10-01: "a smooth leech", not beads): no rings, a flatter body, soft
+// lengthwise markings and a dorsal stripe instead of blotches, a wetter sheen.
+uniform float leech = 0.0;
 uniform sampler2D noise_tex : filter_linear_mipmap, repeat_enable;
 
 varying float v_t;
@@ -60,7 +64,7 @@ void vertex() {
 	vec3 up2 = normalize(cross(side, tan));
 	float r = mix(pts[i].w, pts[i + 1].w, smoothstep(0.0, 1.0, u));
 	// Faint rings between segments (a soft segmented worm, never beads).
-	r *= 1.0 + 0.06 * cos(f * 6.2832);
+	r *= 1.0 + 0.06 * (1.0 - leech) * cos(f * 6.2832);
 	// Rounded head beyond the first point, a longer pointed tail beyond the last.
 	if (s < 0.0) {
 		pos -= tan * over * r * 1.05;
@@ -71,7 +75,7 @@ void vertex() {
 	}
 	float a = UV.x * 6.2832;
 	// A slightly flattened belly.
-	vec3 off = side * cos(a) + up2 * sin(a) * (sin(a) < 0.0 ? 0.72 : 0.9);
+	vec3 off = side * cos(a) * mix(1.0, 1.12, leech) + up2 * sin(a) * (sin(a) < 0.0 ? mix(0.72, 0.42, leech) : mix(0.9, 0.62, leech));
 	vec3 wp = pos + off * r;
 	VERTEX = wp - MODEL_MATRIX[3].xyz;
 	NORMAL = normalize(side * cos(a) + up2 * sin(a));
@@ -79,10 +83,11 @@ void vertex() {
 }
 
 void fragment() {
-	float n = texture(noise_tex, UV * vec2(3.0, 5.0)).r;
+	float n = texture(noise_tex, UV * mix(vec2(3.0, 5.0), vec2(5.0, 2.0), leech)).r;
 	vec3 vivid = mix(color_a, color_b, v_t);
-	float spots = smoothstep(spot_lo, spot_lo + 0.08, n);
-	vivid = mix(vivid, spot, spots * 0.6);
+	float spots = smoothstep(spot_lo, spot_lo + 0.08, n) * mix(1.0, 0.45, leech);
+	float stripe = leech * (1.0 - smoothstep(0.025, 0.07, abs(UV.x - 0.25)));
+	vivid = mix(vivid, spot, max(spots * 0.6, stripe * 0.55));
 	// Darker along the back ridge and between the rings, paler underneath.
 	vivid *= mix(1.08, 0.84, sin(UV.x * 6.2832) * 0.5 + 0.5);
 	float lum = dot(vivid, vec3(0.3, 0.55, 0.15));
@@ -91,7 +96,9 @@ void fragment() {
 	g = gray_front >= 0.999 ? 1.0 : g;
 	vec3 col = mix(vivid, grey, g);
 	ALBEDO = col + vec3(flash);
-	ROUGHNESS = mix(0.45, 0.9, g);
+	ROUGHNESS = mix(mix(0.45, 0.3, leech), 0.9, g);
 	float glow = (1.0 - g) * (0.25 + spots * 0.8 + windup * 1.5) * glow_gain;
 	EMISSION = vivid * glow + vec3(flash * 0.8);
+	// The tank's caustic light on him/it (creature_light).
+	EMISSION += creature_caustics(ALBEDO, VERTEX, NORMAL, INV_VIEW_MATRIX);
 }

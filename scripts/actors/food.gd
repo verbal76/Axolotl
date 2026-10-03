@@ -26,25 +26,37 @@ var _hover := 1.0
 var _calm_t := 0.0         # ignores water pushes while the axolotl's own lunge is stirring it
 var _hole_pos := Vector3.ZERO
 var _hole_up := Vector3.UP
+## Onboarding's feeding lesson (docs/ONBOARDING.md): the jellyfish the player is asked to eat is held
+## near where it was first seen (INF: free), so it can never drift off, out of reach or out of the
+## region. No random numbers are drawn for it.
+var anchor := Vector3.INF
+## Its own generator (seeded by FoodDirector from the run and ball): food never draws from the
+## gameplay random sequence.
+var rng := RandomNumberGenerator.new()
+## The food region (index into ball.food_regions) it belongs to, or -1 (FoodDirector).
+var region := -1
 
 
-func setup(p_ball: MossBall, p_type: int, pos: Vector3, p_region_dir: Vector3, p_region_deg: float) -> void:
+## `seed_v`: its generator's seed (-1: one drawn from the global sequence, for test stand-ins).
+func setup(p_ball: MossBall, p_type: int, pos: Vector3, p_region_dir: Vector3, p_region_deg: float, seed_v := -1) -> void:
+	rng.seed = seed_v if seed_v >= 0 else randi()
 	ball = p_ball
 	type = p_type
 	region_dir = p_region_dir.normalized()
 	region_radius = deg_to_rad(p_region_deg)
 	position = pos
 	# Hovers at about head height so a lunge can reach it.
-	_hover = randf_range(HOVER_MIN, HOVER_MAX)
+	_hover = rng.randf_range(HOVER_MIN, HOVER_MAX)
 
 
-func setup_burrower(p_ball: MossBall, p_hole: Dictionary) -> void:
+func setup_burrower(p_ball: MossBall, p_hole: Dictionary, seed_v := -1) -> void:
+	rng.seed = seed_v if seed_v >= 0 else randi()
 	ball = p_ball
 	type = Type.BURROWER
 	hole = p_hole
 	hole["occupied"] = true
 	state = "hidden"
-	_cd = randf_range(0.2, 1.5)
+	_cd = rng.randf_range(0.2, 1.5)
 
 
 func _ready() -> void:
@@ -274,7 +286,7 @@ func eaten() -> void:
 
 func _physics_process(dt: float) -> void:
 	var g := Game.inst
-	if g == null or g.player.ball != ball:
+	if g == null or g.player.ball != ball or not g.near_player(global_position) or g.state == "aquarium":
 		return
 	_t += dt
 	_cd = maxf(0.0, _cd - dt)
@@ -315,6 +327,11 @@ func _update_drifter(dt: float) -> void:
 		vel += WaterFX.inst.push_at(global_position) * 4.0 * dt
 	vel += Vector3(sin(_t * 2.1), sin(_t * 1.3), cos(_t * 1.7)) * 0.15 * dt
 	_keep_in_region(up, dt, 0.4)
+	if anchor != Vector3.INF:
+		# A soft tether: free within a metre and a half, then drawn back (lunges may still push it).
+		var off := anchor - global_position
+		if off.length() > 1.5:
+			vel += off.normalized() * minf(3.0, off.length()) * 1.5 * dt
 	vel = vel.limit_length(2.5)
 	vel *= 1.0 - 0.5 * dt
 	global_position += vel * dt
@@ -342,8 +359,8 @@ func _update_darter(dt: float, pl: Axolotl) -> void:
 				# Senses the axolotl: sudden short hop, then a pause.
 				var away := global_position - pl.global_position
 				away -= up * away.dot(up)
-				var side := away.cross(up).normalized() * randf_range(-1.0, 1.0)
-				_dart_dir = (away.normalized() * 0.8 + side * 0.6 + up * randf_range(-0.1, 0.3)).normalized()
+				var side := away.cross(up).normalized() * rng.randf_range(-1.0, 1.0)
+				_dart_dir = (away.normalized() * 0.8 + side * 0.6 + up * rng.randf_range(-0.1, 0.3)).normalized()
 				state = "dart"
 				_t = 0.0
 				Sfx.play("dart", global_position, -10.0)
@@ -371,7 +388,7 @@ func _update_burrower(dt: float, pl: Axolotl) -> void:
 		var dir: Vector3 = hole["dir"]
 		_hole_pos = ball.surface_point(dir, hole.get("h", 0.0))
 		_hole_up = ball.up_at(_hole_pos)
-		global_transform = Transform3D(MossBall.frame_at(_hole_up, randf() * 360.0), _hole_pos - _hole_up * 0.5)
+		global_transform = Transform3D(MossBall.frame_at(_hole_up, rng.randf() * 360.0), _hole_pos - _hole_up * 0.5)
 		if _mound != null:
 			_mound.global_transform = Transform3D(MossBall.frame_at(_hole_up, 0.0), _hole_pos)
 	var d := pl.global_position.distance_to(_hole_pos)
@@ -399,7 +416,7 @@ func _update_burrower(dt: float, pl: Axolotl) -> void:
 			expose = move_toward(expose, 0.0, dt * 0.9)
 			if expose <= 0.0:
 				state = "hidden"
-				_cd = randf_range(4.0, 7.0)
+				_cd = rng.randf_range(4.0, 7.0)
 	global_position = _hole_pos - _hole_up * (0.5 - expose * 0.9)
 	_vis.visible = expose > 0.02
 	# A gentle sway of the whole body from the burrow, the head nodding.
