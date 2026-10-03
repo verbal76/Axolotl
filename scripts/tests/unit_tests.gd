@@ -19,7 +19,7 @@ func run(runner) -> void:
 		g.hints.enabled = false
 	await t.seconds(0.5)
 	var only: String = Settings.test_args.get("only", "")
-	for name_ in ["_test_startup", "_test_ota_and_version", "_test_mesh_winding", "_test_terrain", "_test_ravines", "_test_ooze_bubbles", "_test_view_clearances", "_test_camera_rises_over", "_test_title_safe", "_test_camera_invariant", "_test_ball_view", "_test_hud_corner", "_test_restore_hints", "_test_home_coherence", "_test_terrain_grounded", "_test_no_floating_platforms", "_test_parasite_locomotion", "_test_parasite_body_and_death", "_test_parasite_combat", "_test_organic_motion", "_test_gill_look", "_test_gill_idles", "_test_gill_colours", "_test_gill_patterns", "_test_tail_whip", "_test_gill_traction", "_test_gill_incline_transitions", "_test_traction_no_shortcuts", "_test_gill_body_follow", "_test_swim_body_follow", "_test_ambient_sway", "_test_placements", "_test_tutorial_route", "_test_sphere_walk", "_test_jump_and_burst", "_test_coyote_and_buffer", "_test_swipe_direction_and_stages", "_test_hard_landing", "_test_food", "_test_food_reach", "_test_darter_and_burrower", "_test_food_repopulates", "_test_motes", "_test_checkpoint_and_regen", "_test_crumble", "_test_restoration_gates", "_test_retract_gates_gone", "_test_bubble_columns", "_test_restoration_continuity", "_test_health_map", "_test_vortex", "_test_vortex_tints", "_test_vortex_currents", "_test_vortex_currents_travel", "_test_current", "_test_current_brace", "_test_canopy", "_test_canopy_plain_jumps", "_test_climbs_physical", "_test_jungle_ladders_physical", "_test_leaf_geometry", "_test_leaf_footing", "_test_caves", "_test_mounds", "_test_vegetation", "_test_vortex_mouths_clear", "_test_route_audit", "_test_new_areas", "_test_ecosystem", "_test_music", "_test_opening_audio", "_test_run_clock", "_test_completion_catalog", "_test_completion_frozen", "_test_run_save_file", "_test_run_timer_live", "_test_run_continue", "_test_timer_integrity", "_test_resume_points_safe", "_phase_continue_write", "_phase_continue_read", "_test_upgrades", "_test_quality_title_cap", "_test_ui", "_test_menus_no_scroll", "_test_menu_touch", "_test_tier2_rules", "_test_tier2_world", "_test_ambient_fish", "_test_parasite_never_buried", "_test_tier2_loadout", "_test_aquarium_experiences", "_test_aquarium_polish", "_test_all_clear", "_test_treasure_unlock", "_test_treasure_generation", "_test_treasure_play", "_phase_treasure_stress", "_phase_live_fish_diag", "_phase_cpu_probe", "_phase_incline_survey", "_phase_loco_diag", "_phase_crawl_trace", "_phase_mouth_crawls", "_phase_organic_trace", "_test_skilltree_graph", "_test_progress_store", "_test_starfish_spots", "_test_starfish_pickup", "_test_skill_ui", "_test_quick_gill", "_test_lunge_skills", "_test_burst_skills", "_test_glide_control", "_test_glide_transfers", "_test_mote_magnet", "_phase_starfish_survey", "_phase_starfish_sweep", "_phase_glide_probe", "_test_plants_terminal_growth", "_test_sea_fan_depth", "_test_repopulation", "_phase_repop_survey", "_phase_repop_sim", "_test_aquarium_gill", "_phase_aq_nav", "_test_tutorials_and_title", "_test_onb_progress", "_test_onb_owner_save", "_test_onb_per_run", "_test_onb_toggle", "_test_onb_intro", "_test_onb_feeding", "_test_onb_parasite", "_test_onb_feed_first", "_test_onb_tunnel", "_test_onb_starfish", "_test_onb_softlock", "_test_onb_relaunch", "_test_onb_restoration_equal", "_test_hard_mode", "_test_hard_mode_save", "_test_polish_a", "_test_leaf_motion", "_test_perf_veg_cull", "_test_death_and_arrival", "_test_camera_never_drawn_unsafe", "_phase_world_hash", "_phase_th_bench", "_phase_hard_write", "_phase_hard_read", "_phase_hard_newrun", "_phase_hard_finish", "_phase_hard_sim", "_phase_hard_intervals", "_phase_onb_owner", "_phase_onb_write", "_phase_onb_read", "_phase_onb_kill", "_phase_onb_toggle", "_phase_cohesion_probe"]:
+	for name_ in ["_test_startup", "_test_ota_and_version", "_test_mesh_winding", "_test_terrain", "_test_ravines", "_test_ooze_bubbles", "_test_view_clearances", "_test_camera_rises_over", "_test_title_safe", "_test_camera_invariant", "_test_ball_view", "_test_hud_corner", "_test_restore_hints", "_test_home_coherence", "_test_terrain_grounded", "_test_no_floating_platforms", "_test_parasite_locomotion", "_test_parasite_body_and_death", "_test_parasite_combat", "_test_organic_motion", "_test_gill_look", "_test_gill_idles", "_test_gill_colours", "_test_gill_patterns", "_test_tail_whip", "_test_gill_traction", "_test_gill_incline_transitions", "_test_traction_no_shortcuts", "_test_gill_body_follow", "_test_swim_body_follow", "_test_ambient_sway", "_test_placements", "_test_tutorial_route", "_test_sphere_walk", "_test_jump_and_burst", "_test_coyote_and_buffer", "_test_swipe_direction_and_stages", "_test_hard_landing", "_test_food", "_test_food_reach", "_test_darter_and_burrower", "_test_food_repopulates", "_test_motes", "_test_checkpoint_and_regen", "_test_crumble", "_test_restoration_gates", "_test_retract_gates_gone", "_test_bubble_columns", "_test_restoration_continuity", "_test_health_map", "_test_vortex", "_test_vortex_tints", "_test_vortex_currents", "_test_vortex_currents_travel", "_test_current", "_test_current_brace", "_test_canopy", "_test_canopy_plain_jumps", "_test_climbs_physical", "_test_jungle_ladders_physical", "_test_leaf_geometry", "_test_leaf_footing", "_test_caves", "_test_mounds", "_test_vegetation", "_test_vortex_mouths_clear", "_test_route_audit", "_test_new_areas", "_test_ecosystem", "_test_music", "_test_opening_audio", "_test_run_clock", "_test_completion_catalog", "_test_completion_frozen", "_test_run_save_file", "_test_run_timer_live", "_test_run_continue", "_test_timer_integrity", "_test_resume_points_safe", "_phase_continue_write", "_phase_continue_read", "_test_upgrades", "_test_quality_title_cap", "_test_ui", "_test_menus_no_scroll", "_test_menu_touch", "_test_tier2_rules", "_test_tier2_world", "_test_ambient_fish", "_test_parasite_never_buried", "_test_tier2_loadout", "_test_aquarium_experiences", "_test_aquarium_polish", "_test_all_clear", "_test_treasure_unlock", "_test_treasure_generation", "_test_treasure_play", "_phase_treasure_stress", "_phase_live_fish_diag", "_phase_cpu_probe", "_phase_incline_survey", "_phase_loco_diag", "_phase_crawl_trace", "_phase_mouth_crawls", "_phase_organic_trace", "_test_skilltree_graph", "_test_progress_store", "_test_starfish_spots", "_test_starfish_pickup", "_test_skill_ui", "_test_quick_gill", "_test_lunge_skills", "_test_burst_skills", "_test_glide_control", "_test_glide_transfers", "_test_mote_magnet", "_phase_starfish_survey", "_phase_starfish_sweep", "_phase_glide_probe", "_test_plants_terminal_growth", "_test_sea_fan_depth", "_test_repopulation", "_phase_repop_survey", "_phase_repop_sim", "_test_aquarium_gill", "_phase_aq_nav", "_test_tutorials_and_title", "_test_onb_progress", "_test_onb_owner_save", "_test_onb_per_run", "_test_onb_toggle", "_test_onb_intro", "_test_onb_feeding", "_test_onb_parasite", "_test_onb_feed_first", "_test_onb_tunnel", "_test_onb_starfish", "_test_onb_softlock", "_test_onb_relaunch", "_test_onb_restoration_equal", "_test_hard_mode", "_test_hard_mode_save", "_test_polish_a", "_test_leaf_motion", "_test_perf_veg_cull", "_test_death_and_arrival", "_test_camera_never_drawn_unsafe", "_test_startup_build_identical", "_phase_world_hash", "_phase_th_bench", "_phase_hard_write", "_phase_hard_read", "_phase_hard_newrun", "_phase_hard_finish", "_phase_hard_sim", "_phase_hard_intervals", "_phase_onb_owner", "_phase_onb_write", "_phase_onb_read", "_phase_onb_kill", "_phase_onb_toggle", "_phase_cohesion_probe"]:
 		# "_phase_*" tests are halves of a relaunch test: they run only when asked for by name
 		# (in a child process started by _test_run_continue).
 		if name_.begins_with("_phase") and not only.split(",", false).has(name_):
@@ -71,6 +71,96 @@ func _test_startup() -> void:
 			net_before = true
 	t.check("startup_no_ota_check_before_usable", usable >= 0.0 and not net_before and not Boot.auto_check("start"), "")
 	t.check("startup_summary_for_pause_menu", StartupTrace.summary().begins_with("Last launch: Mote on screen after"), StartupTrace.summary())
+
+
+## Startup speed-ups (2026-10-02, docs/research/startup-2026-10-01/RESULTS-2026-10-02.md) must build
+## exactly the same world: each ball's ground rebuilt with its tiles on worker threads is
+## bit-identical (vertices, normals, indices, collision faces, far mesh, extremes) to the same
+## ground built one tile at a time on this thread; Levels.NearSet answers exactly as _near_any; a
+## ball whose stem, leaf and landform meshes are made on worker threads is the same as one made without.
+func _test_startup_build_identical() -> void:
+	var same := 0
+	var detail := []
+	for b in g.balls:
+		var mb := b as MossBall
+		mb.parallel_terrain = false
+		mb.finalize_terrain()
+		var serial := _terrain_hash(mb)
+		mb.parallel_terrain = true
+		mb.finalize_terrain()
+		var par := _terrain_hash(mb)
+		if serial == par:
+			same += 1
+		else:
+			detail.append("ball %d differs" % (mb.index + 1))
+	await t.frames(1)
+	t.check("startup_terrain_parallel_identical", same == g.balls.size(), "%d of %d balls identical %s" % [same, g.balls.size(), ", ".join(detail)])
+	# Keep-clear checks through Levels.NearSet answer exactly as Levels._near_any over the same list:
+	# random lists (tiny, wide, zero, negative, whole-sphere and integer radii, unnormalised and
+	# zero directions) against random directions and directions just either side of each edge.
+	var rng := RandomNumberGenerator.new()
+	rng.seed = 9
+	# (Counters in a dictionary: a lambda captures plain locals by value.)
+	var n := {"queries": 0, "near": 0, "mismatches": 0}
+	for li in 12:
+		var list := []
+		for k in rng.randi_range(1, 90):
+			var c := Vector3(rng.randfn(), rng.randfn(), rng.randfn()) * (rng.randf_range(0.2, 3.0) if k % 5 == 0 else 1.0)
+			var deg: Variant = rng.randf_range(0.5, 20.0)
+			match k % 17:
+				3: deg = rng.randi_range(1, 30)
+				5: deg = 0.0
+				7: deg = -4.0
+				11: deg = rng.randf_range(40.0, 200.0)
+				13: c = Vector3.ZERO
+			list.append([c, deg])
+		var ns := Levels.NearSet.new(list)
+		var probe := func(d: Vector3) -> void:
+			var a := Levels._near_any(d, list)
+			if a != ns.near(d):
+				n["mismatches"] += 1
+			n["queries"] += 1
+			n["near"] += 1 if a else 0
+		for q in 4000:
+			probe.call(Vector3(rng.randfn(), rng.randfn(), rng.randfn()).normalized())
+		for e in list:
+			var c: Vector3 = e[0]
+			if c == Vector3.ZERO:
+				probe.call(Vector3.ZERO)
+				continue
+			var axis := c.cross(Vector3(rng.randfn(), rng.randfn(), rng.randfn())).normalized()
+			for eps in [-1e-4, -1e-6, 0.0, 1e-6, 1e-4]:
+				probe.call(c.normalized().rotated(axis, deg_to_rad(float(e[1])) + eps))
+	t.check("startup_near_set_exact", n["mismatches"] == 0 and n["near"] > 1000 and n["near"] < n["queries"],
+			"%d queries, %d near, %d mismatches" % [n["queries"], n["near"], n["mismatches"]])
+	# Every ball built again (same random sequence) with its stem, leaf and landform meshes made on
+	# worker threads and on this thread: identical builds. (Last in the suite: it reseeds the global
+	# random sequence. Each copy leaves the tree at once, before any physics or processing.)
+	var ball_same := []
+	for i in g.balls.size():
+		var hashes := []
+		for async in [false, true]:
+			Levels.async_meshes = async
+			seed(7000 + i)
+			var copy := Levels.build_ball(i, g)
+			hashes.append(world_build_hash([copy], false))
+			g.remove_child(copy)
+			copy.queue_free()
+		Levels.async_meshes = true
+		ball_same.append(hashes[0] == hashes[1])
+	t.check("startup_async_meshes_identical", not ball_same.has(false), "every ball rebuilt both ways identical: %s" % str(ball_same))
+
+
+static func _terrain_hash(b: MossBall) -> String:
+	var ctx := HashingContext.new()
+	ctx.start(HashingContext.HASH_SHA256)
+	for mi in b.terrain_chunks:
+		ctx.update(var_to_bytes(mi.mesh.surface_get_arrays(0)))
+	for cs in b._terrain_shapes:
+		ctx.update((cs.shape as ConcavePolygonShape3D).get_faces().to_byte_array())
+	ctx.update(var_to_bytes(b._surface.mesh.surface_get_arrays(0)))
+	ctx.update(var_to_bytes([b.terrain_max_h, b.terrain_tile_count, b.terrain_collision_tiles, b._chunk_dirs, b._chunk_ang]))
+	return ctx.finish().hex_encode()
 
 
 # --- repopulation (ledger row 11; scripts/tests/repop_tests.gd) ------------------------------
@@ -6204,6 +6294,89 @@ func _phase_world_hash() -> void:
 			hs.append(b.terrain_height(Vector3(rng.randf_range(-1, 1), rng.randf_range(-1, 1), rng.randf_range(-1, 1)).normalized()))
 		ctx.update(hs.to_byte_array())
 	t.log_line("WORLDHASH %s meshes %d shapes %d" % [ctx.finish().hex_encode(), n_mesh, n_shape])
+	t.log_line("WORLDHASH_FULL %s" % world_build_hash(g.balls))
+	# The completion catalog (every id, category, label and weight, in order) and the starfish.
+	t.log_line("WORLDHASH_COMPLETION %s ids %d" % [var_to_bytes([g.completion.order, _plain(g.completion.entries)]).hex_encode().sha256_text(),
+			g.completion.order.size()])
+	var stars := []
+	if g.starfish != null:
+		for s in g.starfish.stars:
+			stars.append([s.get("id"), (s as Node3D).global_position if is_instance_valid(s) else null])
+	t.log_line("WORLDHASH_STARFISH %s placed %s stars %d" % [var_to_bytes(_plain(stars)).hex_encode().sha256_text(),
+			str(g.starfish.placed if g.starfish != null else false), stars.size()])
+
+
+## Startup work (2026-10-02): a stricter hash of what the build made under `roots`: every node's
+## class, name and transform in tree order, every mesh surface's arrays (vertices, normals, UVs,
+## custom data, indices), every MultiMesh's instance buffer, every collision shape's data, and each
+## ball's bot hints and terrain extremes. Used to prove the faster startup builds the same world.
+static func world_build_hash(roots: Array, with_names := true) -> String:
+	var ctx := HashingContext.new()
+	ctx.start(HashingContext.HASH_SHA256)
+	# (Empty data is hashed as nothing: HashingContext refuses empty input.)
+	var put := func(bytes: PackedByteArray) -> void:
+		if not bytes.is_empty():
+			ctx.update(bytes)
+	var mesh_bytes := func(m: Mesh) -> void:
+		if m is ArrayMesh:
+			for si in (m as ArrayMesh).get_surface_count():
+				put.call(var_to_bytes((m as ArrayMesh).surface_get_arrays(si)))
+				put.call(var_to_bytes((m as ArrayMesh).surface_get_format(si)))
+		elif m != null:
+			put.call(m.get_class().to_utf8_buffer())
+		if m != null:
+			var meta := {}
+			for k in m.get_meta_list():
+				meta[k] = _plain(m.get_meta(k))
+			put.call(var_to_bytes([m.resource_name, meta]))
+	for r in roots:
+		var stack: Array = [r]
+		while not stack.is_empty():
+			var n: Node = stack.pop_back()
+			var kids := n.get_children()
+			kids.reverse()
+			stack.append_array(kids)
+			put.call(("%s|%s|" % [n.get_class(), n.name if with_names else ""]).to_utf8_buffer())
+			if n is Node3D:
+				put.call(var_to_bytes((n as Node3D).transform))
+			# (Metadata too: headless runs keep no MultiMesh instance data, but the placements are
+			# kept in "veg_transforms".)
+			for k in n.get_meta_list():
+				put.call(var_to_bytes([k, _plain(n.get_meta(k))]))
+			if n is MeshInstance3D:
+				mesh_bytes.call((n as MeshInstance3D).mesh)
+			if n is MultiMeshInstance3D and (n as MultiMeshInstance3D).multimesh != null:
+				var mm := (n as MultiMeshInstance3D).multimesh
+				put.call(mm.buffer.to_byte_array())
+				mesh_bytes.call(mm.mesh)
+			if n is CollisionShape3D and (n as CollisionShape3D).shape != null:
+				var s: Shape3D = (n as CollisionShape3D).shape
+				if s is ConcavePolygonShape3D:
+					put.call((s as ConcavePolygonShape3D).get_faces().to_byte_array())
+				elif s is ConvexPolygonShape3D:
+					put.call((s as ConvexPolygonShape3D).points.to_byte_array())
+				else:
+					put.call(var_to_bytes(s.get_debug_mesh().get_faces()))
+		if r is MossBall:
+			var b := r as MossBall
+			put.call(var_to_bytes([b.terrain_max_h, b.terrain_tile_count, b.terrain_collision_tiles]))
+			if b.has_meta("builder"):
+				put.call(var_to_bytes(_plain((b.get_meta("builder") as LevelBuilder).bot_hints)))
+	return ctx.finish().hex_encode()
+
+
+## `v` with every object replaced by its class name (object ids differ from run to run).
+static func _plain(v: Variant) -> Variant:
+	if v is Object:
+		return (v as Object).get_class() if v != null else null
+	if v is Array:
+		return (v as Array).map(func(x: Variant) -> Variant: return _plain(x))
+	if v is Dictionary:
+		var out := {}
+		for k in v:
+			out[k] = _plain(v[k])
+		return out
+	return v
 
 
 ## Leaves (owner 2026-10-01): a landing gives a little and springs back, settling in about a second

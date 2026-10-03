@@ -4,6 +4,88 @@ class_name MeshLib
 ## UV.y = 0 at the base and 1 at the tip (used by vegetation.gdshader for bending).
 
 
+## Startup (2026-10-02): while `deferring` (Levels.build_ball turns it on while it builds a ball),
+## the meshes made through _commit are built on worker threads while the layout goes on: the caller
+## gets its ArrayMesh at once, empty, and finish_deferred() (at the end of the ball) gives each its
+## surface, name and metadata, in order, exactly as SurfaceTool.commit() makes them on this thread.
+## Only for meshes nothing reads before then and no MultiMesh instances (drawn by a MeshInstance3D), built from
+## their own arguments alone. Off, each is built at once, as before.
+static var deferring := false
+static var _deferred: Array = []
+
+
+## As _commit, but always built at once. For meshes MultiMeshes instance: a MultiMesh given a mesh
+## whose surface comes later keeps bounds that change what is drawn (a title render differed by 505
+## pixels), so the vegetation meshes are never deferred.
+static func _commit_now(build: Callable) -> ArrayMesh:
+	return _filled(null, _committed(build.call(), false))
+
+
+## A mesh from `build` (-> SurfaceTool ready to commit, or [SurfaceTool, resource name, {meta}]).
+static func _commit(build: Callable) -> ArrayMesh:
+	if not deferring:
+		return _filled(null, _committed(build.call(), false))
+	var am := ArrayMesh.new()
+	var out := []
+	var id := WorkerThreadPool.add_task(func() -> void: out.append(_committed(build.call(), true)), true, "mesh")
+	_deferred.append([id, am, out])
+	return am
+
+
+## What `build` made: the committed mesh (on this thread), or its arrays and commit()'s custom-format
+## flags (`arrays`, safe on a worker thread); then its name and metadata.
+static func _committed(r: Variant, arrays: bool) -> Array:
+	var st: SurfaceTool = r[0] if r is Array else r
+	var out := []
+	if arrays:
+		var flags := 0
+		for c in 4:   # (the four custom channels)
+			if st.get_custom_format(c) != SurfaceTool.CUSTOM_MAX:
+				flags |= st.get_custom_format(c) << (Mesh.ARRAY_FORMAT_CUSTOM_BASE + c * Mesh.ARRAY_FORMAT_CUSTOM_BITS)
+		out = [st.commit_to_arrays(), flags]
+	else:
+		out = [st.commit(), 0]
+	out.append(r[1] if r is Array else "")
+	out.append(r[2] if r is Array else {})
+	return out
+
+
+static func _filled(am: ArrayMesh, c: Array) -> ArrayMesh:
+	if c[0] is ArrayMesh:
+		am = c[0]
+	elif not (c[0][Mesh.ARRAY_VERTEX] as PackedVector3Array).is_empty():
+		am.add_surface_from_arrays(Mesh.PRIMITIVE_TRIANGLES, c[0], [], {}, c[1])
+	if c[2] != "":
+		am.resource_name = c[2]
+	for k in c[3]:
+		am.set_meta(k, c[3][k])
+	return am
+
+
+## Waits for the deferred meshes and fills each in.
+static func finish_deferred() -> void:
+	for j in _deferred:
+		WorkerThreadPool.wait_for_task_completion(j[0])
+		_filled(j[1], j[2][0])
+	_deferred.clear()
+
+
+## A mesh of plain triangles, `verts` in order, each with its UV (`uvs`, or (0, its height) when
+## none are given), normals generated: what adding each to a SurfaceTool (set_uv, add_vertex), then
+## generate_normals() and commit() makes. Deferred like _commit.
+static func _triangles(verts: PackedVector3Array, uvs := PackedVector2Array()) -> ArrayMesh:
+	var vs := verts.duplicate()
+	var us := uvs.duplicate()
+	return _commit(func() -> SurfaceTool:
+		var st := SurfaceTool.new()
+		st.begin(Mesh.PRIMITIVE_TRIANGLES)
+		for k in vs.size():
+			st.set_uv(us[k] if not us.is_empty() else Vector2(0.0, vs[k].y))
+			st.add_vertex(vs[k])
+		st.generate_normals()
+		return st)
+
+
 ## A tapered, slightly curved grass blade standing on +Y.
 static func blade(st: SurfaceTool, xf: Transform3D, width: float, height: float, segs: int, curve: float, tint: Color) -> void:
 	var prev_l := Vector3.ZERO
@@ -27,6 +109,11 @@ static func blade(st: SurfaceTool, xf: Transform3D, width: float, height: float,
 
 
 static func tuft_mesh(blades: int, width: float, height: float, spread: float, seed_v: int, segs := 3, curve := 0.35) -> ArrayMesh:
+	return _commit_now(func() -> Variant: return _tuft_mesh_surface(blades, width, height, spread, seed_v, segs, curve))
+
+
+## tuft_mesh's SurfaceTool (safe on a worker thread).
+static func _tuft_mesh_surface(blades: int, width: float, height: float, spread: float, seed_v: int, segs := 3, curve := 0.35) -> Variant:
 	var rng := RandomNumberGenerator.new()
 	rng.seed = seed_v
 	var st := SurfaceTool.new()
@@ -37,7 +124,7 @@ static func tuft_mesh(blades: int, width: float, height: float, spread: float, s
 		var b := Basis(Vector3.UP, rng.randf() * TAU) * Basis(Vector3.RIGHT, rng.randf_range(-0.25, 0.25))
 		var tint := Color.WHITE.darkened(rng.randf() * 0.25)
 		blade(st, Transform3D(b, p), width * rng.randf_range(0.7, 1.2), height * rng.randf_range(0.6, 1.2), segs, curve * rng.randf_range(0.5, 1.3), tint)
-	return st.commit()
+	return st
 
 
 ## A creased blade (a shallow V with a midrib, so it is not a flat card), curved and tapered, with a
@@ -71,6 +158,11 @@ static func reed(st: SurfaceTool, xf: Transform3D, width: float, height: float, 
 ## A clump of reeds (medium/tall vegetation): `blades` creased blades from a small base spread,
 ## leaning out a little, heights and curves varied.
 static func reed_clump(blades: int, width: float, height: float, spread: float, seed_v: int, segs := 5, curve := 0.25) -> ArrayMesh:
+	return _commit_now(func() -> Variant: return _reed_clump_surface(blades, width, height, spread, seed_v, segs, curve))
+
+
+## reed_clump's SurfaceTool (safe on a worker thread).
+static func _reed_clump_surface(blades: int, width: float, height: float, spread: float, seed_v: int, segs := 5, curve := 0.25) -> Variant:
 	var rng := RandomNumberGenerator.new()
 	rng.seed = seed_v
 	var st := SurfaceTool.new()
@@ -82,7 +174,7 @@ static func reed_clump(blades: int, width: float, height: float, spread: float, 
 		var tint := Color.WHITE.darkened(rng.randf() * 0.3)
 		reed(st, Transform3D(bs, p), width * rng.randf_range(0.7, 1.25), height * rng.randf_range(0.6, 1.15), segs,
 				curve * rng.randf_range(0.4, 1.4), rng.randf_range(-0.8, 0.8), tint)
-	return st.commit()
+	return st
 
 
 ## Broad-leaf aquatic plant: a rosette of wide, rounded leaves (Expansion 6, owner: they read as
@@ -90,6 +182,11 @@ static func reed_clump(blades: int, width: float, height: float, spread: float, 
 ## under its own weight, its edges cupped a little, with smooth shading. UV.y runs base to tip, so
 ## the vegetation material sways the outer leaf most in the current.
 static func broadleaf_mesh(leaves: int, size: float, seed_v: int) -> ArrayMesh:
+	return _commit_now(func() -> Variant: return _broadleaf_mesh_surface(leaves, size, seed_v))
+
+
+## broadleaf_mesh's SurfaceTool (safe on a worker thread).
+static func _broadleaf_mesh_surface(leaves: int, size: float, seed_v: int) -> Variant:
 	var rng := RandomNumberGenerator.new()
 	rng.seed = seed_v
 	var st := SurfaceTool.new()
@@ -102,7 +199,7 @@ static func broadleaf_mesh(leaves: int, size: float, seed_v: int) -> ArrayMesh:
 		var half_w := size * rng.randf_range(0.3, 0.42)
 		base = _broad_leaf(st, Basis(Vector3.UP, a), rise, half_w, length, Color.WHITE.darkened(rng.randf() * 0.2), base)
 	st.generate_normals()
-	return st.commit()
+	return st
 
 
 ## A cluster of stem plants (Expansion 6, owner reference "a sprouted moss ball": Rotala-like red
@@ -120,6 +217,11 @@ static func broadleaf_mesh(leaves: int, size: float, seed_v: int) -> ArrayMesh:
 ## node in the lower stem and every other node above; leaves are 6-triangle lances low down and
 ## 4-triangle folded lances higher up (2-triangle folded kites with `light`).
 static func stem_plant_mesh(stems: int, height: float, seed_v: int, nodes := 9, light := false) -> ArrayMesh:
+	return _commit_now(func() -> Variant: return _stem_plant_mesh_surface(stems, height, seed_v, nodes, light))
+
+
+## stem_plant_mesh's SurfaceTool (safe on a worker thread).
+static func _stem_plant_mesh_surface(stems: int, height: float, seed_v: int, nodes := 9, light := false) -> Variant:
 	var rng := RandomNumberGenerator.new()
 	rng.seed = seed_v
 	var st := SurfaceTool.new()
@@ -209,10 +311,7 @@ static func stem_plant_mesh(stems: int, height: float, seed_v: int, nodes := 9, 
 					1 if not light else 2, 1.0, tint.lightened(0.12))
 		tips.append([tip, axis, csize])
 	st.generate_normals()
-	var mesh := st.commit()
-	mesh.resource_name = "stem_plant"
-	mesh.set_meta("tips", tips)
-	return mesh
+	return [st, "stem_plant", {"tips": tips}]
 
 
 ## One stem-plant leaf from `at`, pointing along `out` (perpendicular to the stem `axis`), raised
@@ -276,6 +375,11 @@ static func _stem_leaf(st: SurfaceTool, vb: Array, at: Vector3, axis: Vector3, o
 ## "sprouted moss ball" reference): `n` thin wavering ribbons of up to `length`, crossed in pairs so
 ## they read from any side. UV.y runs from the moss to the free end.
 static func root_strands_mesh(n: int, length: float, seed_v: int) -> ArrayMesh:
+	return _commit_now(func() -> Variant: return _root_strands_mesh_surface(n, length, seed_v))
+
+
+## root_strands_mesh's SurfaceTool (safe on a worker thread).
+static func _root_strands_mesh_surface(n: int, length: float, seed_v: int) -> Variant:
 	var rng := RandomNumberGenerator.new()
 	rng.seed = seed_v
 	var st := SurfaceTool.new()
@@ -306,13 +410,18 @@ static func root_strands_mesh(n: int, length: float, seed_v: int) -> ArrayMesh:
 				for q in [i0, i0 + 1, i0 + 2, i0 + 1, i0 + 3, i0 + 2]:
 					st.add_index(q)
 	st.generate_normals()
-	return st.commit()
+	return st
 
 
 ## Tube coral / anemone cluster (Expansion 6, the healed tank's colour): `tubes` soft tapering
 ## tubes rising from one spot, leaning outward, each ending in a flared rounded mouth. UV.y runs base
 ## to tip (the vegetation material colours and sways by it).
 static func coral_mesh(tubes: int, height: float, seed_v: int) -> ArrayMesh:
+	return _commit_now(func() -> Variant: return _coral_mesh_surface(tubes, height, seed_v))
+
+
+## coral_mesh's SurfaceTool (safe on a worker thread).
+static func _coral_mesh_surface(tubes: int, height: float, seed_v: int) -> Variant:
 	var rng := RandomNumberGenerator.new()
 	rng.seed = seed_v
 	var st := SurfaceTool.new()
@@ -348,7 +457,7 @@ static func coral_mesh(tubes: int, height: float, seed_v: int) -> ArrayMesh:
 				for q in [i0, i1, i0 + sides, i1, i1 + sides, i0 + sides]:
 					st.add_index(q)
 	st.generate_normals()
-	return st.commit()
+	return st
 
 
 ## A gorgonian sea fan (00040-plants, owner phone report: the old fan was flat strips that crossed
@@ -669,10 +778,15 @@ static func leaf_collision_depth(s: float) -> float:
 ## (+Z, rising slightly as it enters the stem), so the leaf is seen to grow out of it: nothing but
 ## the drawn leaf collides (MeshLib.leaf_collision_shapes); the stalk never snags.
 static func platform_leaf_mesh(length: float, width: float, petiole := false, stalk := 0.55) -> ArrayMesh:
+	return _commit(func() -> Variant: return _platform_leaf_mesh_surface(length, width, petiole, stalk))
+
+
+## platform_leaf_mesh's SurfaceTool (safe on a worker thread).
+static func _platform_leaf_mesh_surface(length: float, width: float, petiole := false, stalk := 0.55) -> Variant:
 	var st := leaf_surface()
 	_leaf_into(st, Transform3D.IDENTITY, length, width, petiole, 0, stalk)
 	st.generate_normals()
-	return st.commit()
+	return st
 
 
 ## A SurfaceTool for platform leaves: each leaf's vertices carry, in CUSTOM0, the leaf's up and its
@@ -880,9 +994,8 @@ static func mound(radius: float, height: float, sink: float, seed_v: int, radial
 		var a := PI * 0.5 * i / 5.0
 		prof.append([radius - r_edge + cos(a) * r_edge, height - r_edge + sin(a) * r_edge, 1.0 - float(i) / 5.0])
 	prof.append([0.0, height + 0.05, 0.0])
-	var st := SurfaceTool.new()
-	st.begin(Mesh.PRIMITIVE_TRIANGLES)
 	var faces := PackedVector3Array()
+	var uvs := PackedVector2Array()
 	var ring := func(j: int, s: int) -> Vector3:
 		var pr: Array = prof[j]
 		var a := TAU * s / radial
@@ -898,19 +1011,24 @@ static func mound(radius: float, height: float, sink: float, seed_v: int, radial
 			var gy: float = ground.call(d.x * r, d.z * r)
 			y += gy * (1.0 - clampf(y / wall_top, 0.0, 1.0))
 		return Vector3(d.x * r, y, d.z * r)
+	# (Each grid point is worked out once, the first time a quad needs it: four quads share it.)
+	var pts := {}
+	var point := func(j: int, s: int) -> Vector3:
+		var k := j * (radial + 1) + s
+		if not pts.has(k):
+			pts[k] = ring.call(j, s)
+		return pts[k]
 	for s in radial:
 		for j in prof.size() - 1:
-			var v00: Vector3 = ring.call(j, s)
-			var v01: Vector3 = ring.call(j, s + 1)
-			var v10: Vector3 = ring.call(j + 1, s)
-			var v11: Vector3 = ring.call(j + 1, s + 1)
+			var v00: Vector3 = point.call(j, s)
+			var v01: Vector3 = point.call(j, s + 1)
+			var v10: Vector3 = point.call(j + 1, s)
+			var v11: Vector3 = point.call(j + 1, s + 1)
 			# Godot front faces wind clockwise seen from outside.
 			for v in [v00, v11, v10, v00, v01, v11]:
-				st.set_uv(Vector2(float(s) / radial, (v as Vector3).y / height))
-				st.add_vertex(v)
+				uvs.append(Vector2(float(s) / radial, (v as Vector3).y / height))
 				faces.append(v)
-	st.generate_normals()
-	return [st.commit(), faces]
+	return [_triangles(faces, uvs), faces]
 
 
 ## Sweeps a cross-section along a path (ridges, arches, bridges). `place(i, x, y)` gives the
@@ -919,8 +1037,6 @@ static func mound(radius: float, height: float, sink: float, seed_v: int, radial
 ## `profile` runs across the section; `closed` joins its last point back to its first (a tube).
 ## Returns [ArrayMesh, faces]: the collision is exactly the drawn triangles.
 static func sweep(stations: int, profile: PackedVector2Array, closed: bool, place: Callable, inside: Callable) -> Array:
-	var st := SurfaceTool.new()
-	st.begin(Mesh.PRIMITIVE_TRIANGLES)
 	var faces := PackedVector3Array()
 	var rows := []
 	for i in stations:
@@ -948,11 +1064,8 @@ static func sweep(stations: int, profile: PackedVector2Array, closed: bool, plac
 					bb = c
 					c = tmp
 				for v in [a, bb, c]:
-					st.set_uv(Vector2(0.0, v.y))
-					st.add_vertex(v)
 					faces.append(v)
-	st.generate_normals()
-	return [st.commit(), faces]
+	return [_triangles(faces), faces]
 
 
 ## Cross-section of a ridge (x across, y up, at full height 1.0): a flat crest `crest` wide, a
@@ -1011,10 +1124,8 @@ static func shelf(r_top: float, r_stem: float, height: float, sink: float, seed_
 	prof.append([r_top - 0.25, height])
 	prof.append([0.0, height + 0.04])
 	var radial := 26
-	var st := SurfaceTool.new()
-	st.begin(Mesh.PRIMITIVE_TRIANGLES)
 	var faces := PackedVector3Array()
-	var pt := func(j: int, s: int) -> Vector3:
+	var pt0 := func(j: int, s: int) -> Vector3:
 		var a := TAU * s / radial
 		var d := Vector3(cos(a), 0.0, sin(a))
 		var r: float = prof[j][0] * (1.0 + absf(noise.get_noise_2d(cos(a) * 1.3, sin(a) * 1.3)) * 0.14)
@@ -1022,6 +1133,13 @@ static func shelf(r_top: float, r_stem: float, height: float, sink: float, seed_
 		if ground.is_valid() and y < 1.0:
 			y += float(ground.call(d.x * r, d.z * r)) * (1.0 - clampf(y, 0.0, 1.0))
 		return Vector3(d.x * r, y, d.z * r)
+	# (Each grid point is worked out once, the first time a quad needs it: four quads share it.)
+	var pts := {}
+	var pt := func(j: int, s: int) -> Vector3:
+		var k := j * (radial + 1) + s
+		if not pts.has(k):
+			pts[k] = pt0.call(j, s)
+		return pts[k]
 	for s in radial:
 		for j in prof.size() - 1:
 			var v00: Vector3 = pt.call(j, s)
@@ -1043,11 +1161,8 @@ static func shelf(r_top: float, r_stem: float, height: float, sink: float, seed_
 					bb = c
 					c = tmp
 				for v in [a, bb, c]:
-					st.set_uv(Vector2(0.0, v.y))
-					st.add_vertex(v)
 					faces.append(v)
-	st.generate_normals()
-	return [st.commit(), faces]
+	return [_triangles(faces), faces]
 
 
 ## Collision hull points for a cushion (convex).
@@ -1070,6 +1185,11 @@ static func cushion_hull(radius: float, height: float, sink: float = 1.2) -> Pac
 ## metres, so the plant material's grain runs up the stem (it banded across it before).
 ## Collision (LevelBuilder.stem_xf) stays within a few centimetres of it.
 static func stem_mesh(r0: float, r1: float, height: float, radial := 10, bend := 0.0) -> ArrayMesh:
+	return stem_surface(r0, r1, height, radial, bend).commit()
+
+
+## stem_mesh's SurfaceTool, ready to commit (safe on a worker thread).
+static func stem_surface(r0: float, r1: float, height: float, radial := 10, bend := 0.0) -> SurfaceTool:
 	var st := SurfaceTool.new()
 	st.begin(Mesh.PRIMITIVE_TRIANGLES)
 	var rings := maxi(8, int(height / 0.6))
@@ -1100,7 +1220,7 @@ static func stem_mesh(r0: float, r1: float, height: float, radial := 10, bend :=
 				st.set_uv(v[1])
 				st.add_vertex(v[0])
 	st.generate_normals()
-	return st.commit()
+	return st
 
 
 ## Hollow dome shell with an entrance gap: the interior moss caves. Returns [mesh, faces].
@@ -1217,13 +1337,9 @@ static func cave_mound(p: Dictionary) -> Array:
 				ring[cols] = ring[0]
 			grid.append(ring)
 		surfaces.append(grid)
-	var st := SurfaceTool.new()
-	st.begin(Mesh.PRIMITIVE_TRIANGLES)
 	var faces := PackedVector3Array()
 	var tri := func(a: Vector3, b: Vector3, c: Vector3) -> void:
 		for v in [a, b, c]:
-			st.set_uv(Vector2(0.0, v.y))
-			st.add_vertex(v)
 			faces.append(v)
 	var counts := []
 	for layer in [0, 1]:
@@ -1269,9 +1385,8 @@ static func cave_mound(p: Dictionary) -> Array:
 				else:
 					tri.call(p00, p11, p10)
 					tri.call(p00, p01, p11)
-	st.generate_normals()
 	# Triangle index where each part starts: outer, inner, jambs (for tests).
-	return [st.commit(), faces, {"inner": counts[1], "jamb": counts[2], "total": faces.size() / 3, "outline": outline,
+	return [_triangles(faces), faces, {"inner": counts[1], "jamb": counts[2], "total": faces.size() / 3, "outline": outline,
 			"interior_radius": ri, "wall_h": wall_h, "door_w": dw, "door_h": dh}]
 
 

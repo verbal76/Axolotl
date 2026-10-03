@@ -45,7 +45,13 @@ const PALETTES := [
 ]
 
 
+## Stem, leaf and landform meshes built on worker threads during a ball's layout (MeshLib.deferring);
+## false builds them on this thread (the reference _test_startup_build_identical compares with).
+static var async_meshes := true
+
+
 static func build_ball(i: int, game: Node) -> MossBall:
+	MeshLib.deferring = async_meshes
 	var b := MossBall.new()
 	game.add_child(b)
 	b.position = CENTERS[i]
@@ -86,6 +92,8 @@ static func build_ball(i: int, game: Node) -> MossBall:
 				_leaf_shadow(n, shadow_mat)
 		elif n.has_meta("leaves"):
 			_leaf_shadow(n, shadow_mat)
+	MeshLib.finish_deferred()
+	MeshLib.deferring = false
 	b.set_meta("builder", lb)
 	return b
 
@@ -241,7 +249,8 @@ static func _veg_keep_clear(lb: LevelBuilder, extra: Array = []) -> Callable:
 		if body is StaticBody3D and body.get_meta("grounded", "") == "cushion":
 			list.append([b.up_at(body.global_position), deg.call(float(body.get_meta("radius")) * 1.9)])
 	# (Ravines stay bare, so their edges read as the drop they are.)
-	return func(d: Vector3) -> bool: return _near_any(d, list) or b.ravine_carve(d) > 0.1
+	var near := NearSet.new(list)
+	return func(d: Vector3) -> bool: return near.near(d) or b.ravine_carve(d) > 0.1
 
 
 ## Dense stands with clearings: Callable(dir) -> true where a stand grows (smooth noise over the
@@ -293,6 +302,70 @@ static func _near_any(dir: Vector3, list: Array) -> bool:
 		if dir.angle_to(e[0]) < deg_to_rad(e[1]):
 			return true
 	return false
+
+
+## _near_any over a fixed list of [dir, degrees], answered exactly the same (the same comparison,
+## entry by entry) but only against the entries that could be near: they are bucketed by where
+## their direction points, so a query tests a handful instead of the whole list. (Startup,
+## 2026-10-02: vegetation keep-clear checks were ~110 k calls over lists of 40-90 entries.)
+class NearSet extends RefCounted:
+	## Bucket size on the unit cube round the sphere of directions.
+	const CELL := 0.125
+	## Entries reaching further than this (chord on the unit sphere) are tested by every query.
+	const WIDE := 0.75
+	var _c := PackedVector3Array()
+	var _r := PackedFloat64Array()
+	var _cells := {}
+	var _wide := PackedInt32Array()
+
+	func _init(list: Array = []) -> void:
+		for e in list:
+			add(e[0], e[1])
+
+	func add(dir: Vector3, deg: float) -> void:
+		var k := _c.size()
+		var r := deg_to_rad(deg)
+		_c.append(dir)
+		_r.append(r)
+		if r <= 0.0:
+			return   # (never near: no angle is below it)
+		var n := dir.normalized()
+		# A direction whose angle to this one is below r lies within this chord of it (with a
+		# margin far above float error), so only the buckets that box can touch hold the entry.
+		var reach := 2.0 * sin(minf(r, PI) * 0.5) + 0.002
+		if n == Vector3.ZERO or reach > WIDE:
+			_wide.append(k)
+			return
+		var lo := ((n + Vector3.ONE) / CELL - Vector3.ONE * (reach / CELL)).floor()
+		var hi := ((n + Vector3.ONE) / CELL + Vector3.ONE * (reach / CELL)).floor()
+		for x in range(int(lo.x), int(hi.x) + 1):
+			for y in range(int(lo.y), int(hi.y) + 1):
+				for z in range(int(lo.z), int(hi.z) + 1):
+					var key := Vector3i(x, y, z)
+					if not _cells.has(key):
+						_cells[key] = PackedInt32Array()
+					var cell: PackedInt32Array = _cells[key]
+					cell.append(k)
+					_cells[key] = cell
+
+	## Exactly _near_any(dir, list).
+	func near(dir: Vector3) -> bool:
+		for k in _wide:
+			if dir.angle_to(_c[k]) < _r[k]:
+				return true
+		var n := dir.normalized()
+		if n == Vector3.ZERO:
+			for k in _c.size():
+				if dir.angle_to(_c[k]) < _r[k]:
+					return true
+			return false
+		var cell = _cells.get(Vector3i(((n + Vector3.ONE) / CELL).floor()))
+		if cell == null:
+			return false
+		for k in cell:
+			if dir.angle_to(_c[k]) < _r[k]:
+				return true
+		return false
 
 
 ## Tower of cushions with a crumbling brittle-moss bridge leading to a Mote on top.
@@ -830,7 +903,8 @@ static func _ball2(lb: LevelBuilder) -> void:
 	# Long flowing grasses bending with the current; broad leaves; tall stems.
 	var avoid := [[MossBall.dir_ll(15, -20), 9.0], [_vortex_dir(1, 2), 5.0], [_vortex_dir(1, 0), 5.0], [_vortex_dir(1, 4), 5.0],
 			[MossBall.dir_ll(-25, 110.5), 6.0], [MossBall.dir_ll(-18, 110.2), 5.0], [MossBall.dir_ll(10, 28), 10.0]]
-	var ok := func(dd: Vector3) -> bool: return not _near_any(dd, avoid) and b.ravine_carve(dd) < 0.1
+	var avoid_set := NearSet.new(avoid)
+	var ok := func(dd: Vector3) -> bool: return not avoid_set.near(dd) and b.ravine_carve(dd) < 0.1
 	# The long grass grows in dense stands with open clearings between them (same number of
 	# plants, so the stands are thicker), rather than an even carpet.
 	var stands := _stands(20, -0.15)
@@ -1159,7 +1233,9 @@ static func _ball3(lb: LevelBuilder) -> void:
 	var ladder_feet := []
 	for e in placed:
 		ladder_feet.append([e[0], rad_to_deg(3.8 / b.radius)])
-	var ok := func(dd: Vector3) -> bool: return not _near_any(dd, keep.slice(0, 5)) and not _near_any(dd, ladder_feet)
+	var keep_set := NearSet.new(keep.slice(0, 5))
+	var feet_set := NearSet.new(ladder_feet)
+	var ok := func(dd: Vector3) -> bool: return not keep_set.near(dd) and not feet_set.near(dd)
 	var stands := _stands(30, -0.2)
 	var ok_tall := func(dd: Vector3) -> bool: return ok.call(dd) and stands.call(dd)
 	var tall := b.make_veg_material(Color(0.06, 0.3, 0.06), Color(0.4, 0.7, 0.16), Vegetation.family_params("tall", 4.2).merged({"cam_fade": 2.4}, true))

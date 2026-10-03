@@ -437,21 +437,33 @@ func finalize_terrain() -> void:
 	_terrain_shapes.clear()
 	terrain_tile_count = 0
 	terrain_collision_tiles = 0
-	# Startup (2026-10-01): every tile's height samples are computed first, in parallel on worker
-	# threads (terrain_height is a pure read of the hills, ravines and cells, all built above); the
-	# meshes and collision are then built here on the main thread, in the same order, from those
-	# exact values, so the ground is bit-identical to computing them one by one.
+	# Startup (2026-10-01, 2026-10-02): every tile's geometry (its height samples, vertices,
+	# normals, indices and collision faces) and the far mesh's vertices are computed in parallel on
+	# worker threads (pure reads of the hills, ravines and cells, all built above); the meshes,
+	# nodes and collision shapes are then made here on the main thread, in the same order, from
+	# those exact values, so the ground is bit-identical to building the tiles one by one
+	# (_test_terrain_parallel_identical compares the two).
 	var jobs: Array = []
 	for f in FACES.size():
 		for cx in CHUNKS_PER_EDGE:
 			for cy in CHUNKS_PER_EDGE:
+				var k := 0
 				for tx in range(cx * per, (cx + 1) * per):
 					for ty in range(cy * per, (cy + 1) * per):
-						jobs.append(TileHeights.new(f, tx, ty))
-	var task := WorkerThreadPool.add_group_task(func(k: int) -> void:
-		var jb: TileHeights = jobs[k]
-		jb.h = _tile_heights(FACES[jb.f], jb.tx, jb.ty, tiles), jobs.size(), -1, true, "terrain heights")
-	WorkerThreadPool.wait_for_group_task_completion(task)
+						jobs.append(TileGeometry.new(f, tx, ty, k * (TILE_Q + 1) * (TILE_Q + 1)))
+						k += 1
+	var far := []
+	if parallel_terrain:
+		var task := WorkerThreadPool.add_group_task(func(ji: int) -> void:
+			if ji == jobs.size():
+				far.append(_far_vertices())
+			else:
+				_tile_geometry(jobs[ji], tiles), jobs.size() + 1, -1, true, "terrain tiles")
+		WorkerThreadPool.wait_for_group_task_completion(task)
+	else:
+		for jb in jobs:
+			_tile_geometry(jb, tiles)
+		far.append(_far_vertices())
 	var next := 0
 	for f in FACES.size():
 		for cx in CHUNKS_PER_EDGE:
@@ -461,7 +473,7 @@ func finalize_terrain() -> void:
 				var st_i := PackedInt32Array()
 				for tx in range(cx * per, (cx + 1) * per):
 					for ty in range(cy * per, (cy + 1) * per):
-						_build_tile(FACES[f], tx, ty, tiles, st_v, st_n, st_i, (jobs[next] as TileHeights).h)
+						_add_tile(jobs[next], st_v, st_n, st_i)
 						next += 1
 				var arr := []
 				arr.resize(Mesh.ARRAY_MAX)
@@ -484,39 +496,39 @@ func finalize_terrain() -> void:
 				_chunk_dirs.append(cd)
 				_chunk_ang.append(cd.angle_to(corner) * 1.15)
 	# The far mesh: the whole ball, light (hills and ravines at a coarse spacing).
-	_surface.mesh = _far_mesh()
+	_surface.mesh = _far_mesh(far[0])
 	_surface.visibility_range_begin = radius + FAR_LOD_M
 	_surface.visibility_range_begin_margin = 4.0
 
 
-## One tile's quads into a chunk's arrays; collision for it when it has raised ground.
-## One tile's job for the parallel height pass (finalize_terrain).
-class TileHeights extends RefCounted:
+## Tile geometry on worker threads (finalize_terrain); false builds every tile on the calling
+## thread instead (the reference the parallel build is checked against).
+var parallel_terrain := true
+
+
+## One tile's geometry, computed by _tile_geometry (on a worker thread) and added to its chunk by
+## _add_tile (on the main thread). `base`: the tile's first vertex index within its chunk.
+class TileGeometry extends RefCounted:
 	var f: int
 	var tx: int
 	var ty: int
-	var h: PackedFloat64Array
-	func _init(p_f: int, p_tx: int, p_ty: int) -> void:
+	var base: int
+	var verts: PackedVector3Array
+	var norms: PackedVector3Array
+	var idx: PackedInt32Array
+	## The drawn triangles, for collision; empty when the tile has no raised ground.
+	var faces: PackedVector3Array
+	var max_h := -INF
+	func _init(p_f: int, p_tx: int, p_ty: int, p_base: int) -> void:
 		f = p_f
 		tx = p_tx
 		ty = p_ty
+		base = p_base
 
 
-## A tile's height samples, in _build_tile's order (safe on a worker thread: reads only).
-func _tile_heights(face: Array, tx: int, ty: int, tiles: int) -> PackedFloat64Array:
-	var q := TILE_Q
-	var n := q + 3
-	var out := PackedFloat64Array()
-	out.resize(n * n)
-	for j in n:
-		for i in n:
-			var u := -1.0 + 2.0 * (tx + float(i - 1) / q) / tiles
-			var v := -1.0 + 2.0 * (ty + float(j - 1) / q) / tiles
-			out[j * n + i] = terrain_height(_cube_dir(face, u, v))
-	return out
-
-
-func _build_tile(face: Array, tx: int, ty: int, tiles: int, verts: PackedVector3Array, norms: PackedVector3Array, idx: PackedInt32Array, heights := PackedFloat64Array()) -> void:
+## A tile's quads (safe on a worker thread: reads only the terrain and writes only `jb`).
+func _tile_geometry(jb: TileGeometry, tiles: int) -> void:
+	var face: Array = FACES[jb.f]
 	var q := TILE_Q
 	var n := q + 3   # one sample of border each side, for the normals
 	var pos := PackedVector3Array()
@@ -524,15 +536,16 @@ func _build_tile(face: Array, tx: int, ty: int, tiles: int, verts: PackedVector3
 	var raised := false
 	for j in n:
 		for i in n:
-			var u := -1.0 + 2.0 * (tx + float(i - 1) / q) / tiles
-			var v := -1.0 + 2.0 * (ty + float(j - 1) / q) / tiles
+			var u := -1.0 + 2.0 * (jb.tx + float(i - 1) / q) / tiles
+			var v := -1.0 + 2.0 * (jb.ty + float(j - 1) / q) / tiles
 			var d := _cube_dir(face, u, v)
-			var h := heights[j * n + i] if not heights.is_empty() else terrain_height(d)
-			terrain_max_h = maxf(terrain_max_h, h)
+			var h := terrain_height(d)
+			jb.max_h = maxf(jb.max_h, h)
 			if h > 0.01 and i > 0 and j > 0 and i < n - 1 and j < n - 1:
 				raised = true
 			pos[j * n + i] = d * (radius + h)
-	var base := verts.size()
+	var verts := PackedVector3Array()
+	var norms := PackedVector3Array()
 	for j in range(1, n - 1):
 		for i in range(1, n - 1):
 			var p := pos[j * n + i]
@@ -545,23 +558,37 @@ func _build_tile(face: Array, tx: int, ty: int, tiles: int, verts: PackedVector3
 	# Front faces are clockwise seen from outside: pick the order from the tile's own geometry.
 	var p00 := pos[1 * n + 1]
 	var flip := (pos[1 * n + 2] - p00).cross(pos[2 * n + 1] - p00).dot(p00) > 0.0
+	var idx := PackedInt32Array()
 	var faces := PackedVector3Array()
+	var base := jb.base
 	for j in q:
 		for i in q:
-			var a := base + j * w + i
+			var a := j * w + i
 			var b := a + 1
 			var c := a + w
 			var d := c + 1
 			if flip:
-				idx.append_array([a, c, b, b, c, d])
+				idx.append_array([base + a, base + c, base + b, base + b, base + c, base + d])
 			else:
-				idx.append_array([a, b, c, b, d, c])
+				idx.append_array([base + a, base + b, base + c, base + b, base + d, base + c])
 			if raised:
 				faces.append_array([verts[a], verts[b], verts[c], verts[b], verts[d], verts[c]])
+	jb.verts = verts
+	jb.norms = norms
+	jb.idx = idx
+	jb.faces = faces
+
+
+## Adds a computed tile to its chunk's arrays, with collision when it has raised ground.
+func _add_tile(jb: TileGeometry, verts: PackedVector3Array, norms: PackedVector3Array, idx: PackedInt32Array) -> void:
+	terrain_max_h = maxf(terrain_max_h, jb.max_h)
+	verts.append_array(jb.verts)
+	norms.append_array(jb.norms)
+	idx.append_array(jb.idx)
 	terrain_tile_count += 1
-	if raised:
+	if not jb.faces.is_empty():
 		var shape := ConcavePolygonShape3D.new()
-		shape.set_faces(faces)
+		shape.set_faces(jb.faces)
 		shape.backface_collision = true
 		var cs := CollisionShape3D.new()
 		cs.shape = shape
@@ -617,18 +644,29 @@ func _collect_veg_cull() -> void:
 			_veg_cull_ang.append(float(c.get_meta("chunk_ang", 0.9)))
 
 
-func _far_mesh() -> ArrayMesh:
+## The far mesh's vertices (safe on a worker thread).
+func _far_vertices() -> PackedVector3Array:
 	var seg := 96
 	var rings := 48
 	var verts := PackedVector3Array()
-	var norms := PackedVector3Array()
 	for r in rings + 1:
 		var th := PI * r / rings
 		for sg in seg + 1:
 			var ph := TAU * sg / seg
 			var d := Vector3(sin(th) * cos(ph), cos(th), sin(th) * sin(ph))
 			verts.append(d * (radius + terrain_height(d)))
-			norms.append(d)
+	return verts
+
+
+func _far_mesh(verts: PackedVector3Array) -> ArrayMesh:
+	var seg := 96
+	var rings := 48
+	var norms := PackedVector3Array()
+	for r in rings + 1:
+		var th := PI * r / rings
+		for sg in seg + 1:
+			var ph := TAU * sg / seg
+			norms.append(Vector3(sin(th) * cos(ph), cos(th), sin(th) * sin(ph)))
 	var idx := PackedInt32Array()
 	for r in rings:
 		for sg in seg:

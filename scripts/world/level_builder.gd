@@ -287,8 +287,7 @@ func ladder_stem(stem_xf_: Transform3D, stem_h: float, r0: float, r1: float, ben
 	root.add_child(body)
 	body.global_transform = stem_xf_
 	body.set_meta("floats_by_design", "leaves attached to a stem")
-	var st := MeshLib.leaf_surface()
-	var nv := 0
+	var leaf_xfs := []
 	var out := []
 	var tops := []
 	var leaves := []
@@ -305,7 +304,7 @@ func ladder_stem(stem_xf_: Transform3D, stem_h: float, r0: float, r1: float, ben
 		var r := lerpf(r0, r1, clampf(y / stem_h, 0.0, 1.0))
 		# The leaf's base stands just clear of the stem; its stalk reaches back into it.
 		var local := Transform3D(Basis(Vector3.UP, atan2(dir.x, dir.z) + PI), axis + dir * (r + LEAF_CLEAR))
-		nv = MeshLib._leaf_into(st, local, len, w, true, nv)
+		leaf_xfs.append([local, len, w])
 		for shape in MeshLib.leaf_collision_shapes(len, w):
 			var cs := CollisionShape3D.new()
 			cs.shape = shape
@@ -318,9 +317,14 @@ func ladder_stem(stem_xf_: Transform3D, stem_h: float, r0: float, r1: float, ben
 		tops.append(Levels.leaf_mid(world, minf(1.4, len * 0.5), 0.0).origin)
 	# Each leaf's placement and size, for the footing and route audits: [world xform, length, width].
 	body.set_meta("leaves", leaves)
-	st.generate_normals()
 	var mi := MeshInstance3D.new()
-	mi.mesh = st.commit()
+	mi.mesh = MeshLib._commit(func() -> SurfaceTool:
+		var st := MeshLib.leaf_surface()
+		var nv := 0
+		for lf in leaf_xfs:
+			nv = MeshLib._leaf_into(st, lf[0], lf[1], lf[2], true, nv)
+		st.generate_normals()
+		return st)
 	mi.material_override = leaf_mat
 	mi.visibility_range_end = 140.0
 	body.add_child(mi)
@@ -367,7 +371,8 @@ func stem_xf(xf: Transform3D, height: float, r0: float, r1: float, collide := tr
 	node.global_transform = xf.translated_local(Vector3(0, -0.5, 0))
 	node.set_meta("grounded", "stem")
 	var mi := MeshInstance3D.new()
-	mi.mesh = MeshLib.stem_mesh(r0, r1, height + 0.5, 9, bend)
+	# (Built on a worker thread during a ball's build: MeshLib.deferring.)
+	mi.mesh = MeshLib._commit(func() -> SurfaceTool: return MeshLib.stem_surface(r0, r1, height + 0.5, 9, bend))
 	mi.material_override = stem_mat
 	mi.visibility_range_end = 140.0
 	node.add_child(mi)
