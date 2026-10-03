@@ -2032,6 +2032,73 @@ func _front_faces_out(mesh: ArrayMesh, interior: Callable) -> int:
 	return wrong
 
 
+## Stone pillars (E6f, MeshLib.stone_pillar: stepping stones, the stone field, basalt columns):
+## faces wound and lit outward; a flat top at exactly the design height whose outline clears the
+## old cylinder's radius everywhere (a landing is never smaller); sides steep (over 52 degrees)
+## above the foot and never overhanging (no lip to pull up on); and in the world, every column's
+## and rising stone's collision is exactly its drawn triangles.
+func _check_stone_pillars() -> void:
+	var wrong := 0
+	var lit := 0
+	var top_bad := 0
+	var narrow := 99.0
+	var side_bad := 0
+	for c in [[0.75, 3.1, 7], [0.8, 3.6, 7], [0.95, 1.1, 6], [0.95, 5.5, 6], [1.3, 3.05, 9]]:
+		for sd in [1, 2, 3]:
+			var r: float = c[0]
+			var h: float = c[1]
+			var res := MeshLib.stone_pillar(r, h, 0.6, sd * 7919, c[2])
+			var mesh: ArrayMesh = res[0]
+			wrong += _front_faces_out(mesh, func(cc: Vector3) -> Vector3: return Vector3(0, cc.y - 0.3, 0))
+			lit += _front_faces_out_normals(mesh)
+			var f: PackedVector3Array = res[1]
+			for k in range(0, f.size(), 3):
+				var a := f[k]
+				var bb := f[k + 1]
+				var cc := f[k + 2]
+				var n := (cc - a).cross(bb - a).normalized()
+				var hi := maxf(a.y, maxf(bb.y, cc.y))
+				if absf(n.y - 1.0) < 1e-4:
+					# The flat top: at the design height, and its outer edge never inside `r`.
+					if absf(hi - h) > 1e-4 or absf(minf(a.y, minf(bb.y, cc.y)) - h) > 1e-4:
+						top_bad += 1
+					# (Each top triangle is the centre and one edge of the outline.)
+					var rim: Array[Vector2] = []
+					for v: Vector3 in [a, bb, cc]:
+						if Vector2(v.x, v.z).length() > 1e-4:
+							rim.append(Vector2(v.x, v.z))
+					if rim.size() == 2:
+						var ed := rim[1] - rim[0]
+						narrow = minf(narrow, absf(rim[0].cross(ed)) / maxf(ed.length(), 1e-6) / r)
+				elif minf(a.y, minf(bb.y, cc.y)) >= 0.3 - 1e-4 and (n.y < 0.0 or n.y > cos(deg_to_rad(52.0))):
+					side_bad += 1
+	t.check("stone_pillar_faces_outward", wrong == 0 and lit == 0, "%d inward faces, %d lit inward" % [wrong, lit])
+	t.check("stone_pillar_top_flat_and_full", top_bad == 0 and narrow >= 0.999, "%d top faces off height; narrowest top %.3f x radius" % [top_bad, narrow])
+	t.check("stone_pillar_sides_steep_no_overhang", side_bad == 0, "%d side faces walkable or overhanging" % side_bad)
+	var pillars := 0
+	var mismatch := 0
+	for b in g.balls:
+		for node in (b.get_meta("builder") as LevelBuilder).root.get_children():
+			if not str(node.get_meta("terrain_kind", "")) in ["stone column", "rising stone"]:
+				continue
+			pillars += 1
+			var drawn := PackedVector3Array()
+			var col := PackedVector3Array()
+			for ch in node.get_children():
+				if ch is MeshInstance3D:
+					drawn = (ch as MeshInstance3D).mesh.get_faces()
+				elif ch is CollisionShape3D:
+					col = ((ch as CollisionShape3D).shape as ConcavePolygonShape3D).get_faces()
+			if drawn.size() == 0 or drawn.size() != col.size():
+				mismatch += 1
+				continue
+			for i in drawn.size():
+				if drawn[i].distance_to(col[i]) > 1e-4:
+					mismatch += 1
+					break
+	t.check("stone_pillar_collision_is_drawn_mesh", pillars >= 15 and mismatch == 0, "%d pillars, %d differ" % [pillars, mismatch])
+
+
 func _test_mesh_winding() -> void:
 	var cushion := _front_faces_out(MeshLib.cushion_mesh(1.4, 2.8, 1.5), func(_c: Vector3) -> Vector3: return Vector3(0, 1.0, 0))
 	t.check("cushion_faces_outward", cushion == 0, "%d inward faces" % cushion)
@@ -2040,6 +2107,7 @@ func _test_mesh_winding() -> void:
 	t.check("mound_faces_outward", mound_bad == 0, "%d inward faces" % mound_bad)
 	var stem := _front_faces_out(MeshLib.stem_mesh(0.3, 0.2, 3.0, 9), func(c: Vector3) -> Vector3: return Vector3(0, c.y, 0))
 	t.check("stem_faces_outward", stem == 0, "%d inward faces" % stem)
+	_check_stone_pillars()
 	# Cave: the outside faces out, the inside faces into the cave, the jambs face into the mouth.
 	var cave: Array = MeshLib.cave_mound({"seed": 3})
 	var f: PackedVector3Array = cave[1]
