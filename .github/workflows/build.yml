@@ -16,41 +16,69 @@ env:
   GODOT_BASE: https://github.com/godotengine/godot/releases/download/4.7.2-stable
 
 jobs:
+  # Does the OTA publish workflow already cover this exact commit? Then its full unit + playthrough run IS the
+  # evidence (ota-publish.yml cannot publish a SHA that has not passed them), so this workflow does not repeat
+  # the ~70 minutes of suites on the same SHA:
+  #   - a pull request whose head is one of the authorized publish branches (same repository): ota-publish runs
+  #     on that very push, so only the fast checks run here;
+  #   - any run whose SHA already has a SUCCESSFUL ota-publish run (for example the push to main that lands a
+  #     published commit): covered.
+  # A manual run always runs everything. Anything else (feature-branch PRs, forks, main merges of an unpublished
+  # SHA, a SHA whose publish run failed) runs the full suites.
+  covered:
+    name: Does OTA publish already cover this commit?
+    runs-on: ubuntu-latest
+    permissions:
+      actions: read
+      contents: read
+    outputs:
+      skip: ${{ steps.c.outputs.skip }}
+    steps:
+      - id: c
+        env:
+          GH_TOKEN: ${{ github.token }}
+          EVENT: ${{ github.event_name }}
+          HEAD_REF: ${{ github.event.pull_request.head.ref }}
+          HEAD_REPO: ${{ github.event.pull_request.head.repo.full_name }}
+        run: |
+          SKIP=false
+          if [ "$EVENT" = "workflow_dispatch" ]; then
+            echo "manual run: run everything"
+          else
+            # Keep in sync with the push branches of ota-publish.yml.
+            if [ "$EVENT" = "pull_request" ] && [ "$HEAD_REPO" = "$GITHUB_REPOSITORY" ] && \
+               { [ "$HEAD_REF" = "claude/axolotl-aquarium-platformer-3y0qyy" ] || [ "$HEAD_REF" = "claude/mote-game-continuation-bov2x9" ]; }; then
+              SKIP=true; echo "PR from publish branch $HEAD_REF: ota-publish tests this exact SHA"
+            fi
+            OK=$(gh api "repos/$GITHUB_REPOSITORY/actions/workflows/ota-publish.yml/runs?head_sha=$SOURCE_SHA&status=success&per_page=1" --jq '.total_count' || echo 0)
+            if [ "$OK" != "0" ]; then SKIP=true; echo "a successful ota-publish run exists for $SOURCE_SHA"; fi
+          fi
+          echo "skip=$SKIP" >> $GITHUB_OUTPUT
+          echo "SHA $SOURCE_SHA: skip full suites = $SKIP"
+
+  tests:
+    name: Tests
+    needs: covered
+    uses: ./.github/workflows/tests.yml
+    with:
+      ref: ${{ github.event.pull_request.head.sha || github.sha }}
+      full: ${{ needs.covered.outputs.skip != 'true' }}
+
+  # The stable, single check name (what a branch-protection rule can require). Green only if the tests job
+  # (fast checks always; unit shards + playthrough unless covered) succeeded.
   verify:
     name: Scripts + automated tests (headless)
+    needs: [covered, tests]
+    if: ${{ always() }}
     runs-on: ubuntu-latest
-    timeout-minutes: 60
     steps:
-      - uses: actions/checkout@v4
-        with:
-          ref: ${{ env.SOURCE_SHA }}
-      - name: Install Godot
+      - name: Result
+        env:
+          TESTS: ${{ needs.tests.result }}
+          SKIP: ${{ needs.covered.outputs.skip }}
         run: |
-          curl -sSL -o godot.zip "$GODOT_BASE/Godot_v${GODOT_VERSION}-stable_linux.x86_64.zip"
-          unzip -q godot.zip && mv Godot_v${GODOT_VERSION}-stable_linux.x86_64 /usr/local/bin/godot
-      - name: Import project
-        run: godot --headless --path . --import || true
-      - name: Check every script compiles
-        run: |
-          godot --headless --path . -s tools/check_scripts.gd 2>&1 | tee check.log
-          ! grep -E "Parse Error" check.log
-      - name: Mechanics test suite
-        run: |
-          godot --headless --path . --fixed-fps 60 --max-fps 0 -- --test=unit --out=$PWD/test_out 2>&1 | tee unit.log
-          grep -E "\[TEST\] SUMMARY [0-9]+ passed, 0 failed" unit.log
-      - name: Beginning-to-end playthrough bot
-        run: |
-          godot --headless --path . --fixed-fps 60 --max-fps 0 -- --test=playthrough --out=$PWD/test_out 2>&1 | tee playthrough.log
-          grep -E "\[TEST\] SUMMARY [0-9]+ passed, 0 failed" playthrough.log
-      - name: Version-drift regression (all consumers follow the canonical GAME_VERSION)
-        run: GODOT=godot tools/version_drift_check.sh
-      - name: Native-runtime lock is current
-        run: python3 tools/ota_runtime.py --check
-      - uses: actions/upload-artifact@v4
-        if: always()
-        with:
-          name: test-results
-          path: test_out/
+          echo "tests: $TESTS; full suites skipped (covered by ota-publish on this SHA): $SKIP"
+          [ "$TESTS" = "success" ]
 
   # A new APK is built only when the native layer changes (the owner's rule: game-layer changes
   # ship by OTA; a replacement APK only when native/runtime changes require one). Native layer =

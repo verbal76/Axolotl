@@ -2,7 +2,8 @@ name: OTA publish (dev channel)
 
 # Publishes the game layer as a signed, immutable OTA for the installed Mote app.
 # No APK is built here. Order of evidence:
-#   exact SHA -> runtime gate -> tests -> PCK -> SHA-256/size -> signed manifest
+#   exact SHA -> tests (fast checks, 2 unit shards, playthrough: parallel jobs of tests.yml, on that SHA)
+#   -> runtime gate -> PCK -> SHA-256/size -> signed manifest
 #   -> client-side inspection -> immutable release -> re-download + re-verify
 #   -> channel pointer moved forward -> receipt.
 
@@ -38,19 +39,45 @@ env:
   MOTE_OTA_PUBKEY_DER_SHA256: a003a45ce422325ef1de52958bd9d4d2a06b912ae119c6c7a7f9e40ff2720cf2
 
 jobs:
+  # Resolve the requested ref to ONE full commit SHA. The tests and the publish job both check out that SHA,
+  # never a branch name, so what is published is exactly what passed.
+  resolve:
+    name: Resolve exact SHA
+    runs-on: ubuntu-latest
+    outputs:
+      sha: ${{ steps.r.outputs.sha }}
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          ref: ${{ inputs.ref || github.sha }}
+      - id: r
+        run: echo "sha=$(git rev-parse HEAD)" >> $GITHUB_OUTPUT
+
+  # The release gate: fast checks + both unit shards + the playthrough, in parallel, on the exact SHA.
+  tests:
+    name: Tests
+    needs: resolve
+    uses: ./.github/workflows/tests.yml
+    with:
+      ref: ${{ needs.resolve.outputs.sha }}
+      full: true
+
   publish:
     name: Publish OTA to dev
+    # Runs only when every test job succeeded (a skipped or failed `tests` stops the release).
+    needs: [resolve, tests]
     runs-on: ubuntu-latest
     timeout-minutes: 60
     steps:
       - uses: actions/checkout@v4
         with:
-          ref: ${{ inputs.ref || github.sha }}
+          ref: ${{ needs.resolve.outputs.sha }}
 
       - name: Exact source identity
         id: src
         run: |
           SHA=$(git rev-parse HEAD)
+          test "$SHA" = "${{ needs.resolve.outputs.sha }}"
           echo "sha=$SHA" >> $GITHUB_OUTPUT
           SEQ=${{ github.run_number }}
           ID=$(printf "%s-%06d" "$CHANNEL" "$SEQ")
@@ -80,14 +107,10 @@ jobs:
           echo "game_version=$(jq -r .game_version "$ID")" >> $GITHUB_OUTPUT
           echo "runtime_id=$(jq -r .runtime_id "$ID")" >> $GITHUB_OUTPUT
 
-      - name: Required checks (scripts, mechanics, playthrough)
+      - name: Required checks (scripts compile; mechanics and playthrough passed in the tests job on this exact SHA)
         run: |
           godot --headless --path . -s tools/check_scripts.gd 2>&1 | tee check.log
           if grep -E "Parse Error" check.log; then exit 1; fi
-          godot --headless --path . --fixed-fps 60 --max-fps 0 -- --test=unit --out=$PWD/test_out 2>&1 | tee unit.log
-          grep -E "\[TEST\] SUMMARY [0-9]+ passed, 0 failed" unit.log
-          godot --headless --path . --fixed-fps 60 --max-fps 0 -- --test=playthrough --out=$PWD/test_out 2>&1 | tee playthrough.log
-          grep -E "\[TEST\] SUMMARY [0-9]+ passed, 0 failed" playthrough.log
 
       - name: Signing key
         id: key
