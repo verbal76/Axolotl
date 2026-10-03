@@ -9329,7 +9329,7 @@ func _test_home_coherence() -> void:
 			par = q
 			break
 	if par == null:
-		t.check("home_coherence_setup", false, "no live parasite near Gill on ball %d" % g.balls.find(b))
+		t.check("home_coherence_setup", false, "no live parasite near him on ball %d" % g.balls.find(b))
 		return
 	if par.state == "init":
 		par._init_on_ground()
