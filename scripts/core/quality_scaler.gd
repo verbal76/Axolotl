@@ -34,6 +34,15 @@ func _ready() -> void:
 func _process(dt: float) -> void:
 	if get_tree().paused:
 		return
+	# (The title capped at an even 30 fps (Game._title_pacing) is not a slow frame rate: its frames
+	# are never counted, and a window it interrupts starts again (ledger row 28: the cap used to step
+	# quality down to the lowest level within ~16 s).)
+	if Game.inst != null and Game.inst.title_capped:
+		_acc = 0.0
+		_frames = 0
+		_low_windows = 0
+		_high_windows = 0
+		return
 	_acc += dt
 	_frames += 1
 	_cooldown = maxf(0.0, _cooldown - dt)
