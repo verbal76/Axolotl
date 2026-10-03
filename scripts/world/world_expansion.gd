@@ -783,7 +783,7 @@ static func hollow_grotto(lb: LevelBuilder) -> void:
 		var a := 1.2 * k
 		var bh := 1.1 + 1.1 * k
 		var bd := b.up_at((colxf.call(cos(a) * 2.6, sin(a) * 2.6) as Transform3D).origin)
-		lb.stone_column(bd, 0.95, bh)
+		lb.stone_column(bd, 0.95, bh, 6)
 		bctops.append(b.surface_point(bd, bh))
 	lb.route("basalt columns", (colxf.call(5.4, 0) as Transform3D).origin, bctops, ["columns"], "the highest column")
 	var bct: Vector3 = bctops[4]

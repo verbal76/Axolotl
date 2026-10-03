@@ -198,7 +198,8 @@ const LEAF_FLUTTER := 0.06
 
 static func _materials(lb: LevelBuilder, stem_a: Color, stem_b: Color, leaf_a: Color, leaf_b: Color) -> void:
 	var b := lb.ball
-	lb.stem_mat = b.make_plant_material(stem_a, stem_b)
+	# (Stems and trunks show fibres and grooves up their length, E6f.)
+	lb.stem_mat = b.make_plant_material(stem_a, stem_b, {"bark": 1.0})
 	# (Leaves flap a few centimetres at the tip, each on its own; the stems stay rigid.)
 	# (The climbable leaves take the golden-pothos look, ledger row 15: surface only, the shape
 	# and collision unchanged.)

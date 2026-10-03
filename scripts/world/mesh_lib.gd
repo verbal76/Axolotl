@@ -1031,6 +1031,65 @@ static func mound(radius: float, height: float, sink: float, seed_v: int, radial
 	return [_triangles(faces, uvs), faces]
 
 
+## A natural stone pillar (stepping stones, basalt columns; E6f, replacing a plain cylinder):
+## an irregular prism of `facets` flat faces whose corners are unevenly spaced and set out at
+## slightly different radii, a bevelled rim round a flat top at exactly `height`, sides leaning
+## out a little going down and a short flare into the ground, buried `sink` m below it.
+## The top outline is only ever outward of `radius`, so a landing is never smaller than it was,
+## and the side never steps out (no lip to pull up on). Returns [ArrayMesh, faces]: the collision
+## is exactly the drawn triangles.
+static func stone_pillar(radius: float, height: float, sink: float, seed_v: int, facets := 7) -> Array:
+	var rng := RandomNumberGenerator.new()
+	rng.seed = seed_v
+	var angs: Array[float] = []
+	var rads: Array[float] = []
+	for k in facets:
+		angs.append(TAU * (k + rng.randf_range(-0.12, 0.12)) / facets)
+		rads.append(rng.randf_range(0.0, 0.05))
+	# The corners sit far enough out that even the widest face's midpoint clears `radius`.
+	var gap := 0.0
+	for k in facets:
+		gap = maxf(gap, fposmod(angs[(k + 1) % facets] - angs[k], TAU))
+	var reach := 1.0 / cos(gap * 0.5)
+	# Profile from the buried base up: [scale of the outline, y].
+	var bevel := clampf(radius * 0.15, 0.08, 0.16)
+	var prof := [[1.15, -sink], [1.13, 0.0], [1.1, minf(0.3, height * 0.2)], [1.085, height * 0.55], [1.06, height - bevel], [1.0, height]]
+	var corner := func(k: int, j: int) -> Vector3:
+		var kk := posmod(k, facets)
+		var a: float = angs[kk]
+		var r: float = radius * (1.0 + rads[kk]) * reach * float(prof[j][0])
+		return Vector3(cos(a) * r, float(prof[j][1]), sin(a) * r)
+	var st := SurfaceTool.new()
+	st.begin(Mesh.PRIMITIVE_TRIANGLES)
+	var faces := PackedVector3Array()
+	var tri := func(a: Vector3, b: Vector3, c: Vector3, out: Vector3) -> void:
+		# (Godot front faces wind clockwise seen from outside; the normal is the facet's own, so
+		# each face catches the light flat, like split stone.)
+		var n := (b - a).cross(c - a).normalized()
+		var vs := [a, c, b] if n.dot(out) > 0.0 else [a, b, c]
+		if n.dot(out) < 0.0:
+			n = -n
+		for v: Vector3 in vs:
+			st.set_normal(n)
+			st.set_uv(Vector2(atan2(v.z, v.x) / TAU, v.y / maxf(height, 0.1)))
+			st.add_vertex(v)
+			faces.append(v)
+	for k in facets:
+		for j in prof.size() - 1:
+			var v00: Vector3 = corner.call(k, j)
+			var v01: Vector3 = corner.call(k + 1, j)
+			var v10: Vector3 = corner.call(k, j + 1)
+			var v11: Vector3 = corner.call(k + 1, j + 1)
+			var out := (v00 + v01 + v10 + v11) * 0.25
+			out.y = 0.0
+			tri.call(v00, v11, v10, out)
+			tri.call(v00, v01, v11, out)
+		# The flat top.
+		var top := prof.size() - 1
+		tri.call(Vector3(0, height, 0), corner.call(k, top), corner.call(k + 1, top), Vector3.UP)
+	return [st.commit(), faces]
+
+
 ## Sweeps a cross-section along a path (ridges, arches, bridges). `place(i, x, y)` gives the
 ## position of profile point (x across, y up) at station i (it follows the terrain or the path);
 ## `inside(i)` a point inside the solid at station i, so every triangle is wound to face out.

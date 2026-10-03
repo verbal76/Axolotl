@@ -51,6 +51,10 @@ uniform float pothos = 0.0;
 uniform vec3 pothos_green : source_color = vec3(0.29, 0.56, 0.13);
 uniform vec3 pothos_cream : source_color = vec3(0.94, 0.92, 0.7);
 uniform vec3 pothos_yellow : source_color = vec3(0.86, 0.85, 0.38);
+// Stems and trunks (E6f): shallow ribs running up the stem that catch the light, long lighter
+// and darker streaks, and a darker foot where it rises out of the moss. Needs the stem UVs of
+// MeshLib.stem_mesh (UV.x round it, UV.y = 0.08 per metre up it). 0 = off (leaves, roots).
+uniform float bark = 0.0;
 
 varying float v_health;
 varying float v_leaf;
@@ -109,6 +113,17 @@ float bayer4(vec2 fc) {
 	return (float(m[i]) + 0.5) / 16.0;
 }
 
+// Bump from a height field (surface-gradient bump mapping with screen-space derivatives).
+vec3 bump(vec3 n, vec3 p, float hgt, float amp) {
+	vec3 dpx = dFdx(p);
+	vec3 dpy = dFdy(p);
+	vec3 r1 = cross(dpy, n);
+	vec3 r2 = cross(n, dpx);
+	float det = dot(dpx, r1);
+	vec3 grad = (r1 * dFdx(hgt) + r2 * dFdy(hgt)) * sign(det) / max(abs(det), 1e-8);
+	return normalize(n - grad * amp);
+}
+
 void fragment() {
 	if (cam_fade > 0.0) {
 		float d = length(VERTEX);
@@ -133,6 +148,18 @@ void fragment() {
 	float v = vein * (1.0 - smoothstep(0.0, 0.04, abs(UV.x - 0.5))) ;
 	float side_veins = vein * 0.5 * (1.0 - smoothstep(0.0, 0.1, abs(fract((UV.y + abs(UV.x - 0.5) * 0.8) * 7.0) - 0.5)));
 	alb *= 1.0 + (v + side_veins) * 0.25;
+	if (bark > 0.0) {
+		// Ribs: 24 round the stem (UV.x runs 0..3), wandering with the noise, faded out where they
+		// would be finer than a pixel. Streaks: one extra fetch stretched along the stem.
+		float fib = texture(noise_tex, vec2(UV.x * 1.5, UV.y * 1.2)).g;
+		float ph = UV.x * 50.2655 + (n - 0.5) * 4.0 + (fib - 0.5) * 3.0;
+		float groove = mix(0.5, sin(ph) * 0.5 + 0.5, 1.0 - smoothstep(0.5, 1.5, fwidth(ph)));
+		alb *= mix(1.0, mix(0.8, 1.06, groove) * mix(0.86, 1.1, smoothstep(0.25, 0.75, fib)), bark);
+		alb *= mix(1.0, mix(0.62, 1.0, smoothstep(0.0, 0.09, UV.y)), bark);
+		float near_ = 1.0 - smoothstep(8.0, 26.0, length(VERTEX));
+		vec3 bn = bump(normalize(v_wnorm), v_wpos, groove, 0.02 * bark * near_);
+		NORMAL = normalize((VIEW_MATRIX * vec4(bn, 0.0)).xyz);
+	}
 	alb *= 1.0 - dark;
 	float in_cave = cave_factor(v_wpos);
 	alb *= 1.0 - in_cave * 0.62;

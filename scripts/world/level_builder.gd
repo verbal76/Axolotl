@@ -494,33 +494,15 @@ func ravine(points_ll: Array, width_m: float, depth_m: float, wall_m: float, id:
 
 
 ## A stone column standing straight up from the ground at `dir` to `height` (a stepping stone in a
-## ravine): no skirt, a flat mossy top. Collision is its drawn faces.
-func stone_column(dir: Vector3, radius: float, height: float) -> StaticBody3D:
+## ravine): a weathered prism of `facets` faces (MeshLib.stone_pillar), a flat mossy top at least
+## `radius` across. Collision is its drawn faces.
+func stone_column(dir: Vector3, radius: float, height: float, facets := 7) -> StaticBody3D:
 	var xf := ball.xform_on_dir(dir)
-	var cm := CylinderMesh.new()
-	cm.top_radius = radius
-	cm.bottom_radius = radius * 1.12
-	cm.height = height + 0.6
-	cm.radial_segments = 14
-	cm.rings = 6
 	var body := StaticBody3D.new()
 	body.collision_layer = 1
 	root.add_child(body)
 	body.global_transform = xf
-	var cs := CollisionShape3D.new()
-	var shape := ConcavePolygonShape3D.new()
-	var faces := cm.get_faces()
-	# (Drawn from 0.6 m under the ground to `height`.)
-	for i in faces.size():
-		faces[i] += Vector3(0, cm.height * 0.5 - 0.6, 0)
-	shape.set_faces(faces)
-	cs.shape = shape
-	body.add_child(cs)
-	var mi := MeshInstance3D.new()
-	mi.mesh = cm
-	mi.position = Vector3(0, cm.height * 0.5 - 0.6, 0)
-	mi.material_override = ball.moss_material
-	body.add_child(mi)
+	_pillar_into(body, radius, height, hash(xf.origin.snapped(Vector3.ONE * 0.01)), facets)
 	body.set_meta("top", height)
 	body.set_meta("radius", radius)
 	body.set_meta("grounded", "stone column")
@@ -529,32 +511,29 @@ func stone_column(dir: Vector3, radius: float, height: float) -> StaticBody3D:
 	return body
 
 
+## The drawn stone pillar and its collision (exactly the drawn triangles), from 0.6 m under the
+## ground to `height`.
+func _pillar_into(body: Node3D, radius: float, height: float, seed_v: int, facets: int) -> void:
+	var res := MeshLib.stone_pillar(radius, height, 0.6, seed_v, facets)
+	var cs := CollisionShape3D.new()
+	var shape := ConcavePolygonShape3D.new()
+	shape.set_faces(res[1])
+	cs.shape = shape
+	body.add_child(cs)
+	var mi := MeshInstance3D.new()
+	mi.mesh = res[0]
+	mi.material_override = ball.moss_material
+	body.add_child(mi)
+
+
 ## A stepping stone that rises out of the ground at `dir` to `height` when `zone` heals
-## (RestorationGate "rise": buried until then; it never rises into him). Flat mossy top;
-## collision is its drawn faces.
+## (RestorationGate "rise": buried until then; it never rises into him). A broad stone pillar
+## with a flat mossy top; collision is its drawn faces.
 func rising_stone(zone_id: String, dir: Vector3, radius: float, height: float) -> RestorationGate:
 	var open_xf := ball.xform_on_dir(dir)
 	var closed_xf := open_xf.translated_local(Vector3(0, -height - 0.4, 0))
-	var cm := CylinderMesh.new()
-	cm.top_radius = radius
-	cm.bottom_radius = radius * 1.1
-	cm.height = height + 0.6
-	cm.radial_segments = 14
-	cm.rings = 5
 	var gt := RestorationGate.new()
-	var cs := CollisionShape3D.new()
-	var shape := ConcavePolygonShape3D.new()
-	var faces := cm.get_faces()
-	for i in faces.size():
-		faces[i] += Vector3(0, cm.height * 0.5 - 0.6, 0)
-	shape.set_faces(faces)
-	cs.shape = shape
-	gt.add_child(cs)
-	var mi := MeshInstance3D.new()
-	mi.mesh = cm
-	mi.position = Vector3(0, cm.height * 0.5 - 0.6, 0)
-	mi.material_override = ball.moss_material
-	gt.add_child(mi)
+	_pillar_into(gt, radius, height, hash(open_xf.origin.snapped(Vector3.ONE * 0.01)), 9)
 	gt.setup(ball, zone_id, "rise", closed_xf, open_xf, 2.5)
 	gt.set_meta("top", height)
 	gt.set_meta("top_point", open_xf * Vector3(0, height, 0))

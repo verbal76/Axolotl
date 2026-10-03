@@ -11,6 +11,8 @@ render_mode cull_back, diffuse_lambert, specular_disabled;
 // - Health (restoration) turns the moss from grey to green; the stone only greys a little.
 // - Four noise scales, two fetches each (8 fetches; the proof-of-concept material used 9): macro
 //   variation, the moss/stone boundary and strata, detail, and moss tufts.
+// - Near the camera the same samples also give the surface relief (bump from screen-space
+//   derivatives: no extra fetches), so moss clumps and stone grain catch the light (E6f).
 
 #include "res://shaders/health_field.gdshaderinc"
 #include "res://shaders/aquarium_light.gdshaderinc"
@@ -30,6 +32,9 @@ uniform float sheen = 0.35;
 // How steep a face must be before stone shows (0 = vertical, 1 = flat), and how wide the blend is.
 uniform float moss_slope = 0.5;
 uniform float moss_blend = 0.22;
+// How far the macro layer warps the mid one (m), and the height of the surface relief (m).
+uniform float warp = 8.0;
+uniform float relief = 0.035;
 // Nearby Regeneration Motes (xyz = world position, w = intensity). Cheap fake local light.
 uniform vec4 motes[6];
 uniform int mote_count = 0;
@@ -76,10 +81,11 @@ Biplanar biplanar(vec3 n) {
 	return b;
 }
 
-vec4 tri4(vec3 p, Biplanar b, float sc) {
+// `blur` widens the filter footprint (a coarser mip): 1 = normal.
+vec4 tri4(vec3 p, Biplanar b, float sc, float blur) {
 	vec3 q = p * sc;
-	vec3 dx = dFdx(q);
-	vec3 dy = dFdy(q);
+	vec3 dx = dFdx(q) * blur;
+	vec3 dy = dFdy(q) * blur;
 	vec2 u1 = vec2(q[int(b.ma.y)], q[int(b.ma.z)]);
 	vec2 u2 = vec2(q[int(b.me.y)], q[int(b.me.z)]);
 	vec4 x = textureGrad(noise_tex, u1, vec2(dx[int(b.ma.y)], dx[int(b.ma.z)]), vec2(dy[int(b.ma.y)], dy[int(b.ma.z)]));
@@ -87,17 +93,30 @@ vec4 tri4(vec3 p, Biplanar b, float sc) {
 	return (x * b.w.x + y * b.w.y) / (b.w.x + b.w.y);
 }
 
+// Bump from a height field with no extra texture fetches: the height's screen-space derivatives
+// tilt the normal (surface-gradient bump mapping). `amp` is the relief in metres.
+vec3 bump(vec3 n, vec3 p, float hgt, float amp) {
+	vec3 dpx = dFdx(p);
+	vec3 dpy = dFdy(p);
+	vec3 r1 = cross(dpy, n);
+	vec3 r2 = cross(n, dpx);
+	float det = dot(dpx, r1);
+	vec3 grad = (r1 * dFdx(hgt) + r2 * dFdy(hgt)) * sign(det) / max(abs(det), 1e-8);
+	return normalize(n - grad * amp);
+}
+
 void fragment() {
 	vec3 wn = normalize(v_wnorm);
 	Biplanar bl = biplanar(wn);
 	// (The macro layer on a rotated grid, and the mid layer warped by it: on the big balls these
 	// repeat dozens of times round the circumference, and without this the repeats line up into
-	// stripes seen from afar.)
-	vec4 macro = tri4(vec3(v_wpos.x * 0.6 - v_wpos.z * 0.8, v_wpos.y, v_wpos.x * 0.8 + v_wpos.z * 0.6) + 41.0, bl, tex_scale * 0.18);
-	vec4 mid = tri4(v_wpos + (macro.rgb - 0.5) * 14.0, bl, tex_scale * 0.6);
-	vec4 det = tri4(v_wpos, bl, tex_scale * 2.2);
+	// stripes seen from afar. The macro layer is read from a coarse mip (E6f): its fine grain,
+	// magnified by the warp, smeared the moss into marble swirls and streaks up close.)
+	vec4 macro = tri4(vec3(v_wpos.x * 0.6 - v_wpos.z * 0.8, v_wpos.y, v_wpos.x * 0.8 + v_wpos.z * 0.6) + 41.0, bl, tex_scale * 0.18, 24.0);
+	vec4 mid = tri4(v_wpos + (macro.rgb - 0.5) * warp, bl, tex_scale * 0.6, 1.0);
+	vec4 det = tri4(v_wpos, bl, tex_scale * 2.2, 1.0);
 	// Tufts on a rotated, non-aligned grid, so the fine pattern does not visibly repeat.
-	vec4 tuft = tri4(vec3(v_wpos.x * 0.8 + v_wpos.z * 0.6, v_wpos.y, v_wpos.z * 0.8 - v_wpos.x * 0.6) + 17.0, bl, tex_scale * 13.1);
+	vec4 tuft = tri4(vec3(v_wpos.x * 0.8 + v_wpos.z * 0.6, v_wpos.y, v_wpos.z * 0.8 - v_wpos.x * 0.6) + 17.0, bl, tex_scale * 13.1, 1.0);
 
 	// Where moss grows: faces turned away from the ball, broken up at mid scale, plus patches
 	// and drips on steep faces; caves are mostly bare.
@@ -117,15 +136,20 @@ void fragment() {
 	float crack = smoothstep(0.86, 0.95, mid.g) * (1.0 - h);
 	dead *= 1.0 - crack * 0.55;
 	vec3 moss = mix(dead, healthy, h);
-	// Tufts: a soft fine grain of brighter clumps and darker gaps.
-	moss *= mix(0.86, 1.08, tuft.r) * mix(0.9, 1.06, det.g);
+	// Cushions of moss (E6f; owner reference: a sprouted moss ball): clumps a few centimetres
+	// across on lumps a hand wide, shaded gaps between them, and paler tips on the tallest strands.
+	float clump = tuft.r * 0.65 + det.g * 0.35;
+	moss *= mix(0.68, 1.1, smoothstep(0.22, 0.78, clump));
+	moss = mix(moss, moss * vec3(1.12, 1.12, 0.86) + vec3(0.02, 0.025, 0.0), smoothstep(0.62, 0.86, tuft.r) * 0.5 * h);
 
 	// Earth and stone: faint strata following the ball's layers, grains and dark seams.
 	float alt = length(v_wpos - ball_center);
 	float strata = sin(alt * 4.0 + (mid.g - 0.5) * 9.0 + (macro.b - 0.5) * 6.0) * 0.5 + 0.5;
-	vec3 stone = mix(stone_a, stone_b, smoothstep(0.1, 1.0, strata * 0.4 + det.r * 0.6 + tuft.b * 0.2));
+	float grain = strata * 0.4 + det.r * 0.6 + tuft.b * 0.2;
+	vec3 stone = mix(stone_a, stone_b, smoothstep(0.1, 1.0, grain));
 	stone *= mix(0.8, 1.08, tuft.g);
-	stone *= 1.0 - smoothstep(0.78, 0.92, det.b) * 0.45;
+	float seam = smoothstep(0.78, 0.92, det.b);
+	stone *= 1.0 - seam * 0.45;
 	// Stone near sick moss is a little greyer.
 	stone = mix(stone, vec3(dot(stone, vec3(0.33))), (1.0 - h) * 0.2);
 
@@ -137,6 +161,13 @@ void fragment() {
 	ALBEDO = alb;
 	ROUGHNESS = 1.0;
 	float fres = pow(1.0 - clamp(dot(NORMAL, VIEW), 0.0, 1.0), 2.2);
+	// Relief (E6f): the moss clumps, and the stone's grain, strata and sunken seams, catch the
+	// light. Faded out with distance, where it would only shimmer. (No branch round it: screen-space
+	// derivatives are undefined in divergent control flow.)
+	float near_ = 1.0 - smoothstep(10.0, 32.0, length(VERTEX));
+	float hgt = mix(grain * 0.7 + tuft.g * 0.3 - seam * 0.6, clump * 1.3, cover);
+	vec3 bn = bump(wn, v_wpos, hgt, relief * near_);
+	NORMAL = normalize((VIEW_MATRIX * vec4(bn, 0.0)).xyz);
 	vec3 em = healthy_b * fres * sheen * h * 0.5 * cover;
 	vec3 glow = vec3(0.0);
 	for (int i = 0; i < mote_count; i++) {
