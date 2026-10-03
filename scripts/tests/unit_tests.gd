@@ -31,7 +31,9 @@ func run(runner) -> void:
 		if picked:
 			# A test that stops on a script error reports nothing; count that as a failure.
 			var before: int = t.results.size()
+			var started := Time.get_ticks_msec()
 			await call(name_)
+			print("[TIME] %s %d" % [name_, Time.get_ticks_msec() - started])
 			if t.results.size() == before:
 				t.check("test_completed:" + name_, false, "reported no checks (stopped on a script error?)")
 
