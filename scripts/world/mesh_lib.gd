@@ -63,6 +63,22 @@ static func finish_deferred() -> void:
 	_deferred.clear()
 
 
+## A mesh of plain triangles, `verts` in order, each with its UV (`uvs`, or (0, its height) when
+## none are given), normals generated: what adding each to a SurfaceTool (set_uv, add_vertex), then
+## generate_normals() and commit() makes. Deferred like _commit.
+static func _triangles(verts: PackedVector3Array, uvs := PackedVector2Array()) -> ArrayMesh:
+	var vs := verts.duplicate()
+	var us := uvs.duplicate()
+	return _commit(func() -> SurfaceTool:
+		var st := SurfaceTool.new()
+		st.begin(Mesh.PRIMITIVE_TRIANGLES)
+		for k in vs.size():
+			st.set_uv(us[k] if not us.is_empty() else Vector2(0.0, vs[k].y))
+			st.add_vertex(vs[k])
+		st.generate_normals()
+		return st)
+
+
 ## A tapered, slightly curved grass blade standing on +Y.
 static func blade(st: SurfaceTool, xf: Transform3D, width: float, height: float, segs: int, curve: float, tint: Color) -> void:
 	var prev_l := Vector3.ZERO
@@ -971,9 +987,8 @@ static func mound(radius: float, height: float, sink: float, seed_v: int, radial
 		var a := PI * 0.5 * i / 5.0
 		prof.append([radius - r_edge + cos(a) * r_edge, height - r_edge + sin(a) * r_edge, 1.0 - float(i) / 5.0])
 	prof.append([0.0, height + 0.05, 0.0])
-	var st := SurfaceTool.new()
-	st.begin(Mesh.PRIMITIVE_TRIANGLES)
 	var faces := PackedVector3Array()
+	var uvs := PackedVector2Array()
 	var ring := func(j: int, s: int) -> Vector3:
 		var pr: Array = prof[j]
 		var a := TAU * s / radial
@@ -989,19 +1004,24 @@ static func mound(radius: float, height: float, sink: float, seed_v: int, radial
 			var gy: float = ground.call(d.x * r, d.z * r)
 			y += gy * (1.0 - clampf(y / wall_top, 0.0, 1.0))
 		return Vector3(d.x * r, y, d.z * r)
+	# (Each grid point is worked out once, the first time a quad needs it: four quads share it.)
+	var pts := {}
+	var point := func(j: int, s: int) -> Vector3:
+		var k := j * (radial + 1) + s
+		if not pts.has(k):
+			pts[k] = ring.call(j, s)
+		return pts[k]
 	for s in radial:
 		for j in prof.size() - 1:
-			var v00: Vector3 = ring.call(j, s)
-			var v01: Vector3 = ring.call(j, s + 1)
-			var v10: Vector3 = ring.call(j + 1, s)
-			var v11: Vector3 = ring.call(j + 1, s + 1)
+			var v00: Vector3 = point.call(j, s)
+			var v01: Vector3 = point.call(j, s + 1)
+			var v10: Vector3 = point.call(j + 1, s)
+			var v11: Vector3 = point.call(j + 1, s + 1)
 			# Godot front faces wind clockwise seen from outside.
 			for v in [v00, v11, v10, v00, v01, v11]:
-				st.set_uv(Vector2(float(s) / radial, (v as Vector3).y / height))
-				st.add_vertex(v)
+				uvs.append(Vector2(float(s) / radial, (v as Vector3).y / height))
 				faces.append(v)
-	st.generate_normals()
-	return [st.commit(), faces]
+	return [_triangles(faces, uvs), faces]
 
 
 ## Sweeps a cross-section along a path (ridges, arches, bridges). `place(i, x, y)` gives the
@@ -1010,8 +1030,6 @@ static func mound(radius: float, height: float, sink: float, seed_v: int, radial
 ## `profile` runs across the section; `closed` joins its last point back to its first (a tube).
 ## Returns [ArrayMesh, faces]: the collision is exactly the drawn triangles.
 static func sweep(stations: int, profile: PackedVector2Array, closed: bool, place: Callable, inside: Callable) -> Array:
-	var st := SurfaceTool.new()
-	st.begin(Mesh.PRIMITIVE_TRIANGLES)
 	var faces := PackedVector3Array()
 	var rows := []
 	for i in stations:
@@ -1039,11 +1057,8 @@ static func sweep(stations: int, profile: PackedVector2Array, closed: bool, plac
 					bb = c
 					c = tmp
 				for v in [a, bb, c]:
-					st.set_uv(Vector2(0.0, v.y))
-					st.add_vertex(v)
 					faces.append(v)
-	st.generate_normals()
-	return [st.commit(), faces]
+	return [_triangles(faces), faces]
 
 
 ## Cross-section of a ridge (x across, y up, at full height 1.0): a flat crest `crest` wide, a
@@ -1102,10 +1117,8 @@ static func shelf(r_top: float, r_stem: float, height: float, sink: float, seed_
 	prof.append([r_top - 0.25, height])
 	prof.append([0.0, height + 0.04])
 	var radial := 26
-	var st := SurfaceTool.new()
-	st.begin(Mesh.PRIMITIVE_TRIANGLES)
 	var faces := PackedVector3Array()
-	var pt := func(j: int, s: int) -> Vector3:
+	var pt0 := func(j: int, s: int) -> Vector3:
 		var a := TAU * s / radial
 		var d := Vector3(cos(a), 0.0, sin(a))
 		var r: float = prof[j][0] * (1.0 + absf(noise.get_noise_2d(cos(a) * 1.3, sin(a) * 1.3)) * 0.14)
@@ -1113,6 +1126,13 @@ static func shelf(r_top: float, r_stem: float, height: float, sink: float, seed_
 		if ground.is_valid() and y < 1.0:
 			y += float(ground.call(d.x * r, d.z * r)) * (1.0 - clampf(y, 0.0, 1.0))
 		return Vector3(d.x * r, y, d.z * r)
+	# (Each grid point is worked out once, the first time a quad needs it: four quads share it.)
+	var pts := {}
+	var pt := func(j: int, s: int) -> Vector3:
+		var k := j * (radial + 1) + s
+		if not pts.has(k):
+			pts[k] = pt0.call(j, s)
+		return pts[k]
 	for s in radial:
 		for j in prof.size() - 1:
 			var v00: Vector3 = pt.call(j, s)
@@ -1134,11 +1154,8 @@ static func shelf(r_top: float, r_stem: float, height: float, sink: float, seed_
 					bb = c
 					c = tmp
 				for v in [a, bb, c]:
-					st.set_uv(Vector2(0.0, v.y))
-					st.add_vertex(v)
 					faces.append(v)
-	st.generate_normals()
-	return [st.commit(), faces]
+	return [_triangles(faces), faces]
 
 
 ## Collision hull points for a cushion (convex).
@@ -1313,13 +1330,9 @@ static func cave_mound(p: Dictionary) -> Array:
 				ring[cols] = ring[0]
 			grid.append(ring)
 		surfaces.append(grid)
-	var st := SurfaceTool.new()
-	st.begin(Mesh.PRIMITIVE_TRIANGLES)
 	var faces := PackedVector3Array()
 	var tri := func(a: Vector3, b: Vector3, c: Vector3) -> void:
 		for v in [a, b, c]:
-			st.set_uv(Vector2(0.0, v.y))
-			st.add_vertex(v)
 			faces.append(v)
 	var counts := []
 	for layer in [0, 1]:
@@ -1365,9 +1378,8 @@ static func cave_mound(p: Dictionary) -> Array:
 				else:
 					tri.call(p00, p11, p10)
 					tri.call(p00, p01, p11)
-	st.generate_normals()
 	# Triangle index where each part starts: outer, inner, jambs (for tests).
-	return [st.commit(), faces, {"inner": counts[1], "jamb": counts[2], "total": faces.size() / 3, "outline": outline,
+	return [_triangles(faces), faces, {"inner": counts[1], "jamb": counts[2], "total": faces.size() / 3, "outline": outline,
 			"interior_radius": ri, "wall_h": wall_h, "door_w": dw, "door_h": dh}]
 
 
