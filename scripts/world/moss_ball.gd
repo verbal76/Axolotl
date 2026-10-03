@@ -115,6 +115,7 @@ func setup(p_index: int, p_radius: float, p_palette: Dictionary) -> void:
 	_veg_parent = Node3D.new()
 	_veg_parent.name = "Vegetation"
 	add_child(_veg_parent)
+	_veg_parent.child_order_changed.connect(func() -> void: _veg_cull_dirty = true)
 
 
 # --- Materials ---------------------------------------------------------------------------
@@ -589,10 +590,31 @@ func update_visibility(cam_pos: Vector3) -> void:
 		terrain_chunks[i].visible = vis
 		if not vis:
 			chunks_hidden += 1
+	if _veg_cull_dirty:
+		_collect_veg_cull()
+	for i in _veg_cull.size():
+		_veg_cull[i].visible = cam_dir.angle_to(_veg_cull_dir[i]) < horizon + _veg_cull_ang[i]
+
+
+## The tagged vegetation chunks with their directions and spreads, gathered once and again only
+## when the vegetation's children change (perf 2026-10-02: reading two metas off ~2500 nodes on
+## every pass was a 3.5 ms spike four times a second).
+var _veg_cull: Array[Node3D] = []
+var _veg_cull_dir: Array[Vector3] = []
+var _veg_cull_ang: Array[float] = []
+var _veg_cull_dirty := true
+
+
+func _collect_veg_cull() -> void:
+	_veg_cull_dirty = false
+	_veg_cull.clear()
+	_veg_cull_dir.clear()
+	_veg_cull_ang.clear()
 	for c in _veg_parent.get_children():
 		if c is Node3D and c.has_meta("chunk_dir"):
-			var vis2: bool = cam_dir.angle_to(c.get_meta("chunk_dir")) < horizon + float(c.get_meta("chunk_ang", 0.9))
-			(c as Node3D).visible = vis2
+			_veg_cull.append(c)
+			_veg_cull_dir.append(c.get_meta("chunk_dir"))
+			_veg_cull_ang.append(float(c.get_meta("chunk_ang", 0.9)))
 
 
 func _far_mesh() -> ArrayMesh:
