@@ -30,6 +30,12 @@ app start -> Boot mounts the newest VERIFIED package already on the device (no n
 - **When:** once per launch (after boot health); again when the app returns to the foreground if the
   last automatic attempt was at least 15 minutes ago; and every 60 minutes while it keeps running.
   Failed attempts count, so an offline phone is not hammered. `Boot.auto_check_due()` holds the policy.
+- **Resume gap on the wall clock (game layer, 2026-10-03).** r5 measures the 15-minute resume gap on
+  the engine clock, which stops while the phone sleeps, so a return to the app after a night in the
+  pocket usually counted as "too soon". `AutoUpdate._resume_check()` applies the same gap to the time of
+  the last recorded check (`state.json` event `check`, any outcome) on the wall clock, runs only when the
+  native check did not (never two at once), and tells the native policy it ran. The engine-clock
+  *periodic* hourly check is unchanged (native). See `docs/HOT_ATTIC_INFRA.md` for the full lifecycle audit.
 - **Never while** the game is starting, in baseline mode (OTA disabled), or when a check is already running.
 - **Non-blocking:** requests are polled from the main loop (DNS, TLS and reads are non-blocking);
   15 s timeout for the pointer and manifest, 15 min for the package. Godot 4.7.2's *threaded*

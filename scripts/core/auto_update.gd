@@ -271,6 +271,37 @@ func _notification(what: int) -> void:
 	if what == NOTIFICATION_APPLICATION_RESUMED or what == NOTIFICATION_APPLICATION_FOCUS_IN:
 		_resume_due = true
 		_resume_left = RESUME_WINDOW_S
+		_resume_check.call_deferred()
+
+
+## Whether a return to the app should check the channel, by the WALL clock: the last check (any
+## outcome; `last_check_iso` from the native event log, "" when none) is at least `gap_s` ago, or
+## the clock went backwards. Pure (unit-tested).
+static func resume_check_due(now_unix: float, last_check_iso: String, gap_s: int) -> bool:
+	if last_check_iso == "":
+		return true
+	var t := Time.get_unix_time_from_datetime_string(last_check_iso.trim_suffix("Z"))
+	if t <= 0:
+		return true
+	return now_unix - t >= gap_s or now_unix < t - 60.0
+
+
+## The native resume check (r5 Boot.auto_check) measures its 15-minute gap on the engine clock,
+## which stops while the phone sleeps: back in the app after a night in the pocket, it usually
+## decided "too soon" and the update waited for the hourly check. Same gap and the same rules,
+## measured on the wall clock; it never runs alongside a native check (busy) and tells the native
+## policy it ran, so the two never double up.
+func _resume_check() -> void:
+	if _off() != "" or _has_flag(OS.get_cmdline_user_args(), "--ota-no-autocheck"):
+		return
+	if not Boot.healthy or Boot.updater.busy or Boot.core.state["disabled"]:
+		return
+	var last: Dictionary = (Boot.core.state["events"] as Dictionary).get("check", {})
+	if not resume_check_due(Time.get_unix_time_from_system(), str(last.get("time", "")), Boot.AUTO_CHECK_MIN_GAP_S):
+		return
+	Boot.set("_last_auto_check_ms", Time.get_ticks_msec())
+	print("[AUTOUPDATE] resume check (wall clock: last check %s)" % str(last.get("time", "never")))
+	Boot.updater.check(true)
 
 
 func _process(dt: float) -> void:
