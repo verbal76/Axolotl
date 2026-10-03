@@ -25,6 +25,9 @@ func _toggle(nodes: Array, on: bool) -> void:
 func run(runner) -> void:
 	t = runner
 	var mode := str(Settings.test_args.get("perf", "balls"))
+	if mode == "gamesteps":
+		await _game_steps()
+		return
 	if mode == "render":
 		await _render_split()
 		return
@@ -257,6 +260,38 @@ func _probe() -> void:
 	for b in g.balls:
 		t.log_line("PROBE ball %d: %d terrain chunks, %d veg children, %d field materials, %d veg materials, %d blooms, %d motes" % [b.index,
 				b.terrain_chunks.size(), b._veg_parent.get_child_count(), b.field_materials.size(), b.veg_materials.size(), b.blooms.size(), b.motes.size()])
+
+
+## Game's own per-frame steps in play, timed one by one (`--perf=gamesteps`; medians of 60 calls).
+func _game_steps() -> void:
+	var g: Game = t.g
+	await t.seconds(2.0)
+	var dt := 1.0 / 60.0
+	var steps := {
+		"check_blooms": func(): g._check_blooms(),
+		"check_shrines": func(): g._check_shrines(),
+		"check_vortex_entry": func(): g._check_vortex_entry(),
+		"update_tutorial": func(): g._update_tutorial(dt),
+		"check_vortex_connections": func(): g._check_vortex_connections(),
+		"update_restoration": func(): g._update_restoration(dt),
+		"update_mote_lights": func(): g._update_mote_lights(),
+		"update_food": func(): g._update_food(dt),
+		"update_hints": func(): g._update_hints(dt),
+		"update_all_clear": func(): g._update_all_clear(dt),
+		"resume_position": func(): g._resume_position(),
+		"clock_tick": func(): g.clock.tick(dt, true),
+		"autosave": func(): g._autosave(dt),
+	}
+	for k in steps:
+		var per: Array = []
+		for rep in 60:
+			if rep % 10 == 0:
+				await t.get_tree().process_frame
+			var t0 := Time.get_ticks_usec()
+			steps[k].call()
+			per.append((Time.get_ticks_usec() - t0) / 1000.0)
+		per.sort()
+		t.log_line("PROBE game %-26s %.3f ms (p90 %.3f)" % [k, per[30], per[54]])
 
 
 ## MossBall.update_visibility before ledger row 28 (for the probe's before/after).
