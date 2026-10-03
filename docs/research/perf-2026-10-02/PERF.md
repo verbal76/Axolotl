@@ -60,13 +60,16 @@ spike every 8th frame (+0.8–1.3 ms; no script has that cadence).
    the pass and the visibility changes it sends to the renderer no longer land on one frame: the
    0.25 s spike (1.9 ms whole tank) becomes at most one ball's pass (0.11 ms with nothing changing).
 
+3. **The capped title no longer lowers quality** (defect fix, `quality_scaler.gd`, coordinator
+   2026-10-03). When the title capped itself at 30 fps, QualityScaler read 30 < 54 fps as "slow" and
+   stepped quality down to the lowest level within ~16 s (scale 0.7, no shadows, no glow, 45 %
+   vegetation); back in play it climbed back one level per >= 30 s of > 59 fps (+20 s cooldowns).
+   Frames under the cap (`Game.title_capped`) are no longer counted and an interrupted window starts
+   again. `quality_ignores_title_cap`: 30 s of capped 30 fps frames keep level 0; the same 30 s
+   uncapped (genuinely slow) still step down (to level 3).
+
 ## 3. Found, not changed (need an owner decision, a shader-stream change, or are native)
 
-- **QualityScaler vs the title's 30 fps cap.** When the title caps itself at 30 fps, QualityScaler
-  reads 30 < 54 fps as "slow" and steps quality down to the lowest level within ~16 s (scale 0.7,
-  no shadows, no glow, 45 % vegetation); back in play it climbs back one level per ≥ 30 s of > 59 fps
-  (+20 s cooldowns). Proposed: skip scaler windows while `Game.title_capped` (or judge against
-  `Engine.max_fps`). Changes what the owner sees after the title, so not done unasked.
 - **Live world behind the title** (~3 ms of the 4.7 ms script frame: parasite AI, motes, blooms,
   food). Sleeping it keeps exact state but freezes the creatures visible round him on the title.
   Design decision.
