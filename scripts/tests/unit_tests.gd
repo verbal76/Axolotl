@@ -7,6 +7,32 @@ var g: Game
 var p: Axolotl
 
 
+## --shard=1/2 and --shard=2/2 split the suite across two processes (two CI jobs, or two cores). Shard 1 is
+## this list (about 23 minutes of the ~46 minute run); shard 2 is every other _test_ in registry order, so a
+## new test is never dropped (it lands on shard 2; move it here to rebalance, using the [TIME] lines).
+## ORDER DEPENDENCE: _test_parasite_combat -> _test_organic_motion -> ... -> _test_all_clear ->
+## _test_treasure_* must run together and in registry order (organic_motion needs the parasites combat
+## leaves; the treasure tests need the worlds all_clear heals), so they all live on shard 1.
+## _phase_* tests belong to no shard: they run only when named by --only.
+const SHARD_ONE := [
+	"_test_ota_and_version", "_test_terrain", "_test_view_clearances", "_test_camera_rises_over", "_test_title_safe",
+	"_test_home_coherence", "_test_no_floating_platforms", "_test_parasite_locomotion", "_test_parasite_body_and_death",
+	"_test_parasite_combat", "_test_organic_motion", "_test_gill_look", "_test_gill_idles", "_test_gill_patterns",
+	"_test_gill_traction", "_test_gill_incline_transitions", "_test_traction_no_shortcuts", "_test_tutorial_route",
+	"_test_sphere_walk", "_test_coyote_and_buffer", "_test_swipe_direction_and_stages", "_test_hard_landing",
+	"_test_food_reach", "_test_darter_and_burrower", "_test_motes", "_test_vortex", "_test_vortex_tints",
+	"_test_vortex_currents", "_test_vortex_currents_travel", "_test_current", "_test_canopy", "_test_caves",
+	"_test_route_audit", "_test_new_areas", "_test_ecosystem", "_test_music", "_test_completion_frozen",
+	"_test_run_save_file", "_test_timer_integrity", "_test_resume_points_safe", "_test_ui", "_test_menus_no_scroll",
+	"_test_ambient_fish", "_test_parasite_never_buried", "_test_aquarium_experiences", "_test_all_clear",
+	"_test_treasure_unlock", "_test_treasure_generation", "_test_treasure_play", "_test_progress_store",
+	"_test_starfish_pickup", "_test_quick_gill", "_test_burst_skills", "_test_glide_transfers", "_test_sea_fan_depth",
+	"_test_aquarium_gill", "_test_onb_per_run", "_test_onb_toggle", "_test_onb_intro", "_test_onb_feed_first",
+	"_test_onb_starfish", "_test_onb_restoration_equal", "_test_hard_mode", "_test_leaf_motion",
+	"_test_camera_never_drawn_unsafe",
+]
+
+
 func run(runner) -> void:
 	t = runner
 	g = t.g
@@ -24,6 +50,16 @@ func run(runner) -> void:
 	for o in only.split(",", false):
 		if not registry.has(o) and not registry.has("_test_" + o):
 			t.check("only_names_a_test:" + o, false, "--only is an exact test name (the _test_ prefix is optional)")
+	# --shard=K/N (N = 2): a slice of the default list. An explicit --only wins over --shard.
+	var shard := 0
+	var shard_arg: String = Settings.test_args.get("shard", "")
+	if shard_arg != "" and only == "":
+		var parts := shard_arg.split("/")
+		shard = int(parts[0]) if parts.size() == 2 and parts[1] == "2" and parts[0] in ["1", "2"] else -1
+		if shard < 0:
+			t.check("shard_arg_valid", false, "--shard=1/2 or --shard=2/2, not " + shard_arg)
+			return
+		print("[SHARD] %d/2" % shard)
 	for name_ in registry:
 		# "_phase_*" tests are halves of a relaunch test: they run only when asked for by name
 		# (in a child process started by _test_run_continue).
@@ -33,6 +69,8 @@ func run(runner) -> void:
 		# --only names tests EXACTLY ("_test_food" no longer also runs "_test_food_reach"); the "_test_"
 		# prefix may be left off (--only=food,vortex).
 		var picked := only == ""
+		if shard > 0 and name_.begins_with("_test_"):
+			picked = SHARD_ONE.has(name_) == (shard == 1)
 		for o in only.split(",", false):
 			picked = picked or name_ == o or name_ == "_test_" + o
 		if picked:
