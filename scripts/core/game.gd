@@ -125,6 +125,9 @@ func _ready() -> void:
 	visible = false
 	loading = LoadingScreen.new()
 	add_child(loading)
+	# Hot Attic Games studio splash over the loading screen on a genuine launch (skipped while
+	# the canonical logo is not in the build); the world builds behind it.
+	StudioSplash.maybe_show(self, Settings.test_mode, not AutoUpdate.soft_restarted().is_empty())
 	diagnostics = DiagnosticsPage.new()
 	add_child(diagnostics)
 	frame_stats = FrameStats.new()

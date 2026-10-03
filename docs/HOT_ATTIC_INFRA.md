@@ -106,3 +106,74 @@ Tests: `hag_app_info_package_and_play_rules`, `hag_report_has_every_field`,
 ≥ 56 px, apart, row fits with Install showing, no scroll until Technical), `hag_about_technical_and_copy`;
 existing `diagnostics_page_simple`, `settings_fits_landscape_no_scroll`. Screenshots:
 `tests/shots.gd --only=about`.
+
+## 4. Hot Attic Games studio splash
+
+`scripts/ui/studio_splash.gd` (`StudioSplash`), started from `Game._ready` right after Mote's loading
+screen is added. Black background, the canonical logo `res://branding/Hot_Attic_Games_Master_Logo.png`
+centred and contain-fitted (aspect kept, 12 % margin), 1.25 s + 0.25 s fade (wall clock from its first
+frame), silent, input blocked, layer 102 over the loading screen. The world builds behind it (stages
+run one per frame as before: it delays nothing and needs no network).
+
+- **Genuine launch only:** decided once per process (Engine metadata `hag_studio_splash`, which
+  survives scene reloads and soft restarts), so Return to Title / New Run (`reload_current_scene`) and
+  an in-process update never show it; an in-process update from an older version (no metadata yet) is
+  also excluded (`AutoUpdate.soft_restarted()`). Automated test runs skip it.
+- **Asset: CANONICAL HOT ATTIC GAMES ASSET MISSING.** `branding/Hot_Attic_Games_Master_Logo.png` is not in
+  the repository (checked 2026-10-03: no file, no history, nothing on disk). The splash is therefore
+  skipped entirely (no placeholder art); the startup timeline records "game: studio splash skipped:
+  CANONICAL HOT ATTIC GAMES ASSET MISSING (…)". Adding the PNG at that path (and committing its
+  `.import`) turns the splash on in the next OTA — no code change.
+- **OTA-safe vs native:** this splash is game layer (OTA-safe). The **engine boot splash** before it
+  (`boot_splash/*` in `project.godot`: Mote teal + axolotl art) is native, shown by the APK before any
+  game code, and unchanged. A studio logo *there* needs the next APK (proposal N5). Launch order today:
+  engine boot splash → [studio splash, when the logo exists] → Mote loading screen → title.
+- Tests: `hag_splash_genuine_launch_and_asset_rules`, `hag_splash_skipped_when_logo_missing`,
+  `hag_splash_black_centred_contain_fit`, `hag_splash_once_per_launch_about_1_5_s`.
+
+## 5. Android / Google Play audit (2026-10-03)
+
+| Fact | Value | Status / how determined |
+|---|---|---|
+| Package id | `com.verbal76.axolotl` (established on installed devices; **not renamed**) | VERIFIED: `export_presets.cfg` `package/unique_name`; CI asserts it with `aapt dump badging` |
+| versionName | `0.1.0` (`version/name`; equals `GameVersion.GAME_VERSION`, CI checks) | VERIFIED: preset + `build.yml` badging check |
+| versionCode | GitHub Actions `run_number` written into the preset at export (installed: 22); preset file holds `1` | VERIFIED: `build.yml` "Export the Mote APK" |
+| min SDK | 24 | VERIFIED: preset sets none → Godot 4.7.2 default; template `config.gradle` `minSdk: 24` and the template APK's binary manifest `minSdkVersion=24` |
+| target SDK | **36** | VERIFIED (build config): preset sets no `gradle_build/target_sdk` → Godot 4.7.2 default `DEFAULT_TARGET_SDK_VERSION`; template `config.gradle` `targetSdk: 36` (comment: "Also update export_plugin.cpp#DEFAULT_TARGET_SDK_VERSION") and both template APKs' manifests `targetSdkVersion=36`. Not read from an installed APK (the runtime does not expose it) |
+| compile SDK | 36 | VERIFIED: template `compileSdk: 36`, manifest `compileSdkVersion=36` |
+| Play required target API | 36 for new apps and updates from 2026-08-31 (extension to 2026-11-01 on request) | VERIFIED: developer.android.com/google/play/requirements/target-sdk, fetched 2026-10-03 (support.google.com answer 11926878 was unreachable from here) |
+| PLAY API COMPLIANT | **YES** by build configuration (36 ≥ 36); **UNVERIFIED** at runtime | the About page says UNVERIFIED because the running app cannot read its own target SDK in r5 |
+| ABIs | arm64-v8a only | VERIFIED: preset |
+| Gradle build | off (`gradle_build/use_gradle_build=false`: prebuilt template APK) | VERIFIED: preset |
+| APK / AAB | APK only. AAB needs Godot's Gradle build (`use_gradle_build=true`, export format AAB) | Godot's Android exporter only produces AAB with the Gradle build enabled (engine behaviour, from the engine's export options; not re-run here); Play requires AAB for new apps since Aug 2021 (developer.android.com/guide/app-bundle, fetched). **Class B** (native) |
+| Export type | **debug template** (`--export-debug`) → `android:debuggable="true"` | VERIFIED: `build.yml`; template `android_debug.apk` manifest has `debuggable=true`. Google Play Console rejects debuggable uploads (UNVERIFIED by fetch; long-standing Play Console rule). **Class B** |
+| Signing | APK signed with the stable Mote keystore from GitHub secrets (`MOTE_ANDROID_DEV_KEYSTORE_B64`, `…_PASSWORD`, `…_KEY_ALIAS`, `…_KEY_PASSWORD`), passed as Godot's *debug* keystore; CI verifies with `apksigner` and pins the certificate SHA-256 (`MOTE_DEV_CERT_SHA256`). OTA packs: separate key (`MOTE_OTA_SIGNING_KEY` secret; public half pinned in `ota_config.gd`). Play App Signing / upload key: not set up | VERIFIED from workflows (no secret values read or printed) |
+| Permissions | `INTERNET` (OTA), `VIBRATE` (haptics, `Input.vibrate_handheld`); all others off | VERIFIED: preset (`permissions/*=true` only these two); CI lists manifest permissions |
+| allowBackup | false (template default) | VERIFIED: template manifest |
+| Third-party SDKs | none: no addons, no Android plugins, no analytics/ads/crash reporting; only the Godot template's AndroidX libraries | VERIFIED: repo (no `addons/`, no `android/`), preset |
+| Network use | OTA only: HTTPS GET of `latest.json`, the signed manifest + signature and the PCK from GitHub Releases (`github.com/verbal76/Axolotl`); nothing else opens a connection | VERIFIED: only `ota_updater.gd` issues requests |
+| Data collection / transmission | none by Mote: no account, no identifiers, no telemetry; saves and diagnostics stay on the device (Copy diagnostics is user-initiated, clipboard only). GitHub necessarily sees the request IP / user agent when updates download | VERIFIED (code); the Data Safety interpretation is an owner decision |
+| Privacy policy / Data Safety form | none in the repository; no Play listing exists | VERIFIED absent |
+
+**Remediation classes.** NONE: target API (36 meets the current rule). **A** (OTA, done here): About
+diagnostics, activation modal, resume discovery, studio splash code. **B** (native / next APK, documented
+only, not done): release export instead of debug; AAB via Gradle build; Play App Signing / upload key;
+exposing target SDK, versionCode and certificate fingerprint to the runtime; any Godot engine upgrade.
+
+## 6. Native proposals for the next APK (runtime r6)
+
+- **N1 Wall-clock discovery.** `Boot.auto_check_due` on `Time.get_unix_time_from_system()` for resume and
+  periodic checks (the periodic one still uses the engine clock).
+- **N2 Activation API + signal.** `Boot.apply_pending(where) -> String` (the soft-restart mount step,
+  public) and `signal activation_started(id)` / `activation_finished(id, ok)`; the native recovery overlay
+  shows "Please wait, applying update" itself on `activation_started`, so even a broken game layer gets
+  the screen. Cold start: if `Boot._init` mounts a PENDING package for the first time, keep a native
+  "Please wait, applying update" panel up until the game reports its first frame (or 20 s).
+- **N3 Identity fields.** `write_native_build_info.py` adds `package`, `version_code`, `min_sdk`,
+  `target_sdk`, `export` (debug/release) and `signing_cert_sha256` (public fingerprint) to
+  `native_build_info.gd`; `AppInfo` then shows them instead of "not exposed", and PLAY API COMPLIANT can
+  be YES/NO at runtime.
+- **N4 Play readiness (Class B).** `--export-release` with release keystore env vars; Gradle build
+  (`use_gradle_build=true`) to produce an AAB; Play App Signing with an upload key. Keeps package id.
+- **N5 Studio logo in the engine boot splash** (optional): only if the owner wants the logo before any
+  game code; otherwise the OTA splash (§4) is enough.

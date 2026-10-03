@@ -22,6 +22,7 @@ func run() -> void:
 	await _test_activation_no_duplicate()
 	_test_app_info_pure()
 	await _test_about_page()
+	await _test_studio_splash()
 
 
 ## The resume check measures its gap on the wall clock (the engine clock stops while the phone
@@ -210,3 +211,65 @@ func _test_about_page() -> void:
 	dp.close()
 	await t.frames(1)
 	t.check("hag_about_technical_and_copy", tech_ok and copied, "technical %s, copied %s" % [tech_ok, copied])
+
+
+## The studio splash: only on a genuine launch (not a scene reload, an in-process update or a test
+## run), only when the canonical logo is in the build (skipped otherwise: no placeholder), black,
+## logo centred and contain-fitted with its aspect kept, above the loading screen, input blocked,
+## gone after about 1.5 s on its own.
+func _test_studio_splash() -> void:
+	var bad: Array[String] = []
+	var real_missing := not ResourceLoader.exists(StudioSplash.LOGO_PATH)
+	var cases := [[StudioSplash.LOGO_PATH, "", false, false, "" if not real_missing else StudioSplash.MISSING],
+			["res://assets/icon/splash.png", "", false, false, ""], ["res://assets/icon/splash.png", "", true, false, "not a genuine launch"],
+			["res://assets/icon/splash.png", "", false, true, "not a genuine launch"], ["res://assets/icon/splash.png", "unit", false, false, "automated test run"],
+			["res://branding/none.png", "", false, false, StudioSplash.MISSING]]
+	for c in cases:
+		var why := StudioSplash.decide(c[0], c[1], c[2], c[3])
+		if (c[4] == "" and why != "") or (c[4] != "" and not why.begins_with(c[4])):
+			bad.append("%s -> '%s'" % [c, why])
+	t.check("hag_splash_genuine_launch_and_asset_rules", bad.is_empty(), "; ".join(bad))
+	t.log_line("canonical logo %s: %s" % [StudioSplash.LOGO_PATH, "MISSING (splash skipped)" if real_missing else "present"])
+	var saved_meta: Variant = Engine.get_meta(StudioSplash.META, null)
+	var saved_path := StudioSplash.logo_path
+	# The real asset is missing: the launch path adds nothing.
+	if Engine.has_meta(StudioSplash.META):
+		Engine.remove_meta(StudioSplash.META)
+	StudioSplash.logo_path = "res://branding/Hot_Attic_Games_Master_Logo_absent.png"
+	var none := StudioSplash.maybe_show(g, "", false)
+	var skip_why := str(Engine.get_meta(StudioSplash.META, ""))
+	var skipped_ok := none == null and str(Engine.get_meta(StudioSplash.META, "")).contains(StudioSplash.MISSING) and g.get_node_or_null("StudioSplash") == null
+	# With an image standing in for the logo (2:1, so the aspect must be kept).
+	Engine.remove_meta(StudioSplash.META)
+	StudioSplash.logo_path = "res://assets/textures/room/atlas.png"
+	var s := StudioSplash.maybe_show(g, "", false)
+	await t.frames(2)
+	var shown_ok := (s != null and s.layer > 100 and (s.get_node("Black") as ColorRect).color == Color(0, 0, 0, 1)
+			and (s.get_node("Black") as Control).mouse_filter == Control.MOUSE_FILTER_STOP)
+	var fit := ""
+	if s != null:
+		var screen := s.get_viewport().get_visible_rect()
+		var r := s.drawn_rect()
+		var ts := s.texture.get_size()
+		var centred := r.get_center().distance_to(screen.get_center()) < 1.5
+		var aspect := absf(r.size.x / r.size.y - ts.x / ts.y) < 0.01
+		var contained := screen.encloses(r) and (is_equal_approx(r.size.x, s.logo.size.x) or is_equal_approx(r.size.y, s.logo.size.y))
+		shown_ok = shown_ok and centred and aspect and contained
+		fit = "drawn %s in %s, texture %s" % [r, screen, ts]
+	var again := StudioSplash.maybe_show(g, "", false)
+	# Wall time (the splash runs on it; test runs use a fixed frame rate).
+	var t0 := Time.get_ticks_msec()
+	while Time.get_ticks_msec() - t0 < 1000:
+		await t.frames(1)
+	var still := is_instance_valid(s)
+	while Time.get_ticks_msec() - t0 < 1800:
+		await t.frames(1)
+	await t.frames(2)
+	var gone := not is_instance_valid(s)
+	t.check("hag_splash_skipped_when_logo_missing", skipped_ok, skip_why)
+	t.check("hag_splash_black_centred_contain_fit", shown_ok, fit)
+	t.check("hag_splash_once_per_launch_about_1_5_s", again == null and still and gone, "second %s, at 1 s %s, at 2 s gone %s" % [again, still, gone])
+	StudioSplash.logo_path = saved_path
+	Engine.remove_meta(StudioSplash.META)
+	if saved_meta != null:
+		Engine.set_meta(StudioSplash.META, saved_meta)
