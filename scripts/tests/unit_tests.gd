@@ -7,6 +7,32 @@ var g: Game
 var p: Axolotl
 
 
+## --shard=1/2 and --shard=2/2 split the suite across two processes (two CI jobs, or two cores). Shard 1 is
+## this list (about 23 minutes of the ~46 minute run); shard 2 is every other _test_ in registry order, so a
+## new test is never dropped (it lands on shard 2; move it here to rebalance, using the [TIME] lines).
+## ORDER DEPENDENCE: _test_parasite_combat -> _test_organic_motion -> ... -> _test_all_clear ->
+## _test_treasure_* must run together and in registry order (organic_motion needs the parasites combat
+## leaves; the treasure tests need the worlds all_clear heals), so they all live on shard 1.
+## _phase_* tests belong to no shard: they run only when named by --only.
+const SHARD_ONE := [
+	"_test_ota_and_version", "_test_terrain", "_test_view_clearances", "_test_camera_rises_over", "_test_title_safe",
+	"_test_home_coherence", "_test_no_floating_platforms", "_test_parasite_locomotion", "_test_parasite_body_and_death",
+	"_test_parasite_combat", "_test_organic_motion", "_test_gill_look", "_test_gill_idles", "_test_gill_patterns",
+	"_test_gill_traction", "_test_gill_incline_transitions", "_test_traction_no_shortcuts", "_test_tutorial_route",
+	"_test_sphere_walk", "_test_coyote_and_buffer", "_test_swipe_direction_and_stages", "_test_hard_landing",
+	"_test_food_reach", "_test_darter_and_burrower", "_test_motes", "_test_vortex", "_test_vortex_tints",
+	"_test_vortex_currents", "_test_vortex_currents_travel", "_test_current", "_test_canopy", "_test_caves",
+	"_test_route_audit", "_test_new_areas", "_test_ecosystem", "_test_music", "_test_completion_frozen",
+	"_test_run_save_file", "_test_timer_integrity", "_test_resume_points_safe", "_test_ui", "_test_menus_no_scroll",
+	"_test_ambient_fish", "_test_parasite_never_buried", "_test_aquarium_experiences", "_test_all_clear",
+	"_test_treasure_unlock", "_test_treasure_generation", "_test_treasure_play", "_test_progress_store",
+	"_test_starfish_pickup", "_test_quick_gill", "_test_burst_skills", "_test_glide_transfers", "_test_sea_fan_depth",
+	"_test_aquarium_gill", "_test_onb_per_run", "_test_onb_toggle", "_test_onb_intro", "_test_onb_feed_first",
+	"_test_onb_starfish", "_test_onb_restoration_equal", "_test_hard_mode", "_test_leaf_motion",
+	"_test_camera_never_drawn_unsafe",
+]
+
+
 func run(runner) -> void:
 	t = runner
 	g = t.g
@@ -19,19 +45,40 @@ func run(runner) -> void:
 		g.hints.enabled = false
 	await t.seconds(0.5)
 	var only: String = Settings.test_args.get("only", "")
-	for name_ in ["_test_startup", "_test_ota_and_version", "_test_hag_infra", "_test_mesh_winding", "_test_terrain", "_test_ravines", "_test_ooze_bubbles", "_test_view_clearances", "_test_camera_rises_over", "_test_title_safe", "_test_camera_invariant", "_test_ball_view", "_test_hud_corner", "_test_restore_hints", "_test_home_coherence", "_test_terrain_grounded", "_test_no_floating_platforms", "_test_parasite_locomotion", "_test_parasite_body_and_death", "_test_parasite_combat", "_test_organic_motion", "_test_gill_look", "_test_gill_idles", "_test_gill_colours", "_test_gill_patterns", "_test_tail_whip", "_test_gill_traction", "_test_gill_incline_transitions", "_test_traction_no_shortcuts", "_test_gill_body_follow", "_test_swim_body_follow", "_test_ambient_sway", "_test_placements", "_test_tutorial_route", "_test_sphere_walk", "_test_jump_and_burst", "_test_coyote_and_buffer", "_test_swipe_direction_and_stages", "_test_hard_landing", "_test_food", "_test_food_reach", "_test_darter_and_burrower", "_test_food_repopulates", "_test_motes", "_test_checkpoint_and_regen", "_test_crumble", "_test_restoration_gates", "_test_retract_gates_gone", "_test_bubble_columns", "_test_restoration_continuity", "_test_health_map", "_test_vortex", "_test_vortex_tints", "_test_vortex_currents", "_test_vortex_currents_travel", "_test_current", "_test_current_brace", "_test_canopy", "_test_canopy_plain_jumps", "_test_climbs_physical", "_test_jungle_ladders_physical", "_test_leaf_geometry", "_test_leaf_footing", "_test_caves", "_test_mounds", "_test_vegetation", "_test_vortex_mouths_clear", "_test_route_audit", "_test_new_areas", "_test_ecosystem", "_test_music", "_test_opening_audio", "_test_run_clock", "_test_completion_catalog", "_test_completion_frozen", "_test_run_save_file", "_test_run_timer_live", "_test_run_continue", "_test_timer_integrity", "_test_resume_points_safe", "_phase_continue_write", "_phase_continue_read", "_test_upgrades", "_test_quality_title_cap", "_test_ui", "_test_menus_no_scroll", "_test_menu_touch", "_test_tier2_rules", "_test_tier2_world", "_test_ambient_fish", "_test_parasite_never_buried", "_test_tier2_loadout", "_test_aquarium_experiences", "_test_aquarium_polish", "_test_all_clear", "_test_treasure_unlock", "_test_treasure_generation", "_test_treasure_play", "_phase_treasure_stress", "_phase_live_fish_diag", "_phase_cpu_probe", "_phase_incline_survey", "_phase_loco_diag", "_phase_crawl_trace", "_phase_mouth_crawls", "_phase_organic_trace", "_test_skilltree_graph", "_test_progress_store", "_test_starfish_spots", "_test_starfish_pickup", "_test_skill_ui", "_test_quick_gill", "_test_lunge_skills", "_test_burst_skills", "_test_glide_control", "_test_glide_transfers", "_test_mote_magnet", "_phase_starfish_survey", "_phase_starfish_sweep", "_phase_glide_probe", "_test_plants_terminal_growth", "_test_sea_fan_depth", "_test_repopulation", "_phase_repop_survey", "_phase_repop_sim", "_test_aquarium_gill", "_phase_aq_nav", "_test_tutorials_and_title", "_test_onb_progress", "_test_onb_owner_save", "_test_onb_per_run", "_test_onb_toggle", "_test_onb_intro", "_test_onb_feeding", "_test_onb_parasite", "_test_onb_feed_first", "_test_onb_tunnel", "_test_onb_starfish", "_test_onb_softlock", "_test_onb_relaunch", "_test_onb_restoration_equal", "_test_hard_mode", "_test_hard_mode_save", "_test_polish_a", "_test_leaf_motion", "_test_perf_veg_cull", "_test_death_and_arrival", "_test_camera_never_drawn_unsafe", "_test_startup_build_identical", "_phase_world_hash", "_phase_th_bench", "_phase_hard_write", "_phase_hard_read", "_phase_hard_newrun", "_phase_hard_finish", "_phase_hard_sim", "_phase_hard_intervals", "_phase_onb_owner", "_phase_onb_write", "_phase_onb_read", "_phase_onb_kill", "_phase_onb_toggle", "_phase_cohesion_probe"]:
+	var registry := ["_test_startup", "_test_ota_and_version", "_test_hag_infra", "_test_mesh_winding", "_test_terrain", "_test_ravines", "_test_ooze_bubbles", "_test_view_clearances", "_test_camera_rises_over", "_test_title_safe", "_test_camera_invariant", "_test_ball_view", "_test_hud_corner", "_test_restore_hints", "_test_home_coherence", "_test_terrain_grounded", "_test_no_floating_platforms", "_test_parasite_locomotion", "_test_parasite_body_and_death", "_test_parasite_combat", "_test_organic_motion", "_test_gill_look", "_test_gill_idles", "_test_gill_colours", "_test_gill_patterns", "_test_tail_whip", "_test_gill_traction", "_test_gill_incline_transitions", "_test_traction_no_shortcuts", "_test_gill_body_follow", "_test_swim_body_follow", "_test_ambient_sway", "_test_placements", "_test_tutorial_route", "_test_sphere_walk", "_test_jump_and_burst", "_test_coyote_and_buffer", "_test_swipe_direction_and_stages", "_test_hard_landing", "_test_food", "_test_food_reach", "_test_darter_and_burrower", "_test_food_repopulates", "_test_motes", "_test_checkpoint_and_regen", "_test_crumble", "_test_restoration_gates", "_test_retract_gates_gone", "_test_bubble_columns", "_test_restoration_continuity", "_test_health_map", "_test_vortex", "_test_vortex_tints", "_test_vortex_currents", "_test_vortex_currents_travel", "_test_current", "_test_current_brace", "_test_canopy", "_test_canopy_plain_jumps", "_test_climbs_physical", "_test_jungle_ladders_physical", "_test_leaf_geometry", "_test_leaf_footing", "_test_caves", "_test_mounds", "_test_vegetation", "_test_vortex_mouths_clear", "_test_route_audit", "_test_new_areas", "_test_ecosystem", "_test_music", "_test_opening_audio", "_test_run_clock", "_test_completion_catalog", "_test_completion_frozen", "_test_run_save_file", "_test_run_timer_live", "_test_run_continue", "_test_timer_integrity", "_test_resume_points_safe", "_phase_continue_write", "_phase_continue_read", "_test_upgrades", "_test_quality_title_cap", "_test_ui", "_test_menus_no_scroll", "_test_menu_touch", "_test_tier2_rules", "_test_tier2_world", "_test_ambient_fish", "_test_parasite_never_buried", "_test_tier2_loadout", "_test_aquarium_experiences", "_test_aquarium_polish", "_test_all_clear", "_test_treasure_unlock", "_test_treasure_generation", "_test_treasure_play", "_phase_treasure_stress", "_phase_live_fish_diag", "_phase_cpu_probe", "_phase_incline_survey", "_phase_loco_diag", "_phase_crawl_trace", "_phase_mouth_crawls", "_phase_organic_trace", "_phase_organic_cost", "_test_skilltree_graph", "_test_progress_store", "_test_starfish_spots", "_test_starfish_pickup", "_test_skill_ui", "_test_quick_gill", "_test_lunge_skills", "_test_burst_skills", "_test_glide_control", "_test_glide_transfers", "_test_mote_magnet", "_phase_starfish_survey", "_phase_starfish_sweep", "_phase_glide_probe", "_test_plants_terminal_growth", "_test_sea_fan_depth", "_test_repopulation", "_phase_repop_survey", "_phase_repop_sim", "_test_aquarium_gill", "_phase_aq_nav", "_test_tutorials_and_title", "_test_onb_progress", "_test_onb_owner_save", "_test_onb_per_run", "_test_onb_toggle", "_test_onb_intro", "_test_onb_feeding", "_test_onb_parasite", "_test_onb_feed_first", "_test_onb_tunnel", "_test_onb_starfish", "_test_onb_softlock", "_test_onb_relaunch", "_test_onb_restoration_equal", "_test_hard_mode", "_test_hard_mode_save", "_test_polish_a", "_test_leaf_motion", "_test_perf_veg_cull", "_test_death_and_arrival", "_test_camera_never_drawn_unsafe", "_test_startup_build_identical", "_phase_world_hash", "_phase_th_bench", "_phase_hard_write", "_phase_hard_read", "_phase_hard_newrun", "_phase_hard_finish", "_phase_hard_sim", "_phase_hard_intervals", "_phase_onb_owner", "_phase_onb_write", "_phase_onb_read", "_phase_onb_kill", "_phase_onb_toggle", "_phase_cohesion_probe"]
+	# A --only entry that names nothing is a typo (or a stale substring): fail loudly rather than run nothing.
+	for o in only.split(",", false):
+		if not registry.has(o) and not registry.has("_test_" + o):
+			t.check("only_names_a_test:" + o, false, "--only is an exact test name (the _test_ prefix is optional)")
+	# --shard=K/N (N = 2): a slice of the default list. An explicit --only wins over --shard.
+	var shard := 0
+	var shard_arg: String = Settings.test_args.get("shard", "")
+	if shard_arg != "" and only == "":
+		var parts := shard_arg.split("/")
+		shard = int(parts[0]) if parts.size() == 2 and parts[1] == "2" and parts[0] in ["1", "2"] else -1
+		if shard < 0:
+			t.check("shard_arg_valid", false, "--shard=1/2 or --shard=2/2, not " + shard_arg)
+			return
+		print("[SHARD] %d/2" % shard)
+	for name_ in registry:
 		# "_phase_*" tests are halves of a relaunch test: they run only when asked for by name
 		# (in a child process started by _test_run_continue).
 		if name_.begins_with("_phase") and not only.split(",", false).has(name_):
 			continue
 		# (--only may list several, comma-separated: to run tests together in one process.)
+		# --only names tests EXACTLY ("_test_food" no longer also runs "_test_food_reach"); the "_test_"
+		# prefix may be left off (--only=food,vortex).
 		var picked := only == ""
+		if shard > 0 and name_.begins_with("_test_"):
+			picked = SHARD_ONE.has(name_) == (shard == 1)
 		for o in only.split(",", false):
-			picked = picked or name_.contains(o)
+			picked = picked or name_ == o or name_ == "_test_" + o
 		if picked:
 			# A test that stops on a script error reports nothing; count that as a failure.
 			var before: int = t.results.size()
+			var started := Time.get_ticks_msec()
 			await call(name_)
+			print("[TIME] %s %d" % [name_, Time.get_ticks_msec() - started])
 			if t.results.size() == before:
 				t.check("test_completed:" + name_, false, "reported no checks (stopped on a script error?)")
 
@@ -229,6 +276,12 @@ func _phase_hard_sim() -> void:
 func _test_organic_motion() -> void:
 	var ot = load("res://scripts/tests/organic_tests.gd").new(self)
 	await ot.run_checks()
+
+
+## Only the organic cost check, on its own (for tuning its bounds; a normal run does it inside _test_organic_motion).
+func _phase_organic_cost() -> void:
+	var ot = load("res://scripts/tests/organic_tests.gd").new(self)
+	await ot.run_cost_only()
 
 
 ## Motion traces of every enemy type for visual review (--org=on|off, --secs=120).
