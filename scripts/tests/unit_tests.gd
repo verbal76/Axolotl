@@ -19,7 +19,7 @@ func run(runner) -> void:
 		g.hints.enabled = false
 	await t.seconds(0.5)
 	var only: String = Settings.test_args.get("only", "")
-	for name_ in ["_test_startup", "_test_ota_and_version", "_test_mesh_winding", "_test_terrain", "_test_ravines", "_test_ooze_bubbles", "_test_view_clearances", "_test_camera_rises_over", "_test_title_safe", "_test_camera_invariant", "_test_restore_hints", "_test_home_coherence", "_test_terrain_grounded", "_test_no_floating_platforms", "_test_parasite_locomotion", "_test_parasite_body_and_death", "_test_parasite_combat", "_test_organic_motion", "_test_gill_look", "_test_gill_idles", "_test_gill_colours", "_test_gill_patterns", "_test_tail_whip", "_test_gill_traction", "_test_gill_incline_transitions", "_test_traction_no_shortcuts", "_test_gill_body_follow", "_test_swim_body_follow", "_test_ambient_sway", "_test_placements", "_test_tutorial_route", "_test_sphere_walk", "_test_jump_and_burst", "_test_coyote_and_buffer", "_test_swipe_direction_and_stages", "_test_hard_landing", "_test_food", "_test_food_reach", "_test_darter_and_burrower", "_test_food_repopulates", "_test_motes", "_test_checkpoint_and_regen", "_test_crumble", "_test_restoration_gates", "_test_retract_gates_gone", "_test_bubble_columns", "_test_restoration_continuity", "_test_health_map", "_test_vortex", "_test_vortex_tints", "_test_vortex_currents", "_test_vortex_currents_travel", "_test_current", "_test_current_brace", "_test_canopy", "_test_canopy_plain_jumps", "_test_climbs_physical", "_test_jungle_ladders_physical", "_test_leaf_geometry", "_test_leaf_footing", "_test_caves", "_test_mounds", "_test_vegetation", "_test_vortex_mouths_clear", "_test_route_audit", "_test_new_areas", "_test_ecosystem", "_test_music", "_test_opening_audio", "_test_run_clock", "_test_completion_catalog", "_test_completion_frozen", "_test_run_save_file", "_test_run_timer_live", "_test_run_continue", "_test_timer_integrity", "_test_resume_points_safe", "_phase_continue_write", "_phase_continue_read", "_test_upgrades", "_test_ui", "_test_menus_no_scroll", "_test_menu_touch", "_test_tier2_rules", "_test_tier2_world", "_test_ambient_fish", "_test_parasite_never_buried", "_test_tier2_loadout", "_test_aquarium_experiences", "_test_aquarium_polish", "_test_all_clear", "_test_treasure_unlock", "_test_treasure_generation", "_test_treasure_play", "_phase_treasure_stress", "_phase_live_fish_diag", "_phase_cpu_probe", "_phase_incline_survey", "_phase_loco_diag", "_phase_crawl_trace", "_phase_mouth_crawls", "_phase_organic_trace", "_test_skilltree_graph", "_test_progress_store", "_test_starfish_spots", "_test_starfish_pickup", "_test_skill_ui", "_test_quick_gill", "_test_lunge_skills", "_test_burst_skills", "_test_glide_control", "_test_glide_transfers", "_test_mote_magnet", "_phase_starfish_survey", "_phase_starfish_sweep", "_phase_glide_probe", "_test_plants_terminal_growth", "_test_sea_fan_depth", "_test_repopulation", "_phase_repop_survey", "_phase_repop_sim", "_test_aquarium_gill", "_phase_aq_nav", "_test_tutorials_and_title", "_test_onb_progress", "_test_onb_owner_save", "_test_onb_per_run", "_test_onb_toggle", "_test_onb_intro", "_test_onb_feeding", "_test_onb_parasite", "_test_onb_feed_first", "_test_onb_tunnel", "_test_onb_starfish", "_test_onb_softlock", "_test_onb_relaunch", "_test_onb_restoration_equal", "_test_hard_mode", "_test_hard_mode_save", "_test_polish_a", "_test_leaf_motion", "_test_death_and_arrival", "_test_camera_never_drawn_unsafe", "_phase_world_hash", "_phase_th_bench", "_phase_hard_write", "_phase_hard_read", "_phase_hard_newrun", "_phase_hard_finish", "_phase_hard_sim", "_phase_hard_intervals", "_phase_onb_owner", "_phase_onb_write", "_phase_onb_read", "_phase_onb_kill", "_phase_onb_toggle"]:
+	for name_ in ["_test_startup", "_test_ota_and_version", "_test_mesh_winding", "_test_terrain", "_test_ravines", "_test_ooze_bubbles", "_test_view_clearances", "_test_camera_rises_over", "_test_title_safe", "_test_camera_invariant", "_test_ball_view", "_test_hud_corner", "_test_restore_hints", "_test_home_coherence", "_test_terrain_grounded", "_test_no_floating_platforms", "_test_parasite_locomotion", "_test_parasite_body_and_death", "_test_parasite_combat", "_test_organic_motion", "_test_gill_look", "_test_gill_idles", "_test_gill_colours", "_test_gill_patterns", "_test_tail_whip", "_test_gill_traction", "_test_gill_incline_transitions", "_test_traction_no_shortcuts", "_test_gill_body_follow", "_test_swim_body_follow", "_test_ambient_sway", "_test_placements", "_test_tutorial_route", "_test_sphere_walk", "_test_jump_and_burst", "_test_coyote_and_buffer", "_test_swipe_direction_and_stages", "_test_hard_landing", "_test_food", "_test_food_reach", "_test_darter_and_burrower", "_test_food_repopulates", "_test_motes", "_test_checkpoint_and_regen", "_test_crumble", "_test_restoration_gates", "_test_retract_gates_gone", "_test_bubble_columns", "_test_restoration_continuity", "_test_health_map", "_test_vortex", "_test_vortex_tints", "_test_vortex_currents", "_test_vortex_currents_travel", "_test_current", "_test_current_brace", "_test_canopy", "_test_canopy_plain_jumps", "_test_climbs_physical", "_test_jungle_ladders_physical", "_test_leaf_geometry", "_test_leaf_footing", "_test_caves", "_test_mounds", "_test_vegetation", "_test_vortex_mouths_clear", "_test_route_audit", "_test_new_areas", "_test_ecosystem", "_test_music", "_test_opening_audio", "_test_run_clock", "_test_completion_catalog", "_test_completion_frozen", "_test_run_save_file", "_test_run_timer_live", "_test_run_continue", "_test_timer_integrity", "_test_resume_points_safe", "_phase_continue_write", "_phase_continue_read", "_test_upgrades", "_test_ui", "_test_menus_no_scroll", "_test_menu_touch", "_test_tier2_rules", "_test_tier2_world", "_test_ambient_fish", "_test_parasite_never_buried", "_test_tier2_loadout", "_test_aquarium_experiences", "_test_aquarium_polish", "_test_all_clear", "_test_treasure_unlock", "_test_treasure_generation", "_test_treasure_play", "_phase_treasure_stress", "_phase_live_fish_diag", "_phase_cpu_probe", "_phase_incline_survey", "_phase_loco_diag", "_phase_crawl_trace", "_phase_mouth_crawls", "_phase_organic_trace", "_test_skilltree_graph", "_test_progress_store", "_test_starfish_spots", "_test_starfish_pickup", "_test_skill_ui", "_test_quick_gill", "_test_lunge_skills", "_test_burst_skills", "_test_glide_control", "_test_glide_transfers", "_test_mote_magnet", "_phase_starfish_survey", "_phase_starfish_sweep", "_phase_glide_probe", "_test_plants_terminal_growth", "_test_sea_fan_depth", "_test_repopulation", "_phase_repop_survey", "_phase_repop_sim", "_test_aquarium_gill", "_phase_aq_nav", "_test_tutorials_and_title", "_test_onb_progress", "_test_onb_owner_save", "_test_onb_per_run", "_test_onb_toggle", "_test_onb_intro", "_test_onb_feeding", "_test_onb_parasite", "_test_onb_feed_first", "_test_onb_tunnel", "_test_onb_starfish", "_test_onb_softlock", "_test_onb_relaunch", "_test_onb_restoration_equal", "_test_hard_mode", "_test_hard_mode_save", "_test_polish_a", "_test_leaf_motion", "_test_death_and_arrival", "_test_camera_never_drawn_unsafe", "_phase_world_hash", "_phase_th_bench", "_phase_hard_write", "_phase_hard_read", "_phase_hard_newrun", "_phase_hard_finish", "_phase_hard_sim", "_phase_hard_intervals", "_phase_onb_owner", "_phase_onb_write", "_phase_onb_read", "_phase_onb_kill", "_phase_onb_toggle", "_phase_cohesion_probe"]:
 		# "_phase_*" tests are halves of a relaunch test: they run only when asked for by name
 		# (in a child process started by _test_run_continue).
 		if name_.begins_with("_phase") and not only.split(",", false).has(name_):
@@ -9944,6 +9944,239 @@ func _test_camera_invariant() -> void:
 	t.check("camera_invariant_harness_sees_the_class", off_unsafe > 0, "with the safety stage off, the death path drew %d unsafe frames" % off_unsafe)
 	t.check("camera_invariant_holds_everywhere", unsafe == 0 and corrected > 0,
 			"%d requested places corrected, %d unsafe frames drawn; %s%s" % [corrected, unsafe, "; ".join(rows), "" if cam.unsafe_worst == "" else " | first: " + cam.unsafe_worst])
+
+
+## Cohesion audit (2026-10-02): the top-left corner holds the Treasure Hunt box and the starfish
+## chip; a starfish picked up during a hunt shows its chip below the box, never over it.
+func _test_hud_corner() -> void:
+	var tp: TreasurePlay = g.treasure
+	tp._ensure_panel()
+	var panel: TreasurePanel = tp.panel
+	# (TreasurePlay shows the panel only while hunting: held still here.)
+	tp.set_process(false)
+	panel.visible = true
+	panel._box.visible = true
+	panel._name.text = "Golden snail shell"
+	panel._count.text = "3 of 14 found"
+	panel._layout()
+	await t.frames(3)
+	var chip := g.hud.star_chip
+	g.hud.star_collected(4, 30, 1)
+	await t.frames(2)
+	var box := panel.box_rect()
+	var cr := Rect2(chip.position, chip.size)
+	var apart := box.size != Vector2.ZERO and not box.intersects(cr)
+	panel.visible = false
+	g.hud.star_collected(4, 30, 1)
+	var home := is_equal_approx(chip.position.y, g.hud._safe.position.y + 40 * g.hud.canvas.scale_k)
+	chip._t = -1.0
+	chip.modulate.a = 0.0
+	tp.set_process(true)
+	t.check("hud_starfish_chip_clear_of_hunt_box", apart and home, "box %s, chip during hunt %s, chip after at y %.0f" % [box, cr, chip.position.y])
+	var fonts := [panel._count.get_theme_font_size("font_size")]
+	for l in panel._box.find_children("*", "Label", true, false):
+		fonts.append((l as Label).get_theme_font_size("font_size"))
+	t.check("hud_hunt_box_text_legible", fonts.min() >= 18, str(fonts))
+
+
+## Cohesion audit probe (2026-10-02; run by name, reports only): how close each ball's threats and
+## collectables sit to lethal ravine ooze. A parasite whose home area takes in ravine floor fights
+## him at the edge; a collectable within 2 m of the floor baits a fall.
+func _phase_cohesion_probe() -> void:
+	var near_floor := func(b: MossBall, at: Vector3) -> float:
+		var up := b.up_at(at)
+		var fr := MossBall.frame_at(up, 0.0)
+		for r in [0.0, 0.5, 1.0, 1.5, 2.0, 3.0, 4.0]:
+			for k in 12:
+				var off: Vector3 = (fr.x * cos(k * TAU / 12.0) + fr.z * sin(k * TAU / 12.0)) * r
+				if b.ravine_at(b.up_at(at + off)) != "":
+					return r
+		return 99.0
+	var lines := []
+	for b: MossBall in g.balls:
+		if b.carves.is_empty():
+			lines.append("ball %d: no ravines" % (b.index + 1))
+			continue
+		var par_in := 0
+		var par_names := []
+		for pp in b.parasites:
+			var hits := 0
+			var fr := MossBall.frame_at(pp.home_dir, 0.0)
+			for i in 120:
+				var a := randf() * TAU
+				var rr: float = sqrt(randf()) * pp.home_radius
+				var d: Vector3 = pp.home_dir.rotated((fr.x * cos(a) + fr.z * sin(a)).normalized(), rr).normalized()
+				if b.ravine_at(d) != "":
+					hits += 1
+			if hits > 0:
+				par_in += 1
+				par_names.append("%s %d%%" % [pp.zone_id, int(hits * 100 / 120)])
+		var col := {"mote": 0, "bloom": 0, "food": 0, "starfish": 0}
+		var tot := {"mote": 0, "bloom": 0, "food": 0, "starfish": 0}
+		var sets := {"mote": b.motes, "bloom": b.blooms, "food": b.foods, "starfish": g.starfish.stars.filter(func(st): return is_instance_valid(st) and st.ball == b)}
+		for key in sets:
+			for it in sets[key]:
+				if not is_instance_valid(it):
+					continue
+				tot[key] += 1
+				if near_floor.call(b, (it as Node3D).global_position) <= 2.0:
+					col[key] += 1
+		lines.append("ball %d: %d ravines; parasites with ooze in their home area %d/%d [%s]; within 2 m of ooze: motes %d/%d, blooms %d/%d, food %d/%d, starfish %d/%d" % [
+				b.index + 1, b.carves.size(), par_in, b.parasites.size(), ", ".join(par_names), col["mote"], tot["mote"], col["bloom"], tot["bloom"],
+				col["food"], tot["food"], col["starfish"], tot["starfish"]])
+	for l in lines:
+		t.log_line("[COHESION] " + l)
+	t.check("cohesion_probe_ran", lines.size() == g.balls.size(), "")
+
+
+# --- whole-ball view on demand (ledger row 21; BallView) ---------------------------------
+
+## The whole-ball view, on every ball: opened from the pause menu (and the pad's Back), the run stands
+## still (no movement, damage or clock), the camera is far out and inside the tank, never drawn
+## unsafe; any touch or button returns, to exactly the follow place it left, with control back.
+func _test_ball_view() -> void:
+	var bv: BallView = g.ball_view
+	var cam: FollowCam = g.cam
+	var mode0: int = Settings.input_mode
+	var hold := []
+	for b in g.balls:
+		hold.append(_hold_threats(b))
+	# The shot itself, statically: inside the glass and far out, from every side of every ball.
+	var shot_ok := true
+	var shot_bad := ""
+	for b: MossBall in g.balls:
+		for i in 26:
+			var up := MossBall.dir_ll(-80.0 + (i % 9) * 20.0, i * 47.0)
+			var face := MossBall.frame_at(up, 0).z
+			for orbit in [0.0, 1.7, 3.6]:
+				var sh := BallView.shot(b, up, face, orbit)
+				var pos: Vector3 = sh[0]
+				var inside := pos == BallView.in_tank(pos)
+				var far := pos.distance_to(b.global_position) > b.radius + 12.0
+				if not (inside and far) and shot_bad == "":
+					shot_bad = "ball %d up %s: inside %s, %.1f m from centre" % [b.index + 1, up.snapped(Vector3.ONE * 0.01), inside, pos.distance_to(b.global_position)]
+				shot_ok = shot_ok and inside and far
+	t.check("ball_view_shot_inside_tank_and_far", shot_ok, shot_bad)
+	var push := func(ev: InputEvent) -> void:
+		Input.parse_input_event(ev)
+	var rows := []
+	var all_ok := true
+	var d0 := cam.unsafe_drawn
+	var c0 := cam.corrected_frames
+	for b: MossBall in g.balls:
+		place_at(b.index, b.surface_point(b.start_dir, 0.2), MossBall.frame_at(b.start_dir, 0).z)
+		p.restore_full()
+		await t.frames(20)
+		var pos0 := p.global_position
+		var cam0 := cam.global_transform
+		var hp0: int = p.health
+		var run0: float = g.clock.run_s
+		# Moving when it opens: he must not drift while it shows.
+		p.velocity = p.facing * 3.0
+		var opened := true
+		if b.index % 2 == 0:
+			g.pause_menu.open()
+			await t.frames(2)
+			var btn := g.pause_menu.find_child("ViewWholeBall", true, false) as Button
+			opened = btn != null and btn.visible and not btn.disabled and btn.size.y >= PauseMenu.MIN_TOUCH
+			btn.pressed.emit()
+		else:
+			var ev := InputEventJoypadButton.new()
+			ev.button_index = JOY_BUTTON_BACK
+			ev.pressed = true
+			push.call(ev)
+			await t.frames(1)
+			var ev2 := ev.duplicate() as InputEventJoypadButton
+			ev2.pressed = false
+			push.call(ev2)
+		await t.frames(2)
+		opened = opened and bv.active and g.get_tree().paused and not g.pause_menu.visible and not g.hud.visible
+		# (From here the run must stand exactly still; the pad path lets one frame of play run first.)
+		pos0 = p.global_position
+		hp0 = p.health
+		run0 = g.clock.run_s
+		# While it shows nothing in the run may act on him (no threat, current or clock runs).
+		var far := 0.0
+		var frozen := true
+		for f in 150:
+			await t.frames(1)
+			frozen = frozen and not p.can_process() and not g.can_process() and not g.ecosystem.can_process()
+			far = maxf(far, cam.global_position.distance_to(b.global_position) - b.radius)
+		var still := frozen and p.global_position.distance_to(pos0) < 0.01 and p.health == hp0 and absf(g.clock.run_s - run0) < 0.001
+		# Any touch returns (a key on odd balls).
+		if b.index % 2 == 0:
+			var tev := InputEventScreenTouch.new()
+			tev.pressed = true
+			tev.position = Vector2(640, 360)
+			push.call(tev)
+			await t.frames(1)
+			var tev2 := tev.duplicate() as InputEventScreenTouch
+			tev2.pressed = false
+			push.call(tev2)
+		else:
+			var kev := InputEventJoypadButton.new()
+			kev.button_index = JOY_BUTTON_A
+			kev.pressed = true
+			push.call(kev)
+			await t.frames(1)
+			var kev2 := kev.duplicate() as InputEventJoypadButton
+			kev2.pressed = false
+			push.call(kev2)
+		var back_f := 0
+		for f in 60 * 4:
+			await t.frames(1)
+			back_f = f
+			if not bv.active:
+				break
+		var cam_back := cam.global_transform.origin.distance_to(cam0.origin)
+		var home := not bv.active and not g.get_tree().paused and g.hud.visible and p.controls_enabled \
+				and p.global_position.distance_to(pos0) < 0.05 and cam_back < 0.25 and cam.process_mode == Node.PROCESS_MODE_INHERIT
+		var ok := opened and still and far > 20.0 and home
+		all_ok = all_ok and ok
+		rows.append("ball %d: open %s, still %s, %.0f m out, back in %d frames, camera %.2f m off%s" % [b.index + 1, opened, still, far, back_f, cam_back, "" if ok else " FAIL"])
+		p.velocity = Vector3.ZERO
+	t.check("ball_view_every_ball_frozen_and_returns", all_ok, "; ".join(rows))
+	t.check("ball_view_never_drawn_unsafe", cam.unsafe_drawn == d0, "%d unsafe, %d corrected%s" % [cam.unsafe_drawn - d0, cam.corrected_frames - c0, "" if cam.unsafe_worst == "" else ": " + cam.unsafe_worst])
+	# Not mid-cinematic: the menu entry is greyed and the pad button does nothing.
+	var b0: MossBall = g.balls[0]
+	place_at(0, b0.surface_point(b0.start_dir, 0.2), MossBall.frame_at(b0.start_dir, 0).z)
+	g._start_cinematic("frame", {})
+	await t.frames(2)
+	g.pause_menu.open()
+	await t.frames(2)
+	var greyed := (g.pause_menu.find_child("ViewWholeBall", true, false) as Button).disabled
+	g.pause_menu.close()
+	var refused := not bv.open()
+	for f in 60 * 6:
+		await t.frames(1)
+		if g.cinematic == "":
+			break
+	t.check("ball_view_not_during_cinematics", greyed and refused and not bv.active, "greyed %s, refused %s" % [greyed, refused])
+	# Android back closes it too.
+	await t.frames(30)
+	var opened2 := bv.open()
+	await t.frames(30)
+	g._go_back()
+	for f in 60 * 3:
+		await t.frames(1)
+		if not bv.active:
+			break
+	# The caption: name, % restored, and the tunnel's threshold only while one out is still shut.
+	var vb: Vortex = g.vortices[0]
+	var vwas := vb.connected
+	vb.connected = false
+	var cap_shut := BallView.caption(vb.ball_a, g.vortices)
+	vb.connected = true
+	var cap_open := BallView.caption(vb.ball_a, [vb])
+	vb.connected = vwas
+	t.check("ball_view_caption", cap_shut.begins_with(vb.ball_a.display_name) and cap_shut.contains("% restored") and cap_shut.contains("opens at 70%")
+			and not cap_open.contains("opens at"), "%s | %s" % [cap_shut, cap_open])
+	t.check("ball_view_back_closes", opened2 and not bv.active and not g.get_tree().paused and not g.pause_menu.visible, "")
+	for r in hold:
+		r.call()
+	p.restore_full()
+	# (The pad presses above switched the HUD to controller mode.)
+	Settings._set_mode(mode0)
 
 
 ## The whole suite, every test's camera: no frame drawn under a ball's ground or inside a solid, and

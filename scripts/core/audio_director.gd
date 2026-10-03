@@ -35,6 +35,9 @@ const BED_GLIDE := 4.0
 var _water_target := WATER_DB
 var _aerator_target := AERATOR_DB
 var _bed_in := 0.0
+## The bed's gliding levels; the players follow them in VOLUME_STEP_DB steps (see set_volume).
+var _water_db := -80.0
+var _aerator_db := -80.0
 var _life: AudioStreamPlayer
 var _travel: AudioStreamPlayer
 var _outside: AudioStreamPlayer
@@ -152,7 +155,7 @@ func update_mix(ball_r: Array[float], g: float, current: int) -> void:
 	# The aquarium's own soundscape grows; outside sounds recede.
 	_water_target = lerpf(-13.0, -10.0, g) + BED_UNDER_MUSIC_DB
 	_aerator_target = lerpf(-18.0, -15.0, g) + BED_UNDER_MUSIC_DB
-	_life.volume_db = linear_to_db(maxf(0.0001, g * 0.55))
+	set_volume(_life, linear_to_db(maxf(0.0001, g * 0.55)), true)
 	var ob := AudioServer.get_bus_index("Outside")
 	if ob >= 0:
 		AudioServer.set_bus_volume_db(ob, lerpf(-3.0, -22.0, pow(g, 0.8)))
@@ -172,18 +175,38 @@ func _glide_cutoff(dt: float) -> void:
 
 ## The bed's level: a linear fade-in from silence at launch, then gliding toward its targets.
 func bed_levels() -> Vector2:
-	return Vector2(_water.volume_db, _aerator.volume_db)
+	return Vector2(_water_db, _aerator_db)
 
 
 func _glide_bed(dt: float) -> void:
 	if _bed_in < 1.0:
 		_bed_in = minf(1.0, _bed_in + dt / BED_FADE_IN)
 		var k := linear_to_db(maxf(0.0001, _bed_in))
-		_water.volume_db = _water_target + k
-		_aerator.volume_db = _aerator_target + k
+		_water_db = _water_target + k
+		_aerator_db = _aerator_target + k
+	else:
+		_water_db = move_toward(_water_db, _water_target, BED_GLIDE * dt)
+		_aerator_db = move_toward(_aerator_db, _aerator_target, BED_GLIDE * dt)
+	set_volume(_water, _water_db, _water_db == _water_target)
+	set_volume(_aerator, _aerator_db, _aerator_db == _aerator_target)
+
+
+## Engine crash fix (ledger row 37): every volume_db write on a playing player makes Godot 4.7.2
+## swap the player's bus details and free the old ones a few frames later, while the audio thread
+## may still be reading them (a use-after-free in AudioServer._mix_step; 6 crashes in 171 long test
+## runs). So a playing player's volume is written only when it moves audibly: in VOLUME_STEP_DB
+## steps (inaudible), or exactly once on arriving (`settled`), and never again while it holds.
+const VOLUME_STEP_DB := 0.1
+
+
+static func set_volume(p: Node, db: float, settled := false) -> void:
+	if p == null:
 		return
-	_water.volume_db = move_toward(_water.volume_db, _water_target, BED_GLIDE * dt)
-	_aerator.volume_db = move_toward(_aerator.volume_db, _aerator_target, BED_GLIDE * dt)
+	var cur: float = p.volume_db
+	if cur == db:
+		return
+	if settled or absf(db - cur) >= VOLUME_STEP_DB:
+		p.volume_db = db
 
 
 func _process(dt: float) -> void:

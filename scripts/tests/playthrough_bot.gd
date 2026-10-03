@@ -13,6 +13,9 @@ var t0 := 0.0
 var sim_time := 0.0
 var timeline: Array = []
 var stuck_events := 0
+## Where each stuck recovery happened: "ball N (lat, lon)" -> count (cohesion audit, 2026-10-02:
+## a spot many recoveries share is a candidate terrain snag, not just the bot's routing).
+var stuck_at := {}
 var failures: Array = []
 var _stick := Vector2.ZERO
 var _shots := true
@@ -603,9 +606,25 @@ func mark(what: String) -> void:
 	t.log_line("[%6.1fs] %s  (R: %s, hp %d/%d, deaths %d)" % [sim_time, what, " ".join(rs), p.health, p.max_health, g.stats["deaths"]])
 
 
+## His place as "ball N (lat, lon)", rounded to 2 degrees (spots a few metres apart group).
+func _here() -> String:
+	var ll: Vector2 = Levels._latlon(p.ball.up_at(p.global_position))
+	return "ball %d (%d, %d)" % [p.ball.index + 1, int(round(ll.x / 2.0) * 2), int(round(ll.y / 2.0) * 2)]
+
+
+func _note_stuck() -> void:
+	var k := _here()
+	stuck_at[k] = int(stuck_at.get(k, 0)) + 1
+
+
 func _report() -> void:
 	t.log_line("stats: " + str(g.stats))
 	t.log_line("stuck recoveries: %d" % stuck_events)
+	# The spots most recoveries share (cohesion audit).
+	var keys := stuck_at.keys()
+	keys.sort_custom(func(a, b): return stuck_at[a] > stuck_at[b])
+	for k in keys.slice(0, 15):
+		t.log_line("stuck spot: %s x%d" % [k, stuck_at[k]])
 	for f in failures:
 		t.log_line("fallback: " + f)
 	if _perf_n > 0:
@@ -872,6 +891,7 @@ func goto(target: Variant, radius := 0.9, timeout := 45.0, allow_vortex: Vortex 
 			last = p.global_position
 			if moved < 1.0 and flat.length() > radius:
 				stuck_events += 1
+				_note_stuck()
 				escalate += 1
 				# Escalating detours: hop, then walk around the obstacle on alternating sides.
 				match escalate % 5:
@@ -891,7 +911,7 @@ func goto(target: Variant, radius := 0.9, timeout := 45.0, allow_vortex: Vortex 
 			else:
 				escalate = 0
 	set_stick(Vector2.ZERO)
-	failures.append("goto timeout on ball %d" % p.ball.index)
+	failures.append("goto timeout on ball %d at %s (%s)" % [p.ball.index, _here(), activity])
 	return false
 
 
@@ -1209,7 +1229,7 @@ func hop_chain(tops: Array, retries := 4, start_back: Variant = null, no_settle:
 			tries += 1
 			total_fails += 1
 			if tries > retries or total_fails > retries * 3:
-				failures.append("hop chain failed at step %d on ball %d" % [i, p.ball.index])
+				failures.append("hop chain failed at step %d on ball %d at %s (%s)" % [i, p.ball.index, _here(), activity])
 				return false
 			await wait_grounded(2.0)
 			# If we fell off, climb back from the start.
@@ -1472,6 +1492,7 @@ func lunge_at(target: Callable, timeout := 20.0, stay := false) -> bool:
 			if prog_t >= 1.5:
 				if not stay and prog_d - dist < 0.3:
 					stuck_events += 1
+					_note_stuck()
 					set_stick(Vector2.ZERO)
 					return false
 				prog_t = 0.0

@@ -42,6 +42,8 @@ var gill: GillProgress
 var starfish: StarfishField
 ## Onboarding (docs/ONBOARDING.md): the intro screen and the three first-discovery lessons.
 var onboarding: Onboarding
+## The whole-ball view on demand (ledger row 21): pause menu "View whole ball", pad Back, key V.
+var ball_view: BallView
 
 var state := "title"          # title | play | aquarium (the experiences; the clock never counts)
 var cinematic := ""
@@ -300,6 +302,10 @@ func _build_world() -> void:
 	add_child(onboarding.ui)
 	pause_menu = PauseMenu.new()
 	add_child(pause_menu)
+	ball_view = BallView.new()
+	ball_view.name = "BallView"
+	ball_view.g = self
+	add_child(ball_view)
 	StartupTrace.mark("pause menu built")
 	title = TitleScreen.new()
 	add_child(title)
@@ -768,6 +774,8 @@ func _notification(what: int) -> void:
 func _go_back() -> void:
 	if diagnostics != null and diagnostics.visible:
 		diagnostics.close()
+	elif ball_view != null and ball_view.active:
+		ball_view.close()
 	elif presentation != null and presentation.active():
 		presentation.back()
 	elif pause_menu.visible:
@@ -822,6 +830,8 @@ func run_diagnostics_text() -> String:
 func _unhandled_input(event: InputEvent) -> void:
 	if event.is_action_pressed("pause") and state == "play":
 		pause_menu.open()
+	elif event.is_action_pressed("view_ball") and state == "play" and not pause_menu.visible:
+		ball_view.open()
 
 
 func tank_flow() -> Vector3:
@@ -1520,13 +1530,11 @@ func _update_cinematic(dt: float) -> void:
 
 func _cine_frame() -> void:
 	# After the first local restoration: pull back to reveal the still-sick moss ball.
-	var b := player.ball
-	var up := player.up
-	var side := player.facing
-	var d := (up * 0.55 - side * 0.85).normalized()
-	cam.cine_pos = b.global_position + d * (b.radius + 30.0)
-	cam.cine_look = b.global_position + up * b.radius * 0.25
-	cam.cine_up = (up - d * up.dot(d)).normalized()
+	# (The same shot the player can ask for at any time: BallView, ledger row 21.)
+	var s := BallView.shot(player.ball, player.up, player.facing)
+	cam.cine_pos = s[0]
+	cam.cine_look = s[1]
+	cam.cine_up = s[2]
 	if cine_t > 3.8:
 		_end_cinematic()
 		get_tree().create_timer(1.0).timeout.connect(func(): _show_prompt("camera"))

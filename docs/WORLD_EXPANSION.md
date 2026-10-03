@@ -74,8 +74,8 @@ dev-000025. Mossy Meadow first as the template, then worlds 2–7 (not clones).
    local ground.
 3. **Ravines and recovery.**
    - Ravine volumes and meta: "unsafe", so they are never used as a safe position.
-   - `Game.ravine_fall()`: one frond, then a short re-form at the nearest edge anchor. On the last
-     frond, a normal death at the last bloom.
+   - `Game.ravine_fall()`: superseded by ledger row 32 (2026-10-02): every ooze fall is a death,
+     re-formed at the checkpoint like any other (the ooze only picks the sinking look).
 4. **Restoration geography.**
    - Gated features: a stem rises into a bridge, leaves unfurl, roots withdraw, a tunnel clears, a
      current changes direction.
@@ -119,8 +119,8 @@ dev-000025. Mossy Meadow first as the template, then worlds 2–7 (not clones).
 - **Terrain (X2).** Cube-sphere tiles (8 m, 10×10 quads), 24 render chunks per ball and a far
   LOD mesh; concave collision per raised tile. Plateaus, and ravines carved into them
   (`add_ravine`), with the base sphere as the floor. Standing on a ravine floor (not on a
-  bridge or stone above it) costs one frond and puts Gill back on the rim
-  (`Game.ravine_fall`, `Axolotl.ravine_return_point`); on the last frond it is a normal death.
+  bridge or stone above it) is a death, as every death re-formed at the checkpoint (ledger row 32;
+  `Game.ravine_fall`).
 - **Health map (X3a).** A 512×256 equirect texture per ball; no splat cap.
 - **Regional activation (X3b).** Parasites, motes and food tick only within 55 m of Gill;
   ground and vegetation chunks below the camera's horizon are not drawn.

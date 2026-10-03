@@ -69,7 +69,8 @@ func _ready() -> void:
 	row.add_child(col)
 	var head := Label.new()
 	head.text = "TREASURE HUNT"
-	head.add_theme_font_size_override("font_size", 15)
+	# (18 and 20, not 15 and 17: legible on a phone held at arm's length; cohesion audit 2026-10-02.)
+	head.add_theme_font_size_override("font_size", 18)
 	head.add_theme_color_override("font_color", Color(1.0, 0.86, 0.45))
 	col.add_child(head)
 	_name = Label.new()
@@ -79,7 +80,7 @@ func _ready() -> void:
 	col.add_child(_name)
 	_count = Label.new()
 	_count.name = "Count"
-	_count.add_theme_font_size_override("font_size", 17)
+	_count.add_theme_font_size_override("font_size", 20)
 	_count.add_theme_color_override("font_color", Color(0.85, 0.95, 0.92, 0.85))
 	col.add_child(_count)
 	# The centred note ("found it", "new hunt").
@@ -153,6 +154,14 @@ func _big_label(size: int) -> Label:
 	l.modulate.a = 0.0
 	add_child(l)
 	return l
+
+
+## The small hunt box's rect on screen while it shows (empty when hidden): the HUD's starfish chip
+## goes below it rather than over it.
+func box_rect() -> Rect2:
+	if not visible or not _box.visible:
+		return Rect2()
+	return Rect2(_box.position, _box.size * _box.scale)
 
 
 func _layout() -> void:
