@@ -30,6 +30,7 @@ rests on the bot, the human-facing reason is stated and the size is hedged.
 | 5 | Readability | Small parasites at 7-10 m are a few pinkish pixels, close to Gill's own colour | Medium | Proposal P5 (look stream) |
 | 6 | UI | Treasure Hunt box text at 15 / 17 px (about 1.4 / 1.6 mm on a phone) | Low-medium | **Fixed** |
 | 7 | UI | A starfish picked up during a Treasure Hunt drew its chip over the hunt box | Low | **Fixed** |
+| 7b | Pacing / readability | Cave eels: all 5 left at every normal finish; most bot stuck time is in their grottos | Medium | Proposal P7 |
 | 8 | Ecosystem | Creature threats are uneven: Reed Canyon has five kinds, Canopy Spire and Giant Stems almost none | Low | Proposal P6 |
 | 9 | Docs | The ravine-fall comment and WORLD_EXPANSION.md still described "one frond, back on the rim" | Low (maintainers) | **Fixed** |
 | 10 | UI | Pause button 56 px (about 5.3 mm; 7.2 mm with its touch margin), under Android's 48 dp | Low | Note; deliberate (no accidental pauses) |
@@ -119,10 +120,34 @@ point. No change proposed.
 
 ## Terrain and collision
 
-See §T1 (stuck spots from `audit_pt1`). The existing gates already cover holes and floating pieces
-(`_test_terrain_grounded`, `_test_no_floating_platforms`, `_test_route_audit`, `_test_view_clearances`)
-and all pass. Invisible walls were not probed directly (no tool for it here); the bot's stuck spots are
-the nearest evidence.
+The existing gates already cover holes and floating pieces (`_test_terrain_grounded`,
+`_test_no_floating_platforms`, `_test_route_audit`, `_test_view_clearances`) and all pass. Invisible
+walls were not probed directly; the bot's stuck spots are the nearest evidence.
+
+### T1. Where the bot gets stuck (`audit_pt1`, 24/24, 100% by play)
+
+The bot now logs each stuck recovery's place (ball, lat/lon to 2°) and each fallback's place and
+activity. Top spots (recoveries): Reed Canyon (24, -50) ×89, Hollow Grotto (-8, 158-160) ×65,
+Current Hollows mesa (10..20, -14..-24) ×84 in all, Hollow Grotto (40, 12) ×45, Current Hollows
+north-cap cave (72, 94-96) ×27. By activity:
+
+- **Eel grottos (most of it).** Every top spot except the mesa is a cave eel's grotto, during the
+  completionist phase ("100%: b5.eel.0", "b7.eel.0/1"). The eel sits in a cleft on the side away from
+  the ledges and its front is often "blocked" from where he stands; the bot pushes into the grotto wall
+  between strikes. All 5 eels were still undefeated at the normal finish in all six runs, and the eel
+  phase was most of the 4,550 s between the normal finish and 100% here. For a human this is the
+  "which wall is it in, and how do I hit it" question: a **readability/pacing finding (Medium)**,
+  proposal P7.
+- **The Mesa on Current Hollows (Low-medium).** 15 goto timeouts at its foot ("mesa", "on mesa top:
+  false"): the living platforms up the mesa are hard to mount from the side the bot approaches; it got
+  up in the end on every run. Worth a look in play, not a collision defect on this evidence.
+- **Ball 1 rims** (74, 0) "kill rim": finding 1 again.
+- **Ball 3 canopy foot** (20..30, -28..-36): finding 4 again.
+
+No stuck spot points to a hole or an invisible wall in open ground.
+
+Pacing note: this run's normal finish was 4,691 s against 3,233-3,699 s in the five earlier runs; the
+difference is the Ball 3 canopy loop (finding 4), about 700 s.
 
 ## Proposals (not implemented: larger than a bounded local fix, or another stream's)
 
@@ -142,6 +167,10 @@ the nearest evidence.
   last 3% is not the tallest climb on the ball.
 - **P5. Parasite read at distance** (look stream): a hue or value step away from Gill's pink in the
   murky state, or a faint rim/eye glow that reads at 10 m.
+- **P7. Cave eels read and reach.** A faint glow or bubble trail from the eel's cleft once he is in its
+  grotto (it already has glowing eyes when alert), and keep its strike line clear of the grotto's
+  ledges so a hit is always possible from a ledge he can stand on; or drop eels from the completion
+  catalog's "wildlife" and keep them as optional fights (owner's call, catalog appends only).
 - **P6. Threat spread.** Move one Reed Canyon threat (the second stalker or the puffer) to Giant Stems'
   jungle floor.
 
