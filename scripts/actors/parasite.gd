@@ -167,6 +167,57 @@ func setup(p_ball: MossBall, p_kind: int, p_zone: String, dir: Vector3, home_deg
 	_org = OrganicMotion.new(_rng.seed, [OrganicMotion.PARASITE_SMALL, OrganicMotion.PARASITE_MEDIUM, OrganicMotion.PARASITE_LARGE][kind - 1])
 
 
+## Home-area coherence (owner, 2026-10-02; ledger row 36): a required (authored) parasite stays with
+## the area it keeps dead. Chases may run past the edge (up to ~2.3 home radii) and it walks back;
+## beyond STRAY_K home radii it counts as strayed and is returned home where nobody sees it.
+const STRAY_K := 2.6
+const STRAY_CHECK_S := 2.0
+const STRAY_GRAZE_S := 20.0
+const STRAY_UNSEEN_M := 12.0
+var _stray_check := 0.0
+var _away_t := 0.0
+
+
+## Whether this required parasite is alive, settled and far outside its home area.
+func strayed() -> bool:
+	if returner or hp <= 0 or state not in ["graze", "chase", "recover"]:
+		return false
+	return _angle_from_home(global_position) > home_radius * STRAY_K
+
+
+## Puts it back at its home spot, unless it or the spot is on camera (then it waits for the next
+## check). Returns whether it moved. Nothing random is drawn: gameplay sequences stay the same.
+func return_home_unseen() -> bool:
+	var cam := get_viewport().get_camera_3d()
+	var spot := ball.surface_point(home_dir)
+	if Repopulation.on_camera(cam, global_position, up) or Repopulation.on_camera(cam, spot, home_dir):
+		return false
+	var h := spawn_h if home_dir.angle_to(spawn_dir) < 0.01 else 0.0
+	var q := PhysicsRayQueryParameters3D.create(ball.surface_point(home_dir, h + 3.0), ball.global_position, 1 | 2)
+	var hit := get_world_3d().direct_space_state.intersect_ray(q)
+	up = home_dir
+	standing_on = null
+	if hit.is_empty():
+		global_position = ball.surface_point(home_dir, _ground_offset)
+	else:
+		global_position = hit.position + up * _ground_offset
+		standing_on = hit.collider
+	heading = heading - up * heading.dot(up)
+	if heading.length() < 0.01:
+		heading = MossBall.frame_at(up, 0.0).z * -1.0
+	heading = heading.normalized()
+	_trail.clear()
+	_trail_up.clear()
+	for i in 12:
+		_trail.push_back(global_position - heading * spacing * i * 0.5)
+		_trail_up.push_back(up)
+	_set_state("graze")
+	_graze_target = global_position
+	_away_t = 0.0
+	_update_segments(0.0)
+	return true
+
+
 ## Repopulation: a parasite that came back to a cleared zone (Repopulation). It is never in
 ## `ball.parasites`, has no completion id, and killing it earns and restores nothing.
 var returner := false
@@ -342,13 +393,25 @@ func _physics_process(dt: float) -> void:
 	if state == "init":
 		_init_on_ground()
 		return
-	# Parasites on other moss balls sleep (they don't respawn and keep their state).
-	if state != "drifting" and g.player.ball != ball:
-		return
-	# Far from him on his own ball they pause too (world expansion: only his region runs).
-	if state not in ["drifting", "dying"] and not g.near_player(global_position):
+	# Parasites on other moss balls sleep (they don't respawn and keep their state). Far from him on
+	# his own ball they pause too (world expansion: only his region runs). A required one asleep away
+	# from its home is put back there, unseen (ledger row 36).
+	if (state != "drifting" and g.player.ball != ball) or (state not in ["drifting", "dying"] and not g.near_player(global_position)):
+		_stray_check -= dt
+		if _stray_check <= 0.0:
+			_stray_check = STRAY_CHECK_S
+			if strayed():
+				return_home_unseen()
 		return
 	state_t += dt
+	# Awake and grazing far from home for a while (stranded below a ledge it will not crawl off, say):
+	# it goes home as soon as neither it nor its home spot is in view.
+	if state == "graze" and strayed():
+		_away_t += dt
+		if _away_t >= STRAY_GRAZE_S and g.player.global_position.distance_to(global_position) > STRAY_UNSEEN_M:
+			return_home_unseen()
+	else:
+		_away_t = 0.0
 	hit_cd = maxf(0.0, hit_cd - dt)
 	_shaken = maxf(0.0, _shaken - dt)
 	_alerted_t = maxf(0.0, _alerted_t - dt)
@@ -1204,14 +1267,17 @@ func _update_flung(dt: float) -> void:
 	if not hit.is_empty() and state_t > 0.2 and vel.dot(up) <= 0.5:
 		global_position = hit.position + up * _ground_offset
 		standing_on = hit.collider
-		# Re-latch: its home is now wherever it grabbed on.
-		home_dir = ball.up_at(global_position)
+		# Re-latch. A returner makes its home wherever it grabbed on; an authored parasite keeps its
+		# own home (the area it keeps dead) and walks back to it (ledger row 36).
+		if returner:
+			home_dir = ball.up_at(global_position)
 		_set_state("recover")
 		return
 	global_position = to
 	if (global_position - ball.global_position).length() < ball.radius:
 		global_position = ball.surface_point(ball.up_at(global_position), _ground_offset)
-		home_dir = ball.up_at(global_position)
+		if returner:
+			home_dir = ball.up_at(global_position)
 		_set_state("recover")
 
 
