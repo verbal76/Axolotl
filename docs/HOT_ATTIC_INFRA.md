@@ -72,3 +72,37 @@ signal, so a broken game layer cannot show the activation screen.
   `hag_modal_text_indicator_blocks_input`, `hag_modal_single_instance`,
   `hag_modal_safety_timeout_never_hangs`, `hag_no_duplicate_activation`,
   `autoupd_unmountable_activation_failed`. Screenshot: `tests/shots.gd --only=applying`.
+
+## 3. Settings → About / Diagnostics and Copy diagnostics
+
+Settings → **About / Diagnostics** (`scripts/ui/diagnostics_page.gd`) now shows, without scrolling:
+the update headline, three concise lines (`AppInfo.about_lines()`: product, version, app build,
+running package; update state, channel, runtime; device OS/API/model/locale) and the buttons
+**Check for updates**, **Install now** (only when an update waits on the title), **Copy diagnostics**,
+**Advanced** (the unchanged native recovery panel) and **Close**. **Technical** (top right) opens the
+full report in the page's only scroll area; it is closed every time the page opens.
+
+**Copy diagnostics** (`AppInfo.copy_text()`, `DisplayServer.clipboard_set`) copies plain text: the
+standard report below, then the existing native diagnostics (OTA slots and events, startup
+timeline, automatic updates, run timer summary). No keys, passwords, user names, home paths or save
+file contents (test `hag_copy_text_plain_no_secrets`).
+
+| Section | Field | Source at runtime |
+|---|---|---|
+| App | app name, version name (game + APK), version code, native runtime id, build identity, source SHA, channel | `Boot.identity()` (native build info baked into the APK + `GameVersion`) |
+| App | package id | the app's private data directory (`OS.get_user_data_dir()` = `/data/user/<n>/<package>/files` on Android); otherwise "not exposed by this build (next APK)" |
+| Device | OS + version, model, locale | `OS.get_name()`, `OS.get_version()`, `OS.get_model_name()`, `OS.get_locale()` |
+| Device | API level | system property `ro.build.version.sdk` via `getprop` (once per process, Android only); otherwise "not exposed" |
+| — | captured-at | UTC wall clock when the text is built |
+| OTA | updates enabled, channel, runtime compatibility, current OTA id + seq, running source (embedded vs OTA), OTA source SHA, PCK SHA-256, last check | `Boot.core.state` / `Boot.core.active` / `Boot.updater` |
+| OTA | update state | `UpdateActivation.phase()`: CURRENT / AVAILABLE / STAGED / APPLYING / FAILED, or a qualified UNKNOWN (not checked yet, checking, offline) or OFF; never guessed |
+| Play | target SDK | **not exposed by this build (next APK)**; the line also states what the build configuration implies (Godot 4.7.2 default 36, min 24) and that it was not read from the app |
+| Play | Play required target API | 36 (developer.android.com, checked 2026-10-03) |
+| Play | PLAY API COMPLIANT | **UNVERIFIED** at runtime (target not exposed); the build configuration implies YES |
+| Play | export / signing | debug vs release template (`OS.is_debug_build()`), "signed"; certificate fingerprint not exposed (next APK) |
+
+Tests: `hag_app_info_package_and_play_rules`, `hag_report_has_every_field`,
+`hag_copy_text_plain_no_secrets`, `hag_about_concise_fits_no_scroll` (panel on screen, buttons inside,
+≥ 56 px, apart, row fits with Install showing, no scroll until Technical), `hag_about_technical_and_copy`;
+existing `diagnostics_page_simple`, `settings_fits_landscape_no_scroll`. Screenshots:
+`tests/shots.gd --only=about`.

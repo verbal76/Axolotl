@@ -25,6 +25,20 @@ func run(runner) -> void:
 		await t.shot("diag_page")
 		g.diagnostics.close()
 		g.pause_menu.close()
+	if only == "about":
+		g._enter_title()
+		await t.seconds(1.0)
+		g.pause_menu.open(true)
+		g.diagnostics.open()
+		await t.seconds(0.5)
+		await t.shot("about_page")
+		g.diagnostics._install.visible = true
+		g.diagnostics._tech.visible = true
+		g.diagnostics._text_at = -100000
+		await t.seconds(0.5)
+		await t.shot("about_technical")
+		g.diagnostics.close()
+		g.pause_menu.close()
 	if only == "applying":
 		# The activation modal over the title (HOT_ATTIC_INFRA.md §2).
 		g._enter_title()

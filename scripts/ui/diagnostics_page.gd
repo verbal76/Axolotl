@@ -5,7 +5,9 @@ extends CanvasLayer
 ## Updates are automatic now (AutoUpdate), so this page shows the state first (version, the
 ## running OTA, whether Mote is up to date) with the full diagnostics text under it, and keeps
 ## only what a player needs: Check for updates, Install now (only while an update waits and the
-## title is showing), Copy, Close. Every recovery tool (download, activate, roll back, bundled
+## title is showing), Copy diagnostics, Close. The About block is a few lines (AppInfo.about_lines);
+## the full report (AppInfo.report_text, then the native diagnostics) is under Technical, the only
+## part that scrolls, and only when opened. Every recovery tool (download, activate, roll back, bundled
 ## baseline, close app) stays in the native panel behind Advanced, unchanged: that panel is part
 ## of the installed app (scripts/boot), which an OTA cannot change, and its safety checks are the
 ## same ones this page relies on.
@@ -17,9 +19,12 @@ var _panel: PanelContainer
 var _status: Label
 var _detail: Label
 var _text: Label
+var _tech: ScrollContainer
+var _tech_btn: Button
 var _check: Button
 var _install: Button
 var _say := ""
+var _text_at := -100000
 
 
 func _ready() -> void:
@@ -47,16 +52,29 @@ func _ready() -> void:
 	_status.name = "Status"
 	_status.add_theme_font_size_override("font_size", 30)
 	_status.add_theme_color_override("font_color", Color(1.0, 0.86, 0.55))
-	v.add_child(_status)
+	_status.size_flags_horizontal = Control.SIZE_EXPAND_FILL
+	var head := HBoxContainer.new()
+	head.add_theme_constant_override("separation", 14)
+	v.add_child(head)
+	head.add_child(_status)
 	_detail = Label.new()
 	_detail.name = "Detail"
 	_detail.add_theme_font_size_override("font_size", 21)
 	_detail.autowrap_mode = TextServer.AUTOWRAP_WORD_SMART
 	v.add_child(_detail)
 	var scroll := ScrollContainer.new()
+	scroll.name = "Technical"
 	scroll.size_flags_vertical = Control.SIZE_EXPAND_FILL
 	scroll.horizontal_scroll_mode = ScrollContainer.SCROLL_MODE_DISABLED
+	scroll.visible = false
 	v.add_child(scroll)
+	_tech = scroll
+	var gap := Control.new()
+	gap.name = "Gap"
+	gap.size_flags_vertical = Control.SIZE_EXPAND_FILL
+	gap.mouse_filter = Control.MOUSE_FILTER_IGNORE
+	v.add_child(gap)
+	scroll.visibility_changed.connect(func(): gap.visible = not scroll.visible)
 	_text = Label.new()
 	_text.name = "Text"
 	_text.add_theme_font_size_override("font_size", 17)
@@ -64,12 +82,14 @@ func _ready() -> void:
 	_text.autowrap_mode = TextServer.AUTOWRAP_WORD_SMART
 	_text.size_flags_horizontal = Control.SIZE_EXPAND_FILL
 	scroll.add_child(_text)
+	_tech_btn = _btn(head, "TechnicalToggle", "Technical", func(): _tech.visible = not _tech.visible; _text_at = -100000; _refresh())
+	_tech_btn.custom_minimum_size.x = 230
 	var row := HBoxContainer.new()
-	row.add_theme_constant_override("separation", 14)
+	row.add_theme_constant_override("separation", 10)
 	v.add_child(row)
 	_check = _btn(row, "Check", "Check for updates", _on_check)
 	_install = _btn(row, "Install", "Install now", _on_install)
-	_btn(row, "Copy", "Copy", func(): DisplayServer.clipboard_set(Boot.diagnostics_text()); _say = "Diagnostics copied."; _refresh())
+	_btn(row, "Copy", "Copy diagnostics", copy_diagnostics)
 	var adv := _btn(row, "Advanced", "Advanced", func(): Boot.show_diagnostics())
 	adv.modulate = Color(1, 1, 1, 0.75)
 	var spacer := Control.new()
@@ -92,6 +112,7 @@ func _btn(row: Control, name_: String, text: String, cb: Callable) -> Button:
 
 func open() -> void:
 	_say = ""
+	_tech.visible = false
 	visible = true
 	_layout()
 	_refresh()
@@ -139,19 +160,27 @@ static func status_line() -> String:
 
 
 func _refresh() -> void:
-	var id: Dictionary = Boot.identity()
 	_status.text = status_line()
-	var active := str(id.get("ota_id", "none"))
 	var where := "installs on the title screen" if not waiting_update().is_empty() else ""
-	_detail.text = "Version %s  ·  running %s  ·  Android build %s%s%s" % [id.get("game_version", "?"),
-			active if active != "none" else "the bundled game", id.get("native_build", "?"),
-			("\n" + where) if where != "" else "", ("\n" + _say) if _say != "" else ""]
+	_detail.text = "\n".join(AppInfo.about_lines()) + (("\n" + where) if where != "" else "") + (("\n" + _say) if _say != "" else "")
+	_tech_btn.text = "Hide technical" if _tech.visible else "Technical"
 	var on_title: bool = Game.inst != null and Game.inst.state == "title"
 	_install.visible = not waiting_update().is_empty() and on_title
 	_check.disabled = Boot.updater == null or not Boot.ota_enabled or Boot.updater.busy
-	var t := Boot.diagnostics_text()
-	if _text.text != t:
-		_text.text = t
+	# The full text only while it is shown (or first opened), at most once a second.
+	var now := Time.get_ticks_msec()
+	if _text.text == "" or (_tech.visible and now - _text_at >= 1000):
+		_text_at = now
+		var t := AppInfo.report_text() + "\n\n" + Boot.diagnostics_text()
+		if _text.text != t:
+			_text.text = t
+
+
+## Copies the clean plain-text diagnostics (AppInfo.copy_text) to the clipboard.
+func copy_diagnostics() -> void:
+	DisplayServer.clipboard_set(AppInfo.copy_text())
+	_say = "Diagnostics copied."
+	_refresh()
 
 
 func _on_check() -> void:

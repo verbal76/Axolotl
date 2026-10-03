@@ -20,6 +20,8 @@ func run() -> void:
 	_test_activation_states()
 	await _test_activation_modal()
 	await _test_activation_no_duplicate()
+	_test_app_info_pure()
+	await _test_about_page()
 
 
 ## The resume check measures its gap on the wall clock (the engine clock stops while the phone
@@ -126,3 +128,85 @@ func _test_activation_no_duplicate() -> void:
 		Engine.set_meta(UA.META, saved)
 	DirAccess.remove_absolute(SoftRestart.record_path)
 	SoftRestart.record_path = saved_path
+
+
+func _test_app_info_pure() -> void:
+	var bad: Array[String] = []
+	for c in [["/data/user/0/com.verbal76.axolotl/files", "com.verbal76.axolotl"], ["/data/data/com.verbal76.axolotl/files/", "com.verbal76.axolotl"],
+			["/data/user/10/com.example.game/files", "com.example.game"], ["/home/x/.local/share/godot/app_userdata/Mote", ""],
+			["/storage/emulated/0/Android/data/com.verbal76.axolotl/files", ""], ["", ""]]:
+		if AppInfo.package_from_data_dir(c[0]) != c[1]:
+			bad.append("%s -> '%s'" % [c[0], AppInfo.package_from_data_dir(c[0])])
+	for c in [[-1, 36, "UNVERIFIED"], [36, 36, "YES"], [37, 36, "YES"], [35, 36, "NO"], [34, 0, "UNVERIFIED"]]:
+		if AppInfo.play_api_compliant(c[0], c[1]) != c[2]:
+			bad.append("compliance %s" % [c])
+	t.check("hag_app_info_package_and_play_rules", bad.is_empty(), "; ".join(bad))
+
+
+## About: a few lines on the page; the standard report (every field present, unknowns said as
+## such) and the native diagnostics under Technical and on the clipboard; nothing secret or
+## personal; buttons inside the panel, finger-sized, apart; no scrolling until Technical is opened.
+func _test_about_page() -> void:
+	var r := AppInfo.report_text()
+	var missing: Array[String] = []
+	for k in ["Captured at: ", "App name: Mote", "Package id: ", "Version name: ", "Version code: ", "Native runtime: " + Boot.identity()["runtime_id"],
+			"Build identity: ", "Source SHA (running code): ", "Channel: ", "OS: ", "API level: ", "Model: ", "Locale: ",
+			"Updates enabled: ", "Runtime compatibility: ", "Current OTA: ", "Running source: ", "OTA source SHA: ", "OTA PCK SHA-256: ",
+			"Last check: ", "Update state: ", "Target SDK: " + AppInfo.NOT_EXPOSED, "Play required target API: 36",
+			"PLAY API COMPLIANT: UNVERIFIED"]:
+		if not r.contains(k):
+			missing.append(k)
+	t.check("hag_report_has_every_field", missing.is_empty(), "missing: %s" % [missing])
+	var copy := AppInfo.copy_text()
+	var leaks: Array[String] = []
+	for s in ["PRIVATE KEY", "BEGIN PUBLIC KEY", "PASSWORD", "KEYSTORE", "password"]:
+		if copy.contains(s):
+			leaks.append(s)
+	var home := OS.get_environment("HOME")
+	if home.length() > 1 and copy.contains(home):
+		leaks.append("home directory")
+	t.check("hag_copy_text_plain_no_secrets", leaks.is_empty() and copy.begins_with("MOTE ABOUT / DIAGNOSTICS") and copy.contains("MOTE DIAGNOSTICS"), "found %s" % [leaks])
+	var dp: DiagnosticsPage = g.diagnostics
+	dp.open()
+	await t.frames(3)
+	var panel := dp._panel.get_global_rect()
+	var screen := dp._root.get_viewport_rect()
+	var bad: Array[String] = []
+	if not screen.encloses(panel):
+		bad.append("panel %s off screen %s" % [panel, screen])
+	if dp._tech.is_visible_in_tree():
+		bad.append("technical text open by default")
+	var rects: Array[Rect2] = []
+	for n in dp._panel.find_children("*", "Button", true, false):
+		var b := n as Button
+		if not b.is_visible_in_tree():
+			continue
+		var br := b.get_global_rect()
+		if not panel.encloses(br) or br.size.y < 56.0:
+			bad.append("%s %s" % [b.name, br])
+		for o in rects:
+			if o.intersects(br):
+				bad.append("%s overlaps" % b.name)
+		rects.append(br)
+	# With Install showing too (an update waiting on the title), the button row still fits.
+	var row := dp._install.get_parent() as Control
+	dp._install.visible = true
+	var row_w := row.get_combined_minimum_size().x
+	dp._install.visible = false
+	if row_w > row.size.x + 0.5:
+		bad.append("button row with Install needs %.0f of %.0f" % [row_w, row.size.x])
+	var lines := dp._detail.text.split("\n")
+	if lines.size() > 6 or not dp._detail.text.contains("Updates: ") or not panel.encloses(dp._detail.get_global_rect()):
+		bad.append("about block %s" % [lines])
+	t.check("hag_about_concise_fits_no_scroll", bad.is_empty(), "; ".join(bad))
+	(dp._panel.find_child("TechnicalToggle", true, false) as Button).pressed.emit()
+	await t.frames(2)
+	var tech_ok: bool = dp._tech.is_visible_in_tree() and dp._text.text.contains("PLAY API COMPLIANT") and dp._text.text.contains("MOTE DIAGNOSTICS")
+	(dp._panel.find_child("Copy", true, false) as Button).pressed.emit()
+	await t.frames(1)
+	var copied: bool = dp._detail.text.contains("Diagnostics copied.")
+	if DisplayServer.get_name() != "headless":
+		copied = copied and DisplayServer.clipboard_get().begins_with("MOTE ABOUT / DIAGNOSTICS")
+	dp.close()
+	await t.frames(1)
+	t.check("hag_about_technical_and_copy", tech_ok and copied, "technical %s, copied %s" % [tech_ok, copied])
