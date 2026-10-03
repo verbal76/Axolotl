@@ -314,6 +314,17 @@ func chase_run(b: MossBall, centre: Vector3, par: Parasite, bearing: float, time
 	return [t_commit, rows]
 
 
+## Just the cost check (--only=_phase_organic_cost): to tune its bounds or re-run it alone.
+func run_cost_only() -> void:
+	var release := hold_everything()
+	var was_on := organic_on()
+	var saved := _save_world()
+	await _check_cost()
+	set_organic(was_on)
+	_restore_world(saved)
+	release.call()
+
+
 # --- Checks --------------------------------------------------------------------------------
 
 func run_checks() -> void:
@@ -926,14 +937,149 @@ func _check_pursuit() -> void:
 
 
 ## Cost: the layer itself, and a representative population with it on and off.
-func _check_cost() -> void:
+##
+## Wall-clock timing on a shared machine: every absolute microsecond figure scales with CPU load, and a
+## scheduler stall can swallow a whole long block. So nothing here is an absolute limit. The signal is
+## (a) on/off RATIOS measured in many short ABBA-interleaved slices (drift and contention hit both arms
+## alike) compared by MEDIAN (a stalled slice cannot move it), and (b) the layer's per-step cost expressed in
+## units of a fixed arithmetic kernel timed in the same slices (a "calibration" that slows with the machine).
+## A failing attempt is measured once more; a real cost regression fails both attempts.
+const COST_SLICE_PAIRS := 12  # x4 slices (A B B A) per arm group
+const COST_LAYER_STEPS := 150  # OrganicMotion.step calls per layer slice (about 0.3 ms, like a reference slice: both meet the scheduler alike)
+const COST_REF_ITERS := 5000  # iterations of the calibration kernel per reference slice
+const COST_PAR_FRAMES := 12  # frames per parasite / critter slice
+const COST_MAX_LAYER_REF := 80.0  # layer step cost, in calibration iterations (steady 39-41 from idle to a load of 10 on 4 CPUs; limit is 2x, about the old 5 us)
+const COST_MAX_PAR_RATIO := 1.35  # whole grazing-parasite tick, organic on / off (1.10-1.16 measured)
+const COST_MAX_CRIT_RATIO := 1.9  # all critters' ticks together, on / off (1.4-1.5 measured)
+const COST_MAX_SPECIES_RATIO := 2.6  # any one critter species (noisier: fewer samples; 1.2-1.5 typical)
+const COST_MAX_EXTRA_REF := 360.0  # extra cost per creature-frame with the layer on, in calibration iterations (80-250 measured under load; the old 10 us limit was about 180 on an idle machine)
+const COST_SANITY_US := 1000.0  # no creature-frame may ever cost a millisecond
+
+
+## The fixed arithmetic kernel: microseconds for COST_REF_ITERS iterations of plain float math.
+func _cost_ref_us() -> float:
+	var t0 := Time.get_ticks_usec()
+	var x := 1.0
+	for i in COST_REF_ITERS:
+		x = x * 1.0000001 + 0.25 - floorf(x * 0.5) * 0.5
+	if x < 0.0:  # (keeps the loop from being treated as dead; never true)
+		print(x)
+	return float(Time.get_ticks_usec() - t0)
+
+
+func _median(a: Array) -> float:
+	if a.is_empty():
+		return 0.0
+	var b := a.duplicate()
+	b.sort()
+	var n := b.size()
+	return float(b[n / 2]) if n % 2 == 1 else (float(b[n / 2 - 1]) + float(b[n / 2])) * 0.5
+
+
+## Lower quartile: contention only ever ADDS time to a slice, so for an absolute figure (not a ratio of
+## two interleaved arms) the low end is the honest one.
+func _low(a: Array) -> float:
+	var b := a.duplicate()
+	b.sort()
+	return float(b[b.size() / 4])
+
+
+## Spread of the slice times relative to their median: above 1 the machine was too noisy to trust.
+func _spread(a: Array) -> float:
+	var b := a.duplicate()
+	b.sort()
+	var n := b.size()
+	return (float(b[n * 3 / 4]) - float(b[n / 4])) / maxf(_median(b), 0.001)
+
+
+## One measurement attempt; returns the figures and whether every bound held.
+func _cost_attempt(pars: Array, snaps: Array, crit: Array, cs: Array) -> Dictionary:
 	var om := OrganicMotion.new(4242, OrganicMotion.PARASITE_MEDIUM)
-	var per := INF
-	for rep in 3:
-		var t0 := Time.get_ticks_usec()
-		for i in 10000:
-			om.step(DT, 1.0, 1.0, 1.0)
-		per = minf(per, float(Time.get_ticks_usec() - t0) / 10000.0)
+	var layer_us := []
+	var ref_us := []
+	for k in COST_SLICE_PAIRS * 16:
+		# A B B A: layer, reference, reference, layer.
+		if k % 4 == 0 or k % 4 == 3:
+			var t0 := Time.get_ticks_usec()
+			for i in COST_LAYER_STEPS:
+				om.step(DT, 1.0, 1.0, 1.0)
+			layer_us.append(float(Time.get_ticks_usec() - t0) / COST_LAYER_STEPS)
+		else:
+			ref_us.append(_cost_ref_us())
+	var ref_unit := _low(ref_us) / COST_REF_ITERS  # us per kernel iteration, now
+	var layer_ref := _low(layer_us) / maxf(ref_unit, 0.0001)  # layer step in kernel iterations
+	# Twelve grazing parasites of one ball: whole _physics_process, organic on and off, interleaved.
+	var par_us := {true: [], false: []}
+	var par_ref := []
+	for k in COST_SLICE_PAIRS * 4:
+		var on: bool = k % 4 == 0 or k % 4 == 3  # on, off, off, on
+		set_organic(on)
+		for i in pars.size():
+			par_full_restore(pars[i], snaps[i])
+		var t1 := Time.get_ticks_usec()
+		for f in COST_PAR_FRAMES:
+			for par in pars:
+				(par as Parasite)._physics_process(DT)
+		par_us[on].append(float(Time.get_ticks_usec() - t1) / (COST_PAR_FRAMES * pars.size()))
+		par_ref.append(_cost_ref_us())
+	for i in pars.size():
+		par_full_restore(pars[i], snaps[i])
+	var par_on := _median(par_us[true])
+	var par_off := _median(par_us[false])
+	var par_ratio := par_on / maxf(par_off, 0.001)
+	var par_extra_ref := (par_on - par_off) / maxf(_median(par_ref) / COST_REF_ITERS, 0.0001)
+	# Critters (stalker, puffer, crab, eel): per species tick, on and off, interleaved.
+	var sp_us := {}  # "<species>_<on|off>" -> slice figures
+	var crit_ref := []
+	var n_of := {}
+	for c in crit:
+		n_of[c.species] = n_of.get(c.species, 0) + 1
+	var crit_all := {true: [], false: []}
+	for k in COST_SLICE_PAIRS * 4:
+		var on: bool = k % 4 == 0 or k % 4 == 3
+		set_organic(on)
+		for i in crit.size():
+			_crit_restore(crit[i], cs[i])
+		var slice := {}
+		var total := 0.0
+		for f in COST_PAR_FRAMES:
+			for c in crit:
+				var t3 := Time.get_ticks_usec()
+				c.tick(DT)
+				var d := float(Time.get_ticks_usec() - t3)
+				slice[c.species] = slice.get(c.species, 0.0) + d
+				total += d
+		crit_all[on].append(total / (COST_PAR_FRAMES * crit.size()))
+		for sp in slice:
+			var key: String = sp + ("_on" if on else "_off")
+			if not sp_us.has(key):
+				sp_us[key] = []
+			sp_us[key].append(slice[sp] / (COST_PAR_FRAMES * n_of[sp]))
+		crit_ref.append(_cost_ref_us())
+	for i in crit.size():
+		_crit_restore(crit[i], cs[i])
+	set_organic(true)
+	var crit_on := _median(crit_all[true])
+	var crit_off := _median(crit_all[false])
+	var crit_extra_ref := (crit_on - crit_off) / maxf(_median(crit_ref) / COST_REF_ITERS, 0.0001)
+	var worst_ratio := 0.0
+	var brk: Array[String] = []
+	for sp in ["stalker", "puffer", "crab", "eel"]:
+		if sp_us.has(sp + "_on") and sp_us.has(sp + "_off"):
+			var r := _median(sp_us[sp + "_on"]) / maxf(_median(sp_us[sp + "_off"]), 0.001)
+			worst_ratio = maxf(worst_ratio, r)
+			brk.append("%s x%.2f" % [sp, r])
+	var noise := maxf(_spread(layer_us), maxf(_spread(par_us[true]), _spread(par_us[false])))
+	var crit_ratio := crit_on / maxf(crit_off, 0.001)
+	var ok: bool = layer_ref < COST_MAX_LAYER_REF and par_ratio < COST_MAX_PAR_RATIO and par_extra_ref < COST_MAX_EXTRA_REF \
+			and crit_ratio < COST_MAX_CRIT_RATIO and worst_ratio < COST_MAX_SPECIES_RATIO and crit_extra_ref < COST_MAX_EXTRA_REF \
+			and par_on < COST_SANITY_US and crit_on < COST_SANITY_US and _median(layer_us) < COST_SANITY_US
+	return {"ok": ok, "detail": "layer %.2f us/step (low quartile) = %.1f kernel iters (limit %.0f); grazing parasite %.1f us on, %.1f off (x%.2f, limit %.2f; +%.0f iters, limit %.0f; %d of them); critters %.1f us on, %.1f off (x%.2f, limit %.1f; +%.0f iters; %s, limit x%.1f; %d); slice spread %.2f" % [
+			_low(layer_us), layer_ref, COST_MAX_LAYER_REF, par_on, par_off, par_ratio, COST_MAX_PAR_RATIO, par_extra_ref,
+			COST_MAX_EXTRA_REF, pars.size(), crit_on, crit_off, crit_ratio, COST_MAX_CRIT_RATIO, crit_extra_ref, ", ".join(brk), COST_MAX_SPECIES_RATIO, crit.size(), noise]}
+
+
+func _check_cost() -> void:
 	# Twelve grazing parasites of one ball (the most that run near him) and the creatures.
 	var pars := []
 	var b: MossBall = null
@@ -950,19 +1096,6 @@ func _check_cost() -> void:
 	var snaps := []
 	for par in pars:
 		snaps.append(par_full_snapshot(par))
-	var us := {true: INF, false: INF}
-	for rep in 3:
-		for on in [false, true]:
-			set_organic(on)
-			for i in pars.size():
-				par_full_restore(pars[i], snaps[i])
-			var t1 := Time.get_ticks_usec()
-			for f in 300:
-				for par in pars:
-					(par as Parasite)._physics_process(DT)
-			us[on] = minf(us[on], float(Time.get_ticks_usec() - t1) / (300.0 * pars.size()))
-	for i in pars.size():
-		par_full_restore(pars[i], snaps[i])
 	set_organic(true)
 	var crit := []
 	for c in g.ecosystem.all_critters():
@@ -971,33 +1104,12 @@ func _check_cost() -> void:
 	var cs := []
 	for c in crit:
 		cs.append(_crit_snapshot(c))
-	var cus := {true: INF, false: INF}
-	var per_sp := {}
-	for rep in 3:
-		for on in [false, true]:
-			set_organic(on)
-			for i in crit.size():
-				_crit_restore(crit[i], cs[i])
-			var sp_us := {}
-			var t2 := Time.get_ticks_usec()
-			for f in 300:
-				for c in crit:
-					var t3 := Time.get_ticks_usec()
-					c.tick(DT)
-					sp_us[c.species] = sp_us.get(c.species, 0.0) + float(Time.get_ticks_usec() - t3)
-			cus[on] = minf(cus[on], float(Time.get_ticks_usec() - t2) / (300.0 * crit.size()))
-			for sp in sp_us:
-				var n := crit.filter(func(c): return c.species == sp).size()
-				var k: String = sp + ("_on" if on else "_off")
-				per_sp[k] = minf(per_sp.get(k, INF), sp_us[sp] / (300.0 * n))
-	for i in crit.size():
-		_crit_restore(crit[i], cs[i])
+	var r := _cost_attempt(pars, snaps, crit, cs)
+	var attempts := 1
+	if not r["ok"]:
+		# Possibly a noisy moment on a shared machine: measure once more (a real regression fails again).
+		await t.frames(2)
+		r = _cost_attempt(pars, snaps, crit, cs)
+		attempts = 2
 	set_organic(true)
-	var brk: Array[String] = []
-	for sp in ["stalker", "puffer", "crab", "eel"]:
-		if per_sp.has(sp + "_on"):
-			brk.append("%s %.1f/%.1f" % [sp, per_sp[sp + "_on"], per_sp[sp + "_off"]])
-	# The layer itself must stay within a few microseconds; a creature's whole tick may cost a little
-	# more with it on (a curved path meets its patch edge and rocks at other moments: extra rays).
-	t.check("organic_cost_bounded", per < 5.0 and us[true] - us[false] < 10.0 and cus[true] - cus[false] < 10.0,
-			"layer %.2f us per creature per frame; grazing parasite %.1f us on, %.1f off (%d of them); critter %.1f us on, %.1f off (%d; on/off %s)" % [per, us[true], us[false], pars.size(), cus[true], cus[false], crit.size(), ", ".join(brk)])
+	t.check("organic_cost_bounded", r["ok"], "attempts %d; %s" % [attempts, r["detail"]])

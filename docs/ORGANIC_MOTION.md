@@ -119,7 +119,7 @@ generator exactly as before (unchanged timing).
 | Determinism / bot RNG | no draws in layer; graze on own `_rng` | `organic_deterministic`, `organic_leaves_gameplay_rng_alone`, `parasite_decisions_deterministic`, `eco_leaves_gameplay_rng_alone` |
 | Synchronised individuals / loops | hashed phases, tempos, start times; time warp | `organic_individuals_not_in_step`, `organic_no_short_period_repetition` |
 | Frame-rate dependence | absolute functions of time, exponential easing | `organic_signal_frame_rate_independent` (0 diff), `organic_paths_frame_rate_independent` |
-| Cost | ~17 sines, branches skip unused channels | `organic_cost_bounded` |
+| Cost | ~17 sines, branches skip unused channels; load-tolerant check (ABBA-interleaved slices, medians, on/off ratios, layer cost in units of a calibration kernel, one retry; `--only=_phase_organic_cost` runs it alone) | `organic_cost_bounded` |
 | Puffer has no wall test | drift is a bounded positional function (velocity = its derivative), fades when puffed | bounds test (height/home vs layer off) |
 
 
