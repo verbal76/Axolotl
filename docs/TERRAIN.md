@@ -140,3 +140,22 @@ under a software Vulkan renderer. The frame times are a relative proxy, not phon
 - Open views: frame time within run-to-run noise.
 - Cave interior: about 20% slower. The same geometry with the old material costs the same, so this
   is the tunnel filling more of the screen at that camera position, not the material.
+
+### E6f materials (moss relief, stone pillars, stem ribs)
+
+Measured on a quiet machine with `--test=shots --only=perflook` (xvfb, Vulkan Mobile renderer,
+software rasteriser): 3 alternating runs each of the base `7d7dffd` (A) and the E6f branch (B),
+one Godot process at a time. Median ms/frame (a relative proxy, not phone numbers):
+
+| View | A | B | Change |
+|---|---|---|---|
+| ball 1 open moss (10, 30) | 879 | 864 | −2% |
+| ball 1 mounds (−59, 31) | 391 | 394 | +1% |
+| ball 2 (10, 70) | 341 | 341 | 0% |
+| ball 3 stems (10, 110) | 248 | 262 | +6% |
+| ball 1 cave | 294 | 288 | −2% |
+| ball 7 cave | 255 | 273 | +7% |
+| ball 7 first route | 216 | 219 | +1% |
+
+Every view is within run-to-run spread (single runs vary up to ±15%); none is over 10% slower.
+Triangles and draw calls are unchanged within noise.
