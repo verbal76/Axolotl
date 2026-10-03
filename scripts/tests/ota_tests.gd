@@ -7,6 +7,7 @@ const OtaUpdater := preload("res://scripts/boot/ota_updater.gd")
 const HttpStub := preload("res://scripts/tests/ota_http_stub.gd")
 const BootScript := preload("res://scripts/boot/boot.gd")
 const SoftRestart := preload("res://scripts/core/soft_restart.gd")
+const UpdateActivationScript := preload("res://scripts/core/update_activation.gd")
 const RUNTIME := "testos-godot-4.7.2-r1"
 
 var t
@@ -462,6 +463,9 @@ func _test_soft_restart_failure_keeps_game() -> void:
 			and get_tree_root().get_node_or_null(SoftRestart.CURTAIN_NAME) == null and Settings.get_script() != null, why)
 	t.check("autoupd_unmountable_native_semantics", c.is_bad("dev-000001") and c.active.is_empty() and c.state["boot"] == boot_before, str(c.state["boot"]))
 	t.check("autoupd_failure_recorded", str(SoftRestart.record_read()["last"]["result"]).contains("not applied"), str(SoftRestart.record_read()["last"]))
+	var act: Dictionary = UpdateActivationScript.state()
+	t.check("autoupd_unmountable_activation_failed", act.get("state", "") == "failed" and act.get("ota_id", "") == "dev-000001"
+			and not UpdateActivationScript.is_applying(), str(act))
 	Boot.core = saved[0]
 	Boot.ota_enabled = saved[1]
 	DirAccess.remove_absolute(SoftRestart.record_path)

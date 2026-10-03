@@ -25,6 +25,7 @@ extends Node
 ## work exactly as after a cold start.
 
 const SoftRestart := preload("res://scripts/core/soft_restart.gd")
+const UpdateActivation := preload("res://scripts/core/update_activation.gd")
 const OtaCore := preload("res://scripts/boot/ota_core.gd")
 ## Longest the launch waits for its check and download, from the moment the check starts.
 const LAUNCH_CAP_MS := 8000
@@ -356,7 +357,6 @@ func _save_progress() -> String:
 func _apply(m: Dictionary, where: String, save: Callable) -> String:
 	_applying = true
 	print("[AUTOUPDATE] applying %s at %s" % [m["ota_id"], where])
-	Boot.toast("Updating to %s..." % m["ota_id"])
 	var why: String = await SoftRestart.apply(m, where, save)
 	# (Only reached when the update did not go ahead: otherwise this node no longer exists.)
 	if why != "":
@@ -384,6 +384,7 @@ static func on_loading_visible() -> void:
 	if sr.is_empty():
 		return
 	SoftRestart.lift_curtain()
+	UpdateActivation.finish(sr.get("to", "") == sr.get("wanted", "") and str(sr.get("result", "")) == "", str(sr.get("result", "")))
 	if not sr.get("announced", false):
 		var from: String = sr.get("from", "") if sr.get("from", "") != "" else "bundled game"
 		if sr.get("to", "") == sr.get("wanted", "") and str(sr.get("result", "")) == "":

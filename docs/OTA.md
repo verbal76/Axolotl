@@ -55,7 +55,8 @@ what the r5 native layer already exposes (`Boot.updater`, `Boot.core`, `Boot.hea
 ```
 launch -> loading screen; the game layer starts a check (Boot.updater.check) while the world builds
        -> world built: wait for the check, at most 8 s after it started (offline: it already failed)
-       -> verified update PENDING? loading screen "Updating..." -> soft restart -> title of the NEW version
+       -> verified update PENDING? loading screen "Updating..." -> soft restart ("Please wait, applying
+          update" modal) -> title of the NEW version
 during a session: update downloaded (native start / resume / periodic check)
        -> installs at the next safe moment: the title screen, or the app returning from the background
           (never in play, cinematics, lessons, menus, the aquarium or the ending); run + profile saved first
@@ -76,6 +77,17 @@ The soft restart:
 3. **Health re-armed.** The new version must report ready and keep running 3 s before the native layer
    makes it CURRENT (the old CURRENT becomes PREVIOUS). A version that never gets there is abandoned
    after the usual two unhealthy starts and the device falls back, as after a cold start.
+
+**Activation screen (2026-10-03, `scripts/core/update_activation.gd`).** Only the soft restart itself
+shows "Please wait, applying update" (a Mote panel with an indeterminate bar over the loading-screen
+backdrop, input blocked); checking and downloading never do. It goes up when `SoftRestart.apply` starts
+the switch (after the save), is lifted by the new version's loading screen (`AutoUpdate.on_loading_visible`),
+and is removed at once when the native layer does not mount the package (the toast then says the current
+version keeps running). A second activation while one runs is refused. If nothing lifts it within 20 s,
+its own engine-only timer replaces the text with "The update did not finish. Mote will try again on the
+next start." and removes it 3 s later; the activation state expires on the same clock. A cold-start
+activation happens inside `Boot._init` before any game code exists: nothing can be shown there by an OTA
+(native proposal in `docs/HOT_ATTIC_INFRA.md`).
 
 Safety: each OTA id is tried in-process at most once (`user://ota_autoupdate.json`, written before
 anything changes); in a session the running version must itself be healthy first; nothing is applied

@@ -32,7 +32,10 @@ const TRACE_PATH := "res://scripts/core/startup_trace.gd"
 const GILL_LOOK_PATH := "res://scripts/actors/gill_look.gd"
 ## Never recompiled: the native layer and its generated build info belong to the APK.
 const NATIVE_PREFIXES := ["res://scripts/boot/", "res://scripts/generated/"]
+## The "Please wait, applying update" modal (UpdateActivation.NODE_NAME); lifted by name, so any
+## version's loading screen removes it.
 const CURTAIN_NAME := "AutoUpdateCurtain"
+const ACTIVATION_PATH := "res://scripts/core/update_activation.gd"
 ## Engine metadata (survives scene changes and script reloads) describing the last soft restart
 ## of this process: {from, to, where, usec, scripts, resources, note}.
 const META := "mote_soft_restart"
@@ -194,64 +197,6 @@ static func _res_rank(path: String) -> int:
 	return 1
 
 
-## A plain-engine copy of Mote's loading screen (no game script, so it can stay up while every
-## game script is recompiled). The new game's own loading screen takes over and removes it.
-static func _curtain(tree: SceneTree, text: String) -> CanvasLayer:
-	var old := tree.root.get_node_or_null(CURTAIN_NAME)
-	if old != null:
-		old.free()
-	var c := CanvasLayer.new()
-	c.name = CURTAIN_NAME
-	c.layer = 101
-	c.process_mode = Node.PROCESS_MODE_ALWAYS
-	var bg := ColorRect.new()
-	bg.color = Color(0.04, 0.1, 0.1, 1.0)
-	bg.set_anchors_preset(Control.PRESET_FULL_RECT)
-	bg.mouse_filter = Control.MOUSE_FILTER_STOP
-	c.add_child(bg)
-	var art := TextureRect.new()
-	if ResourceLoader.exists("res://assets/icon/splash.png"):
-		art.texture = load("res://assets/icon/splash.png")
-	art.expand_mode = TextureRect.EXPAND_IGNORE_SIZE
-	art.stretch_mode = TextureRect.STRETCH_KEEP_ASPECT_CENTERED
-	art.set_anchors_preset(Control.PRESET_CENTER)
-	var win := DisplayServer.window_get_size()
-	var sz := clampf(320.0 * tree.root.get_visible_rect().size.y / float(win.y), 150.0, 360.0) if win.y > 0 else 213.0
-	art.offset_left = -sz / 2.0
-	art.offset_right = sz / 2.0
-	art.offset_top = -sz / 2.0
-	art.offset_bottom = sz / 2.0
-	bg.add_child(art)
-	var title := Label.new()
-	title.text = "MOTE"
-	title.horizontal_alignment = HORIZONTAL_ALIGNMENT_CENTER
-	title.vertical_alignment = VERTICAL_ALIGNMENT_BOTTOM
-	title.add_theme_font_size_override("font_size", 72)
-	title.add_theme_color_override("font_color", Color(0.98, 0.82, 0.86))
-	title.add_theme_color_override("font_outline_color", Color(0.05, 0.18, 0.16, 0.8))
-	title.add_theme_constant_override("outline_size", 8)
-	_band(title, -sz / 2.0 - 130.0, -sz / 2.0 - 16.0)
-	bg.add_child(title)
-	var status := Label.new()
-	status.text = text
-	status.horizontal_alignment = HORIZONTAL_ALIGNMENT_CENTER
-	status.add_theme_font_size_override("font_size", 24)
-	status.add_theme_color_override("font_color", Color(0.85, 0.95, 0.92, 0.75))
-	_band(status, sz / 2.0 + 22.0, sz / 2.0 + 60.0)
-	bg.add_child(status)
-	tree.root.add_child(c)
-	return c
-
-
-static func _band(c: Control, top: float, bottom: float) -> void:
-	c.anchor_left = 0.0
-	c.anchor_right = 1.0
-	c.anchor_top = 0.5
-	c.anchor_bottom = 0.5
-	c.offset_top = top
-	c.offset_bottom = bottom
-
-
 ## Removes the curtain (called by the new game once its own loading screen is on screen).
 static func lift_curtain() -> void:
 	var tree := Engine.get_main_loop() as SceneTree
@@ -306,6 +251,10 @@ static func apply(m: Dictionary, where: String, save := Callable()) -> String:
 	var tree := Engine.get_main_loop() as SceneTree
 	var core = Boot.core
 	var id: String = m.get("ota_id", "")
+	var act: Script = load(ACTIVATION_PATH)
+	if act.call("is_applying"):
+		# Never two activations at once (the one running owns the modal and the game layer).
+		return "an update is already being applied"
 	var from: Dictionary = (core.active as Dictionary).duplicate(true)
 	var from_id: String = from.get("ota_id", "")
 	if save.is_valid():
@@ -316,7 +265,8 @@ static func apply(m: Dictionary, where: String, save := Callable()) -> String:
 			return "progress could not be saved: " + why
 	record_attempt(id, from_id, where)
 	_mark("game: update %s: soft restart begins (%s)" % [id, where])
-	var curtain := _curtain(tree, "Updating...")
+	act.call("begin", id)
+	var curtain: CanvasLayer = act.call("show_modal", tree)
 	# Let every game-layer frame on the call stack finish before anything is torn down.
 	await tree.process_frame
 	_wait_workers()
@@ -336,6 +286,7 @@ static func apply(m: Dictionary, where: String, save := Callable()) -> String:
 		curtain.queue_free()
 		var said: Array = (core.boot_log as Array).slice(log_n)
 		var why := "the native layer did not mount it (%s)" % ("; ".join(said) if not said.is_empty() else "no reason given")
+		act.call("finish", false, why)
 		record_result(id, "not applied: %s; still running %s" % [why, from_id if from_id != "" else "the bundled game"])
 		return why
 
@@ -391,6 +342,7 @@ static func apply(m: Dictionary, where: String, save := Callable()) -> String:
 	# then the main scene from the new pack.
 	ResourceLoader.load.call_deferred(SELF_PATH, "", ResourceLoader.CACHE_MODE_IGNORE)
 	tree.change_scene_to_file.call_deferred(str(ProjectSettings.get_setting("application/run/main_scene")))
-	# (The new loading screen lifts the curtain; this is only a backstop.)
-	tree.create_timer(20.0, true).timeout.connect(curtain.queue_free)
+	# The new loading screen lifts the modal and ends the activation (AutoUpdate.on_loading_visible);
+	# if it never does, the modal's own safety timer says so and removes it, and the activation
+	# state expires (UpdateActivation.SAFETY_MS).
 	return ""

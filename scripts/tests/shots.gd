@@ -25,6 +25,16 @@ func run(runner) -> void:
 		await t.shot("diag_page")
 		g.diagnostics.close()
 		g.pause_menu.close()
+	if only == "applying":
+		# The activation modal over the title (HOT_ATTIC_INFRA.md §2).
+		g._enter_title()
+		await t.seconds(1.0)
+		preload("res://scripts/core/update_activation.gd").show_modal(g.get_tree())
+		await t.seconds(0.4)
+		await t.shot("applying_update")
+		await t.seconds(0.3)
+		await t.shot("applying_update_b")
+		preload("res://scripts/core/update_activation.gd").modal(g.get_tree()).queue_free()
 	if only == "ooze":
 		# The green ooze on a ravine floor, seen from its rim (owner, 2026-10-01).
 		var b: MossBall = g.balls[0]

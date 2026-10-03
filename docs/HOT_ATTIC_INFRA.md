@@ -38,3 +38,37 @@ so the native policy stays coherent. Test: `hag_resume_check_wall_clock`.
 blind spot; activation is driven from the game layer through r5 internals (`Boot.core.boot`,
 `Boot._ready_at`) rather than a public native API; and the native layer emits no activation
 signal, so a broken game layer cannot show the activation screen.
+
+## 2. "Please wait, applying update"
+
+**Where activation really happens.** Two places:
+1. **In-process soft restart (game layer, the normal path).** `AutoUpdate` → `SoftRestart.apply`:
+   save → native `Boot.core.boot()` re-verifies and mounts PENDING → the old game layer is freed and
+   recompiled from the new pack → the main scene reloads → the new loading screen appears. Fully
+   observable and driven by OTA code. **IMPLEMENTED** here.
+2. **Cold start (native).** If the app is killed with an update PENDING, `Boot._init` mounts it before
+   any game script exists. Nothing OTA-delivered runs during that window, so no OTA can show anything
+   there (the engine boot splash is on screen). **PREPARED/HELD** as native proposal N2 (§6).
+
+**Implementation** (`scripts/core/update_activation.gd`):
+- *State* (Engine metadata, survives the script recompile): `begin(id)` when `SoftRestart.apply` starts
+  the switch (after the save succeeded, before anything changes), refused while one runs (no duplicate
+  activation; `SoftRestart.apply` returns "an update is already being applied"); `finish(false)` when the
+  native layer does not mount it; `finish(ok)` from the new version's first loading-screen frame
+  (`AutoUpdate.on_loading_visible`). `is_applying()` also expires after 20 s, so it can never stick.
+- *Modal*: plain engine nodes only (no game script, so it stays up while every game script is
+  recompiled): Mote's loading-screen backdrop, a `UiStyle` panel/font, exactly "Please wait, applying
+  update", an indeterminate `ProgressBar` (animated by the engine), `MOUSE_FILTER_STOP` backdrop, layer
+  101 above the loading screen. Node name `AutoUpdateCurtain` (unchanged), so any version's loading
+  screen lifts it.
+- *Never hangs*: an engine-only `Timer` inside the modal (20 s) turns the text into "The update did not
+  finish. Mote will try again on the next start.", hides the bar and removes the modal 3 s later. A
+  failure before the point of no return removes the modal at once and the existing toast says the
+  current version keeps running.
+- *Not shown* while idle, checking, downloading, failed, rejected, incompatible, offline, up to date or
+  merely staged (`UpdateActivation.phase()` / `shows_modal()`); the earlier "Updating to …" toast during
+  activation was removed (the modal says it).
+- Tests: `hag_activation_modal_only_when_applying`, `hag_activation_once_and_cleared`,
+  `hag_modal_text_indicator_blocks_input`, `hag_modal_single_instance`,
+  `hag_modal_safety_timeout_never_hangs`, `hag_no_duplicate_activation`,
+  `autoupd_unmountable_activation_failed`. Screenshot: `tests/shots.gd --only=applying`.
