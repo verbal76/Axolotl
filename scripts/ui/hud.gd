@@ -414,6 +414,13 @@ func reveal_special() -> void:
 ## A red starfish collected: the star chip shows the count (and what there is to spend) for a
 ## few seconds, then fades.
 func star_collected(n: int, total: int, balance: int) -> void:
+	# (During a Treasure Hunt its box holds the same corner: the chip shows just below it.)
+	star_chip.position = _safe.position + Vector2(6, 40 * canvas.scale_k)
+	var tp: TreasurePlay = Game.inst.treasure if Game.inst != null else null
+	if tp != null and tp.panel != null:
+		var br := tp.panel.box_rect()
+		if br.size != Vector2.ZERO:
+			star_chip.position.y = br.end.y + 8.0
 	star_chip.show_count(n, total, balance)
 
 

@@ -657,6 +657,69 @@ func run(runner) -> void:
 		await _gill_shots(g, "gill_restored")
 	if only == "menus":
 		await _menus_shots(g)
+	if only == "cohesion":
+		# Cohesion audit (2026-10-02): what a player sees on arriving at each ball, through the
+		# ordinary follow camera with the touch HUD: two headings each (as he lands, then turned).
+		Settings.input_mode = Settings.InputMode.TOUCH
+		g.player.invuln_t = 9999
+		for bi in g.balls.size():
+			var b: MossBall = g.balls[bi]
+			var arrive: Vector3 = b.start_dir if bi == 0 else b.arrival_dir
+			var fr := MossBall.frame_at(arrive, 0.0)
+			for k in 2:
+				var face := fr.z if k == 0 else fr.z.rotated(arrive, 2.1)
+				g.player.place(b, b.surface_point(arrive, 0.2), face)
+				g.cam.snap_behind()
+				await t.seconds(1.8)
+				await t.shot("coh_b%d_%d" % [bi + 1, k])
+	if only == "cohesion2":
+		# Cohesion audit: threat vs collectable at play distance (about 7 m ahead, ordinary camera),
+		# on Ball 2 unrestored: a parasite, a Mote, food, a red starfish and a bloom.
+		Settings.input_mode = Settings.InputMode.TOUCH
+		g.player.invuln_t = 9999
+		var b: MossBall = g.balls[1]
+		for pp in b.parasites:
+			pp.set_physics_process(false)
+		var stars := []
+		for st in g.starfish.stars:
+			if is_instance_valid(st) and st.ball == b:
+				stars.append(st)
+		var subjects := {"parasite": b.parasites, "mote": b.motes, "food": b.foods, "starfish": stars, "bloom": b.blooms}
+		for key in subjects:
+			var arr: Array = subjects[key]
+			var it: Node3D = null
+			for x in arr:
+				if is_instance_valid(x) and x is Node3D:
+					it = x
+					break
+			if it == null:
+				continue
+			var up := b.up_at(it.global_position)
+			var fr := MossBall.frame_at(up, 30.0)
+			var at := b.surface_point((b.global_position + (it.global_position - b.global_position) - fr.z * 7.0 - b.global_position).normalized(), 0.2)
+			g.player.place(b, at, it.global_position - at)
+			g.cam.snap_behind()
+			await t.seconds(1.5)
+			await t.shot("coh2_%s" % key)
+	if only == "ballview":
+		# The whole-ball view on demand (ledger row 21): the menu row, then the view on three balls
+		# (Ball 5 sits by the tank's glass), then back.
+		Settings.input_mode = Settings.InputMode.TOUCH
+		g.pause_menu.open()
+		await t.seconds(0.5)
+		await t.shot("ballview_menu")
+		g.pause_menu.close()
+		for bi in [0, 4, 6]:
+			var b: MossBall = g.balls[bi]
+			g.player.place(b, b.surface_point(b.start_dir, 0.2), MossBall.frame_at(b.start_dir, 0).z)
+			g.cam.snap_behind()
+			await t.seconds(1.5)
+			g.ball_view.open()
+			await t.seconds(2.5)
+			await t.shot("ballview_ball%d" % (bi + 1))
+			g.ball_view.close()
+			await t.seconds(1.5)
+		await t.shot("ballview_back")
 	if only == "aqframes":
 		await load("res://scripts/tests/aq_nav_tests.gd").new(t, g).frames_phase()
 	if only == "aqgill":
