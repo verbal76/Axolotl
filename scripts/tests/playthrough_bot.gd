@@ -606,7 +606,7 @@ func mark(what: String) -> void:
 	t.log_line("[%6.1fs] %s  (R: %s, hp %d/%d, deaths %d)" % [sim_time, what, " ".join(rs), p.health, p.max_health, g.stats["deaths"]])
 
 
-## Gill's place as "ball N (lat, lon)", rounded to 2 degrees (spots a few metres apart group).
+## His place as "ball N (lat, lon)", rounded to 2 degrees (spots a few metres apart group).
 func _here() -> String:
 	var ll: Vector2 = Levels._latlon(p.ball.up_at(p.global_position))
 	return "ball %d (%d, %d)" % [p.ball.index + 1, int(round(ll.x / 2.0) * 2), int(round(ll.y / 2.0) * 2)]
