@@ -30,6 +30,12 @@ app start -> Boot mounts the newest VERIFIED package already on the device (no n
 - **When:** once per launch (after boot health); again when the app returns to the foreground if the
   last automatic attempt was at least 15 minutes ago; and every 60 minutes while it keeps running.
   Failed attempts count, so an offline phone is not hammered. `Boot.auto_check_due()` holds the policy.
+- **Resume gap on the wall clock (game layer, 2026-10-03).** r5 measures the 15-minute resume gap on
+  the engine clock, which stops while the phone sleeps, so a return to the app after a night in the
+  pocket usually counted as "too soon". `AutoUpdate._resume_check()` applies the same gap to the time of
+  the last recorded check (`state.json` event `check`, any outcome) on the wall clock, runs only when the
+  native check did not (never two at once), and tells the native policy it ran. The engine-clock
+  *periodic* hourly check is unchanged (native). See `docs/HOT_ATTIC_INFRA.md` for the full lifecycle audit.
 - **Never while** the game is starting, in baseline mode (OTA disabled), or when a check is already running.
 - **Non-blocking:** requests are polled from the main loop (DNS, TLS and reads are non-blocking);
   15 s timeout for the pointer and manifest, 15 min for the package. Godot 4.7.2's *threaded*
@@ -49,7 +55,8 @@ what the r5 native layer already exposes (`Boot.updater`, `Boot.core`, `Boot.hea
 ```
 launch -> loading screen; the game layer starts a check (Boot.updater.check) while the world builds
        -> world built: wait for the check, at most 8 s after it started (offline: it already failed)
-       -> verified update PENDING? loading screen "Updating..." -> soft restart -> title of the NEW version
+       -> verified update PENDING? loading screen "Updating..." -> soft restart ("Please wait, applying
+          update" modal) -> title of the NEW version
 during a session: update downloaded (native start / resume / periodic check)
        -> installs at the next safe moment: the title screen, or the app returning from the background
           (never in play, cinematics, lessons, menus, the aquarium or the ending); run + profile saved first
@@ -70,6 +77,17 @@ The soft restart:
 3. **Health re-armed.** The new version must report ready and keep running 3 s before the native layer
    makes it CURRENT (the old CURRENT becomes PREVIOUS). A version that never gets there is abandoned
    after the usual two unhealthy starts and the device falls back, as after a cold start.
+
+**Activation screen (2026-10-03, `scripts/core/update_activation.gd`).** Only the soft restart itself
+shows "Please wait, applying update" (a Mote panel with an indeterminate bar over the loading-screen
+backdrop, input blocked); checking and downloading never do. It goes up when `SoftRestart.apply` starts
+the switch (after the save), is lifted by the new version's loading screen (`AutoUpdate.on_loading_visible`),
+and is removed at once when the native layer does not mount the package (the toast then says the current
+version keeps running). A second activation while one runs is refused. If nothing lifts it within 20 s,
+its own engine-only timer replaces the text with "The update did not finish. Mote will try again on the
+next start." and removes it 3 s later; the activation state expires on the same clock. A cold-start
+activation happens inside `Boot._init` before any game code exists: nothing can be shown there by an OTA
+(native proposal in `docs/HOT_ATTIC_INFRA.md`).
 
 Safety: each OTA id is tried in-process at most once (`user://ota_autoupdate.json`, written before
 anything changes); in a session the running version must itself be healthy first; nothing is applied
