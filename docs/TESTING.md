@@ -57,3 +57,6 @@ Result: a published SHA is tested once (in the release gate), not two to three t
 minutes of wall time instead of about 85. The `android` / `ios` jobs and the native-layer detection are unchanged.
 Not done on purpose: `paths-ignore` for docs-only changes (it would leave a required check pending) and a
 `concurrency` group on the tests (the release gate already serialises on `ota-dev-channel`).
+
+## First run of the parallel pipeline (2026-10-03)
+OTA publish run 91 (a1a53c2, dev-000091): fast checks 31 s, unit shard 1/2 11m47s, shard 2/2 14m41s, playthrough 19m54s in parallel; publish 1 min; **21 min push-to-published** (was ~47 min serial). The PR check (Build & Verify) saw the SHA covered by OTA publish and finished in 1m40s instead of a second full suite.
