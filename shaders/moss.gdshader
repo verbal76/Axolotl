@@ -33,7 +33,7 @@ uniform float sheen = 0.35;
 uniform float moss_slope = 0.5;
 uniform float moss_blend = 0.22;
 // How far the macro layer warps the mid one (m), and the height of the surface relief (m).
-uniform float warp = 4.0;
+uniform float warp = 8.0;
 uniform float relief = 0.035;
 // Nearby Regeneration Motes (xyz = world position, w = intensity). Cheap fake local light.
 uniform vec4 motes[6];
@@ -81,10 +81,11 @@ Biplanar biplanar(vec3 n) {
 	return b;
 }
 
-vec4 tri4(vec3 p, Biplanar b, float sc) {
+// `blur` widens the filter footprint (a coarser mip): 1 = normal.
+vec4 tri4(vec3 p, Biplanar b, float sc, float blur) {
 	vec3 q = p * sc;
-	vec3 dx = dFdx(q);
-	vec3 dy = dFdy(q);
+	vec3 dx = dFdx(q) * blur;
+	vec3 dy = dFdy(q) * blur;
 	vec2 u1 = vec2(q[int(b.ma.y)], q[int(b.ma.z)]);
 	vec2 u2 = vec2(q[int(b.me.y)], q[int(b.me.z)]);
 	vec4 x = textureGrad(noise_tex, u1, vec2(dx[int(b.ma.y)], dx[int(b.ma.z)]), vec2(dy[int(b.ma.y)], dy[int(b.ma.z)]));
@@ -109,13 +110,13 @@ void fragment() {
 	Biplanar bl = biplanar(wn);
 	// (The macro layer on a rotated grid, and the mid layer warped by it: on the big balls these
 	// repeat dozens of times round the circumference, and without this the repeats line up into
-	// stripes seen from afar. The warp is gentle (`warp`): a strong one smeared the moss into
-	// marble swirls up close, E6f.)
-	vec4 macro = tri4(vec3(v_wpos.x * 0.6 - v_wpos.z * 0.8, v_wpos.y, v_wpos.x * 0.8 + v_wpos.z * 0.6) + 41.0, bl, tex_scale * 0.18);
-	vec4 mid = tri4(v_wpos + (macro.rgb - 0.5) * warp, bl, tex_scale * 0.6);
-	vec4 det = tri4(v_wpos, bl, tex_scale * 2.2);
+	// stripes seen from afar. The macro layer is read from a coarse mip (E6f): its fine grain,
+	// magnified by the warp, smeared the moss into marble swirls and streaks up close.)
+	vec4 macro = tri4(vec3(v_wpos.x * 0.6 - v_wpos.z * 0.8, v_wpos.y, v_wpos.x * 0.8 + v_wpos.z * 0.6) + 41.0, bl, tex_scale * 0.18, 24.0);
+	vec4 mid = tri4(v_wpos + (macro.rgb - 0.5) * warp, bl, tex_scale * 0.6, 1.0);
+	vec4 det = tri4(v_wpos, bl, tex_scale * 2.2, 1.0);
 	// Tufts on a rotated, non-aligned grid, so the fine pattern does not visibly repeat.
-	vec4 tuft = tri4(vec3(v_wpos.x * 0.8 + v_wpos.z * 0.6, v_wpos.y, v_wpos.z * 0.8 - v_wpos.x * 0.6) + 17.0, bl, tex_scale * 13.1);
+	vec4 tuft = tri4(vec3(v_wpos.x * 0.8 + v_wpos.z * 0.6, v_wpos.y, v_wpos.z * 0.8 - v_wpos.x * 0.6) + 17.0, bl, tex_scale * 13.1, 1.0);
 
 	// Where moss grows: faces turned away from the ball, broken up at mid scale, plus patches
 	// and drips on steep faces; caves are mostly bare.
