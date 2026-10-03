@@ -797,6 +797,31 @@ func run(runner) -> void:
 		await _plant_perf(g)
 	if only == "look":
 		await _look_shots(g)
+	if only == "perflook":
+		# Frame cost of the E6f materials at the views they fill (a short subset of "perf"):
+		# open moss, a mound field, stems, the ball 1 cave, ball 7's shelf, a stone column close.
+		g.player.invuln_t = 9999
+		var pv := [[0, 10.0, 30.0], [0, -59.0, 31.0], [1, 10.0, 70.0], [2, 10.0, 110.0]]
+		for v in pv:
+			var b := g.balls[v[0]]
+			g.player.place(b, b.surface_point(MossBall.dir_ll(v[1], v[2]), 0.2), Vector3.FORWARD)
+			g.cam.snap_behind()
+			await _perf_view("ball%d_%d_%d" % [v[0] + 1, v[1], v[2]])
+		for bi in [0, 6]:
+			var b := g.balls[bi]
+			for h in (b.get_meta("builder") as LevelBuilder).bot_hints:
+				if h.has("cave"):
+					g.player.place(b, b.surface_point(b.up_at(h["door"]), 0.2), (h["door"] as Vector3) - (h["entry"] as Vector3))
+					g.cam.snap_behind()
+					await _perf_view("cave_b%d" % (bi + 1))
+					break
+		for h in (g.balls[6].get_meta("builder") as LevelBuilder).bot_hints:
+			if h.has("route"):
+				var nb := g.balls[6]
+				g.player.place(nb, (h["start"] as Vector3) + nb.up_at(h["start"]) * 0.2, (h["tops"][0] as Vector3) - (h["start"] as Vector3))
+				g.cam.snap_behind()
+				await _perf_view("ball7_first_route")
+				break
 	if only == "" or only == "moments":
 		await _moments(g)
 	if only == "" or only == "restored":
