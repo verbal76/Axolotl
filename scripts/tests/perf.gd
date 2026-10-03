@@ -242,6 +242,17 @@ func _probe() -> void:
 		old_ms.append((Time.get_ticks_usec() - t0) / 1000.0)
 	now_ms.sort()
 	old_ms.sort()
+	# (Game culls one ball a frame in turn: the most any one frame carries is the dearest ball.)
+	var dearest := 0.0
+	for b in g.balls:
+		var per: Array = []
+		for rep in 11:
+			var t1 := Time.get_ticks_usec()
+			b.update_visibility(g.cam.global_position)
+			per.append((Time.get_ticks_usec() - t1) / 1000.0)
+		per.sort()
+		dearest = maxf(dearest, per[5])
+	t.log_line("PROBE update_visibility dearest single ball: %.2f ms" % dearest)
 	t.log_line("PROBE update_visibility all balls: now %.2f ms (p90 %.2f), before %.2f ms (p90 %.2f)" % [now_ms[10], now_ms[18], old_ms[10], old_ms[18]])
 	for b in g.balls:
 		t.log_line("PROBE ball %d: %d terrain chunks, %d veg children, %d field materials, %d veg materials, %d blooms, %d motes" % [b.index,

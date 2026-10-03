@@ -834,6 +834,7 @@ func tank_flow() -> Vector3:
 ## (on his own ball) pause, as creatures do beyond Critter.ACTIVE_RANGE.
 const ACTIVE_RADIUS := 55.0
 var _region_t := 0.0
+var _region_next := 0
 
 
 ## Whether the run stands still for the aquarium experiences (parasites, Motes, food pause).
@@ -894,8 +895,12 @@ func _process(dt: float) -> void:
 	if _region_t <= 0.0 and cam != null:
 		# Four times a second: each ball draws only what can be above the camera's horizon.
 		_region_t = 0.25
-		for b in balls:
-			b.update_visibility(cam.global_position)
+		_region_next = 0
+	# (One ball a frame, in turn (ledger row 28): every ball is still culled four times a second,
+	# without the whole tank's pass landing on one frame.)
+	if _region_next < balls.size() and cam != null:
+		balls[_region_next].update_visibility(cam.global_position)
+		_region_next += 1
 	_resume_position()
 	clock.tick(dt, state == "play")
 	if state == "play":
