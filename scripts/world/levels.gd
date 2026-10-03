@@ -45,7 +45,7 @@ const PALETTES := [
 ]
 
 
-## Plant, stem and leaf meshes built on worker threads during a ball's layout (MeshLib.deferring);
+## Stem, leaf and landform meshes built on worker threads during a ball's layout (MeshLib.deferring);
 ## false builds them on this thread (the reference _test_startup_build_identical compares with).
 static var async_meshes := true
 

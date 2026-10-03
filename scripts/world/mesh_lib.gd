@@ -8,10 +8,17 @@ class_name MeshLib
 ## the meshes made through _commit are built on worker threads while the layout goes on: the caller
 ## gets its ArrayMesh at once, empty, and finish_deferred() (at the end of the ball) gives each its
 ## surface, name and metadata, in order, exactly as SurfaceTool.commit() makes them on this thread.
-## Only for meshes nothing reads before then (they are drawn or instanced, never sampled), built from
+## Only for meshes nothing reads before then and no MultiMesh instances (drawn by a MeshInstance3D), built from
 ## their own arguments alone. Off, each is built at once, as before.
 static var deferring := false
 static var _deferred: Array = []
+
+
+## As _commit, but always built at once. For meshes MultiMeshes instance: a MultiMesh given a mesh
+## whose surface comes later keeps bounds that change what is drawn (a title render differed by 505
+## pixels), so the vegetation meshes are never deferred.
+static func _commit_now(build: Callable) -> ArrayMesh:
+	return _filled(null, _committed(build.call(), false))
 
 
 ## A mesh from `build` (-> SurfaceTool ready to commit, or [SurfaceTool, resource name, {meta}]).
@@ -102,7 +109,7 @@ static func blade(st: SurfaceTool, xf: Transform3D, width: float, height: float,
 
 
 static func tuft_mesh(blades: int, width: float, height: float, spread: float, seed_v: int, segs := 3, curve := 0.35) -> ArrayMesh:
-	return _commit(func() -> Variant: return _tuft_mesh_surface(blades, width, height, spread, seed_v, segs, curve))
+	return _commit_now(func() -> Variant: return _tuft_mesh_surface(blades, width, height, spread, seed_v, segs, curve))
 
 
 ## tuft_mesh's SurfaceTool (safe on a worker thread).
@@ -151,7 +158,7 @@ static func reed(st: SurfaceTool, xf: Transform3D, width: float, height: float, 
 ## A clump of reeds (medium/tall vegetation): `blades` creased blades from a small base spread,
 ## leaning out a little, heights and curves varied.
 static func reed_clump(blades: int, width: float, height: float, spread: float, seed_v: int, segs := 5, curve := 0.25) -> ArrayMesh:
-	return _commit(func() -> Variant: return _reed_clump_surface(blades, width, height, spread, seed_v, segs, curve))
+	return _commit_now(func() -> Variant: return _reed_clump_surface(blades, width, height, spread, seed_v, segs, curve))
 
 
 ## reed_clump's SurfaceTool (safe on a worker thread).
@@ -175,7 +182,7 @@ static func _reed_clump_surface(blades: int, width: float, height: float, spread
 ## under its own weight, its edges cupped a little, with smooth shading. UV.y runs base to tip, so
 ## the vegetation material sways the outer leaf most in the current.
 static func broadleaf_mesh(leaves: int, size: float, seed_v: int) -> ArrayMesh:
-	return _commit(func() -> Variant: return _broadleaf_mesh_surface(leaves, size, seed_v))
+	return _commit_now(func() -> Variant: return _broadleaf_mesh_surface(leaves, size, seed_v))
 
 
 ## broadleaf_mesh's SurfaceTool (safe on a worker thread).
@@ -210,7 +217,7 @@ static func _broadleaf_mesh_surface(leaves: int, size: float, seed_v: int) -> Va
 ## node in the lower stem and every other node above; leaves are 6-triangle lances low down and
 ## 4-triangle folded lances higher up (2-triangle folded kites with `light`).
 static func stem_plant_mesh(stems: int, height: float, seed_v: int, nodes := 9, light := false) -> ArrayMesh:
-	return _commit(func() -> Variant: return _stem_plant_mesh_surface(stems, height, seed_v, nodes, light))
+	return _commit_now(func() -> Variant: return _stem_plant_mesh_surface(stems, height, seed_v, nodes, light))
 
 
 ## stem_plant_mesh's SurfaceTool (safe on a worker thread).
@@ -368,7 +375,7 @@ static func _stem_leaf(st: SurfaceTool, vb: Array, at: Vector3, axis: Vector3, o
 ## "sprouted moss ball" reference): `n` thin wavering ribbons of up to `length`, crossed in pairs so
 ## they read from any side. UV.y runs from the moss to the free end.
 static func root_strands_mesh(n: int, length: float, seed_v: int) -> ArrayMesh:
-	return _commit(func() -> Variant: return _root_strands_mesh_surface(n, length, seed_v))
+	return _commit_now(func() -> Variant: return _root_strands_mesh_surface(n, length, seed_v))
 
 
 ## root_strands_mesh's SurfaceTool (safe on a worker thread).
@@ -410,7 +417,7 @@ static func _root_strands_mesh_surface(n: int, length: float, seed_v: int) -> Va
 ## tubes rising from one spot, leaning outward, each ending in a flared rounded mouth. UV.y runs base
 ## to tip (the vegetation material colours and sways by it).
 static func coral_mesh(tubes: int, height: float, seed_v: int) -> ArrayMesh:
-	return _commit(func() -> Variant: return _coral_mesh_surface(tubes, height, seed_v))
+	return _commit_now(func() -> Variant: return _coral_mesh_surface(tubes, height, seed_v))
 
 
 ## coral_mesh's SurfaceTool (safe on a worker thread).

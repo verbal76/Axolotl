@@ -77,7 +77,7 @@ func _test_startup() -> void:
 ## exactly the same world: each ball's ground rebuilt with its tiles on worker threads is
 ## bit-identical (vertices, normals, indices, collision faces, far mesh, extremes) to the same
 ## ground built one tile at a time on this thread; Levels.NearSet answers exactly as _near_any; a
-## ball whose plant, stem and leaf meshes are made on worker threads is the same as one made without.
+## ball whose stem, leaf and landform meshes are made on worker threads is the same as one made without.
 func _test_startup_build_identical() -> void:
 	var same := 0
 	var detail := []
@@ -133,7 +133,7 @@ func _test_startup_build_identical() -> void:
 				probe.call(c.normalized().rotated(axis, deg_to_rad(float(e[1])) + eps))
 	t.check("startup_near_set_exact", n["mismatches"] == 0 and n["near"] > 1000 and n["near"] < n["queries"],
 			"%d queries, %d near, %d mismatches" % [n["queries"], n["near"], n["mismatches"]])
-	# Every ball built again (same random sequence) with its plant, stem and leaf meshes made on
+	# Every ball built again (same random sequence) with its stem, leaf and landform meshes made on
 	# worker threads and on this thread: identical builds. (Last in the suite: it reseeds the global
 	# random sequence. Each copy leaves the tree at once, before any physics or processing.)
 	var ball_same := []
@@ -6295,6 +6295,15 @@ func _phase_world_hash() -> void:
 		ctx.update(hs.to_byte_array())
 	t.log_line("WORLDHASH %s meshes %d shapes %d" % [ctx.finish().hex_encode(), n_mesh, n_shape])
 	t.log_line("WORLDHASH_FULL %s" % world_build_hash(g.balls))
+	# The completion catalog (every id, category, label and weight, in order) and the starfish.
+	t.log_line("WORLDHASH_COMPLETION %s ids %d" % [var_to_bytes([g.completion.order, _plain(g.completion.entries)]).hex_encode().sha256_text(),
+			g.completion.order.size()])
+	var stars := []
+	if g.starfish != null:
+		for s in g.starfish.stars:
+			stars.append([s.get("id"), (s as Node3D).global_position if is_instance_valid(s) else null])
+	t.log_line("WORLDHASH_STARFISH %s placed %s stars %d" % [var_to_bytes(_plain(stars)).hex_encode().sha256_text(),
+			str(g.starfish.placed if g.starfish != null else false), stars.size()])
 
 
 ## Startup work (2026-10-02): a stricter hash of what the build made under `roots`: every node's
