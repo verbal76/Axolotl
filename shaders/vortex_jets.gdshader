@@ -26,16 +26,6 @@ uniform vec3 foam : source_color = vec3(0.9, 0.98, 1.0);
 // The connection's own faint hue (Vortex.TINTS): the same at both ends, mostly in the bright water.
 uniform vec3 tint : source_color = vec3(1.0);
 uniform float tint_amt = 0.0;
-// Platform state (Vortex.STATE_LOOK, from Vortex.travel_ready()): the jets' feet, where they flare
-// into each pool, glow with it, so a player approaching on the ground reads it without looking up.
-// Not ready: muted red, in separate bands, dim and breathing; ready: muted green, continuous, brighter,
-// with light climbing the jets. (Pattern, brightness and motion, not only hue.)
-uniform vec3 state_col : source_color = vec3(0.72, 0.3, 0.17);
-uniform float state_gain = 0.8;
-uniform float state_dash = 1.0;
-uniform float state_breathe = 0.3;
-uniform float state_flow = 0.0;
-uniform float state_foot_m = 4.5;
 
 varying float v_t;   // u along the connection (0 = ball A, 0.5 = midpoint, 1 = ball B)
 varying float v_jet;
@@ -109,17 +99,6 @@ void fragment() {
 	}
 	float end_fade = smoothstep(0.0, 0.015, t) * (1.0 - smoothstep(0.985, 1.0, t));
 	float a = (0.42 + fres * 0.4 + streak * 0.4) * (0.25 + strength * 0.75) * (1.0 + pulse * 0.5);
-	// The state glow on the feet of the jets (metres from the nearer mouth).
-	float from_end = min(t, 1.0 - t) * length_m;
-	float foot = 1.0 - smoothstep(state_foot_m * 0.45, state_foot_m, from_end);
-	float bands = mix(1.0, smoothstep(0.0, 0.5, sin(from_end * 4.5)), state_dash);
-	float breathe = 1.0 - state_breathe * (0.5 + 0.5 * sin(TIME * 1.6));
-	float climb = mix(1.0, 0.75 + 0.25 * sin(from_end * 2.2 - TIME * 3.0), state_flow);
-	float sg = clamp(foot * bands * breathe * climb * state_gain, 0.0, 1.0);
-	// Ready is luminous, not ready dim (a value step that reads in grey as well as in colour).
-	float lift = mix(1.95, 0.6, state_dash);
-	col = mix(col, state_col * lift, sg * 0.9);
-	a = max(a, sg * mix(0.95, 0.7, state_dash));
 	ALBEDO = col;
 	ALPHA = clamp(a * tip * end_fade * opacity, 0.0, 1.0);
 }

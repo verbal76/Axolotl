@@ -41,7 +41,7 @@ const CUR_SHARE := [0.46, 0.34, 0.2]
 const CUR_AXES := Vector3(1.0, 0.78, 0.3)
 
 ## Platform state (owner, 2026-10-04: from the ground the player cannot see whether the funnel has
-## reached the next ball). A glowing ring round each tidal pool shows travel readiness, read from
+## reached the next ball). The flat tidal pool at the base (the landing pad) shows travel readiness, read from
 ## travel_ready() only. Never colour alone (red/green colour-vision deficiency): not ready is a
 ## muted red, DASHED, dim and slowly breathing; ready is a muted green, CONTINUOUS, brighter and
 ## steadily flowing. Per state: [colour, gain, dashes (0 = continuous), breathing swing, flow].
@@ -471,7 +471,7 @@ func _update_state(dt: float) -> void:
 	var want := 1.0 if travel_ready() else 0.0
 	ready_shown = want if ready_shown < 0.0 else move_toward(ready_shown, want, dt / STATE_FADE_S)
 	var lk := state_look(ready_shown)
-	for pm in _pool_mats + [_jet_mat, _stream_mat]:
+	for pm in _pool_mats:
 		pm.set_shader_parameter("state_col", lk[0])
 		pm.set_shader_parameter("state_gain", lk[1])
 		pm.set_shader_parameter("state_dash", lk[2])

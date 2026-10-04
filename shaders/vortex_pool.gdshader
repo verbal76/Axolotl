@@ -92,7 +92,11 @@ void fragment() {
 	}
 	float edge = 1.0 - smoothstep(0.8, 1.0, r);
 	float a = (0.6 + crest * 0.3 + ring * 0.3 + lip * 0.3) * edge * (0.35 + strength * 0.65);
-	// The state ring, just inside the foam lip.
+	// The pad's state (the owner's landing-pad indicator): the whole pool's water takes a muted wash
+	// of the state colour (brighter when ready), and a ring just inside the foam lip carries the
+	// pattern: dashed and breathing when not ready, continuous and flowing when ready.
+	float wash = mix(0.42, 0.3, state_dash) * smoothstep(1.0, 0.6, r);
+	col = mix(col, state_col * mix(1.35, 0.75, state_dash), wash);
 	float sr = exp(-pow((r - 0.7) / 0.075, 2.0));
 	float dash = mix(1.0, smoothstep(0.3, 0.62, 0.5 + 0.5 * cos(ang * 9.0)), state_dash);
 	float breathe = 1.0 - state_breathe * (0.5 + 0.5 * sin(TIME * 1.6));
