@@ -133,8 +133,9 @@ input blocked, layer 102 over the loading screen. The world builds behind it, so
   the same frame, the splash on top, opaque black). Android's own launch screen shows no artwork:
   its icon is the adaptive launcher foreground, which is fully transparent. **Fix (native, next
   APK = runtime r6):** `boot_splash/show_image=false`, `bg_color` black, export preset
-  `splash_screen/*` set explicitly (neutral). Prepared on branch `preserve/mote-native-r6-splash`;
-  cannot ship by OTA (the APK draws it before an OTA pack is mounted).
+  `splash_screen/*` set explicitly (`icon=""`, `background_color` black). It cannot ship by OTA (the
+  APK draws it before an OTA pack is mounted) and the native layer is frozen: **not made; awaits the
+  owner's approval for an r6 APK** (then `tools/ota_runtime.py --bump`, build, install over r5).
 - **Recurrence guard:** `StudioSplash.native_launch_problems()` + test
   `hag_native_launch_neutral_before_studio_splash` read `project.godot`, the Android export preset
   and the launch icon's pixels. r5 is the one recorded exception (exactly its two known boot-splash
