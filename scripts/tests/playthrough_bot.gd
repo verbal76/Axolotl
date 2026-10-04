@@ -655,6 +655,7 @@ var _last_us := 0
 var _perf_max := 0.0
 var _hb := 0.0
 var _last_hp := 99
+var _last_deaths := 0
 var _last_eat_try := -99.0
 var _high_logged := {}
 
@@ -703,6 +704,10 @@ func tick() -> void:
 	if p.health < _last_hp:
 		t.log_line("hurt at %.1fs: hp %d (%s; nearest threat %s)" % [sim_time, p.health, activity, _nearest_threat()])
 	_last_hp = p.health
+	# Each death with its place and cause (audit P1: deaths per ball, and where on it).
+	if int(g.stats["deaths"]) > _last_deaths:
+		_last_deaths = int(g.stats["deaths"])
+		t.log_line("DEATH %d at %.1fs: %s, %s (%s; nearest threat %s)" % [_last_deaths, sim_time, _here(), "ooze" if g.cinematic == "ravine" else "hurt", activity, _nearest_threat()])
 	if _hb >= float(Settings.test_args.get("hb", "20")):
 		_hb = 0.0
 		t.log_line("heartbeat %.0fs ball %d h %.1f act '%s' R %.2f %.2f %.2f hp %d cine '%s' state %s %s" % [sim_time, p.ball.index + 1,
