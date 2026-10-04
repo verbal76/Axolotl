@@ -244,7 +244,10 @@ func canopy_guard_leaf() -> void:
 	# (Back at home for the by-play part, whatever earlier tests did to it.)
 	if guard.is_alive() and guard.global_position.distance_to(g_at) > 1.5:
 		guard.return_home_unseen()
-	# By play: the spiral's leaves from the ground with plain jumps, to the guard leaf.
+	# By play: the spiral's leaves from the ground with plain jumps, to the guard leaf. (Base moves:
+	# no skill-tree tiers left over from earlier tests.)
+	var tiers0: Dictionary = p.skill_tiers.duplicate()
+	p.apply_skills({})
 	p.invuln_t = 999.0
 	var ground := b.surface_point(b.up_at(Levels.leaf_mid(spiral[0], 4.4, 0.0).origin), 0.1)
 	u.place_at(2, ground, (Levels.leaf_mid(spiral[0], 1.5, 0.0).origin - ground).normalized())
@@ -319,14 +322,12 @@ func canopy_guard_leaf() -> void:
 			await t.frames(1)
 		p.bot_input = Vector2.ZERO
 		t.log_line("guard-leaf lunge %d: from %s, Mote at %s (leaf frame: side, up, -along)" % [attempt, str((lx * p.global_position).snapped(Vector3.ONE * 0.01)), str((lx * mote.global_position).snapped(Vector3.ONE * 0.01))])
-		# (It hovers up to about a metre and a half over the leaf: jump first when it is high, as the
-		# bot and a player do.)
-		if (mote.global_position - p.global_position).dot(p.up) > 0.65:
-			await u.press("jump")
-			for i in 30:
-				await t.frames(1)
-				if (mote.global_position - p.global_position).dot(p.up) < 0.35 or p.velocity.dot(p.up) < 0.5:
-					break
+		# (It bobs between about 0.3 and 1.4 m over the leaf: wait for it to come low, as a player
+		# does, rather than jump-lunging round the trunk.)
+		for i in 60 * 6:
+			if (mote.global_position - p.global_position).dot(p.up) < 0.8:
+				break
+			await t.frames(1)
 		await u.press("lunge")
 		await t.frames(40)
 		await u.wait_grounded()
@@ -335,6 +336,7 @@ func canopy_guard_leaf() -> void:
 	t.check("canopy_guard_mote_taken_from_leaf", got and b.altitude(p.global_position) > b.altitude(leaf_top) - 1.5,
 			"Mote taken %s; he is %.1f m up (leaf %.1f m)" % [got, b.altitude(p.global_position), b.altitude(leaf_top)])
 	p.invuln_t = 0.0
+	p.apply_skills(tiers0)
 
 
 # --- P6: threats ------------------------------------------------------------------------------------

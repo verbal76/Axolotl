@@ -1870,7 +1870,13 @@ func canopy(b: MossBall, h: Dictionary) -> void:
 							set_stick(stick_for(inward, 0.3))
 							await tick()
 						set_stick(Vector2.ZERO)
-						await lunge_at(func(): return m.global_position, 3.0, true)
+						# (It bobs over the leaf: lunge when it is low, never a jump-lunge round the trunk.)
+						for k in 60 * 6:
+							if height_of(m.global_position) < 0.8:
+								break
+							await tick()
+						await press("lunge")
+						await wait(0.7)
 			if absf(height_of(chain[gl])) > 1.5:
 				continue
 			await settle_on(chain[gl])
