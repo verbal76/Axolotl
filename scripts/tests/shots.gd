@@ -3601,12 +3601,12 @@ func _vcur_shots(g: Game) -> void:
 	_open(g)
 
 
-## One connection's platform at play distance (9 and 14 m), not ready then ready.
+## One connection's landing pad at play distance (5, 9 and 14 m), not ready then ready.
 func _vplat(g: Game, v: Vortex, li: int) -> void:
 	var b0: MossBall = v.ball_a
 	var vd := v.dir_a
 	var fr := MossBall.frame_at(vd, 0.0)
-	for dist in [9.0, 14.0]:
+	for dist in [5.0, 9.0, 14.0]:
 		var at := vd.rotated(fr.x, dist / b0.radius)
 		var face := b0.surface_point(vd) - b0.surface_point(at)
 		for rdy in [false, true]:
