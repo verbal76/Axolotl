@@ -29,7 +29,7 @@ after a while; ambient life is never saved.
 
 | Creature | Role | Habitat | How it behaves | What the player does |
 |---|---|---|---|---|
-| **Reed stalker** | hidden hunter | tall reeds (Mossy Meadow reed bed, Reed Canyon floor ×2, Giant Stems far jungle) | Prowls low in its patch, lower than the reeds. Stalks him a few metres off when he is in its patch. Then rears and hisses while the reeds thrash (0.9 s), and pounces along the line it locked. Lies low afterwards. Gives up when he leaves the patch | Watch the reeds. Sidestep the pounce, strike while it lies low (2 hits), or leave its patch. Driven off, it returns after 2 minutes |
+| **Reed stalker** | hidden hunter | tall reeds (Mossy Meadow reed bed and Fern Grove, the Reed Canyon floor and the Reed Maze, the Giant Stems far jungle and western jungle floor) | Prowls low in its patch, lower than the reeds. Stalks him a few metres off when he is in its patch. Then rears and hisses while the reeds thrash (0.9 s), and pounces along the line it locked. Lies low afterwards. Gives up when he leaves the patch | Watch the reeds. Sidestep the pounce, strike while it lies low (2 hits), or leave its patch. Driven off, it returns after 2 minutes |
 | **Crab guardian** | territorial | grotto mouths (Terrace Steps, Reed Canyon, Hollow Grotto) | Rests at its post. When he enters its territory (5 m) it faces him, raises its claws and clacks (1.2 s). If he stays within 3.8 m it charges sideways; only the charge hurts. Never leaves its territory, and walks back to its post | Back off after the warning, or fight it: 3 hits, sidestep the charge. Beaten, it stays beaten (a completion entry) |
 | **Cave eel** | ambush | grotto walls (Current Hollows, Reed Canyon, Hollow Grotto ×2) | Hidden in a dark cleft, eyes faintly glowing. When he is near, in front and in its line of sight, its eyes brighten and bubbles rise (0.9 s), then it strikes up to 2.3 m and pulls back. It never leaves the crevice; the strike stops short of rock or a ledge; it never notices him through the wall | Read the bubbles and step out of reach, or swipe it while it is out (2 hits). Beaten, it stays beaten (a completion entry) |
 | **Pufferfish** | avoid or beat | open water at jump height over ridges and open ground (Current Hollows ×2, Terrace Steps, Reed Canyon, Hollow Grotto) | Drifts slowly (the current carries it on Current Hollows). Calm, it is an elongated spotted fish with fins. Near him it puffs up over 0.6 s into a round ball, its spines standing out, sinks to face him and stays puffed a while | Go round it, or beat it: touching it puffed hurts, and three tail swipes that land beat it (each knocks it back about a body length with a flash; at most one hit per 0.35 s). Beaten, it deflates and is gone, back in its patch 120 s later when he is elsewhere. Beating it is not a completion entry |
@@ -47,6 +47,38 @@ after a while; ambient life is never saved.
 - Nothing strikes or notices through rock.
 - No threat can reach a bloom's respawn point or a vortex arrival point.
 - The stalker pounces along a line locked when its telegraph starts, so a sidestep avoids it.
+
+## Threat spread (cohesion audit P6, owner-approved 2026-10-04)
+
+The cohesion audit (`docs/research/audit-2026-10-02/AUDIT.md`, finding 8) found Reed Canyon a spike
+(stalkers ×2 on its floor plus the maze stalker, a crab, an eel, a puffer and a spitter) next to Giant
+Stems with one stalker and Canopy Spire with ambient life only. Pacing, not uniform density, was the
+goal: Reed Canyon's second canyon stalker (it hunted at `R(0, 78)`, the canyon's far end) now hunts
+Giant Stems' western jungle floor (`Ecosystem.GS_STALKER_LL`, lat -20, lon -75, a 6° patch): on the
+ground in the tall blades between the canopy and the Root Tangle, on the walk between them, at least
+6 m clear of every parasite's area and 8 m clear of every bloom, the arrival point and the vortex
+mouths; the Giant Stems food region at (8, -60) is beside it. Canopy Spire stays the vertical
+playground with ambient life only (its threat is the height).
+
+| Ball | Threats before | After |
+|---|---|---|
+| Mossy Meadow | stalker ×2 | the same |
+| Current Hollows | puffer ×3, eel, spitter ×2 | the same |
+| Giant Stems | stalker, spitter | stalker ×2, spitter |
+| Terrace Steps | puffer, crab, spitter | the same |
+| Reed Canyon | stalker ×3, puffer, crab, eel, spitter | stalker ×2 (canyon, maze), puffer, crab, eel, spitter |
+| Canopy Spire | none (ambient) | the same |
+| Hollow Grotto | puffer, crab, eel ×3 | the same |
+
+**Saves and completion.** Stalkers carry no completion id and are never saved (they are placed as
+authored on every launch), so moving one changes no id and no save: a save made before still loads,
+counts and finishes exactly as before, and `species.stalker` is earned by a first close look at any
+stalker. The catalog (348 ids, `completion_ids_unique_and_pinned`) is unchanged. Creatures draw from
+their own generators seeded by (ball, species, index): the moved stalker takes Giant Stems' stalker
+index 1; Reed Canyon's crab, whose seed counts the creatures placed before it, is given the index that
+keeps its seed as it was. Same creature count overall, so no cost change (only creatures within 38 m
+of Gill are ticked). Test: `threat_spread_stalker_on_giant_stems` (`scripts/tests/pacing_tests.gd`),
+with `eco_no_threats_at_respawn_or_arrival` and `eco_species_in_their_habitats`.
 
 ## Parasites (Expansion 6 addendum: combat)
 

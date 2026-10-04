@@ -120,7 +120,11 @@ dev-000025. Mossy Meadow first as the template, then worlds 2–7 (not clones).
   LOD mesh; concave collision per raised tile. Plateaus, and ravines carved into them
   (`add_ravine`), with the base sphere as the floor. Standing on a ravine floor (not on a
   bridge or stone above it) is a death, as every death re-formed at the checkpoint (ledger row 32;
-  `Game.ravine_fall`).
+  `Game.ravine_fall`). **Edge assist** (cohesion audit P1, 2026-10-04; `Axolotl._edge_stop`): a
+  lunge or tail swipe made on the ground, or a hit's knock-back, stops at a ravine's rim instead of
+  carrying him over; walking, running, jumping, bursting and gliding are untouched, so walking or
+  jumping in is still a death, and a lunge along a bridge, log or stepping stone (footing under it)
+  goes on as before. Tests `edge_*` in `_test_edge_assist`.
 - **Health map (X3a).** A 512×256 equirect texture per ball; no splat cap.
 - **Regional activation (X3b).** Parasites, motes and food tick only within 55 m of Gill;
   ground and vegetation chunks below the camera's horizon are not drawn.
@@ -142,8 +146,8 @@ ball (so it is twice as far apart) and its completion ids; the tutorial keeps it
 | Region | What is there |
 |---|---|
 | Glade Upland (tut, rim) | The tutorial on a 3.5 m upland over the north, its escarpment falling to the lowlands between latitude 54 and 40 |
-| Great Ravine (rim) | 47 m long, 3.6 m floor: walk round either end (easy), two stone columns (skilled), a burst straight over (skilled), or the fallen stem that rises into a bridge when the glade heals |
-| Split Crack (crack) | A narrower cut in the western upland, crossed by a natural stone bridge with a Mote on it |
+| Great Ravine (rim) | 47 m long, 3.6 m floor: walk round either end (easy), two stone columns (skilled), a burst straight over (skilled), or the fallen stem that rises into a bridge when the glade heals. Its three parasites live back from the rims (lat 51.8 south, 72.3 north), their areas at least 2 m short of the cut (audit P1, 2026-10-04: at 57 / 68 their areas took in 5-16% of the ooze floor) |
+| Split Crack (crack) | A narrower cut in the western upland, crossed by a natural stone bridge with a Mote on it; its two parasites' areas also stop 2 m short of the cut (audit P1) |
 | The Heights (heights) | Three-tier terraces on the eastern upland, a hopper leading up them, a Mote and a snail on top |
 | Moss Meadow (meadow) | Rolling lowland fields; the Meadow Stone (a shelf reached from a mound) |
 | East Tower lands (east) | The brittle tower and the vortex to Current Hollows |
@@ -201,9 +205,9 @@ Radius 30 → 60. Vertical jungle.
 
 | Region | What is there |
 |---|---|
-| The giant spiral (canopy) | As before: sixteen leaves round the giant stem to the canopy leaves and the extreme drop; now a bubble column beside it (between its lines of leaves) flows once the lower jungle heals, a shortcut halfway up |
+| The giant spiral (canopy) | As before: sixteen leaves round the giant stem to the canopy leaves and the extreme drop; now a bubble column beside it (between its lines of leaves) flows once the lower jungle heals, a shortcut halfway up. The canopy's medium parasite guards a Mote on the spiral's 13th leaf, 12.8 m up (audit P4, 2026-10-04: they were on C2, 17.3 m up and across two stems from the spiral's top, the ball's last 3%); C2 is still the extreme drop's leaf |
 | The Great Trunk and High Crown (crown) | A 30 m giant laddered all the way up, turning less where it is thick (75° a leaf at the base, 108° at the top) so every step is a plain jump; broad crown leaves with a Mote, a bloom and a snail; a hopper leads up the first leaves |
-| The jungle | 140 laddered stems (was 70), every one climbed physically by the tests |
+| The jungle | 140 laddered stems (was 70), every one climbed physically by the tests; two reed stalkers on its floor, the far jungle's and (audit P6, 2026-10-04, moved from Reed Canyon) the western jungle's |
 | The Root Tangle (tangle) | Old roots arching over one another into low tunnels on the underside, shrimp in the shade |
 
 Motes now perch on climbing leaves too (they fell through them to the ground before, so a Mote
