@@ -221,6 +221,7 @@ func _test_about_page() -> void:
 func _test_studio_splash() -> void:
 	var bad: Array[String] = []
 	var real_missing := not ResourceLoader.exists(StudioSplash.LOGO_PATH)
+	t.check("hag_splash_canonical_logo_present", not real_missing, StudioSplash.LOGO_PATH)
 	var cases := [[StudioSplash.LOGO_PATH, "", false, false, "" if not real_missing else StudioSplash.MISSING],
 			["res://assets/icon/splash.png", "", false, false, ""], ["res://assets/icon/splash.png", "", true, false, "not a genuine launch"],
 			["res://assets/icon/splash.png", "", false, true, "not a genuine launch"], ["res://assets/icon/splash.png", "unit", false, false, "automated test run"],
@@ -240,9 +241,9 @@ func _test_studio_splash() -> void:
 	var none := StudioSplash.maybe_show(g, "", false)
 	var skip_why := str(Engine.get_meta(StudioSplash.META, ""))
 	var skipped_ok := none == null and str(Engine.get_meta(StudioSplash.META, "")).contains(StudioSplash.MISSING) and g.get_node_or_null("StudioSplash") == null
-	# With an image standing in for the logo (2:1, so the aspect must be kept).
+	# The canonical owner logo (3:2, transparent), so the aspect and alpha must be kept.
 	Engine.remove_meta(StudioSplash.META)
-	StudioSplash.logo_path = "res://assets/textures/room/atlas.png"
+	StudioSplash.logo_path = StudioSplash.LOGO_PATH
 	var s := StudioSplash.maybe_show(g, "", false)
 	await t.frames(2)
 	var shown_ok := (s != null and s.layer > 100 and (s.get_node("Black") as ColorRect).color == Color(0, 0, 0, 1)
@@ -257,19 +258,28 @@ func _test_studio_splash() -> void:
 		var contained := screen.encloses(r) and (is_equal_approx(r.size.x, s.logo.size.x) or is_equal_approx(r.size.y, s.logo.size.y))
 		shown_ok = shown_ok and centred and aspect and contained
 		fit = "drawn %s in %s, texture %s" % [r, screen, ts]
+	var canon := "missing"
+	if s != null:
+		var img := s.texture.get_image()
+		var transparent := img != null and img.detect_alpha() != Image.ALPHA_NONE and img.get_pixel(0, 0).a < 0.05
+		canon = "%s %dx%d alpha %s" % [s.texture.resource_path, int(s.texture.get_size().x), int(s.texture.get_size().y), transparent]
+		t.check("hag_splash_uses_canonical_logo_with_alpha", s.texture.resource_path == "res://Hot_Attic_Games_Master_Logo_ALPHA_FINAL.png"
+				and s.texture.get_size() == Vector2(1536, 1024) and transparent, canon)
+	else:
+		t.check("hag_splash_uses_canonical_logo_with_alpha", false, "canonical logo did not show")
 	var again := StudioSplash.maybe_show(g, "", false)
 	# Wall time (the splash runs on it; test runs use a fixed frame rate).
 	var t0 := Time.get_ticks_msec()
-	while Time.get_ticks_msec() - t0 < 1000:
+	while Time.get_ticks_msec() - t0 < 2000:
 		await t.frames(1)
 	var still := is_instance_valid(s)
-	while Time.get_ticks_msec() - t0 < 1800:
+	while Time.get_ticks_msec() - t0 < 2900:
 		await t.frames(1)
 	await t.frames(2)
 	var gone := not is_instance_valid(s)
 	t.check("hag_splash_skipped_when_logo_missing", skipped_ok, skip_why)
 	t.check("hag_splash_black_centred_contain_fit", shown_ok, fit)
-	t.check("hag_splash_once_per_launch_about_1_5_s", again == null and still and gone, "second %s, at 1 s %s, at 2 s gone %s" % [again, still, gone])
+	t.check("hag_splash_once_per_launch_about_2_6_s", again == null and still and gone, "second %s, at 2 s %s, at 2.9 s gone %s" % [again, still, gone])
 	StudioSplash.logo_path = saved_path
 	Engine.remove_meta(StudioSplash.META)
 	if saved_meta != null:

@@ -110,26 +110,26 @@ existing `diagnostics_page_simple`, `settings_fits_landscape_no_scroll`. Screens
 ## 4. Hot Attic Games studio splash
 
 `scripts/ui/studio_splash.gd` (`StudioSplash`), started from `Game._ready` right after Mote's loading
-screen is added. Black background, the canonical logo `res://branding/Hot_Attic_Games_Master_Logo.png`
-centred and contain-fitted (aspect kept, 12 % margin), 1.25 s + 0.25 s fade (wall clock from its first
-frame), silent, input blocked, layer 102 over the loading screen. The world builds behind it (stages
-run one per frame as before: it delays nothing and needs no network).
+screen is added. Black background, the owner-supplied canonical logo
+**`res://Hot_Attic_Games_Master_Logo_ALPHA_FINAL.png`** (1536×1024 RGBA, transparent background) centred
+and contain-fitted (aspect kept, 12 % margin; never redrawn, cropped, recoloured or substituted).
+0.3 s fade-in, shown to 2.2 s, 0.4 s fade-out: about 2.6 s on the wall clock from its first frame. Silent,
+input blocked, layer 102 over the loading screen. The world builds behind it, so it masks startup work.
 
-- **Genuine launch only:** decided once per process (Engine metadata `hag_studio_splash`, which
-  survives scene reloads and soft restarts), so Return to Title / New Run (`reload_current_scene`) and
-  an in-process update never show it; an in-process update from an older version (no metadata yet) is
-  also excluded (`AutoUpdate.soft_restarted()`). Automated test runs skip it.
-- **Asset: CANONICAL HOT ATTIC GAMES ASSET MISSING.** `branding/Hot_Attic_Games_Master_Logo.png` is not in
-  the repository (checked 2026-10-03: no file, no history, nothing on disk). The splash is therefore
-  skipped entirely (no placeholder art); the startup timeline records "game: studio splash skipped:
-  CANONICAL HOT ATTIC GAMES ASSET MISSING (…)". Adding the PNG at that path (and committing its
-  `.import`) turns the splash on in the next OTA — no code change.
-- **OTA-safe vs native:** this splash is game layer (OTA-safe). The **engine boot splash** before it
-  (`boot_splash/*` in `project.godot`: Mote teal + axolotl art) is native, shown by the APK before any
-  game code, and unchanged. A studio logo *there* needs the next APK (proposal N5). Launch order today:
-  engine boot splash → [studio splash, when the logo exists] → Mote loading screen → title.
-- Tests: `hag_splash_genuine_launch_and_asset_rules`, `hag_splash_skipped_when_logo_missing`,
-  `hag_splash_black_centred_contain_fit`, `hag_splash_once_per_launch_about_1_5_s`.
+- **Genuine (cold) launch only:** decided once per process (Engine metadata `hag_studio_splash`, which
+  survives scene reloads and soft restarts), so Return to Title / New Run and an in-process update never
+  show it (`AutoUpdate.soft_restarted()` also excluded). Automated test runs skip it.
+- **Never strands the user:** it frees itself after 2.6 s whatever else happens, and gives way at once if
+  the "Please wait, applying update" modal appears (update-first launch). If the asset were ever absent
+  the splash is skipped (no placeholder) and the timeline records why.
+- **Launch order:** engine boot splash (native, APK) → Hot Attic Games splash → Mote loading/title → play.
+  A studio logo in the native boot splash needs the next APK (proposal N5).
+- **Standing requirement:** see `CLAUDE.md` — the only studio logo is
+  `Hot_Attic_Games_Master_Logo_ALPHA_FINAL.png`; the old path `branding/Hot_Attic_Games_Master_Logo.png`
+  is obsolete.
+- Tests: `hag_splash_genuine_launch_and_asset_rules`, `hag_splash_canonical_logo_present`,
+  `hag_splash_uses_canonical_logo_with_alpha`, `hag_splash_skipped_when_logo_missing`,
+  `hag_splash_black_centred_contain_fit`, `hag_splash_once_per_launch_about_2_6_s`.
 
 ## 5. Android / Google Play audit (2026-10-03)
 

@@ -2,7 +2,8 @@ class_name StudioSplash
 extends CanvasLayer
 ## GAME LAYER — the Hot Attic Games studio splash (docs/HOT_ATTIC_INFRA.md §4).
 ##
-## Black, the canonical studio logo centred and contain-fitted (aspect kept), about 1.5 s, silent,
+## Black, the canonical studio logo (owner-supplied, with transparency) centred and contain-fitted
+## (aspect kept), about 2.6 s with a fade in and out, silent,
 ## on a genuine launch only: never after Return to Title / New Run (scene reloads) or an
 ## in-process update, never in automated test runs. It covers Mote's loading screen while the world
 ## builds underneath (it delays nothing: the stages run one per frame behind it) and needs no
@@ -10,11 +11,14 @@ extends CanvasLayer
 ## (no placeholder art) and the reason is in the startup timeline.
 ## The engine boot splash before it (boot_splash/* in project.godot) is native and unchanged.
 
-const LOGO_PATH := "res://branding/Hot_Attic_Games_Master_Logo.png"
+## The owner-supplied canonical artwork (2026-10-04). Never redraw, crop, recolour or substitute it.
+const LOGO_PATH := "res://Hot_Attic_Games_Master_Logo_ALPHA_FINAL.png"
 ## Engine metadata: this process already decided (survives scene reloads and soft restarts).
 const META := "hag_studio_splash"
-const SHOW_S := 1.25
-const FADE_S := 0.25
+const FADE_IN_S := 0.3
+## Fully shown until this many seconds, then fades out over FADE_S: 2.6 s in all.
+const SHOW_S := 2.2
+const FADE_S := 0.4
 ## Fraction of the screen the logo may use on each side (contain-fit inside it).
 const MARGIN := 0.12
 const MISSING := "CANONICAL HOT ATTIC GAMES ASSET MISSING"
@@ -24,6 +28,8 @@ static var logo_path := LOGO_PATH
 var texture: Texture2D
 var logo: TextureRect
 var _t0 := -1
+## The activation script (no class_name on purpose: it must survive an in-process update).
+var _ua: Script
 
 
 ## "" when the splash should show now, otherwise why not. Pure (unit-tested).
@@ -97,6 +103,13 @@ func _process(_dt: float) -> void:
 	if _t0 < 0:
 		_t0 = now
 	var t := (now - _t0) / 1000.0
+	# An update being applied at launch has its own screen ("Please wait, applying update"): give way.
+	if _ua == null:
+		_ua = load("res://scripts/core/update_activation.gd")
+	if _ua != null and _ua.modal(get_tree()) != null:
+		queue_free()
+		return
+	logo.modulate.a = clampf(t / FADE_IN_S, 0.0, 1.0)
 	if t > SHOW_S:
 		var a := clampf(1.0 - (t - SHOW_S) / FADE_S, 0.0, 1.0)
 		(get_child(0) as CanvasItem).modulate.a = a
