@@ -23,6 +23,7 @@ func run() -> void:
 	_test_app_info_pure()
 	await _test_about_page()
 	await _test_studio_splash()
+	_test_no_update_toasts()
 
 
 ## The resume check measures its gap on the wall clock (the engine clock stops while the phone
@@ -273,3 +274,18 @@ func _test_studio_splash() -> void:
 	Engine.remove_meta(StudioSplash.META)
 	if saved_meta != null:
 		Engine.set_meta(StudioSplash.META, saved_meta)
+
+
+## Owner, 2026-10-04: no update text over the title or loading screen. The game shows none, and the
+## native "restart to run it" toast is cleared when a download finishes.
+func _test_no_update_toasts() -> void:
+	var src := FileAccess.get_file_as_string("res://scripts/core/auto_update.gd")
+	var game_quiet := not src.contains("Mote updated:") and not src.contains("installs on the title screen\" %")
+	var ov = Boot.get("_overlay")
+	var cleared := true
+	if ov != null:
+		Boot.toast("dev-000999 ready: restart to run it")
+		AutoUpdate._hide_native_toast()
+		cleared = not ov._toast.visible
+	t.check("hag_no_update_toasts", game_quiet and cleared, "game toasts gone %s, native toast cleared %s" % [game_quiet, cleared])
+

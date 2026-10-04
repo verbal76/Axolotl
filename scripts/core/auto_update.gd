@@ -372,8 +372,19 @@ func _on_update_finished(result: String) -> void:
 	var pend: Dictionary = Boot.core.slot("pending") if Boot.core != null else {}
 	if result.contains("restart to run") and not pend.is_empty() and _off() == "" and _announced_download != str(pend.get("ota_id", "")):
 		_announced_download = str(pend.get("ota_id", ""))
-		if g != null and g.ready_done:
-			Boot.toast("Update %s downloaded: it installs on the title screen" % _announced_download)
+	# (Owner, 2026-10-04: no update text over the title or loading screen. A downloaded update
+	# installs quietly on the title behind "Please wait, applying update"; the native layer's own
+	# "restart to run it" toast is cleared too. About / Diagnostics still shows the update state.)
+	if result.contains("restart to run"):
+		_hide_native_toast.call_deferred()
+
+
+## Clears the native overlay's toast (r5 shows "… restart to run it" on every download).
+static func _hide_native_toast() -> void:
+	var ov = Boot.get("_overlay")
+	if ov != null and is_instance_valid(ov) and ov.get("_toast") != null:
+		ov._toast_t = 0.0
+		ov._toast.visible = false
 
 
 # --- after a soft restart -------------------------------------------------------------------------
@@ -403,7 +414,6 @@ static func on_usable() -> void:
 	var to: String = sr.get("to", "")
 	if sr.get("result", "") == "" and to == sr.get("wanted", ""):
 		SoftRestart.record_result(to, "applied in-process at %s; running %s (boot health pending)" % [sr.get("where", "?"), to])
-		Boot.toast("Mote updated: %s" % to)
 
 
 # --- diagnostics ----------------------------------------------------------------------------------
