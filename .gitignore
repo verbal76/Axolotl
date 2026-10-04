@@ -1,0 +1,13 @@
+.godot/
+build/
+*.tmp
+.claude/
+# Generated at native build time (APK identity); never committed.
+scripts/generated/
+# Private signing material never enters the repository (it lives only in GitHub Secrets).
+*.keystore
+*.jks
+*.p12
+*.keystore.b64
+*private*.pem
+*SECRETS*.txt
