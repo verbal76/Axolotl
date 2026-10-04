@@ -220,7 +220,7 @@ jobs:
           fi
           SEQ=$((10#${ID##*-}))
           printf '%s\n' "# Mote v$SEQ" "" \
-            "**Nothing to download:** the Mote app on your phone installs Mote v$SEQ by itself (on the title screen)." \
+            "**Nothing to download:** the Mote app on your phone installs Mote v$SEQ by itself (at launch, while Mote is loading)." \
             "New phone: install the Mote app once (Android, \`com.verbal76.axolotl\`); it then updates itself to the newest version." "" \
             "---" "Technical provenance (for engineers):" \
             "- OTA revision: $ID (dev channel), immutable" \
