@@ -40,13 +40,15 @@ const CUR_SHARE := [0.46, 0.34, 0.2]
 ## Amplitude share per axis: sideways, vertical, along the connection (depth).
 const CUR_AXES := Vector3(1.0, 0.78, 0.3)
 
+## Owner rule (permanent): the jets' / streams' / debris' hue is DESTINATION IDENTITY (TINTS) and never
+## follows readiness; only the flat landing pad shows readiness. A blue vortex may sit over a red pad.
 ## Platform state (owner, 2026-10-04: from the ground the player cannot see whether the funnel has
 ## reached the next ball). The flat tidal pool at the base (the landing pad) shows travel readiness, read from
 ## travel_ready() only. Never colour alone (red/green colour-vision deficiency): not ready is a
 ## muted red, DASHED, dim and slowly breathing; ready is a muted green, CONTINUOUS, brighter and
 ## steadily flowing. Per state: [colour, gain, dashes (0 = continuous), breathing swing, flow].
 const STATE_LOOK := {
-	false: [Color(0.72, 0.3, 0.17), 0.8, 1.0, 0.3, 0.0],
+	false: [Color(0.7, 0.32, 0.22), 0.8, 1.0, 0.3, 0.0],
 	true: [Color(0.33, 0.78, 0.52), 1.0, 0.0, 0.0, 1.0],
 }
 ## Seconds the ring takes to change state (the 70% moment is also marked by the connect shot).

@@ -24,7 +24,7 @@ uniform float u_end = 0.0;
 // Platform state ring (Vortex.STATE_LOOK, set from Vortex.travel_ready()): colour, gain, dashes
 // (0 = continuous), breathing swing and flow. Pattern, brightness and motion differ between the two
 // states as well as hue, so it reads without red/green colour vision.
-uniform vec3 state_col : source_color = vec3(0.72, 0.3, 0.17);
+uniform vec3 state_col : source_color = vec3(0.7, 0.32, 0.22);
 uniform float state_gain = 0.8;
 uniform float state_dash = 1.0;
 uniform float state_breathe = 0.3;

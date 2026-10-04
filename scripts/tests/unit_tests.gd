@@ -3894,6 +3894,20 @@ func _test_vortex_ready_state() -> void:
 		v.connected = want
 		await t.seconds(Vortex.STATE_FADE_S + 0.3)
 		follows = follows and is_equal_approx(v.ready_shown, 1.0 if v.travel_ready() else 0.0)
+	# Owner rule: vortex colour = destination identity, pad colour = readiness. Only the pad's material
+	# takes the state; the jets, streams and debris keep their link's hue whatever the state.
+	var ident_ok := true
+	for want in [false, true]:
+		v.connected = want
+		await t.seconds(Vortex.STATE_FADE_S + 0.3)
+		for m in [v._jet_mat, v._stream_mat] + v._debris_mats:
+			var sm := m as ShaderMaterial
+			ident_ok = ident_ok and sm.get_shader_parameter("tint") == v.tint and sm.get_shader_parameter("state_col") == null \
+					and not sm.shader.code.contains("state_col")
+		for pm in v._pool_mats:
+			ident_ok = ident_ok and pm.get_shader_parameter("tint") == v.tint
+	v.connected = was
+	t.check("vortex_identity_colour_never_follows_readiness", ident_ok and v.tint == Vortex.TINTS[g.vortices.find(v) % Vortex.TINTS.size()], "tint %s" % v.tint)
 	v.ready_shown = -1.0
 	await t.frames(2)
 	var snapped := is_equal_approx(v.ready_shown, 1.0 if v.travel_ready() else 0.0)

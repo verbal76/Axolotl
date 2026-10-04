@@ -14,6 +14,16 @@
 - Implementation: `scripts/ui/studio_splash.gd` (the one splash system — do not add a second).
   Details: `docs/HOT_ATTIC_INFRA.md` §4. Tests: `hag_splash_*` in `scripts/tests/hag_tests.gd`.
 
+## Vortex navigation colours (permanent, owner rule 2026-10-04)
+
+- **Vortex / water-tunnel colour = DESTINATION IDENTITY.** Each connection's hue (`Vortex.TINTS`, by link)
+  lets the player remember which tunnel leads where (arrived through green → green is the way back).
+  It must NEVER change with readiness, distress or anything else about travel state.
+- **Pad colour = CONNECTION / TRAVEL READINESS.** Only the flat landing/launch pad (the tidal pool at the
+  base) shows it: muted red = not usable yet, muted green = usable, with pattern/brightness/motion cues too.
+  Driven only by `Vortex.travel_ready()` (the same call the entry check uses).
+- So a blue vortex can sit over a red pad or a green pad. Guarded by `vortex_identity_colour_never_follows_readiness`.
+
 ## Native freeze
 
 `project.godot`, `export_presets.cfg` and `scripts/boot/*` are frozen (runtime r5);
