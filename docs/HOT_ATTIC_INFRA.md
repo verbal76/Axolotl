@@ -122,15 +122,31 @@ input blocked, layer 102 over the loading screen. The world builds behind it, so
 - **Never strands the user:** it frees itself after 2.6 s whatever else happens, and gives way at once if
   the "Please wait, applying update" modal appears (update-first launch). If the asset were ever absent
   the splash is skipped (no placeholder) and the timeline records why.
-- **Launch order:** engine boot splash (native, APK) → Hot Attic Games splash → Mote loading/title → play.
-  A studio logo in the native boot splash needs the next APK (proposal N5).
+- **Launch order (required):** neutral native frame → Hot Attic Games splash → Mote loading/title → play.
+  The Hot Attic Games splash must be the first branded image.
+- **VERIFIED OWNER FINDING (v95, 2026-10-04): splash sequencing failure.** On the phone the launch
+  reads Mote → Hot Attic Games → Mote. Root cause: the *engine boot splash* of the installed r5 APK
+  (`project.godot` `application/boot_splash/image = res://assets/icon/splash.png`, the Mote axolotl,
+  on Mote teal) is drawn by the APK before any game code runs; the Mote loading screen after the
+  studio splash deliberately reuses the same artwork (it was designed as a seamless hand-over from
+  that boot splash). The game layer is already right (studio splash and loading screen are added in
+  the same frame, the splash on top, opaque black). Android's own launch screen shows no artwork:
+  its icon is the adaptive launcher foreground, which is fully transparent. **Fix (native, next
+  APK = runtime r6):** `boot_splash/show_image=false`, `bg_color` black, export preset
+  `splash_screen/*` set explicitly (neutral). Prepared on branch `preserve/mote-native-r6-splash`;
+  cannot ship by OTA (the APK draws it before an OTA pack is mounted).
+- **Recurrence guard:** `StudioSplash.native_launch_problems()` + test
+  `hag_native_launch_neutral_before_studio_splash` read `project.godot`, the Android export preset
+  and the launch icon's pixels. r5 is the one recorded exception (exactly its two known boot-splash
+  problems; anything new fails); every later runtime revision must be clean.
 - **Standing requirement:** see `CLAUDE.md` — the only studio logo is
   `Hot_Attic_Games_Master_Logo_ALPHA_FINAL.png`; the old path `branding/Hot_Attic_Games_Master_Logo.png`
   is obsolete.
 - Tests: `hag_splash_genuine_launch_and_asset_rules`, `hag_splash_canonical_logo_present`,
   `hag_splash_uses_canonical_logo_with_alpha`, `hag_splash_skipped_when_logo_missing`,
   `hag_splash_black_centred_contain_fit`, `hag_splash_once_per_launch_about_2_6_s`,
-  `hag_splash_yields_to_update_modal`. Release gate: `tools/check_pack_logo.gd` (in `ota-publish.yml`)
+  `hag_splash_yields_to_update_modal`, `hag_launch_order_rule`,
+  `hag_native_launch_neutral_before_studio_splash`. Release gate: `tools/check_pack_logo.gd` (in `ota-publish.yml`)
   checks the logo is inside each OTA pack, pixel-exact against the canonical file, before the release.
 
 ## 5. Android / Google Play audit (2026-10-03)

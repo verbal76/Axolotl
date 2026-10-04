@@ -3,9 +3,9 @@ extends CanvasLayer
 ## Mote's first frame: drawn before the world is built, so launching never looks dead.
 ## Deliberately cheap: a colour, the owner's axolotl artwork, MOTE in the title-screen colours,
 ## and a line naming the stage actually being worked on. No percentages: the stages are not
-## equal in length. Colour and artwork match the engine's boot splash (boot_splash/* in
-## project.godot, drawn by the APK before any game code runs), and the artwork sits exactly
-## centred like the splash, so the hand-over is seamless.
+## equal in length. It shows under the Hot Attic Games splash and is revealed when that fades
+## (launch order: neutral native frame → studio splash → this). The r5 APK's engine boot splash
+## still draws this same artwork first; from runtime r6 the boot frame is neutral black.
 
 const BG := Color(0.04, 0.1, 0.1, 1.0)
 const ART := preload("res://assets/icon/splash.png")

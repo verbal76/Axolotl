@@ -23,6 +23,7 @@ func run() -> void:
 	_test_app_info_pure()
 	await _test_about_page()
 	await _test_studio_splash()
+	_test_native_launch_order()
 	_test_no_update_toasts()
 
 
@@ -314,3 +315,43 @@ func _test_no_update_toasts() -> void:
 		cleared = not ov._toast.visible
 	t.check("hag_no_update_toasts", game_quiet and cleared, "game toasts gone %s, native toast cleared %s" % [game_quiet, cleared])
 
+
+## Owner, 2026-10-04 (VERIFIED on v95): no game branding before the Hot Attic Games splash. The
+## rule is checked on synthetic inputs, then on this repository's native layer: the installed r5
+## APK is the one recorded exception (exactly its known problems); any later runtime must be clean.
+func _test_native_launch_order() -> void:
+	var mote_art := StudioSplash.native_launch_problems(true, "res://assets/icon/splash.png", Color(0.04, 0.1, 0.1), "", false)
+	var teal := StudioSplash.native_launch_problems(false, "", Color(0.2, 0.5, 0.5), "", false)
+	var icon := StudioSplash.native_launch_problems(false, "", Color.BLACK, "res://assets/icon/icon_192.png", true)
+	var neutral := StudioSplash.native_launch_problems(false, "res://assets/icon/splash.png", Color.BLACK, "", false)
+	t.check("hag_launch_order_rule", mote_art.size() == 2 and teal.size() == 1 and icon.size() == 1 and neutral.is_empty(),
+			"mote art %s, teal %s, icon %s, neutral %s" % [mote_art, teal, icon, neutral])
+	var preset := ConfigFile.new()
+	var opts := ""
+	if preset.load("res://export_presets.cfg") == OK:
+		for sec in preset.get_sections():
+			if sec.ends_with(".options") and str(preset.get_value(sec.trim_suffix(".options"), "platform", "")) == "Android":
+				opts = sec
+	var android_icon := str(preset.get_value(opts, "splash_screen/icon", "")) if opts != "" else ""
+	var shown_icon := android_icon if android_icon != "" else str(preset.get_value(opts, "launcher_icons/adaptive_foreground_432x432", "")) if opts != "" else ""
+	var visible := false
+	if shown_icon != "":
+		var img := Image.load_from_file(ProjectSettings.globalize_path(shown_icon))
+		if img != null:
+			img.convert(Image.FORMAT_RGBA8)
+			var d := img.get_data()
+			for i in range(3, d.size(), 4):
+				if d[i] > 8:
+					visible = true
+					break
+	var problems := StudioSplash.native_launch_problems(bool(ProjectSettings.get_setting("application/boot_splash/show_image", true)),
+			str(ProjectSettings.get_setting("application/boot_splash/image", "")),
+			ProjectSettings.get_setting("application/boot_splash/bg_color", Color(0.14, 0.14, 0.14)), shown_icon, visible)
+	var rev: int = load("res://scripts/boot/ota_config.gd").RUNTIME_REVISION
+	var ok: bool
+	if rev == StudioSplash.NATIVE_EXCEPTION_REVISION:
+		# Exactly the known r5 problems, nothing new (the Android launch icon must already be neutral).
+		ok = problems.size() <= 2 and problems.all(func(p: String) -> bool: return p.begins_with("engine boot splash"))
+	else:
+		ok = opts != "" and problems.is_empty()
+	t.check("hag_native_launch_neutral_before_studio_splash", ok, "runtime r%d, android icon %s visible %s, problems %s" % [rev, shown_icon, visible, problems])

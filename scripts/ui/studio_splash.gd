@@ -43,6 +43,30 @@ static func decide(path: String, test_mode: String, already_decided: bool, soft_
 	return ""
 
 
+## Launch order (owner, 2026-10-04): the Hot Attic Games splash is the FIRST branded image. Before
+## any game code runs, the APK draws Android's launch screen (its icon: the export preset's
+## splash_screen/icon, else the adaptive launcher foreground; Android masks it to a circle, so the
+## logo cannot go there uncropped) and then the engine boot splash (application/boot_splash/*).
+## Both must be neutral. Returns the problems, empty when the native layer is right. Pure
+## (unit-tested; the caller reads project.godot / export_presets.cfg and the icon's pixels).
+static func native_launch_problems(boot_show_image: bool, boot_image: String, boot_bg: Color,
+		android_icon: String, android_icon_visible: bool) -> Array[String]:
+	var out: Array[String] = []
+	if boot_show_image and boot_image != "":
+		out.append("engine boot splash draws %s before the studio splash" % boot_image)
+	if boot_bg.get_luminance() > 0.08:
+		out.append("engine boot splash background #%s is not a neutral dark frame" % boot_bg.to_html(false))
+	if android_icon_visible:
+		out.append("Android launch screen icon %s is visible artwork" % android_icon)
+	return out
+
+
+## The installed APK of runtime r5 (Build 22) predates the rule: its engine boot splash draws
+## Mote's axolotl (VERIFIED OWNER FINDING on v95). Only a new APK can change that; every later
+## runtime revision must pass native_launch_problems().
+const NATIVE_EXCEPTION_REVISION := 5
+
+
 ## Adds the splash under `parent` if this is a genuine launch and the logo exists; returns it or
 ## null. Decides once per process.
 static func maybe_show(parent: Node, test_mode := "", soft_restarted := false) -> StudioSplash:

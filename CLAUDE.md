@@ -2,7 +2,10 @@
 
 ## Hot Attic Games studio splash (standing, owner directive 2026-10-04)
 
-- Every cold launch shows, in order: APP START → HOT ATTIC GAMES SPLASH → PRODUCT TITLE → experience.
+- Every cold launch shows, in order: APP START (neutral native frame) → HOT ATTIC GAMES SPLASH → PRODUCT TITLE → experience.
+  The studio splash is the FIRST branded image: no Mote artwork in Android's launch screen or the engine
+  boot splash (`application/boot_splash/*`, export `splash_screen/*`). Guarded by
+  `hag_native_launch_neutral_before_studio_splash`; the r5 APK is the one recorded exception (fixed in r6).
 - The only studio logo is the owner-supplied file **`Hot_Attic_Games_Master_Logo_ALPHA_FINAL.png`**
   (repo root, `res://Hot_Attic_Games_Master_Logo_ALPHA_FINAL.png`, 1536×1024 RGBA with transparency).
   Never redraw, crop, distort, recolour or substitute it. `branding/Hot_Attic_Games_Master_Logo.png` is obsolete.
