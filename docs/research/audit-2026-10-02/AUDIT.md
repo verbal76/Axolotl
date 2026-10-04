@@ -207,7 +207,7 @@ Tests: `_test_arrival_view` (`arrival_*`: plays on the first arrival, about 3 s,
 camera, control restored and he walks off at once; not on Ball 1, not a second time, not after a
 death or a reload; skipped by a touch; saved round trip; old-save migration, pure and live; dropped
 outside play; camera never drawn unsafe). Shots: `--test=shots --only=ballprogress`
-(`docs/screenshots/ballprogress_*.png`).
+(`docs/screenshots/ballprogress_pause_b4_42.jpg`, `ballprogress_pause_b2_74.jpg`, `ballprogress_arrival_b2.jpg`, `ballprogress_arrival_back.jpg`; the pause shots set the ball's % for the picture, so the run-wide counts below read 0).
 
 ## Proposals (not implemented: larger than a bounded local fix, or another stream's)
 
