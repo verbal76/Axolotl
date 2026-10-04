@@ -744,6 +744,43 @@ func run(runner) -> void:
 			g.ball_view.close()
 			await t.seconds(1.5)
 		await t.shot("ballview_back")
+	if only == "ballprogress":
+		# Cohesion audit P2 / P3: this ball's line in the pause menu (below and past the tunnel's
+		# 70%), then the first-arrival view on Current Hollows, mid-shot.
+		Settings.input_mode = Settings.InputMode.TOUCH
+		for k in [[3, 0.42], [1, 0.74]]:
+			var b: MossBall = g.balls[k[0]]
+			g.player.place(b, b.surface_point(b.start_dir, 0.2), MossBall.frame_at(b.start_dir, 0).z)
+			g.cam.snap_behind()
+			await t.seconds(1.0)
+			var r0 := b.restoration
+			b.restoration = k[1]
+			g.pause_menu.open()
+			await t.seconds(0.5)
+			await t.shot("ballprogress_pause_b%d_%d" % [k[0] + 1, int(k[1] * 100.0)])
+			g.pause_menu.close()
+			b.restoration = r0
+		# (Set down where the tunnel lands him, then arrived: the ride itself is too slow to render here.)
+		var v: Vortex = g.vortices[0]
+		var a: Array = g.arrival_point(v, false)
+		g.player.place(a[0], a[1], a[3])
+		g.cam.snap_behind()
+		g.arrival_views = true
+		g.balls_seen = {}
+		await t.seconds(1.0)
+		g._arrived(a[0])
+		for i in 60 * 3:
+			await t.frames(1)
+			if g.ball_view.active:
+				break
+		await t.seconds(1.4)
+		await t.shot("ballprogress_arrival_b2")
+		for i in 60 * 4:
+			await t.frames(1)
+			if not g.ball_view.active:
+				break
+		await t.seconds(0.3)
+		await t.shot("ballprogress_arrival_back")
 	if only == "aqframes":
 		await load("res://scripts/tests/aq_nav_tests.gd").new(t, g).frames_phase()
 	if only == "aqgill":

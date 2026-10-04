@@ -3,7 +3,8 @@ extends CanvasLayer
 ## The pause / Settings menu: one wide landscape panel with nothing to scroll (phone audit
 ## 2026-09-30 §A, owner ruling). Left: the actions, Resume first and Return to Title directly beneath
 ## it (owner ruling 2026-09-30), then New Run, Aquarium | Whole ball (one row), Treasure Hunt, the colours page (GillPage)
-## and Skills (SkillTreePage). Right: this run (time, completion, finish, best), the Tier 2 loadout,
+## and Skills (SkillTreePage). Right: this run (time; the ball he is on, its % and tunnel; completion,
+## finish, best), the Tier 2 loadout,
 ## the toggles, Music and Sound, controller/touch status, About / Diagnostics and the startup line.
 ## Every control is at least 56 px tall.
 
@@ -25,6 +26,8 @@ var _reduced: CheckButton
 var _timer_toggle: CheckButton
 var _run_time: Label
 var _run_detail: RichTextLabel
+## The current ball's line shown above the run table ("" when none): BallView.progress_line.
+var _ball_line := ""
 var _haptics: CheckButton
 var _swim_invert: CheckButton
 var _resume: Button
@@ -119,7 +122,8 @@ func _ready() -> void:
 	_right = VBoxContainer.new()
 	_right.name = "Details"
 	_right.size_flags_horizontal = Control.SIZE_EXPAND_FILL
-	_right.add_theme_constant_override("separation", 12)
+	# (10, not 12: room for this ball's line above the run table with nothing to scroll.)
+	_right.add_theme_constant_override("separation", 10)
 	cols.add_child(_right)
 	# This run: time, completion, finished or not, best finish (two columns of detail).
 	_run_time = Label.new()
@@ -440,6 +444,11 @@ func _refresh() -> void:
 		# (Two columns: the first half of the lines on the left.)
 		var half := int(ceil(lines.size() / 2.0))
 		_run_detail.text = "[table=2][cell padding=0,0,24,0]%s[/cell][cell]%s[/cell][/table]" % ["\n".join(lines.slice(0, half)), "\n".join(lines.slice(half))]
+		# This ball (cohesion audit P2): above the run-wide table, in play only (not from the title
+		# or the aquarium, where there is no ball he is playing).
+		_ball_line = ball_line()
+		if _ball_line != "":
+			_run_detail.text = "[color=#e6fff5]%s[/color]\n%s" % [_ball_line, _run_detail.text]
 	if g != null and g.gill != null:
 		_skills_button.text = "Skills  (%d to spend)" % g.gill.balance() if g.gill.balance() > 0 else "Skills"
 	_haptics.set_pressed_no_signal(Settings.haptics)
@@ -452,6 +461,14 @@ func _refresh() -> void:
 	_status.text = Settings.controller_status()
 	_startup.text = StartupTrace.summary()
 	_layout.call_deferred()
+
+
+## The current ball's line in the run panel (BallView.progress_line), or "" outside a run's play.
+func ball_line() -> String:
+	var g := Game.inst
+	if _from_title or g == null or g.state != "play" or g.player == null or g.player.ball == null:
+		return ""
+	return BallView.progress_line(g.player.ball, g.vortices)
 
 
 func _unhandled_input(event: InputEvent) -> void:
