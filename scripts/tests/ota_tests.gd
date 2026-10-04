@@ -331,9 +331,9 @@ func _test_auto_update_policy() -> void:
 			and AutoUpdate.safe_moment("resume", play.merged({"healthy": false}, true)) != "", "")
 	t.check("autoupd_aquarium_not_safe", AutoUpdate.safe_moment("resume", play.merged({"state": "aquarium"}, true)) != "", "")
 	t.check("autoupd_launch_only_before_ready", AutoUpdate.safe_moment("launch", {"ready_done": false}) == "" and AutoUpdate.safe_moment("launch", title) != "", "")
-	t.check("autoupd_launch_wait_capped", not AutoUpdate.launch_wait_over(0, true) and not AutoUpdate.launch_wait_over(AutoUpdate.LAUNCH_CAP_MS - 1, true)
-			and AutoUpdate.launch_wait_over(AutoUpdate.LAUNCH_CAP_MS, true) and AutoUpdate.launch_wait_over(5, false), "cap %d ms" % AutoUpdate.LAUNCH_CAP_MS)
-	t.check("autoupd_launch_cap_about_8s", AutoUpdate.LAUNCH_CAP_MS <= 8000, "")
+	t.check("autoupd_launch_wait_capped", not AutoUpdate.wait_over(0, true, AutoUpdate.CHECK_WAIT_MS) and not AutoUpdate.wait_over(AutoUpdate.CHECK_WAIT_MS - 1, true, AutoUpdate.CHECK_WAIT_MS)
+			and AutoUpdate.wait_over(AutoUpdate.CHECK_WAIT_MS, true, AutoUpdate.CHECK_WAIT_MS) and AutoUpdate.wait_over(5, false, AutoUpdate.CHECK_WAIT_MS), "cap %d ms" % AutoUpdate.CHECK_WAIT_MS)
+	t.check("autoupd_launch_answer_cap_about_3s", AutoUpdate.CHECK_WAIT_MS <= 3000, "")
 
 
 func _test_auto_update_record() -> void:

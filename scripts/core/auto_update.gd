@@ -6,11 +6,13 @@ extends Node
 ## runs one after a cold start, which Android rarely gives a game. This node closes the gap with
 ## what r5 already exposes (Boot.updater, Boot.core), and SoftRestart runs the update in-process:
 ##
-##  * Launch: while Mote's loading screen builds the world, the update channel is checked (and
-##    a newer verified package downloaded). If one is ready before the world is, or within
-##    LAUNCH_CAP_MS of the check starting, the loading screen shows "Updating..." and the new
-##    version takes over before the title appears: one launch is enough. Offline, the check
-##    fails fast and nothing waits; a stalled network costs at most the cap.
+##  * Launch ("check first, wait briefly", owner 2026-10-04): before the world is built, with
+##    Mote's loading screen up, the update channel is asked whether a newer version exists. The
+##    answer is awaited at most CHECK_WAIT_MS; offline, slow, erroring or turned off, the launch
+##    goes on at once exactly as before. A newer compatible version is downloaded and verified right
+##    there ("Getting the newest version...", at most DOWNLOAD_CAP_MS) and activated in-process
+##    before anything is built, so the new version builds the world once. A download that fails or
+##    runs late leaves this version starting; the update then installs through the running path.
 ##  * Running: an update downloaded during a session (the native start/resume/periodic checks)
 ##    installs at the next safe moment: on the title screen, or when the app returns from the
 ##    background. Never during play, cinematics, lessons, menus or the aquarium. The run and the
@@ -27,8 +29,12 @@ extends Node
 const SoftRestart := preload("res://scripts/core/soft_restart.gd")
 const UpdateActivation := preload("res://scripts/core/update_activation.gd")
 const OtaCore := preload("res://scripts/boot/ota_core.gd")
-## Longest the launch waits for its check and download, from the moment the check starts.
-const LAUNCH_CAP_MS := 8000
+## Launch pre-check: longest the launch waits for the channel's answer (pointer + manifest), and
+## then for the download and verification of a newer version it found.
+const CHECK_WAIT_MS := 3000
+const DOWNLOAD_CAP_MS := 45000
+## The loading-screen line while a found update downloads (no percentages: see LoadingScreen).
+const DOWNLOAD_STAGE := "Getting the newest version"
 ## Bytes the update download may take per frame (see _on_updater_request).
 const DOWNLOAD_CHUNK := 4 * 1024 * 1024
 ## How often the running game looks for a safe moment.
@@ -37,7 +43,8 @@ const POLL_S := 0.25
 const LAUNCH_META := "mote_launch_check"
 
 var g: Node
-var _launch_t0 := -1
+## This launch asked the channel before building the world (see launch_gate).
+var _precheck_ran := false
 var _poll := 0.0
 var _resume_due := false
 ## Seconds after a return from the background during which it still counts as that safe moment
@@ -163,9 +170,36 @@ static func safe_moment(where: String, c: Dictionary) -> String:
 	return ""
 
 
-## Whether the launch has waited long enough: the check is over, or the cap is reached.
-static func launch_wait_over(elapsed_ms: int, busy: bool) -> bool:
-	return not busy or elapsed_ms >= LAUNCH_CAP_MS
+## Whether a launch wait is over: the updater is done, or `cap_ms` is reached.
+static func wait_over(elapsed_ms: int, busy: bool, cap_ms: int) -> bool:
+	return not busy or elapsed_ms >= cap_ms
+
+
+## "" when this launch asks the channel before building the world, otherwise why not. Never on a
+## scene reload (Return to Title, New Run: `already` = this process already decided) or on the
+## re-entry after a soft restart; never in test or check-and-quit runs, nor when automatic updates
+## or checks are turned off, in baseline mode, or while a check already runs (no second one).
+static func precheck_skip_reason(ota_ok: bool, test_mode: String, args: PackedStringArray, already: bool,
+		soft_restart: bool, disabled: bool, busy: bool) -> String:
+	if soft_restart:
+		return "re-entry after an in-process update"
+	if already:
+		return "scene reload (this launch already checked)"
+	var why := launch_check_off_reason(ota_ok, test_mode, args)
+	if why != "":
+		return why
+	if disabled:
+		return "OTA disabled (bundled baseline mode)"
+	if busy:
+		return "a check is already running"
+	return ""
+
+
+## What the launch does once the wait for the channel's answer is over: "download" when the
+## check finished and found a newer compatible version, else "start" (up to date, offline, slow,
+## incompatible, rejected: the world is built now with this version).
+static func precheck_next(busy: bool, status: String, has_available: bool) -> String:
+	return "download" if not busy and status == "available" and has_available else "start"
 
 
 # --- game state ---------------------------------------------------------------------------------
@@ -208,58 +242,110 @@ static func soft_restarted() -> Dictionary:
 
 # --- launch ---------------------------------------------------------------------------------------
 
-## Starts the launch check (once per process, never after a soft restart). Returns immediately;
-## the world keeps building meanwhile.
-func begin_launch_check() -> void:
-	if Engine.has_meta(LAUNCH_META) or not soft_restarted().is_empty():
-		return
-	var why := launch_check_off_reason(Boot.ota_enabled and Boot.core != null and Boot.updater != null, Settings.test_mode, OS.get_cmdline_user_args())
-	if why == "" and (Boot.core.state["disabled"] or Boot.updater.busy):
-		why = "OTA disabled" if Boot.core.state["disabled"] else "a check is already running"
+## "Check first, wait briefly": runs on the loading screen BEFORE the world is built. Asks the
+## channel (Boot.updater.check without download) and waits for the answer at most CHECK_WAIT_MS;
+## a newer compatible version is then downloaded and verified (at most DOWNLOAD_CAP_MS, the
+## loading screen says DOWNLOAD_STAGE) and activated in-process at once. Returns "activating" when
+## the new version is taking over (the caller must stop: this game layer is about to be replaced),
+## otherwise why this version starts now. `deps` (tests) replaces the updater ("updater"), the
+## caps ("check_wait_ms", "download_cap_ms"), the update to apply ("candidate": Callable -> [m, why])
+## and the activation ("activate": Callable(m) -> "" or why not).
+func launch_precheck(loading, deps := {}) -> String:
+	var native: bool = deps.is_empty()
+	var up = deps.get("updater", Boot.updater if native else null)
+	var why := "updater missing" if up == null else ""
+	if native and why == "":
+		why = precheck_skip_reason(Boot.ota_enabled and Boot.core != null and Boot.updater != null, Settings.test_mode,
+				OS.get_cmdline_user_args(), Engine.has_meta(LAUNCH_META), not soft_restarted().is_empty(),
+				Boot.core.state["disabled"], Boot.updater.busy)
+	elif native:
+		why = precheck_skip_reason(false, Settings.test_mode, OS.get_cmdline_user_args(), Engine.has_meta(LAUNCH_META),
+				not soft_restarted().is_empty(), false, false)
 	if why != "":
-		Engine.set_meta(LAUNCH_META, {"result": "not checked: " + why, "waited_ms": 0})
-		return
+		# (A reload keeps the first launch's record for Diagnostics.)
+		if not Engine.has_meta(LAUNCH_META):
+			Engine.set_meta(LAUNCH_META, {"result": "not checked: " + why, "waited_ms": 0})
+		StartupTrace.mark("game: launch update check skipped (%s)" % why)
+		return why
+	var check_cap: int = deps.get("check_wait_ms", CHECK_WAIT_MS)
+	var dl_cap: int = deps.get("download_cap_ms", DOWNLOAD_CAP_MS)
+	var candidate: Callable = deps.get("candidate", _candidate)
+	var activate: Callable = deps.get("activate", func(m: Dictionary) -> String: return await _apply(m, "launch", Callable()))
+	var tree := get_tree()
+	var t0 := Time.get_ticks_msec()
+	_precheck_ran = true
 	Engine.set_meta(LAUNCH_META, {"result": "checking", "waited_ms": 0})
-	_launch_t0 = Time.get_ticks_msec()
-	StartupTrace.mark("game: launch update check starts")
-	print("[AUTOUPDATE] launch check starts")
-	Boot.updater.finished.connect(_on_launch_check_finished, CONNECT_ONE_SHOT)
-	Boot.updater.check(true)
+	if native:
+		# This IS the launch's automatic check: the native policy hears about it (as with the
+		# resume check), and the native start check after boot health never runs alongside it.
+		Boot.set("_last_auto_check_ms", t0)
+	StartupTrace.mark("game: launch update check starts (before the world is built)")
+	print("[AUTOUPDATE] launch check starts (before the world is built)")
+	up.check(false)
+	while not wait_over(Time.get_ticks_msec() - t0, up.busy, check_cap):
+		await tree.process_frame
+	var answered := Time.get_ticks_msec() - t0
+	if up.busy:
+		# Too slow: start now. The check carries on; a newer version it finds is fetched in the
+		# background and installs through the running path (title / return to the app).
+		if not up.finished.is_connected(_on_late_answer):
+			up.finished.connect(_on_late_answer.bind(up), CONNECT_ONE_SHOT)
+		return _precheck_done(t0, "no answer within %d ms (still %s): starting now, the check continues in the background" % [check_cap, up.status])
+	StartupTrace.mark("game: launch update check answered after %d ms (%s)" % [answered, up.status])
+	if precheck_next(up.busy, up.status, up.has_available()) != "download":
+		return _precheck_done(t0, "answered in %d ms: %s" % [answered, up.status_detail])
+	if loading != null:
+		loading.set_stage(DOWNLOAD_STAGE)
+	var d0 := Time.get_ticks_msec()
+	StartupTrace.mark("game: launch update download starts")
+	up.download_available()
+	while not wait_over(Time.get_ticks_msec() - d0, up.busy, dl_cap):
+		await tree.process_frame
+	var dl := Time.get_ticks_msec() - d0
+	if up.busy:
+		return _precheck_done(t0, "download still running after %d ms: starting now; it installs later" % dl)
+	StartupTrace.mark("game: launch update download finished after %d ms (%s)" % [dl, up.status])
+	if up.status != "downloaded":
+		return _precheck_done(t0, "download did not complete (%s): starting now" % up.status_detail)
+	var r: Array = candidate.call()
+	if (r[0] as Dictionary).is_empty():
+		return _precheck_done(t0, "downloaded but not applied: %s" % r[1])
+	var id := str((r[0] as Dictionary).get("ota_id", "?"))
+	_precheck_done(t0, "activating %s before the world is built" % id)
+	var res: String = await activate.call(r[0])
+	if res == "":
+		return "activating"
+	return _precheck_done(t0, "activation of %s did not go ahead (%s): starting this version" % [id, res])
 
 
-func _on_launch_check_finished(_result: String) -> void:
-	if _launch_t0 >= 0:
-		StartupTrace.mark("game: launch update check finished after %d ms (%s)" % [Time.get_ticks_msec() - _launch_t0, Boot.updater.status])
+## Records the launch pre-check's outcome (Diagnostics, timeline) and returns it.
+func _precheck_done(t0: int, result: String) -> String:
+	var waited := Time.get_ticks_msec() - t0
+	Engine.set_meta(LAUNCH_META, {"result": result, "waited_ms": waited})
+	StartupTrace.mark("game: launch update check done after %d ms: %s" % [waited, result])
+	print("[AUTOUPDATE] launch: ", result)
+	return result
 
 
-## Called once the world is built, before the title. Waits (capped) for the launch check, then
-## applies a verified update if there is one. True when the new version is taking over (the
-## caller must stop: this game layer is about to be replaced).
+## The launch stopped waiting before the channel answered: if the answer is a newer version,
+## fetch it now (the native start check would otherwise find it only after boot health).
+func _on_late_answer(_result: String, up) -> void:
+	StartupTrace.mark("game: launch update check answered late (%s)" % up.status)
+	if not up.busy and up.has_available():
+		up.download_available()
+
+
+## Called once the world is built, before the title. Never waits: if the launch pre-check started
+## a download that has finished meanwhile, the verified update is applied before the title shows.
+## True when the new version is taking over (the caller must stop).
 func launch_gate(loading) -> bool:
-	if _launch_t0 < 0:
+	if not _precheck_ran or Boot.updater == null or Boot.updater.busy:
 		return false
-	var shown := false
-	var gate_t0 := Time.get_ticks_msec()
-	while not launch_wait_over(Time.get_ticks_msec() - _launch_t0, Boot.updater.busy):
-		if not shown and loading != null:
-			loading.set_stage("Checking for updates")
-			shown = true
-		await get_tree().process_frame
-	var since_check := Time.get_ticks_msec() - _launch_t0
-	var waited := Time.get_ticks_msec() - gate_t0
-	_launch_t0 = -1
-	var info: Dictionary = Engine.get_meta(LAUNCH_META, {})
-	info["waited_ms"] = waited
-	info["result"] = Boot.updater.status_detail if not Boot.updater.busy else "still %s after %d ms: continues in the background" % [Boot.updater.status, since_check]
-	Engine.set_meta(LAUNCH_META, info)
-	StartupTrace.mark("game: launch gate: world ready, waited %d ms more for the update check (%s, %d ms since it started)" % [waited, Boot.updater.status, since_check])
-	if Boot.updater.busy:
-		return false
+	_precheck_ran = false
 	var r := _candidate()
 	if r[0].is_empty():
-		if r[1] != "no update waiting":
-			print("[AUTOUPDATE] launch: not applying: ", r[1])
 		return false
+	StartupTrace.mark("game: launch gate: %s arrived while the world was built" % r[0].get("ota_id", "?"))
 	if loading != null:
 		loading.set_stage("Updating")
 	var why: String = await _apply(r[0], "launch", Callable())
@@ -361,7 +447,9 @@ func _apply(m: Dictionary, where: String, save: Callable) -> String:
 	# (Only reached when the update did not go ahead: otherwise this node no longer exists.)
 	if why != "":
 		print("[AUTOUPDATE] not applied: ", why)
-		Boot.toast("Update %s not installed: playing the current version" % m["ota_id"])
+		# (Never over the loading screen: owner, 2026-10-04. Diagnostics keeps the reason.)
+		if where != "launch":
+			Boot.toast("Update %s not installed: playing the current version" % m["ota_id"])
 	_applying = false
 	return why
 
@@ -424,7 +512,7 @@ static func diagnostics_text() -> String:
 	var off := _off()
 	L.append("  Mode: %s" % ("automatic (launch, title screen, return from background)" if off == "" else "off: " + off))
 	var lc: Dictionary = Engine.get_meta(LAUNCH_META, {})
-	L.append("  Launch check: %s" % (("%s (title waited %d ms for it; cap %d ms from the check's start)" % [lc.get("result", "?"), int(lc.get("waited_ms", 0)), LAUNCH_CAP_MS]) if not lc.is_empty() else "none this process"))
+	L.append("  Launch check: %s" % (("%s (start waited %d ms; caps %d ms for the answer, %d ms for a download)" % [lc.get("result", "?"), int(lc.get("waited_ms", 0)), CHECK_WAIT_MS, DOWNLOAD_CAP_MS]) if not lc.is_empty() else "none this process"))
 	var sr := soft_restarted()
 	if not sr.is_empty():
 		L.append("  This process: soft restart at %s from %s to %s (%s)%s" % [sr.get("where", "?"),

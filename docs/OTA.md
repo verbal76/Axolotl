@@ -4,7 +4,7 @@ Mote is **offline-capable, not offline-only** (owner ruling). The installed **Mo
 complete game and needs no connection to launch, load, play, save, restore saves or finish. When a
 connection happens to be available it checks for signed, compatible over-the-air (OTA) game updates
 in the background, downloads and verifies them, and installs them by itself (see *Fully automatic
-updates*: at launch before the title, or at the next safe moment in a session). You push a
+updates*: at launch before the world is built, or at the next safe moment in a session). You push a
 commit, CI tests it and publishes a signed Godot PCK, and the phone picks it up. You only build a new
 APK when the installed **runtime** changes.
 
@@ -53,15 +53,48 @@ mount a package in `Boot._init`, so the **game layer** (`scripts/core/auto_updat
 what the r5 native layer already exposes (`Boot.updater`, `Boot.core`, `Boot.healthy`):
 
 ```
-launch -> loading screen; the game layer starts a check (Boot.updater.check) while the world builds
-       -> world built: wait for the check, at most 8 s after it started (offline: it already failed)
-       -> verified update PENDING? loading screen "Updating..." -> soft restart ("Please wait, applying
-          update" modal) -> title of the NEW version
+launch -> loading screen, BEFORE the world is built: the game layer asks the channel
+          (Boot.updater.check(false)) and waits for the answer at most 3 s
+       -> up to date / offline / slow / error / turned off: the world is built at once, exactly as
+          before (a slow check carries on in the background; a newer version it finds is fetched)
+       -> newer compatible version: loading screen "Getting the newest version..." ->
+          Boot.updater.download_available() (download + SHA-256 + signature, at most 45 s)
+          -> verified PENDING -> soft restart ("Please wait, applying update" modal) -> the NEW
+          version builds the world once and shows its title
+       -> download failed or late: this version starts; the update installs on the paths below
 during a session: update downloaded (native start / resume / periodic check)
        -> installs at the next safe moment: the title screen, or the app returning from the background
           (never in play, cinematics, lessons, menus, the aquarium or the ending); run + profile saved first
           -> soft restart -> title (Continue resumes the run)
 ```
+
+**Check first, wait briefly (owner decision, 2026-10-04).** Until then the launch check ran while the
+world was being built and was waited for afterwards (up to 8 s): in practice a new update was found on
+the title, downloaded there and installed by a soft restart that built the world a second time. Now
+`AutoUpdate.launch_precheck()` runs on the first loading-screen frame, before `Game._build_world()`:
+
+- **Waits:** at most `CHECK_WAIT_MS` (3 s) for the channel's answer (pointer + manifest + signature);
+  at most `DOWNLOAD_CAP_MS` (45 s) for a found update's download and verification. No percentages: the
+  loading screen just says "Getting the newest version...".
+- **Never delays otherwise:** offline (connection refused fails in milliseconds), a channel that does
+  not answer in 3 s, any error, an incompatible or rejected update: the world is built at once. A late
+  answer still counts: if it finds an update, the download starts in the background.
+- **Counts as the launch's automatic check:** it sets the native `Boot._last_auto_check_ms` (as the
+  resume check does) and never runs while a check is already running. The native start check after
+  boot health is r5 policy and still runs (one small pointer request when up to date; it is skipped
+  while the pre-check's download is still running).
+- **Skipped** on scene reloads (Return to Title, New Run: once per process), on the re-entry after a soft
+  restart, in test and `--ota-quit-after-check` runs, with `--no-auto-update` or `--ota-no-autocheck`,
+  in baseline mode (OTA disabled in Diagnostics) and without an OTA client.
+- **Guards kept:** the activation is `SoftRestart.apply` (record written before anything changes, so
+  an OTA id is never tried twice; rollback and boot health exactly as after a cold start; the modal's
+  20 s safety timeout). No text toasts over the loading screen; a failed activation is only in
+  Diagnostics, and the launch then builds the current version.
+- **Diagnostics:** the Startup timeline shows `game: launch update check starts (before the world is
+  built)`, `... answered after N ms (status)`, the download start/finish, and `... done after N ms: result`
+  (or `... skipped (reason)`); *Automatic updates → Launch check* shows the result and the wait.
+- If a download started by the pre-check finishes while the world is being built (late answer), the
+  launch gate after the build still applies it before the title (never waits).
 
 The soft restart:
 1. **Native verification and mount.** `Boot.core.boot()` re-selects PENDING, re-checks its signed

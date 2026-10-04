@@ -139,9 +139,11 @@ func _ready() -> void:
 	await _drawn()
 	StartupTrace.mark("first frame drawn: Mote loading screen visible")
 	AutoUpdate.on_loading_visible()
-	# Automatic updates: the channel is checked while the world builds; a verified update that is
-	# ready in time (capped) takes over before the title appears.
-	auto_update.begin_launch_check()
+	# Automatic updates, "check first, wait briefly" (owner, 2026-10-04): on a genuine launch the
+	# channel is asked BEFORE the world is built (answer awaited at most ~3 s); a newer version is
+	# downloaded and activated right here, so only the new version builds the world.
+	if await auto_update.launch_precheck(loading) == "activating":
+		return
 	await _build_world()
 	_open_run()
 	if await auto_update.launch_gate(loading):

@@ -13,6 +13,8 @@
 #  15. publish a corrupt package (hash mismatch): rejected, previous keeps running
 #  16. roll back; also: boot bundled baseline, and an OTA that never reaches boot health
 #      is abandoned automatically.
+#  18-20. launch-time install ("check first"): OTA 5 published -> a normal cold start installs it
+#      before the world is built (built once, by the new version); up to date and offline starts.
 #
 # Usage: GODOT=/path/to/godot tools/ota_e2e_local.sh   (needs Linux export templates)
 set -uo pipefail
@@ -226,6 +228,31 @@ run_game 17_ota4_abandoned
 expect "unhealthy OTA abandoned after repeated starts" "$W/run_17_ota4_abandoned.log" "dev-000004: never reached boot health"
 expect "falls back to last healthy OTA" "$W/run_17_ota4_abandoned.log" "E2E GAME MARKER OTA 1"
 expect "startup: after abandoning an unhealthy OTA the game reaches a usable frame" "$W/run_17_ota4_abandoned.log" "$USABLE"
+
+# "Check first, wait briefly" (owner, 2026-10-04): a genuine cold start (no --ota-quit-after-check)
+# asks the channel BEFORE building the world; a newly published OTA is downloaded and activated
+# in-process right there, and only the new version builds the world.
+launch_run() { # launch_run <label> [extra args...]: a normal launch, stopped after RUN_TIMEOUT
+	local label=$1; shift
+	timeout "${RUN_TIMEOUT:-25}" "$W/axolotl.x86_64" --headless -- --ota-root="$DEVICE" \
+		--ota-pointer="$BASEURL/ota-channel-dev/latest.json" "$@" > "$W/run_$label.log" 2>&1
+	echo "--- run $label"; grep -E "^\[OTA\]|^\[AUTOUPDATE\]|E2E GAME MARKER|launch update check|usable" "$W/run_$label.log" | cut -c1-200
+}
+O5=$(make_copy ota5); mark_game "$O5" 5; publish "$O5" 5
+launch_run 18_launch_install
+L="$W/run_18_launch_install.log"
+before "launch: update check starts before the world is built" "$L" "launch update check starts \(before the world is built\)" "moss ball 1 built"
+before "launch: new OTA activated before the world is built" "$L" "activating dev-000005 before the world is built" "E2E GAME MARKER OTA 5"
+before "launch: the new version builds the world" "$L" "E2E GAME MARKER OTA 5" "moss ball 1 built"
+if [ "$(grep -c "moss ball 1 built" "$L")" = 1 ]; then pass "launch: world built once"; else fail "launch: world built $(grep -c "moss ball 1 built" "$L") times"; fi
+expect "launch: new version reaches boot health" "$L" "boot healthy: dev-000005"
+launch_run 19_launch_up_to_date
+expect "launch: up to date starts after the answer" "$W/run_19_launch_up_to_date.log" "launch: answered in [0-9]+ ms: up to date"
+launch_run 20_launch_offline --ota-pointer="http://127.0.0.1:$((PORT + 2))/ota-channel-dev/latest.json"
+expect "launch: offline starts at once" "$W/run_20_launch_offline.log" "launch: answered in [0-9]+ ms: channel unreachable"
+for r in 18_launch_install 19_launch_up_to_date 20_launch_offline; do
+	echo "timing $r: $(grep -m1 -E "$USABLE" "$W/run_$r.log" | awk '{print $2" ms usable"}'); $(grep -m1 -oE "launch update check done after [0-9]+ ms" "$W/run_$r.log")"
+done
 
 echo
 echo "device state:"; python3 -c "import json,sys;s=json.load(open(sys.argv[1]));print(' current', s['current'].get('ota_id'),' previous', s['previous'].get('ota_id'),' pending', s['pending'].get('ota_id'),' bad', s['bad'],' rollbacks', s['rollback_count'])" "$DEVICE/state.json"
