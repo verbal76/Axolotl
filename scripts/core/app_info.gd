@@ -97,9 +97,10 @@ static func report_text() -> String:
 	L.append("Captured at: %sZ (UTC)" % Time.get_datetime_string_from_system(true))
 	L.append("")
 	L.append("App")
+	L.append("  Version: %s" % GameVersion.public_label())
 	L.append("  App name: %s" % id.get("product", "?"))
 	L.append("  Package id: %s" % package_id())
-	L.append("  Version name: %s (game); app (APK) %s" % [id.get("game_version", "?"), id.get("native_version", "?")])
+	L.append("  Internal version: game %s; app (APK) versionName %s" % [id.get("game_version", "?"), id.get("native_version", "?")])
 	L.append("  Version code: %s" % (str(id.get("native_build", "")) if android else "n/a (%s run; native build %s)" % [OS.get_name(), id.get("native_build", "local")]))
 	L.append("  Native runtime: %s" % id.get("runtime_id", "?"))
 	L.append("  Build identity: %s build, run %s" % [id.get("build_flavor", "?"), id.get("native_build_run", "local")])
@@ -149,7 +150,7 @@ static func about_lines() -> Array[String]:
 	var active := str(id.get("ota_id", "none"))
 	var api := api_level()
 	var L: Array[String] = []
-	L.append("%s %s  ·  app build %s  ·  running %s" % [id.get("product", "Mote"), id.get("game_version", "?"), id.get("native_build", "?"),
+	L.append("%s  ·  app build %s  ·  running %s" % [GameVersion.public_label(), id.get("native_build", "?"),
 			active if active != "none" else "the bundled game"])
 	L.append("Updates: %s  ·  channel %s  ·  %s" % [update_state(), id.get("ota_channel", "none"), id.get("runtime_id", "?")])
 	L.append("%s %s%s  ·  %s  ·  %s" % [OS.get_name(), OS.get_version(), (" (API %d)" % api) if api > 0 else "", OS.get_model_name(), OS.get_locale()])

@@ -151,7 +151,7 @@ func _test_app_info_pure() -> void:
 func _test_about_page() -> void:
 	var r := AppInfo.report_text()
 	var missing: Array[String] = []
-	for k in ["Captured at: ", "App name: Mote", "Package id: ", "Version name: ", "Version code: ", "Native runtime: " + Boot.identity()["runtime_id"],
+	for k in ["Captured at: ", "App name: Mote", "Package id: ", "Version: Mote", "Internal version: ", "Version code: ", "Native runtime: " + Boot.identity()["runtime_id"],
 			"Build identity: ", "Source SHA (running code): ", "Channel: ", "OS: ", "API level: ", "Model: ", "Locale: ",
 			"Updates enabled: ", "Runtime compatibility: ", "Current OTA: ", "Running source: ", "OTA source SHA: ", "OTA PCK SHA-256: ",
 			"Last check: ", "Update state: ", "Target SDK: " + AppInfo.NOT_EXPOSED, "Play required target API: 36",

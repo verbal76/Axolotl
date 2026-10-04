@@ -75,11 +75,20 @@ jobs:
 
       - name: Exact source identity
         id: src
+        env:
+          GH_TOKEN: ${{ github.token }}
         run: |
           SHA=$(git rev-parse HEAD)
           test "$SHA" = "${{ needs.resolve.outputs.sha }}"
           echo "sha=$SHA" >> $GITHUB_OUTPUT
-          SEQ=${{ github.run_number }}
+          # Public version (studio convention, docs/VERSIONING.md "Public version"): every published OTA
+          # is a delivered playable build "Mote vN", N = its seq. N = one more than the highest seq
+          # ever published on this channel, so numbers are sequential, never reused, and failed runs
+          # leave no gaps. (Before 2026-10-04 seq was the run number: v1-v92 have a few gaps.)
+          LAST=$(gh release list --repo "$GITHUB_REPOSITORY" --limit 1000 --json tagName \
+            --jq "[.[].tagName | select(startswith(\"ota-$CHANNEL-\")) | ltrimstr(\"ota-$CHANNEL-\") | tonumber] | max // 0")
+          test -n "$LAST"
+          SEQ=$((LAST + 1))
           ID=$(printf "%s-%06d" "$CHANNEL" "$SEQ")
           echo "seq=$SEQ" >> $GITHUB_OUTPUT
           echo "ota_id=$ID" >> $GITHUB_OUTPUT
@@ -206,9 +215,19 @@ jobs:
           if gh release view "$TAG" >/dev/null 2>&1; then
             echo "::error::$TAG already exists; OTA releases are immutable"; exit 1
           fi
-          gh release create "$TAG" --target "$SHA" --prerelease \
-            --title "OTA $ID (game v$GV, ${SHA:0:12})" \
-            --notes "Immutable dev-channel OTA. Source $SHA. Runtime ${{ steps.ident.outputs.runtime_id }}. Game v$GV. Built by run ${{ github.run_id }}." \
+          SEQ=$((10#${ID##*-}))
+          printf '%s\n' "# Mote v$SEQ" "" \
+            "**Nothing to download:** the Mote app on your phone installs Mote v$SEQ by itself (on the title screen)." \
+            "New phone: install the Mote app once (Android, \`com.verbal76.axolotl\`); it then updates itself to the newest version." "" \
+            "---" "Technical provenance (for engineers):" \
+            "- OTA revision: $ID (dev channel), immutable" \
+            "- Source commit: $SHA" \
+            "- Native runtime: ${{ steps.ident.outputs.runtime_id }}" \
+            "- Internal game version: $GV" \
+            "- Built by run ${{ github.run_id }}" \
+            "- Files: axolotl-$ID.pck (game payload), manifest.json + manifest.json.sig (signed)" > notes.md
+          gh release create "$TAG" --target "$SHA" --latest \
+            --title "Mote v$SEQ" --notes-file notes.md \
             "out/axolotl-$ID.pck" out/manifest.json out/manifest.json.sig
 
       - name: Re-download published objects and verify them
@@ -263,6 +282,21 @@ jobs:
           done
           test "$GOT" = "$ID"
           echo "POINTER_MOVED=true" >> $GITHUB_ENV
+
+      - name: Release titles follow the public version (presentation only)
+        if: steps.key.outputs.ok == 'true'
+        continue-on-error: true
+        env:
+          GH_TOKEN: ${{ github.token }}
+        run: |
+          # Older OTA releases were titled "OTA dev-0000NN (...)": retitle them "Mote vN". Titles only:
+          # tags, files, signatures and the pointer are untouched (idempotent).
+          gh release list --repo "$GITHUB_REPOSITORY" --limit 1000 --json tagName,name \
+            --jq ".[] | select(.tagName | startswith(\"ota-$CHANNEL-\")) | [.tagName, .name] | @tsv" |
+          while IFS=$'\t' read -r tag name; do
+            want="Mote v$((10#${tag##*-}))"
+            [ "$name" = "$want" ] || gh release edit "$tag" --repo "$GITHUB_REPOSITORY" --title "$want" >/dev/null || true
+          done
 
       - name: Publication receipt
         if: always()

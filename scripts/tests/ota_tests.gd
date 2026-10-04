@@ -641,7 +641,8 @@ func _test_version_identity() -> void:
 	t.check("game_version_matches_expected", canonical == expect, "canonical %s expected %s" % [canonical, expect])
 	# Consumers.
 	var shown: String = g.title.version_label.text
-	t.check("title_shows_canonical_version", shown == "v" + expect, "title shows '%s'" % shown)
+	# (Studio convention 2026-10-04: the title shows the public version "vN", not the semantic one.)
+	t.check("title_shows_public_version", shown == GameVersion.display() and not shown.contains(expect), "title shows '%s'" % shown)
 	var id: Dictionary = Boot.identity()
 	t.check("diagnostics_identity_game_version", id["game_version"] == expect, str(id["game_version"]))
 	t.check("diagnostics_text_game_version", Boot.diagnostics_text().contains("Game Version: %s\n" % expect), "")
