@@ -550,9 +550,13 @@ static func _ball1(lb: LevelBuilder) -> void:
 	lb.bot_hints[lb.bot_hints.size() - 1]["exit"] = [south_rim.call(-27.0)]
 	lb.bot_hints.append({"route": "stones off", "audit": true, "branch": true, "start": stones[1], "tops": [south_rim.call(-27.0)], "zones": [], "goal": "the far rim"})
 	lb.mote_xf("rim", Transform3D(MossBall.frame_at(b.up_at(stones[1]), 0.0), stones[1] + b.up_at(stones[1]) * 0.5), 0.3)
-	lb.parasite(Parasite.Kind.SMALL, "rim", 57, -40, 4.0)
-	lb.parasite(Parasite.Kind.SMALL, "rim", 57, 35, 4.0)
-	lb.parasite(Parasite.Kind.MEDIUM, "rim", 68, 45, 4.0)
+	# The rim's parasites (owner-approved audit P1, 2026-10-04): their home areas stop at least 2 m
+	# short of the ravine's rim (they were at 57 / 68 degrees, their areas taking in 5-16% of the
+	# ooze floor, so every fight there was at the lethal edge). Same order, kinds and areas, so the
+	# same ids (b1.rim.parasite.0-2); test rim_fights_clear_of_ooze.
+	lb.parasite(Parasite.Kind.SMALL, "rim", 51.8, -40, 4.0)
+	lb.parasite(Parasite.Kind.SMALL, "rim", 51.8, 35, 4.0)
+	lb.parasite(Parasite.Kind.MEDIUM, "rim", 72.3, 40, 4.0)
 	lb.mote("rim", 56, -15)
 	lb.mote("rim", 67, -50)
 	lb.bloom(56.5, 5)
@@ -569,8 +573,9 @@ static func _ball1(lb: LevelBuilder) -> void:
 	lb.route("stone bridge", cb0, [sbl[4], sbl[8], sbm], ["crack"], "the stone bridge's middle")
 	lb.bot_hints[lb.bot_hints.size() - 1]["exit"] = [sbl[14], cb1]
 	lb.bot_hints.append({"route": "bridge off", "audit": true, "branch": true, "start": sbm, "tops": [sbl[14], cb1], "zones": [], "goal": "the far rim"})
-	lb.parasite(Parasite.Kind.MEDIUM, "crack", 69, -95, 4.0)
-	lb.parasite(Parasite.Kind.SMALL, "crack", 59, -126, 4.0)
+	# (Audit P1 as above: 2 m clear of the crack's rim; they were at (69, -95) and (59, -126).)
+	lb.parasite(Parasite.Kind.MEDIUM, "crack", 69, -80.5, 4.0)
+	lb.parasite(Parasite.Kind.SMALL, "crack", 59, -129, 4.0)
 	lb.mote("crack", 70, -128)
 
 	# ---- The Heights: terraces on the eastern upland -----------------------------------------
@@ -998,6 +1003,8 @@ const SPIRAL_TURN := 90.0
 const SPIRAL_PHASE := 55.0
 ## Expansion 6 (owner phone report): broad leaves, room to land, turn and aim (was 1.9 m).
 const SPIRAL_LEAF_W := 2.4
+## The spiral leaf (from 0) where the canopy's medium parasite guards a Mote (audit P4): 12.8 m up.
+const CANOPY_GUARD_LEAF := 12
 
 
 static func _ball3(lb: LevelBuilder) -> void:
@@ -1065,9 +1072,15 @@ static func _ball3(lb: LevelBuilder) -> void:
 			mi.mesh = MeshLib.stem_mesh(0.05, 0.03, len, 5)
 			mi.material_override = root_mat
 			node.add_child(mi)
-	lb.parasite_xf(Parasite.Kind.MEDIUM, "canopy", leaf_mid(c2, 3.0, 0.5), 2.2)
+	# The canopy's medium parasite and the Mote it guards live on the spiral's 13th leaf, 12.8 m up
+	# (owner-approved audit P4, 2026-10-04): they were on C2, 17.3 m up and across two stems from the
+	# spiral's top, the last 3% of the ball, and the parasite never left its leaf. Same order, so the
+	# same ids (b3.canopy.parasite.0, b3.canopy.mote.0); C2 stays the extreme drop's leaf.
+	lb.parasite_xf(Parasite.Kind.MEDIUM, "canopy", leaf_mid(spiral[CANOPY_GUARD_LEAF], 2.1, 0.0), 1.0)
 	lb.parasite_xf(Parasite.Kind.SMALL, "canopy", leaf_mid(f1._pivot_xf, 2.0, 0.0), 1.2)
-	lb.mote_xf("canopy", leaf_mid(c2, 1.8, -0.5), 0.5)
+	# (Near the trunk end, keeping close to the leaf's line: a lunge in from its outer end takes it and
+	# stops at the trunk.)
+	lb.mote_xf("canopy", leaf_mid(spiral[CANOPY_GUARD_LEAF], 1.0, 0.0), 0.25)
 	lb.mote_xf("canopy", leaf_mid(c3, 3.6, 0.0), 0.5)
 	# Beside the 7th spiral leaf, away from the lower canopy (Expansion 6's quarter-turn spiral).
 	lb.mote_xf("canopy", leaf_mid(spiral[6], 2.2, 0.0), 0.6)

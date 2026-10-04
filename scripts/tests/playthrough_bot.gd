@@ -1850,7 +1850,31 @@ func canopy(b: MossBall, h: Dictionary) -> void:
 				if m.zone_id == "canopy" and m.is_available() and m.global_position.distance_to(p.global_position) < 3.5:
 					await lunge_at(func(): return m.global_position, 8.0)
 			await settle_on(chain[6])
-			if await hop_chain(chain.slice(7), 3, start):
+			# The guarded leaf (audit P4): its medium parasite and its Mote, 12.8 m up.
+			var gl := Levels.CANOPY_GUARD_LEAF
+			if not await hop_chain(chain.slice(7, gl + 1), 3, start):
+				continue
+			for par in b.parasites:
+				if par.zone_id == "canopy" and par.kind == Parasite.Kind.MEDIUM and par.is_alive() and par.global_position.distance_to(p.global_position) < 4.0:
+					await fight_parasite(par, 15.0)
+			for m in b.motes:
+				if m.zone_id == "canopy" and m.is_available() and m.global_position.distance_to(chain[gl]) < 3.0 and absf(height_of(m.global_position)) < 2.0:
+					# (From the leaf's outer end, lunging in toward the trunk: out along it, a lunge
+					# carries him off the tip.)
+					var inward: Vector3 = (spiral[gl] as Transform3D).basis.z
+					for tries in 3:
+						if not m.is_available() or absf(height_of(chain[gl])) > 1.0:
+							break
+						await goto(Levels.leaf_mid(spiral[gl], 2.5, 0.0).origin, 0.3, 6.0)
+						for k in 8:
+							set_stick(stick_for(inward, 0.3))
+							await tick()
+						set_stick(Vector2.ZERO)
+						await lunge_at(func(): return m.global_position, 3.0, true)
+			if absf(height_of(chain[gl])) > 1.5:
+				continue
+			await settle_on(chain[gl])
+			if await hop_chain(chain.slice(gl + 1), 3, start):
 				break
 	mark("top of spiral")
 	var c1: Transform3D = h["c1"]
@@ -1866,16 +1890,10 @@ func canopy(b: MossBall, h: Dictionary) -> void:
 	# Across to C1 and its bloom.
 	await hop_chain([Levels.leaf_mid(c3, 0.8, 0.0).origin, Levels.leaf_mid(c1, 0.8, 0.0).origin], 3)
 	await goto(Levels.leaf_mid(c1, 2.6, 0.0).origin, 0.5, 6.0)   # canopy bloom
-	# Back across to C2 via C1b, fight the medium parasite, grab the mote.
+	# Back across to C2 via C1b for the extreme drop (its parasite and Mote are on the spiral's guard
+	# leaf now, audit P4).
 	await hop_chain([Levels.leaf_mid(c1, 3.8, 0.0).origin,
 			Levels.leaf_mid(c1b, 2.0, 0.0).origin, Levels.leaf_mid(c2, 1.2, 1.0).origin], 3)
-	for par in b.parasites:
-		if par.zone_id == "canopy" and par.kind == Parasite.Kind.MEDIUM and par.is_alive():
-			await fight_parasite(par, 15.0)
-	for attempt in 3:
-		for m in b.motes:
-			if m.zone_id == "canopy" and m.is_available() and m.global_position.distance_to(c2.origin) < 6.0:
-				await lunge_at(func(): return m.global_position, 10.0, true)
 	# The big one: walk off C2's tip -> uncontrolled drop -> extreme superhero landing.
 	mark("canopy drop")
 	await goto(Levels.leaf_mid(c2, 3.8, 0.0).origin, 0.5, 8.0)

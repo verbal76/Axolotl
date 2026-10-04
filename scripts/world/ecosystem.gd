@@ -17,6 +17,8 @@ const SPECIES := {
 }
 ## How often activation and discovery are re-checked (they need not be exact per frame).
 const CHECK_DT := 0.25
+## Giant Stems' second reed stalker (audit P6): its patch centre (lat, lon) on the jungle floor.
+const GS_STALKER_LL := Vector2(-20.0, -75.0)
 
 var balls: Array = []
 var active: Array = []
@@ -96,6 +98,9 @@ func _populate_ball(b: MossBall) -> void:
 		2:
 			# (Well away from the parasites' zones: a stalker should not harass a required fight.)
 			_stalker(b, MossBall.dir_ll(-55, 95), 10.0, 0)
+			# (Owner-approved audit P6, 2026-10-04: Reed Canyon's second canyon stalker moved here, to
+			# the western jungle floor between the canopy and the Root Tangle; stalkers earn no id.)
+			_stalker(b, MossBall.dir_ll(GS_STALKER_LL.x, GS_STALKER_LL.y), 6.0, 1)
 			var hc := {}
 			for h in lb.bot_hints:
 				if h.has("canopy"):
@@ -152,14 +157,15 @@ func _populate_ball(b: MossBall) -> void:
 		4:
 			# (Half their old spread in degrees: the canyon kept its width in metres as the ball doubled.)
 			_stalker(b, R.call(0, 40), 4.0, 0)
-			_stalker(b, R.call(0, 78), 4.0, 1)
+			# (Its second canyon stalker, at R(0, 78), lives on Giant Stems now: audit P6.)
 			_puffer(b, R.call(24, 60), 5.0, 3.2, 0)
 			# World expansion: a reed stalker in the Reed Maze (away from its bloom), shrimp in the
 			# Secret Clearing.
 			_stalker(b, R.call(12, -128), 4.0, 2)
 			_shoal(b, R.call(26, -132), 2.5, 0)
 			for h in caves:
-				_crab(b, h, 0)
+				# (1, not 0: one creature fewer is placed before it now, so this keeps its seed.)
+				_crab(b, h, 1)
 				_eel(b, h, 0)
 		5:
 			_shoal(b, R.call(6, -6), 6.0, 0)
