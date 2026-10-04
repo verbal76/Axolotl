@@ -187,6 +187,9 @@ jobs:
           grep -q "Started Baking shaders" export.log || { echo "::error::shaders were not baked into the OTA pack"; exit 1; }
           test -s "out/axolotl-$ID.pck"
           python3 tools/pck_files.py "out/axolotl-$ID.pck" --require-baked
+          # Standing requirement (CLAUDE.md): the canonical Hot Attic Games logo is in the pack, pixel-exact.
+          godot --headless --path . -s tools/check_pack_logo.gd -- pck="out/axolotl-$ID.pck" | tee logo.log
+          grep -q "LOGO OK" logo.log
           URL="${{ github.server_url }}/${{ github.repository }}/releases/download/$TAG/axolotl-$ID.pck"
           godot --headless --path . -s tools/ota_make_manifest.gd -- pck="out/axolotl-$ID.pck" out=out/manifest.json \
             seq="$SEQ" sha="$SHA" url="$URL" channel="$CHANNEL" run_id="${{ github.run_id }}" \

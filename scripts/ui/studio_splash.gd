@@ -63,8 +63,8 @@ static func maybe_show(parent: Node, test_mode := "", soft_restarted := false) -
 
 func _ready() -> void:
 	name = "StudioSplash"
-	# Above Mote's loading screen (100). (The update modal, 101, only appears after the world is
-	# built, when this has long gone; a soft restart frees it with the rest of the game anyway.)
+	# Above Mote's loading screen (100) and the update modal (101): if an update is applied at
+	# launch, _process gives way to the modal at once. Nothing waits on this node.
 	layer = 102
 	process_mode = Node.PROCESS_MODE_ALWAYS
 	var bg := ColorRect.new()

@@ -129,7 +129,9 @@ input blocked, layer 102 over the loading screen. The world builds behind it, so
   is obsolete.
 - Tests: `hag_splash_genuine_launch_and_asset_rules`, `hag_splash_canonical_logo_present`,
   `hag_splash_uses_canonical_logo_with_alpha`, `hag_splash_skipped_when_logo_missing`,
-  `hag_splash_black_centred_contain_fit`, `hag_splash_once_per_launch_about_2_6_s`.
+  `hag_splash_black_centred_contain_fit`, `hag_splash_once_per_launch_about_2_6_s`,
+  `hag_splash_yields_to_update_modal`. Release gate: `tools/check_pack_logo.gd` (in `ota-publish.yml`)
+  checks the logo is inside each OTA pack, pixel-exact against the canonical file, before the release.
 
 ## 5. Android / Google Play audit (2026-10-03)
 

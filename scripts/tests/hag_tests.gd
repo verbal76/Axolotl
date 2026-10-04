@@ -280,6 +280,21 @@ func _test_studio_splash() -> void:
 	t.check("hag_splash_skipped_when_logo_missing", skipped_ok, skip_why)
 	t.check("hag_splash_black_centred_contain_fit", shown_ok, fit)
 	t.check("hag_splash_once_per_launch_about_2_6_s", again == null and still and gone, "second %s, at 2 s %s, at 2.9 s gone %s" % [again, still, gone])
+	# Update-first launch: when "Please wait, applying update" appears, the splash gives way at once
+	# (it must never sit over the activation screen), and nothing waits on it.
+	Engine.remove_meta(StudioSplash.META)
+	var s2 := StudioSplash.maybe_show(g, "", false)
+	var made := s2 != null
+	await t.frames(2)
+	made = made and is_instance_valid(s2)
+	var UA: Script = load("res://scripts/core/update_activation.gd")
+	var m: Node = UA.show_modal(g.get_tree(), 0.4)
+	await t.frames(3)
+	var yielded := made and not is_instance_valid(s2) and is_instance_valid(m)
+	t.check("hag_splash_yields_to_update_modal", yielded, "shown %s, then gone %s, modal %s" % [made, not is_instance_valid(s2), is_instance_valid(m)])
+	if is_instance_valid(m):
+		m.queue_free()
+	await t.frames(1)
 	StudioSplash.logo_path = saved_path
 	Engine.remove_meta(StudioSplash.META)
 	if saved_meta != null:
