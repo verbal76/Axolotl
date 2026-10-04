@@ -98,7 +98,7 @@ void fragment() {
 	float breathe = 1.0 - state_breathe * (0.5 + 0.5 * sin(TIME * 1.6));
 	float flow = mix(1.0, 0.78 + 0.22 * sin(ang * 3.0 - TIME * 1.3 + r * 12.0), state_flow);
 	float sg = clamp(sr * dash * breathe * flow * state_gain, 0.0, 1.0);
-	col = mix(col, state_col * mix(1.6, 0.9, state_dash), sg);
+	col = mix(col, state_col * mix(1.8, 0.65, state_dash), sg);
 	a = max(a, sg * 0.9 * edge);
 	ALBEDO = col;
 	ALPHA = clamp(a, 0.0, 0.95);

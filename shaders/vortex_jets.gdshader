@@ -117,7 +117,7 @@ void fragment() {
 	float climb = mix(1.0, 0.75 + 0.25 * sin(from_end * 2.2 - TIME * 3.0), state_flow);
 	float sg = clamp(foot * bands * breathe * climb * state_gain, 0.0, 1.0);
 	// Ready is luminous, not ready dim (a value step that reads in grey as well as in colour).
-	float lift = mix(1.75, 0.85, state_dash);
+	float lift = mix(1.95, 0.6, state_dash);
 	col = mix(col, state_col * lift, sg * 0.9);
 	a = max(a, sg * mix(0.95, 0.7, state_dash));
 	ALBEDO = col;
