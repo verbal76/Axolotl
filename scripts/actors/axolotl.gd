@@ -98,6 +98,9 @@ var _lunge_food: Food = null      # what the lunge is homing in on, if anything
 var invuln_t := 0.0
 var hurt_lock := 0.0
 var land_lock := 0.0
+var _knock_t := 0.0                # the knock-back of a hit is under way (see _edge_stop)
+## Tests: count of frames the rim stopped a lunge, a swipe or a knock-back.
+var edge_stops := 0
 var last_safe_pos := Vector3.ZERO
 var last_safe_ball: MossBall
 var fall_danger := false
@@ -345,6 +348,7 @@ func _physics_process(dt: float) -> void:
 	lunge_cd = maxf(0.0, lunge_cd - dt)
 	invuln_t = maxf(0.0, invuln_t - dt)
 	hurt_lock = maxf(0.0, hurt_lock - dt)
+	_knock_t = maxf(0.0, _knock_t - dt)
 	land_lock = maxf(0.0, land_lock - dt)
 
 	# Input.
@@ -446,6 +450,8 @@ func _physics_process(dt: float) -> void:
 		var sp := vh.length()
 		if sp > 0.5:
 			vh = _slerp_tangent(vh / sp, wish.normalized(), minf(1.0, _burst_steer * dt)) * sp
+
+	vh = _edge_stop(vh, dt)
 
 	# Gravity.
 	if not grounded:
@@ -679,6 +685,39 @@ func _physics_process(dt: float) -> void:
 	_apply_orientation(minf(1.0, dt * 20.0))
 	_update_model(dt)
 	_update_shadow()
+
+
+## Edge assist (owner-approved audit P1, 2026-10-04): a lunge or a tail swipe made on the ground, or
+## the knock-back of a hit, never carries him over a ravine's rim into the ooze: at the rim his
+## motion that way stops. Only those moments: walking, running, jumping, bursting and gliding are
+## untouched, so he still falls if he walks in, and every crossing (bridges, logs and stepping stones
+## have footing under them; a burst over is in the air) works as before.
+const EDGE_CARVE := 0.5          # how deep the cut is where the drop begins (m)
+const EDGE_LOOK := 0.35          # how far ahead of his body it is read, plus this frame's travel x2 (m)
+const KNOCK_GUARD_S := 0.6       # a hit's knock-back: long enough to come down from it
+## Tests: the edge assist off, for on/off comparisons.
+static var edge_assist := true
+
+
+func _edge_stop(vh: Vector3, dt: float) -> Vector3:
+	if not edge_assist or ball == null or ball.carves.is_empty() or vh.length() < 0.05:
+		return vh
+	var assisted := (grounded and (lunge_t >= 0.0 or lunge_cd > 0.0 or swipe_t >= 0.0)) \
+			or (_knock_t > 0.0 and ball.altitude(global_position) < 1.2)
+	if not assisted or ball.ravine_carve(up) > EDGE_CARVE:
+		return vh
+	var dir := vh.normalized()
+	var ahead := global_position + dir * (BODY_RADIUS + EDGE_LOOK + vh.length() * dt * 2.0)
+	var ua := ball.up_at(ahead)
+	if ball.ravine_carve(ua) <= EDGE_CARVE:
+		return vh
+	# (Footing ahead at his level, a bridge, a log or a stepping stone: no drop there.)
+	var q := PhysicsRayQueryParameters3D.create(ahead + ua * 0.6, ahead - ua * (EDGE_CARVE * 0.8), collision_mask)
+	q.exclude = [get_rid()]
+	if not get_world_3d().direct_space_state.intersect_ray(q).is_empty():
+		return vh
+	edge_stops += 1
+	return Vector3.ZERO
 
 
 ## Down on a ravine's floor (not up on a bridge or a stepping stone above it).
@@ -949,6 +988,7 @@ func take_damage(amount: int, from_pos: Vector3) -> void:
 	last_hit_from = from_pos
 	invuln_t = 1.3
 	hurt_lock = 0.3
+	_knock_t = KNOCK_GUARD_S
 	model.hurt_t = 0.0
 	model.set_health(health, max_health, true)
 	health_changed.emit(health, max_health)

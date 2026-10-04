@@ -23,15 +23,15 @@ rests on the bot, the human-facing reason is stated and the size is hedged.
 
 | # | Area | Finding | Impact | Status |
 |---|---|---|---|---|
-| 1 | Terrain / threat | Ball 1's rim fights happen on the edge of lethal ooze | High (first ball) | Proposal P1 |
+| 1 | Terrain / threat | Ball 1's rim fights happen on the edge of lethal ooze | High (first ball) | **Fixed** (P1, 2026-10-04) |
 | 2 | Readability / progression | Nothing in play says how restored the current ball is or how near its tunnel is | High | Partly fixed (whole-ball view caption); proposal P2 |
 | 3 | Readability | Arrivals on balls 4-7 show bare, dark ground with no landmark or lead | Medium | Proposal P3 |
-| 4 | Pacing | Ball 3's last 3% sits on the 17 m canopy top; falls cost fronds and the bot loops there | Medium | Proposal P4 |
+| 4 | Pacing | Ball 3's last 3% sits on the 17 m canopy top; falls cost fronds and the bot loops there | Medium | **Fixed** (P4, 2026-10-04) |
 | 5 | Readability | Small parasites at 7-10 m are a few pinkish pixels, close to Gill's own colour | Medium | Proposal P5 (look stream) |
 | 6 | UI | Treasure Hunt box text at 15 / 17 px (about 1.4 / 1.6 mm on a phone) | Low-medium | **Fixed** |
 | 7 | UI | A starfish picked up during a Treasure Hunt drew its chip over the hunt box | Low | **Fixed** |
 | 7b | Pacing / readability | Cave eels: all 5 left at every normal finish; most bot stuck time is in their grottos | Medium | Proposal P7 |
-| 8 | Ecosystem | Creature threats are uneven: Reed Canyon has five kinds, Canopy Spire and Giant Stems almost none | Low | Proposal P6 |
+| 8 | Ecosystem | Creature threats are uneven: Reed Canyon has five kinds, Canopy Spire and Giant Stems almost none | Low | **Fixed** (P6, 2026-10-04) |
 | 9 | Docs | The ravine-fall comment and WORLD_EXPANSION.md still described "one frond, back on the rim" | Low (maintainers) | **Fixed** |
 | 10 | UI | Pause button 56 px (about 5.3 mm; 7.2 mm with its touch margin), under Android's 48 dp | Low | Note; deliberate (no accidental pauses) |
 
@@ -151,6 +151,8 @@ difference is the Ball 3 canopy loop (finding 4), about 700 s.
 
 ## Proposals (not implemented: larger than a bounded local fix, or another stream's)
 
+(P1, P4 and P6 were approved by the owner and implemented on 2026-10-04: see "Remediation" at the end.)
+
 - **P1. Ooze edge on Ball 1's rim.** Either (a) move the three Great Ravine rim parasites' homes so
   their areas stop 2 m short of the rim (lat 57 → about 54-55 with the same 4 m radius; ids are not
   fixed, but the world hash and starfish/treasure clearances must be re-run), or (b) an edge assist: a
@@ -184,3 +186,44 @@ difference is the Ball 3 canopy loop (finding 4), about 700 s.
 | Starfish chip below the hunt box during a hunt | `scripts/ui/hud.gd`, `treasure_panel.gd` | `hud_starfish_chip_clear_of_hunt_box` |
 | Ravine-fall wording | `scripts/actors/axolotl.gd`, `docs/WORLD_EXPANSION.md` | (docs) |
 | Bot logs where it gets stuck; probe; audit shots | `playthrough_bot.gd`, `unit_tests.gd`, `shots.gd` | (tooling) |
+
+## Remediation 2026-10-04: P1, P4, P6 (owner-approved)
+
+| Proposal | Change | Files | Tests |
+|---|---|---|---|
+| P1 (a) | Ball 1's three Great Ravine rim parasites (57/-40, 57/35, 68/45 → 51.8/-40, 51.8/35, 72.3/40) and two Split Crack parasites (69/-95, 59/-126 → 69/-80.5, 59/-129) moved back; same 4° areas, order and kinds, so the same ids. Every area now stops 2.1-2.4 m short of the cut (the top of the ravine wall) | `scripts/world/levels.gd` | `rim_fights_clear_of_ooze`, `ball1_no_parasite_home_on_ooze` |
+| P1 (b) | Edge assist (`Axolotl._edge_stop`): a lunge or tail swipe made on the ground, or a hit's knock-back, stops at a ravine's rim; walking, running, jumping, bursting and gliding are untouched (walking or jumping in is still a death), and a lunge along a bridge, log or stepping stone goes on (footing under it). Bounded: read only during those moves, near a ravine | `scripts/actors/axolotl.gd` | `edge_lunge_stops_at_rim`, `edge_knockback_held_at_rim`, `edge_walking_in_still_falls`, `edge_jumping_in_untouched`, `edge_lunge_along_bridge_unchanged` |
+| P4 | Ball 3's canopy medium parasite and the Mote it guards moved from C2 (17.3 m, across two stems from the spiral's top) to the giant spiral's 13th leaf (12.8 m, `Levels.CANOPY_GUARD_LEAF`); same ids (`b3.canopy.parasite.0`, `b3.canopy.mote.0`). C2 is still the extreme drop's leaf. The parasite still never leaves its leaf on its own; it is now on the climb itself, so it fights him there (it hit the bot on both runs) | `levels.gd`, bot `canopy()` | `canopy_guard_on_spiral_leaf`, `canopy_guard_reached_and_beaten_by_play` (plain jumps up 13 leaves, beaten by swipes on the leaf), `canopy_guard_mote_taken_from_leaf`; existing `canopy_*`, `climbs_with_plain_jumps`, route audit |
+| P6 | Reed Canyon's second canyon stalker now hunts Giant Stems' western jungle floor (-20, -75). Stalkers carry no completion id and are never saved, so no id or save changes (catalog hash unchanged); Reed Canyon's crab keeps its seed. Details in `docs/ECOSYSTEM.md` "Threat spread" | `scripts/world/ecosystem.gd` | `threat_spread_stalker_on_giant_stems`, `eco_*` |
+
+Also: the bot logs each death with its ball, place and cause (`DEATH n at t: ball N (lat, lon), ooze|hurt (activity; nearest threat)`).
+
+**Evidence.** Playthrough bot, default seed, same machine and day; "before" is the base of this branch
+(`f5720c6` plus the death logging only), "after" is this change. Deaths per ball:
+
+| Run | Ball 1 | 2 | 3 | 4 | 5 | 6 | 7 | Total | Ball 3 clear (s) | ALL CLEAR (s) | Result |
+|---|---|---|---|---|---|---|---|---|---|---|---|
+| before (`before_pt1`) | **25** (all ooze; 23 during "kill rim") | 0 | 2 | 0 | 2 | 0 | 2 | 31 | 611 | 3,743 | 100% phase crashed in the engine (signal 11, a worker-thread notification; also seen in other runs under load) |
+| after 1 | **7** (6 ooze; 1 "kill rim") | 2 | 0 | 1 | 0 | 0 | 0 | 10 | 408 | 3,234 | 24/24, 100% by play |
+| after 2 | **5** (all ooze; 0 "kill rim") | 0 | 0 | 3 | 1 | 0 | 1 | 10 | 381 | 3,080 | 24/24, 100% by play |
+
+Earlier runs on older builds (deaths attributed by heartbeat, so approximate): Ball 1 16-24, Ball 3
+clearing 554-927 s (`audit_pt1`: 653 s to 97%, then two more visits).
+
+- Before, 23 of Ball 1's 25 deaths came in "kill rim" loops: walking to a rim parasite grazing at the
+  lip, the bot went round the Great Ravine's west end and the Split Crack's south end and fell in,
+  re-formed at the start and tried again (9 at (62, -64) alone). With the areas back from the cut the
+  target is inland and the loop is gone (1 and 0). What is left on Ball 1 is the skilled climbs the bot
+  walks: the Split Crack's stone bridge (3 + 1 per run) and the stepping stones (1 per run).
+- Home-area ooze floor (deterministic rings-and-spokes sampling, `[RIM]` log; the cohesion probe
+  agrees): Ball 1 before 4 parasites (16%, 13%, 5%, 12%), after 0 of 30. Other balls unchanged and not
+  in scope: Terrace Steps field 2%, Reed Canyon far 4%, Hollow Grotto undercut 4% (each 2-5% before).
+- Knock-back, measured: a hit throws him about 0.8 m; from 0.1 m or more short of the lip he never
+  reaches the ooze even without the assist, and with it he is held on the lip itself. A parasite's reach
+  is 1.5-1.8 m and its area stops 2.1 m or more short of the cut, so where a rim parasite can hit him he
+  is clear of the lip: no enemy can push him into a death loop there.
+- Ball 3: the canopy routine finished in one pass on both runs (about 100 s from the foot of the spiral
+  to the drop; the guard parasite hit him once in run 2 and knocked him a leaf down once), and the ball
+  was 100% on the first visit both times (408 / 381 s against 611 s before and 554-927 s earlier).
+- World hash: geometry hash changes (moved parasites, Mote and stalker); completion catalog hash
+  (`9bf9a8d5…`, 348 ids) and starfish placement hash (`4d2b6438…`, 30 stars) identical before and after.
