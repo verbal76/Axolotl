@@ -40,6 +40,18 @@ const CUR_SHARE := [0.46, 0.34, 0.2]
 ## Amplitude share per axis: sideways, vertical, along the connection (depth).
 const CUR_AXES := Vector3(1.0, 0.78, 0.3)
 
+## Platform state (owner, 2026-10-04: from the ground the player cannot see whether the funnel has
+## reached the next ball). A glowing ring round each tidal pool shows travel readiness, read from
+## travel_ready() only. Never colour alone (red/green colour-vision deficiency): not ready is a
+## muted red, DASHED, dim and slowly breathing; ready is a muted green, CONTINUOUS, brighter and
+## steadily flowing. Per state: [colour, gain, dashes (0 = continuous), breathing swing, flow].
+const STATE_LOOK := {
+	false: [Color(0.72, 0.3, 0.17), 0.8, 1.0, 0.3, 0.0],
+	true: [Color(0.33, 0.78, 0.52), 1.0, 0.0, 0.0, 1.0],
+}
+## Seconds the ring takes to change state (the 70% moment is also marked by the connect shot).
+const STATE_FADE_S := 1.2
+
 ## Off: the shipped straight tunnels (before/after comparisons in the render harness).
 static var currents := true
 
@@ -97,6 +109,9 @@ var distress_level: Array[int] = [0, 0]
 var distress_shown: Array[float] = [0.0, 0.0]
 var distress_phase: Array[float] = [0.0, 0.0]
 var _distress_on := false
+## The platform state shown (0 = not ready .. 1 = ready), easing toward travel_ready(); -1 until the
+## first frame, which snaps to it (a loaded save or a return shows the right state at once).
+var ready_shown := -1.0
 
 
 func setup(a: MossBall, b: MossBall, p_dir_a: Vector3, p_dir_b: Vector3) -> void:
@@ -438,6 +453,32 @@ func mouth_pos(at_b: bool) -> Vector3:
 	return (_mouth_b if at_b else _mouth_a).global_position + d * 0.9
 
 
+## THE travel eligibility: Game._check_vortex_entry lets Gill in only through this, and the platform
+## ring shows only this, so the two can never disagree.
+func travel_ready() -> bool:
+	return connected
+
+
+## The ring's look for a shown state: [colour, gain, dashes, breathing swing, flow].
+static func state_look(shown: float) -> Array:
+	var a: Array = STATE_LOOK[false]
+	var b: Array = STATE_LOOK[true]
+	var k := clampf(shown, 0.0, 1.0)
+	return [(a[0] as Color).lerp(b[0], k), lerpf(a[1], b[1], k), lerpf(a[2], b[2], k), lerpf(a[3], b[3], k), lerpf(a[4], b[4], k)]
+
+
+func _update_state(dt: float) -> void:
+	var want := 1.0 if travel_ready() else 0.0
+	ready_shown = want if ready_shown < 0.0 else move_toward(ready_shown, want, dt / STATE_FADE_S)
+	var lk := state_look(ready_shown)
+	for pm in _pool_mats + [_jet_mat, _stream_mat]:
+		pm.set_shader_parameter("state_col", lk[0])
+		pm.set_shader_parameter("state_gain", lk[1])
+		pm.set_shader_parameter("state_dash", lk[2])
+		pm.set_shader_parameter("state_breathe", lk[3])
+		pm.set_shader_parameter("state_flow", lk[4])
+
+
 func pulse() -> void:
 	_pulse = 1.0
 	Sfx.play("vortex_pulse", _mouth_a.global_position, -6.0)
@@ -475,6 +516,7 @@ func _process(dt: float) -> void:
 		dm.set_shader_parameter("strength", s)
 		dm.set_shader_parameter("spin_phase", spin_phase)
 	_mouth_b.visible = _b_open > 0.001
+	_update_state(dt)
 	if _distress_on:
 		_update_distress(dt)
 	_update_rush(_rush_a, 0.1 + strength)

@@ -46,7 +46,7 @@ func run(runner) -> void:
 		g.hints.enabled = false
 	await t.seconds(0.5)
 	var only: String = Settings.test_args.get("only", "")
-	var registry := ["_test_startup", "_test_ota_and_version", "_test_hag_infra", "_test_launch_update", "_test_mesh_winding", "_test_terrain", "_test_ravines", "_test_ooze_bubbles", "_test_view_clearances", "_test_camera_rises_over", "_test_camera_invariant", "_test_ball_view", "_test_hud_corner", "_test_restore_hints", "_test_home_coherence", "_test_terrain_grounded", "_test_no_floating_platforms", "_test_parasite_locomotion", "_test_parasite_body_and_death", "_test_parasite_combat", "_test_organic_motion", "_test_gill_look", "_test_gill_idles", "_test_gill_colours", "_test_gill_patterns", "_test_tail_whip", "_test_gill_traction", "_test_gill_incline_transitions", "_test_traction_no_shortcuts", "_test_gill_body_follow", "_test_swim_body_follow", "_test_ambient_sway", "_test_placements", "_test_tutorial_route", "_test_sphere_walk", "_test_jump_and_burst", "_test_coyote_and_buffer", "_test_swipe_direction_and_stages", "_test_hard_landing", "_test_food", "_test_food_reach", "_test_darter_and_burrower", "_test_food_repopulates", "_test_motes", "_test_checkpoint_and_regen", "_test_crumble", "_test_restoration_gates", "_test_retract_gates_gone", "_test_bubble_columns", "_test_restoration_continuity", "_test_health_map", "_test_vortex", "_test_vortex_tints", "_test_vortex_currents", "_test_vortex_currents_travel", "_test_current", "_test_current_brace", "_test_canopy", "_test_canopy_plain_jumps", "_test_climbs_physical", "_test_jungle_ladders_physical", "_test_leaf_geometry", "_test_leaf_footing", "_test_caves", "_test_mounds", "_test_vegetation", "_test_vortex_mouths_clear", "_test_route_audit", "_test_new_areas", "_test_ecosystem", "_test_music", "_test_opening_audio", "_test_run_clock", "_test_completion_catalog", "_test_completion_frozen", "_test_run_save_file", "_test_run_timer_live", "_test_run_continue", "_test_timer_integrity", "_test_resume_points_safe", "_phase_continue_write", "_phase_continue_read", "_test_upgrades", "_test_quality_title_cap", "_test_ui", "_test_menus_no_scroll", "_test_menu_touch", "_test_tier2_rules", "_test_tier2_world", "_test_ambient_fish", "_test_parasite_never_buried", "_test_tier2_loadout", "_test_aquarium_experiences", "_test_aquarium_polish", "_test_all_clear", "_test_treasure_unlock", "_test_treasure_generation", "_test_treasure_play", "_phase_treasure_stress", "_phase_live_fish_diag", "_phase_cpu_probe", "_phase_incline_survey", "_phase_loco_diag", "_phase_crawl_trace", "_phase_mouth_crawls", "_phase_organic_trace", "_phase_organic_cost", "_test_skilltree_graph", "_test_progress_store", "_test_starfish_spots", "_test_starfish_pickup", "_test_skill_ui", "_test_quick_gill", "_test_lunge_skills", "_test_burst_skills", "_test_glide_control", "_test_glide_transfers", "_test_mote_magnet", "_phase_starfish_survey", "_phase_starfish_sweep", "_phase_glide_probe", "_test_plants_terminal_growth", "_test_sea_fan_depth", "_test_repopulation", "_phase_repop_survey", "_phase_repop_sim", "_test_aquarium_gill", "_phase_aq_nav", "_test_tutorials_and_title", "_test_onb_progress", "_test_onb_owner_save", "_test_onb_per_run", "_test_onb_toggle", "_test_onb_intro", "_test_onb_feeding", "_test_onb_parasite", "_test_onb_feed_first", "_test_onb_tunnel", "_test_onb_starfish", "_test_onb_softlock", "_test_onb_relaunch", "_test_onb_restoration_equal", "_test_hard_mode", "_test_hard_mode_save", "_test_polish_a", "_test_leaf_motion", "_test_perf_veg_cull", "_test_death_and_arrival", "_test_camera_never_drawn_unsafe", "_test_startup_build_identical", "_phase_world_hash", "_phase_th_bench", "_phase_hard_write", "_phase_hard_read", "_phase_hard_newrun", "_phase_hard_finish", "_phase_hard_sim", "_phase_hard_intervals", "_phase_onb_owner", "_phase_onb_write", "_phase_onb_read", "_phase_onb_kill", "_phase_onb_toggle", "_phase_cohesion_probe"]
+	var registry := ["_test_startup", "_test_ota_and_version", "_test_hag_infra", "_test_launch_update", "_test_mesh_winding", "_test_terrain", "_test_ravines", "_test_ooze_bubbles", "_test_view_clearances", "_test_camera_rises_over", "_test_camera_invariant", "_test_ball_view", "_test_hud_corner", "_test_restore_hints", "_test_home_coherence", "_test_terrain_grounded", "_test_no_floating_platforms", "_test_parasite_locomotion", "_test_parasite_body_and_death", "_test_parasite_combat", "_test_organic_motion", "_test_gill_look", "_test_gill_idles", "_test_gill_colours", "_test_gill_patterns", "_test_tail_whip", "_test_gill_traction", "_test_gill_incline_transitions", "_test_traction_no_shortcuts", "_test_gill_body_follow", "_test_swim_body_follow", "_test_ambient_sway", "_test_placements", "_test_tutorial_route", "_test_sphere_walk", "_test_jump_and_burst", "_test_coyote_and_buffer", "_test_swipe_direction_and_stages", "_test_hard_landing", "_test_food", "_test_food_reach", "_test_darter_and_burrower", "_test_food_repopulates", "_test_motes", "_test_checkpoint_and_regen", "_test_crumble", "_test_restoration_gates", "_test_retract_gates_gone", "_test_bubble_columns", "_test_restoration_continuity", "_test_health_map", "_test_vortex", "_test_vortex_tints", "_test_vortex_ready_state", "_test_vortex_currents", "_test_vortex_currents_travel", "_test_current", "_test_current_brace", "_test_canopy", "_test_canopy_plain_jumps", "_test_climbs_physical", "_test_jungle_ladders_physical", "_test_leaf_geometry", "_test_leaf_footing", "_test_caves", "_test_mounds", "_test_vegetation", "_test_vortex_mouths_clear", "_test_route_audit", "_test_new_areas", "_test_ecosystem", "_test_music", "_test_opening_audio", "_test_run_clock", "_test_completion_catalog", "_test_completion_frozen", "_test_run_save_file", "_test_run_timer_live", "_test_run_continue", "_test_timer_integrity", "_test_resume_points_safe", "_phase_continue_write", "_phase_continue_read", "_test_upgrades", "_test_quality_title_cap", "_test_ui", "_test_menus_no_scroll", "_test_menu_touch", "_test_tier2_rules", "_test_tier2_world", "_test_ambient_fish", "_test_parasite_never_buried", "_test_tier2_loadout", "_test_aquarium_experiences", "_test_aquarium_polish", "_test_all_clear", "_test_treasure_unlock", "_test_treasure_generation", "_test_treasure_play", "_phase_treasure_stress", "_phase_live_fish_diag", "_phase_cpu_probe", "_phase_incline_survey", "_phase_loco_diag", "_phase_crawl_trace", "_phase_mouth_crawls", "_phase_organic_trace", "_phase_organic_cost", "_test_skilltree_graph", "_test_progress_store", "_test_starfish_spots", "_test_starfish_pickup", "_test_skill_ui", "_test_quick_gill", "_test_lunge_skills", "_test_burst_skills", "_test_glide_control", "_test_glide_transfers", "_test_mote_magnet", "_phase_starfish_survey", "_phase_starfish_sweep", "_phase_glide_probe", "_test_plants_terminal_growth", "_test_sea_fan_depth", "_test_repopulation", "_phase_repop_survey", "_phase_repop_sim", "_test_aquarium_gill", "_phase_aq_nav", "_test_tutorials_and_title", "_test_onb_progress", "_test_onb_owner_save", "_test_onb_per_run", "_test_onb_toggle", "_test_onb_intro", "_test_onb_feeding", "_test_onb_parasite", "_test_onb_feed_first", "_test_onb_tunnel", "_test_onb_starfish", "_test_onb_softlock", "_test_onb_relaunch", "_test_onb_restoration_equal", "_test_hard_mode", "_test_hard_mode_save", "_test_polish_a", "_test_leaf_motion", "_test_perf_veg_cull", "_test_death_and_arrival", "_test_camera_never_drawn_unsafe", "_test_startup_build_identical", "_phase_world_hash", "_phase_th_bench", "_phase_hard_write", "_phase_hard_read", "_phase_hard_newrun", "_phase_hard_finish", "_phase_hard_sim", "_phase_hard_intervals", "_phase_onb_owner", "_phase_onb_write", "_phase_onb_read", "_phase_onb_kill", "_phase_onb_toggle", "_phase_cohesion_probe"]
 	# A --only entry that names nothing is a typo (or a stale substring): fail loudly rather than run nothing.
 	for o in only.split(",", false):
 		if not registry.has(o) and not registry.has("_test_" + o):
@@ -1954,6 +1954,11 @@ func _phase_continue_write() -> void:
 	u.taken = true
 	g.upgrade_collected(u)
 	await t.seconds(1.0)
+	# One connection opened (as Game._check_vortex_connections records it), so the read half can
+	# check the vortex platform shows the restored travel state at once.
+	var vk: Vortex = g.vortices.back()
+	vk.connected = true
+	g._earn(vk.get_meta("completion_id", ""))
 	# Then on to a new area (Expansion 4's Hollow Grotto): clear a parasite, take a cave's pearl and
 	# find a bloom there, so the run continues on that ball.
 	var b7 := g.balls[6]
@@ -2011,6 +2016,18 @@ func _phase_continue_read() -> void:
 			mote = x
 	t.check("read_cleared_things_stay_cleared", par != null and not par.is_alive() and not par.visible and mote != null and mote.state == "done" and not mote.visible, "")
 	t.check("read_cave_and_health", g.balls[1].upgrades[0].taken and p.max_health == int(st["max_hp"]), "max hp %d" % p.max_health)
+	# Vortex platforms (owner, 2026-10-04): each shows exactly the restored travel state from its first
+	# frame (no red flash on a connected one, no green on a shut one).
+	var plat_bad: Array[String] = []
+	var n_ready := 0
+	for v in g.vortices:
+		var want := 1.0 if v.travel_ready() else 0.0
+		if v.travel_ready():
+			n_ready += 1
+		if v.travel_ready() != g.run_save.earned().has(v.get_meta("completion_id", "")) or not is_equal_approx(v.ready_shown, want) \
+				or not is_equal_approx(float(v._pool_mats[0].get_shader_parameter("state_dash")), 1.0 - want):
+			plat_bad.append("%s ready %s shown %.2f" % [v.get_meta("completion_id", ""), v.travel_ready(), v.ready_shown])
+	t.check("read_vortex_platform_state_restored", plat_bad.is_empty() and n_ready >= 1 and g.vortices.back().travel_ready(), "%d ready of %d; %s" % [n_ready, g.vortices.size(), plat_bad])
 	var b7 := g.balls[6]
 	var par7: Parasite
 	for x in b7.parasites:
@@ -3830,6 +3847,42 @@ func _test_vortex_tints() -> void:
 			"%d connections, both ends %s, stable %s, closest pair sharing a ball %.2f apart" % [g.vortices.size(), same_ends, stable, worst])
 
 
+## Vortex platform state (owner, 2026-10-04): the ring round each tidal pool reads travel readiness
+## from Vortex.travel_ready() (the same call Game's entry check uses), snaps to it when a world is
+## loaded or returned to, eases on a change, and differs by brightness, pattern and motion as well
+## as by a muted hue, so it reads without red/green colour vision.
+func _test_vortex_ready_state() -> void:
+	var off: Array = Vortex.state_look(0.0)
+	var on: Array = Vortex.state_look(1.0)
+	var lum_off: float = (off[0] as Color).get_luminance() * float(off[1])
+	var lum_on: float = (on[0] as Color).get_luminance() * float(on[1])
+	var muted: bool = (off[0] as Color).s < 0.7 and (on[0] as Color).s < 0.7
+	var cvd: bool = lum_on / maxf(lum_off, 0.001) >= 1.8 and off[2] == 1.0 and on[2] == 0.0 and off[3] > 0.0 and on[3] == 0.0 and on[4] > 0.0
+	t.check("vortex_platform_states_distinct_without_hue", cvd and muted,
+			"glow luminance %.2f vs %.2f (x%.1f), dashed %s/%s, breathing %s/%s, flow %s/%s, muted %s" % [lum_off, lum_on, lum_on / maxf(lum_off, 0.001),
+			off[2], on[2], off[3], on[3], off[4], on[4], muted])
+	# The entry check goes through travel_ready() (no second, cosmetic flag to drift apart).
+	var src := FileAccess.get_file_as_string("res://scripts/core/game.gd")
+	var entry := src.substr(src.find("func _check_vortex_entry"), 600)
+	t.check("vortex_entry_uses_travel_ready", entry.contains("v.travel_ready()") and not entry.contains("v.connected"), "")
+	# Follows every change, and snaps (no fade) on a fresh world or a return.
+	var v: Vortex = g.vortices[g.vortices.size() / 2]
+	var was := v.connected
+	var follows := true
+	for want in [not was, was]:
+		v.connected = want
+		await t.seconds(Vortex.STATE_FADE_S + 0.3)
+		follows = follows and is_equal_approx(v.ready_shown, 1.0 if v.travel_ready() else 0.0)
+	v.ready_shown = -1.0
+	await t.frames(2)
+	var snapped := is_equal_approx(v.ready_shown, 1.0 if v.travel_ready() else 0.0)
+	var all_match := true
+	for vv in g.vortices:
+		all_match = all_match and is_equal_approx(vv.ready_shown, 1.0 if vv.travel_ready() else 0.0) \
+				and (vv._pool_mats[0].get_shader_parameter("state_col") as Color).is_equal_approx(Vortex.state_look(vv.ready_shown)[0])
+	t.check("vortex_platform_follows_travel_ready", follows and snapped and all_match and v.connected == was, "follows %s snapped %s all %s" % [follows, snapped, all_match])
+
+
 ## Vortex currents (ledger row 14): the visible centreline meanders as a moving water current over a
 ## fixed logical path. The stable parameter u (0 = ball A, 0.5 = midpoint, 1 = ball B) reaches every
 ## vortex shader; the mouths stay anchored; the offset is bounded, slow and keeps clear of the balls;
@@ -4038,6 +4091,7 @@ func _test_vortex() -> void:
 	place(0, 20, 60, 0.1, 90)
 	await t.frames(5)
 	t.check("vortex_closed_below_70", not v.connected, "restoration %.2f" % b0.restoration)
+	t.check("vortex_platform_shows_not_ready_below_70", not v.travel_ready() and v.ready_shown == 0.0, "shown %.2f" % v.ready_shown)
 	var step := 1.0 / b0.events_total
 	await _complete_until(b0, 0.7 - step)
 	await t.seconds(1.0)
@@ -4056,6 +4110,13 @@ func _test_vortex() -> void:
 		if vv.ball_a == b0:
 			all_open = all_open and vv.connected
 	t.check("vortex_connects_at_70_with_cinematic", v.connected and all_open and saw_cine and g.cinematic == "" and p.controls_enabled, "restoration %.2f; open %s all %s shot %s cine '%s' pending %d controls %s" % [b0.restoration, v.connected, all_open, saw_cine, g.cinematic, g._pending_connect.size(), p.controls_enabled])
+	# The platform eases to "ready" (green, continuous, flowing) as the 70% connection is made.
+	var eased := 0.0
+	while eased < Vortex.STATE_FADE_S + 1.0 and v.ready_shown < 1.0:
+		await t.frames(1)
+		eased += 1.0 / 60.0
+	t.check("vortex_platform_turns_ready_at_70", v.travel_ready() and is_equal_approx(v.ready_shown, 1.0)
+			and is_equal_approx(float(v._pool_mats[0].get_shader_parameter("state_dash")), 0.0), "shown %.2f after %.1f s" % [v.ready_shown, eased])
 	# Enter the vortex: travel to moss ball #2.
 	var mouth := v.mouth_pos(false)
 	place_at(0, b0.surface_point(b0.up_at(mouth), 0.1), MossBall.frame_at(b0.up_at(mouth), 0).z)

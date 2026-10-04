@@ -1462,7 +1462,7 @@ func _check_vortex_entry() -> void:
 	if player.state != "normal":
 		return
 	for v in vortices:
-		if not v.connected:
+		if not v.travel_ready():
 			continue
 		for at_b in [false, true]:
 			var mb: MossBall = v.ball_b if at_b else v.ball_a

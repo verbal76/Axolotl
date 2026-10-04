@@ -21,6 +21,14 @@ uniform float tint_amt = 0.0;
 // Which end of the connection this pool is (u: 0 = ball A, 1 = ball B; ledger row 14, for Hard Mode).
 // The current's offset is zero at the mouths (they are anchored), so the pool itself does not move.
 uniform float u_end = 0.0;
+// Platform state ring (Vortex.STATE_LOOK, set from Vortex.travel_ready()): colour, gain, dashes
+// (0 = continuous), breathing swing and flow. Pattern, brightness and motion differ between the two
+// states as well as hue, so it reads without red/green colour vision.
+uniform vec3 state_col : source_color = vec3(0.72, 0.3, 0.17);
+uniform float state_gain = 0.8;
+uniform float state_dash = 1.0;
+uniform float state_breathe = 0.3;
+uniform float state_flow = 0.0;
 
 #include "res://shaders/vortex_distress.gdshaderinc"
 
@@ -84,6 +92,14 @@ void fragment() {
 	}
 	float edge = 1.0 - smoothstep(0.8, 1.0, r);
 	float a = (0.6 + crest * 0.3 + ring * 0.3 + lip * 0.3) * edge * (0.35 + strength * 0.65);
+	// The state ring, just inside the foam lip.
+	float sr = exp(-pow((r - 0.7) / 0.075, 2.0));
+	float dash = mix(1.0, smoothstep(0.3, 0.62, 0.5 + 0.5 * cos(ang * 9.0)), state_dash);
+	float breathe = 1.0 - state_breathe * (0.5 + 0.5 * sin(TIME * 1.6));
+	float flow = mix(1.0, 0.78 + 0.22 * sin(ang * 3.0 - TIME * 1.3 + r * 12.0), state_flow);
+	float sg = clamp(sr * dash * breathe * flow * state_gain, 0.0, 1.0);
+	col = mix(col, state_col * mix(1.6, 0.9, state_dash), sg);
+	a = max(a, sg * 0.9 * edge);
 	ALBEDO = col;
 	ALPHA = clamp(a, 0.0, 0.95);
 }
