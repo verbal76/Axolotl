@@ -1242,11 +1242,15 @@ func scatter(mesh: Mesh, mat: Material, count: int, seed_v: int, scale_min: floa
 	while placed < count and tries < count * 6:
 		tries += 1
 		var d := Vector3(rng.randfn(), rng.randfn(), rng.randfn()).normalized()
-		if (accept.is_valid() and not accept.call(d)) or on_vortex_pad(d):
+		if accept.is_valid() and not accept.call(d):
 			continue
 		var key := _cube_cell(d, k)
 		var b := frame_at(d, rng.randf() * 360.0)
 		var s := rng.randf_range(scale_min, scale_max)
+		# (Never on a vortex's landing pad. Skipped after its draws, so every other placement on the
+		# ball stays exactly where it was.)
+		if on_vortex_pad(d):
+			continue
 		b = b.scaled(Vector3(s, s, s))
 		if not buckets.has(key):
 			buckets[key] = []
