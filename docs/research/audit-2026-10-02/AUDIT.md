@@ -24,8 +24,8 @@ rests on the bot, the human-facing reason is stated and the size is hedged.
 | # | Area | Finding | Impact | Status |
 |---|---|---|---|---|
 | 1 | Terrain / threat | Ball 1's rim fights happen on the edge of lethal ooze | High (first ball) | **Fixed** (P1, 2026-10-04) |
-| 2 | Readability / progression | Nothing in play says how restored the current ball is or how near its tunnel is | High | Partly fixed (whole-ball view caption); proposal P2 |
-| 3 | Readability | Arrivals on balls 4-7 show bare, dark ground with no landmark or lead | Medium | Proposal P3 |
+| 2 | Readability / progression | Nothing in play says how restored the current ball is or how near its tunnel is | High | **Fixed** (whole-ball view caption; P2 built 2026-10-04: pause menu line) |
+| 3 | Readability | Arrivals on balls 4-7 show bare, dark ground with no landmark or lead | Medium | **P3 built** 2026-10-04 (first-arrival whole-ball view); the murk itself stays the look stream's |
 | 4 | Pacing | Ball 3's last 3% sits on the 17 m canopy top; falls cost fronds and the bot loops there | Medium | **Fixed** (P4, 2026-10-04) |
 | 5 | Readability | Small parasites at 7-10 m are a few pinkish pixels, close to Gill's own colour | Medium | Proposal P5 (look stream) |
 | 6 | UI | Treasure Hunt box text at 15 / 17 px (about 1.4 / 1.6 mm on a phone) | Low-medium | **Fixed** |
@@ -149,6 +149,66 @@ No stuck spot points to a hole or an invisible wall in open ground.
 Pacing note: this run's normal finish was 4,691 s against 3,233-3,699 s in the five earlier runs; the
 difference is the Ball 3 canopy loop (finding 4), about 700 s.
 
+## P2 and P3, built (owner-approved, 2026-10-04)
+
+**P2. This ball's progress in the pause menu.** The run panel's detail opens with one line for the
+ball he is on, above the run-wide table (whose counts, "Moss restored N / 262" and the rest, are kept):
+
+| State | Line |
+|---|---|
+| below 70%, one tunnel out | `Terrace Steps  ·  42% restored  ·  tunnel opens at 70%` |
+| 70% or more (or the tunnel already open) | `Terrace Steps  ·  74% restored  ·  tunnel open` |
+| two tunnels out (Mossy Meadow, Current Hollows) | `…  ·  tunnels open at 70%` / `…  ·  tunnels open` |
+| no tunnel out (Reed Canyon, Canopy Spire, Hollow Grotto) | `Reed Canyon  ·  42% restored` |
+
+The % is the ball's restoration rounded down (as everywhere), so 100% shows only when the ball is
+fully restored; the line never says "complete" or "done": 70% only opens the way on, and finishing
+still needs every ball at 100%. "Open" uses the game's own rule (`Vortex.CONNECT_AT`, the same
+epsilon as `Game._check_vortex_connections`), or a tunnel the save already has open. Not shown from
+the title's Settings or in the aquarium experiences (no ball is being played); nothing is added to
+the play HUD. To keep the menu at its fullest inside 720 px with nothing to scroll, the right
+column's spacing went from 12 to 10 px: the fullest panel is 687 px tall (was 677; limit 696).
+Code: `BallView.progress_line`, `PauseMenu.ball_line`. Tests: `_test_pause_ball_progress`
+(`pause_ball_line_*`, `pause_menu_shows_this_ball`), and `_test_menus_no_scroll` unchanged.
+
+**P3. First-arrival establishing view.** The first time in a run that a tunnel lands him on a ball,
+the whole-ball view (`BallView`, the tutorial reveal's shot) opens by itself as the landing ends:
+it eases out from the landing camera (0.8 s), holds the slowly circling shot with the caption (ball,
+% restored, "a water tunnel opens at 70%" while one out is shut, "Tap anywhere to skip"), and after
+2.2 s blends back to the follow camera behind him (0.8 s): about 3 s in all (measured 3.03 s).
+Any touch, click, key or button after the first 0.35 s skips it; Android back closes it too. The
+run is held exactly as for the on-demand view (tree paused: no damage, no threats, no current, no
+clock), the HUD's held stick/buttons are let go, and control comes back exactly where the landing
+left it. The camera safety invariant runs throughout.
+
+Rules:
+- Once per ball per run. The ball counts as seen the moment he lands, whatever happens next (the
+  view skipped, or not possible), and the landing's save writes it at once, so it never plays again
+  after a death, a reload, an app restart, an OTA restart or a later trip back. A New Run starts a
+  fresh set (like the tutorial reveal, which is per run too).
+- Never on Ball 1: its establishing view is the tutorial's reveal (no double play). Never during a
+  Treasure Hunt (postgame). A view that cannot open within 1.5 s of play (a lesson card or tunnel
+  shot took the moment, the pause menu, the aquarium) is dropped, never shown late.
+- Only a tunnel landing is an arrival: Continue, respawns and the title never play it, so startup,
+  the update check, the studio splash and the title are untouched.
+- Saved as `run.world.balls_seen` (sorted ball tags, "b2"...). The run save format is unchanged;
+  an older save simply lacks the key.
+- **Older saves** (no `balls_seen`): worked out from where the run shows he has been, erring towards
+  "seen": Ball 1, the ball the run is on, the last tunnel arrival, every ball with anything earned on
+  it (completion ids "bN.…"), and both ends of each tunnel ride in its stats. A ride is stored only by
+  its "from" ball, so for Mossy Meadow and Current Hollows (two tunnels out each) both far ends count;
+  a branch ball never actually visited may then miss its view, which is the safe side. A brand-new run
+  has seen nothing. (`Game.seen_from_save`.)
+- Off in automated unit / shots / perf runs (`Game.arrival_views`; their tests travel freely and expect
+  control straight back); on in play and in the playthrough bot; `_test_arrival_view` turns it on.
+
+Code: `Game._arrived`, `Game._update_arrival_view`, `Game.seen_from_save`, `BallView.open(auto)`.
+Tests: `_test_arrival_view` (`arrival_*`: plays on the first arrival, about 3 s, run held, smooth
+camera, control restored and he walks off at once; not on Ball 1, not a second time, not after a
+death or a reload; skipped by a touch; saved round trip; old-save migration, pure and live; dropped
+outside play; camera never drawn unsafe). Shots: `--test=shots --only=ballprogress`
+(`docs/screenshots/ballprogress_pause_b4_42.jpg`, `ballprogress_pause_b2_74.jpg`, `ballprogress_arrival_b2.jpg`, `ballprogress_arrival_back.jpg`; the pause shots set the ball's % for the picture, so the run-wide counts below read 0).
+
 ## Proposals (not implemented: larger than a bounded local fix, or another stream's)
 
 (P1, P4 and P6 were approved by the owner and implemented on 2026-10-04: see "Remediation" at the end.)
@@ -158,10 +218,10 @@ difference is the Ball 3 canopy loop (finding 4), about 700 s.
   fixed, but the world hash and starfish/treasure clearances must be re-run), or (b) an edge assist: a
   lunge or swipe-turn that would carry him over a ravine rim stops at the rim (the player still falls
   if he walks in). (b) is gentler and covers every ball; (a) is smaller. Owner to choose.
-- **P2. This ball's progress in the pause menu.** Replace "Moss restored N / 262" (run-wide) with
+- **P2 (built 2026-10-04, above). This ball's progress in the pause menu.** Replace "Moss restored N / 262" (run-wide) with
   "Mossy Meadow 42% · tunnel at 70%" in the run detail table (same line count, so the no-scroll fit
   is unchanged), keeping the run-wide counts in the completion lines.
-- **P3. A lead on arrival.** On the first arrival at a ball, play the whole-ball view for about 3 s
+- **P3 (built 2026-10-04, above: the whole-ball view option). A lead on arrival.** On the first arrival at a ball, play the whole-ball view for about 3 s
   (the same shot as the tutorial reveal, now `BallView.shot`), or pre-arm the 90 s shimmer hint to
   start at once on arrival. Either uses existing pieces.
 - **P4. Ball 3 canopy top.** Let the canopy parasites leave their leaves to chase him down the spiral

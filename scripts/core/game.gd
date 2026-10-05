@@ -61,6 +61,20 @@ var prompts_active := {}
 var all_clear_done := false
 var _all_clear_wait := -1.0
 var _tut_framed := false
+## First-arrival establishing view (cohesion audit P3): the balls this run has already arrived on, by
+## tag ("b2"), saved in the run's world as "balls_seen". Ball 1's view is the tutorial's reveal.
+var balls_seen := {}
+## Whether a first arrival plays the whole-ball view: null = the default (arrival_views_on), else
+## a test's choice. Off by default in automated unit / shots / perf runs (their tests travel freely
+## and expect control straight back); the tests for it turn it on.
+var arrival_views = null
+## A first arrival waiting for the moment the view can open: {"ball": MossBall, "until": play_s}.
+var _arrival_due := {}
+## How long the arrival view shows before it returns by itself (s); the camera's blends add about
+## 0.8 s back after it, about 3 s in all. Any press after BallView.GRACE_S skips it.
+const ARRIVAL_VIEW_S := 2.2
+## A due view that has not found its moment in this long (play time) is dropped, never shown late.
+const ARRIVAL_WAIT_S := 1.5
 var _mote_lights: Array[OmniLight3D] = []
 ## Food arrivals: local region targets and cooldowns, its own generator (FoodDirector).
 var food: FoodDirector
@@ -612,6 +626,7 @@ func _apply_run() -> void:
 	for v in vortices:
 		if e.has(v.get_meta("completion_id", "")):
 			v.connected = true
+	balls_seen = seen_from_save(world, e, vortices.map(func(v: Vortex) -> Array: return [v.ball_a.index, v.ball_b.index]))
 	for c in ecosystem.all_critters():
 		if c.threat_id != "" and e.has(c.threat_id):
 			c.restore_defeated()
@@ -662,8 +677,89 @@ func _capture_world() -> Dictionary:
 	return {"ball": player.ball.index, "checkpoint": checkpoint.get_meta("completion_id", "") if checkpoint else "",
 			"arrival": {"v": vortices.find(arrival["v"]), "rev": arrival["rev"]} if not arrival.is_empty() else {},
 			"prompts_done": prompts_done.keys(), "tut_framed": _tut_framed, "all_clear_shown": all_clear_done,
+			"balls_seen": seen_list(),
 			"stats": stats.duplicate(true), "repop": repop.to_dict() if repop != null else {}}.merged(
 			{"vitality": hard.to_dict()} if hard != null else {})
+
+
+## The balls this run has arrived on, as a sorted list of tags (the save's "balls_seen").
+func seen_list() -> Array:
+	var out := balls_seen.keys()
+	out.sort()
+	return out
+
+
+## The balls a saved run has already arrived on (cohesion audit P3). A save that has "balls_seen"
+## (since P3) gives it as it is. An older save has no record, so it is worked out from what the run
+## shows of where he has been, erring towards "seen" so a ball he has already been on never plays
+## its view on the first trip back after the update: Ball 1, the ball the run is on, the last tunnel
+## arrival, every ball with anything earned on it (ids are "bN.…"), and both ends of every tunnel
+## ride in its stats (a ride is stored by its "from" ball only, so for Mossy Meadow and Current
+## Hollows, which have two tunnels out each, both far ends count: a branch ball never visited may
+## then miss its view, which is the safe side). A brand-new run (no world, nothing earned) has seen
+## nothing yet. `links`: each tunnel's [from, to] ball indices, in the game's vortex order.
+static func seen_from_save(world: Dictionary, earned: Dictionary, links: Array) -> Dictionary:
+	var out := {}
+	if world.has("balls_seen"):
+		for tag in world["balls_seen"]:
+			out[str(tag)] = true
+		return out
+	if world.is_empty() and earned.is_empty():
+		return out
+	out[Completion.ball_tag(0)] = true
+	out[Completion.ball_tag(int(world.get("ball", 0)))] = true
+	var arr: Dictionary = world.get("arrival", {})
+	var vi := int(arr.get("v", -1))
+	if vi >= 0 and vi < links.size():
+		out[Completion.ball_tag(int(links[vi][0 if bool(arr.get("rev", false)) else 1]))] = true
+	for id in earned:
+		var head := str(id).get_slice(".", 0)
+		if head.length() >= 2 and head.begins_with("b") and head.substr(1).is_valid_int():
+			out[head] = true
+	for tr in (world.get("stats", {}) as Dictionary).get("travels", []):
+		var a := int((tr as Array)[0])
+		out[Completion.ball_tag(a)] = true
+		for l in links:
+			if int(l[0]) == a:
+				out[Completion.ball_tag(int(l[1]))] = true
+	return out
+
+
+## Gill has just landed on `b` from a tunnel: the first time this run, the whole-ball view shows
+## it (cohesion audit P3), once. The ball counts as seen from this moment whatever happens next
+## (the view skipped, cut short, or not possible), so it never plays late or again: not after a
+## death, a reload, a restart or a later trip back. Never for Ball 1 (the tutorial's reveal is its
+## establishing view) or during a Treasure Hunt (postgame).
+func _arrived(b: MossBall) -> void:
+	var tag := Completion.ball_tag(b.index)
+	if balls_seen.has(tag):
+		return
+	balls_seen[tag] = true
+	if b.index == 0 or not arrival_views_on() or (treasure != null and treasure.hunting()):
+		return
+	_arrival_due = {"ball": b, "until": clock.play_s + ARRIVAL_WAIT_S}
+
+
+## Whether first arrivals play the view: in play and the playthrough bot, unless a test chose.
+## (Read when needed: the command line is not parsed yet when Game's members are set up.)
+func arrival_views_on() -> bool:
+	if arrival_views != null:
+		return bool(arrival_views)
+	return Settings.test_mode == "" or Settings.test_mode == "playthrough"
+
+
+## Opens a due arrival view at the end of a frame of ordinary play (after anything else this frame
+## might have started, e.g. a tunnel shot or a lesson card, which it then simply yields to).
+func _update_arrival_view() -> void:
+	if _arrival_due.is_empty():
+		return
+	if state != "play" or player.ball != _arrival_due["ball"] or clock.play_s > float(_arrival_due["until"]):
+		_arrival_due = {}
+		return
+	if pause_menu.visible or not ball_view.can_open():
+		return
+	_arrival_due = {}
+	ball_view.open(ARRIVAL_VIEW_S)
 
 
 ## Writes the run (clock, world, earned) now.
@@ -949,6 +1045,7 @@ func _process(dt: float) -> void:
 	_update_hints(dt)
 	_update_hard(dt)
 	_update_all_clear(dt)
+	_update_arrival_view()
 
 
 ## The title's orbit camera, kept in front of any wall between it and him, so he stays in view
@@ -1718,6 +1815,7 @@ func _cine_land(dt: float) -> void:
 		player.state = "normal"
 		cam.snap_behind()
 		_end_cinematic()
+		_arrived(d["dest"])
 		save_run()
 
 

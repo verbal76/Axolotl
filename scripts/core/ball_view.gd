@@ -2,7 +2,9 @@ class_name BallView
 extends CanvasLayer
 ## The whole-ball view on demand (ledger row 21): the tutorial's reveal shot (the camera ~30 m past
 ## the ball's ground, looking back at the whole moss ball) whenever the player asks for it, from the
-## pause menu ("View whole ball") or a controller's Back / View button (keyboard V).
+## pause menu ("View whole ball") or a controller's Back / View button (keyboard V). It is also the
+## first-arrival establishing view (cohesion audit P3): Game._arrived opens it with `auto` for about
+## 3 s the first time in a run a tunnel lands him on each ball after Ball 1.
 ##
 ## The run stands still while it shows (the tree is paused, as for the pause menu): no damage, no
 ## current, no clock. Only the camera and this node run. The shot circles slowly round the spot he
@@ -26,8 +28,18 @@ var active := false
 ## Closing: the camera is blending back; the run is still held until it is home.
 var returning := false
 var t := 0.0
+## Returns by itself after this long (s; 0 = only on input): the first-arrival establishing view
+## (cohesion audit P3, Game._arrived) is this same view, shown once for about 3 s.
+var auto_s := 0.0
+## How many times it has opened as a first-arrival view (tests and diagnostics).
+var arrivals_shown := 0
 var _label: Label
 var _saved := {}
+## Where the camera actually was when it opened, if it was already on a cinematic shot (a tunnel's
+## landing hands straight over to the first-arrival view): the shot eases out from there over
+## FROM_S instead of jumping, since the camera's own blend is already complete.
+var _from := {}
+const FROM_S := 0.8
 
 
 func _ready() -> void:
@@ -61,17 +73,29 @@ func can_open() -> bool:
 			and (g.presentation == null or not g.presentation.active())
 
 
-func open() -> bool:
+## Opens the view. `auto` > 0: it returns by itself after that many seconds (the first-arrival
+## view); any press after GRACE_S still returns at once.
+func open(auto := 0.0) -> bool:
 	if not can_open():
 		return false
 	var cam := g.cam
 	active = true
 	returning = false
 	t = 0.0
+	auto_s = auto
+	if auto > 0.0:
+		arrivals_shown += 1
 	_saved = {"yaw": cam.yaw_dir, "pitch": cam.pitch, "up": cam.cam_up, "dist": cam._cur_dist,
 			"hud": g.hud.visible, "onb": g.onboarding != null and g.onboarding.ui != null and g.onboarding.ui.visible,
-			"cam_mode": cam.process_mode}
+			"cam_mode": cam.process_mode, "hud_cine": g.hud._cinematic}
+	_from = {}
+	if cam._cine_weight > 0.0:
+		var look: Vector3 = cam._look if cam._look != Vector3.INF else cam.global_position - cam.global_basis.z * 3.0
+		_from = {"pos": cam.global_position, "look": look, "up": cam.global_basis.y}
 	get_tree().paused = true
+	# (Any finger on the stick or a button is let go: the HUD does not see the release while the
+	# run is held, and a stick left held would walk him off when it returns.)
+	g.hud.set_cinematic(true)
 	# (The camera keeps running through the pause: its blend and its safety stage.)
 	cam.process_mode = Node.PROCESS_MODE_ALWAYS
 	cam.cinematic = true
@@ -79,6 +103,8 @@ func open() -> bool:
 	if _saved["onb"]:
 		g.onboarding.ui.visible = false
 	var how := "Press any button to return" if Settings.input_mode == Settings.InputMode.PAD else "Tap anywhere to return"
+	if auto > 0.0:
+		how = "Press any button to skip" if Settings.input_mode == Settings.InputMode.PAD else "Tap anywhere to skip"
 	_label.text = "%s\n%s" % [caption(g.player.ball, g.vortices), how]
 	visible = true
 	_aim(0.0)
@@ -95,6 +121,27 @@ static func caption(b: MossBall, vortices: Array) -> String:
 			out += "  ·  a water tunnel opens at %d%%" % int(round(Vortex.CONNECT_AT * 100.0))
 			break
 	return out
+
+
+## The pause menu's line for the ball he is on (cohesion audit P2): its name, how restored it is, and
+## where its water tunnel stands: "Terrace Steps  ·  42% restored  ·  tunnel opens at 70%" until the
+## tunnel out of it opens, "...  ·  74% restored  ·  tunnel open" after ("tunnels open at 70%" /
+## "tunnels open" on the two balls with two). 70% only opens the way on; the ball is done at 100%,
+## so the tunnel never reads as the ball's end. A ball with no tunnel out: its name and % only.
+static func progress_line(b: MossBall, vortices: Array) -> String:
+	if b == null:
+		return ""
+	var pct := int(floor(b.restoration * 100.0 + 0.0001))
+	var out := "%s  ·  %d%% restored" % [b.display_name if b.display_name != "" else "Moss ball %d" % (b.index + 1), pct]
+	# (Every tunnel out of a ball opens at the same 70%: Mossy Meadow and Current Hollows have two.)
+	var outs := vortices.filter(func(v: Vortex) -> bool: return v.ball_a == b)
+	if outs.is_empty():
+		return out
+	var open := b.restoration >= Vortex.CONNECT_AT - 0.0001 or outs.all(func(v: Vortex) -> bool: return v.connected)
+	var noun := "tunnel" if outs.size() == 1 else "tunnels"
+	if open:
+		return out + "  ·  %s open" % noun
+	return out + "  ·  %s %s at %d%%" % [noun, "opens" if outs.size() == 1 else "open", int(round(Vortex.CONNECT_AT * 100.0))]
 
 
 ## Starts the return (any input). The run is let go once the camera is home (_process).
@@ -122,6 +169,7 @@ func _finish() -> void:
 	cam.process_mode = _saved["cam_mode"]
 	_hold_follow()
 	g.hud.visible = _saved["hud"]
+	g.hud.set_cinematic(_saved["hud_cine"])
 	if _saved["onb"]:
 		g.onboarding.ui.visible = true
 	active = false
@@ -140,6 +188,9 @@ func _process(dt: float) -> void:
 			_finish()
 		return
 	_aim(t)
+	if auto_s > 0.0 and t >= auto_s:
+		close()
+		return
 	# (The balls show only what can be above the camera's horizon; the game's own update is paused.)
 	for b in g.balls:
 		b.update_visibility(g.cam.global_position)
@@ -147,6 +198,10 @@ func _process(dt: float) -> void:
 
 func _aim(at_t: float) -> void:
 	var s := shot(g.player.ball, g.player.up, g.player.facing, at_t * ORBIT_RATE)
+	if not _from.is_empty() and at_t < FROM_S:
+		var k := smoothstep(0.0, 1.0, at_t / FROM_S)
+		s = [(_from["pos"] as Vector3).lerp(s[0], k), (_from["look"] as Vector3).lerp(s[1], k),
+				(_from["up"] as Vector3).slerp((s[2] as Vector3).normalized(), k)]
 	g.cam.cine_pos = s[0]
 	g.cam.cine_look = s[1]
 	g.cam.cine_up = s[2]
