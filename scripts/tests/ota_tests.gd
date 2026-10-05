@@ -728,17 +728,19 @@ func _test_product_identity() -> void:
 	# The app icon is the owner's artwork everywhere; the first placeholder icon is gone.
 	var app_icon := str(ProjectSettings.get_setting("application/config/icon", ""))
 	t.check("app_icon_is_owner_artwork", app_icon.begins_with("res://assets/icon/") and not FileAccess.file_exists("res://icon.svg"), app_icon)
-	# No new exposition around the name, and the game's Motes keep their name.
+	# No new exposition around the name. (Owner, 2026-10-05: Gill is the permanent canonical name and
+	# is never renamed, so plain references to Gill, Gill's or Gill’s in comments, tests, diagnostics
+	# and prose are fine; only the exposition phrases the owner ruled out are flagged.)
 	var bad := []
 	for f in _all_files("res://scripts") + _all_files("res://scenes"):
-		var src := FileAccess.get_file_as_string(f)
-		for phrase in ["Gill's", "Meet Gill", "Help Gill", "Adventure"]:
-			if src.contains(phrase) and not f.ends_with("ota_tests.gd"):
-				bad.append("%s: %s" % [f, phrase])
-		# Any string literal naming the character outside the canonical source is a copy.
-		if f != "res://scripts/core/game_version.gd" and not f.ends_with("ota_tests.gd") and _name_in_string.search(src) != null:
-			bad.append("%s: extra copy of the character name" % f)
+		if f.ends_with("ota_tests.gd"):
+			continue
+		for p in name_policy_problems(FileAccess.get_file_as_string(f)):
+			bad.append("%s: %s" % [f, p])
 	t.check("no_new_exposition_or_name_copies", bad.is_empty(), ", ".join(bad))
+	var allowed := name_policy_problems("# Gill's gills; Gill’s tail\nvar s := \"Gill is hungry\" # Gill\nt.check(\"x\", true, \"Gill %d\")")
+	var flagged := name_policy_problems("var s := \"Meet Gill!\"")
+	t.check("name_policy_allows_plain_gill", allowed.is_empty() and flagged.size() == 1, "allowed %s, flagged %s" % [allowed, flagged])
 	t.check("regeneration_motes_keep_their_name", ResourceLoader.exists("res://scripts/actors/mote.gd") and g.balls[0].motes.size() > 0 and g.balls[0].motes[0] is Mote, "")
 	# Gill's six gills: all present at full size; health = colour/glow vs dull and faded.
 	var m: AxolotlModel = g.player.model
@@ -758,7 +760,17 @@ func _test_product_identity() -> void:
 	m.set_health(saved[0], saved[1], false)
 
 
-var _name_in_string := RegEx.create_from_string('"[^"\\n]*\\bGill\\b[^"\\n]*"')
+## The exposition the owner ruled out around the character's name (plain "Gill", "Gill's" and
+## "Gill’s" are fine anywhere: the name is canonical and never changes).
+const EXPOSITION := ["Meet Gill", "Help Gill", "Adventure"]
+
+
+static func name_policy_problems(src: String) -> Array[String]:
+	var out: Array[String] = []
+	for phrase in EXPOSITION:
+		if src.contains(phrase):
+			out.append(phrase)
+	return out
 
 
 func _all_files(dir: String) -> Array:

@@ -16,7 +16,7 @@ const SHADER := preload("res://shaders/parasite.gdshader")
 const BODY_SHADER := preload("res://shaders/parasite_body.gdshader")
 const MAX_SEGS := 12
 ## Its eyes glow faintly (cohesion audit P5) in a sulphur yellow, the threat colour of the eel's
-## eyes, far in hue from his pink (about 60 degrees), the food's peach and the motes' mint: at
+## eyes, far in hue from Gill's pink (about 60 degrees), the food's peach and the motes' mint: at
 ## 7-10 m in murky water they are the bright points that tell it from him.
 const EYE_COLOR := Color(1.0, 0.85, 0.3)
 const EYE_GLOW := 1.6
@@ -253,7 +253,7 @@ func _ready() -> void:
 	_mat = ShaderMaterial.new()
 	_mat.shader = SHADER
 	_mat.set_shader_parameter("noise_tex", NOISE)
-	# (Small, cohesion audit P5: a dark wine-magenta to burgundy, a clear value step below his pale
+	# (Small, cohesion audit P5: a dark wine-magenta to burgundy, a clear value step below Gill's pale
 	# pink and away from the food's peach; it was a bright (0.95, 0.2, 0.62) -> orange (1.0, 0.62, 0.12).)
 	var palettes := [[Color(0.55, 0.05, 0.3), Color(0.4, 0.05, 0.12), Color(0.5, 1.0, 0.3)],
 			[Color(0.7, 0.15, 0.95), Color(0.2, 0.9, 0.8), Color(1.0, 0.9, 0.2)],
@@ -284,7 +284,7 @@ func _ready() -> void:
 	_body.visibility_range_end = 80.0
 	add_child(_body)
 	# Head details: beady eyes and mandibles.
-	# (Cohesion audit P5: they glow faintly in the threat colour, like the eel's; his are dark.)
+	# (Cohesion audit P5: they glow faintly in the threat colour, like the eel's; Gill's are dark.)
 	var eye_mat := StandardMaterial3D.new()
 	eye_mat.albedo_color = Color(0.05, 0.05, 0.05)
 	eye_mat.roughness = 0.2

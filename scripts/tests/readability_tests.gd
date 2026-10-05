@@ -229,16 +229,16 @@ func parasite_readability() -> void:
 	var tail: Color = m.get_shader_parameter("color_b")
 	var gill := AxolotlModel.BODY_COLOR
 	var food := Color(1.0, 0.62, 0.42)
-	# A value step: the body is clearly darker than his pale pink (a dark shape against a pale
+	# A value step: the body is clearly darker than Gill's pale pink (a dark shape against a pale
 	# one) and is not the food's peach; the eyes glow in a colour far from both.
 	t.check("parasite_small_darker_than_gill", _lum(head) < _lum(gill) * 0.4 and _lum(tail) < _lum(gill) * 0.4,
-			"head %.2f, tail %.2f, player %.2f" % [_lum(head), _lum(tail), _lum(gill)])
+			"head %.2f, tail %.2f, Gill %.2f" % [_lum(head), _lum(tail), _lum(gill)])
 	t.check("parasite_small_not_food_coloured", _hue_gap(head, food) >= 40.0 and _hue_gap(tail, food) >= 25.0,
 			"head hue %.0f, tail %.0f, food %.0f" % [_hue_deg(head), _hue_deg(tail), _hue_deg(food)])
 	var eye: StandardMaterial3D = small.eye_material()
 	t.check("parasite_eyes_glow_away_from_gill_and_food", eye.emission_enabled and eye.emission_energy_multiplier > 1.0
 			and _hue_gap(eye.emission, gill) >= 45.0 and _hue_gap(eye.emission, food) >= 20.0,
-			"eye hue %.0f energy %.2f; player %.0f, food %.0f" % [_hue_deg(eye.emission), eye.emission_energy_multiplier, _hue_deg(gill), _hue_deg(food)])
+			"eye hue %.0f energy %.2f; Gill %.0f, food %.0f" % [_hue_deg(eye.emission), eye.emission_energy_multiplier, _hue_deg(gill), _hue_deg(food)])
 	# The wind-up flares them; drained (defeated, the grey death drift), they go out.
 	small.set_look(small._gray, 0.0, 1.0)
 	var flare := eye.emission_energy_multiplier
