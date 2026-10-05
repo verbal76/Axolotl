@@ -75,8 +75,11 @@ void fragment() {
 	col = mix(col, foam, crest * (0.25 + 0.45 * (1.0 - r)) + pulse * 0.2);
 	col *= 0.92 + 0.16 * n2;
 	// Churning white water round the eye, and a lip of foam where the pool meets the moss.
-	float ring = exp(-pow((r - 0.13) / 0.06, 2.0)) * (0.6 + 0.4 * n);
-	float lip = exp(-pow((r - 0.82) / 0.07, 2.0)) * smoothstep(0.35, 0.7, n2 + n * 0.4);
+	// (Gaussian bands as x*x: pow() of a negative base is undefined on some mobile GPUs.)
+	float xr = (r - 0.13) / 0.06;
+	float ring = exp(-xr * xr) * (0.6 + 0.4 * n);
+	float xl = (r - 0.82) / 0.07;
+	float lip = exp(-xl * xl) * smoothstep(0.35, 0.7, n2 + n * 0.4);
 	vec3 foam_t = mix(foam, tint, tint_amt * 1.2);
 	vec3 ds = vec3(1.0, 0.0, 0.0);
 	if (distress_any()) {
@@ -95,9 +98,10 @@ void fragment() {
 	// The pad's state (the owner's landing-pad indicator): the whole pool's water takes a muted wash
 	// of the state colour (brighter when ready), and a ring just inside the foam lip carries the
 	// pattern: dashed and breathing when not ready, continuous and flowing when ready.
-	float wash = mix(0.5, 0.58, state_dash) * smoothstep(1.0, 0.6, r);
+	float wash = mix(0.5, 0.58, state_dash) * (1.0 - smoothstep(0.6, 1.0, r));
 	col = mix(col, state_col * mix(1.45, 0.8, state_dash), wash);
-	float sr = exp(-pow((r - 0.7) / 0.075, 2.0));
+	float xs = (r - 0.7) / 0.075;
+	float sr = exp(-xs * xs);
 	float dash = mix(1.0, smoothstep(0.3, 0.62, 0.5 + 0.5 * cos(ang * 9.0)), state_dash);
 	float breathe = 1.0 - state_breathe * (0.5 + 0.5 * sin(TIME * 1.6));
 	float flow = mix(1.0, 0.78 + 0.22 * sin(ang * 3.0 - TIME * 1.3 + r * 12.0), state_flow);

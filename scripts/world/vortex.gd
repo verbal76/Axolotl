@@ -114,6 +114,8 @@ var _distress_on := false
 ## The platform state shown (0 = not ready .. 1 = ready), easing toward travel_ready(); -1 until the
 ## first frame, which snaps to it (a loaded save or a return shows the right state at once).
 var ready_shown := -1.0
+## The shown state last sent to the pad's material (-1: never).
+var _state_sent := -1.0
 
 
 func setup(a: MossBall, b: MossBall, p_dir_a: Vector3, p_dir_b: Vector3) -> void:
@@ -471,7 +473,11 @@ static func state_look(shown: float) -> Array:
 
 func _update_state(dt: float) -> void:
 	var want := 1.0 if travel_ready() else 0.0
+	# (Settled and already sent: nothing to do this frame.)
+	if ready_shown == want and _state_sent == want:
+		return
 	ready_shown = want if ready_shown < 0.0 else move_toward(ready_shown, want, dt / STATE_FADE_S)
+	_state_sent = ready_shown
 	var lk := state_look(ready_shown)
 	for pm in _pool_mats:
 		pm.set_shader_parameter("state_col", lk[0])

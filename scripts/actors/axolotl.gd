@@ -451,7 +451,7 @@ func _physics_process(dt: float) -> void:
 		if sp > 0.5:
 			vh = _slerp_tangent(vh / sp, wish.normalized(), minf(1.0, _burst_steer * dt)) * sp
 
-	vh = _edge_stop(vh, dt)
+	vh = _edge_stop(vh, dt, want_jump)
 
 	# Gravity.
 	if not grounded:
@@ -699,17 +699,19 @@ const KNOCK_GUARD_S := 0.6       # a hit's knock-back: long enough to come down 
 static var edge_assist := true
 
 
-func _edge_stop(vh: Vector3, dt: float) -> Vector3:
-	if not edge_assist or ball == null or ball.carves.is_empty() or vh.length() < 0.05:
+func _edge_stop(vh: Vector3, dt: float, jumping := false) -> Vector3:
+	# (Never on the frame he jumps or bursts: a jump keeps all of his run, whatever he was doing.)
+	if not edge_assist or jumping or ball == null or ball.carves.is_empty() or vh.length() < 0.05:
 		return vh
-	var assisted := (grounded and (lunge_t >= 0.0 or lunge_cd > 0.0 or swipe_t >= 0.0)) \
+	var assisted := (grounded and (lunge_t >= 0.0 or swipe_t >= 0.0)) \
 			or (_knock_t > 0.0 and ball.altitude(global_position) < 1.2)
 	if not assisted or ball.ravine_carve(up) > EDGE_CARVE:
 		return vh
 	var dir := vh.normalized()
 	var ahead := global_position + dir * (BODY_RADIUS + EDGE_LOOK + vh.length() * dt * 2.0)
 	var ua := ball.up_at(ahead)
-	if ball.ravine_carve(ua) <= EDGE_CARVE:
+	var c0 := ball.ravine_carve(ua)
+	if c0 <= EDGE_CARVE:
 		return vh
 	# (Footing ahead at his level, a bridge, a log or a stepping stone: no drop there.)
 	var q := PhysicsRayQueryParameters3D.create(ahead + ua * 0.6, ahead - ua * (EDGE_CARVE * 0.8), collision_mask)
@@ -717,7 +719,14 @@ func _edge_stop(vh: Vector3, dt: float) -> Vector3:
 	if not get_world_3d().direct_space_state.intersect_ray(q).is_empty():
 		return vh
 	edge_stops += 1
-	return Vector3.ZERO
+	# Only the part of his motion over the rim stops; along the rim he keeps moving. The way over is
+	# the cut's gradient there (it deepens toward the floor), read across and along his path.
+	var side := ua.cross(dir).normalized()
+	var h := 0.3
+	var grad := dir * (ball.ravine_carve(ball.up_at(ahead + dir * h)) - c0) \
+			+ side * (ball.ravine_carve(ball.up_at(ahead + side * h)) - ball.ravine_carve(ball.up_at(ahead - side * h))) * 0.5
+	var over := grad.normalized() if grad.length() > 0.0001 else dir
+	return vh - over * maxf(0.0, vh.dot(over))
 
 
 ## Down on a ravine's floor (not up on a bridge or a stepping stone above it).
@@ -880,6 +889,8 @@ func _purchase_ok(col: Object) -> bool:
 
 func _do_jump() -> float:
 	_mantle_t = -1.0
+	# (A deliberate jump ends the knock-back's edge guard: he chose to go.)
+	_knock_t = 0.0
 	_jumped_this_frame = true
 	coyote_t = 0.0
 	buffer_t = 0.0
@@ -894,6 +905,7 @@ func _do_jump() -> float:
 ## Returns [horizontal velocity, vertical velocity].
 func _do_burst(wish: Vector3) -> Array:
 	burst_available = false
+	_knock_t = 0.0
 	var vh: Vector3
 	var vup: float
 	if wish.length() > 0.2:
