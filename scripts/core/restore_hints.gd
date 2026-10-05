@@ -27,7 +27,8 @@ var _done := {}
 var _counted := {}
 var _shim_t := 0.0
 var _guide_t := 0.0
-## For tests: the zone key Gill is in (unrestored only), the stage there (0-3) and the last guide
+## For tests: the zone key Gill is in (unrestored only; "b<ball>.*" when he is in none, or in one with
+## nothing left, while the ball still has targets), the stage there (0-3) and the last guide
 ## direction (unit, world space).
 var zone := ""
 var stage := 0
@@ -74,12 +75,28 @@ func update(dt: float, b: MossBall, gill_pos: Vector3, quiet: bool) -> void:
 			_counted.erase(key)
 		_done[key] = d
 	var id := zone_at(b, (gill_pos - b.global_position).normalized())
-	zone = "" if id == "" else "b%d.%s" % [b.index, id]
-	stage = 0
-	if zone == "" or quiet or not enabled:
-		return
-	var targets := remaining(b, id)
+	var targets := remaining(b, id) if id != "" else []
+	# Owner, v96 phone test: waiting between areas (or in one already cleared while others are not)
+	# must not leave him without help. Then the clock is the ball's own, its progress anywhere starts
+	# it over, and the hints point to what is left anywhere on the ball.
+	var whole := false
 	if targets.is_empty():
+		whole = true
+		id = ""
+		for zid in b.zones:
+			if not b.zones[zid]["completed"]:
+				targets.append_array(remaining(b, zid))
+		var done_all := 0
+		for zid in b.zones:
+			done_all += int(b.zones[zid]["done"])
+		var bk := "b%d.*" % b.index
+		if _done.get(bk, done_all) != done_all:
+			stuck[bk] = 0.0
+			_counted.erase(bk)
+		_done[bk] = done_all
+	zone = ("b%d.*" % b.index) if whole else "b%d.%s" % [b.index, id]
+	stage = 0
+	if quiet or not enabled or targets.is_empty():
 		return
 	var t: float = stuck.get(zone, 0.0) + dt
 	stuck[zone] = t
@@ -106,7 +123,8 @@ func update(dt: float, b: MossBall, gill_pos: Vector3, quiet: bool) -> void:
 		_counted[zone] = true
 		var hud = Game.inst.hud if Game.inst != null else null
 		if hud != null:
-			hud.show_discovery("%d left to restore in this area" % targets.size() if targets.size() != 1 else "1 left to restore in this area")
+			var where := "on this moss ball" if whole else "in this area"
+			hud.show_discovery("%d left to restore %s" % [targets.size(), where] if targets.size() != 1 else "1 left to restore %s" % where)
 
 
 ## A slow plume rising from a target, tall enough to show over a ridge or out of a hollow.

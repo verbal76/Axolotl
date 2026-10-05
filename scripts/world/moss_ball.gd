@@ -1210,6 +1210,22 @@ const CHUNK_DIRS := [Vector3(1, 0, 0), Vector3(-1, 0, 0), Vector3(0, 1, 0), Vect
 		Vector3(1, 1, 1), Vector3(1, 1, -1), Vector3(1, -1, 1), Vector3(1, -1, -1), Vector3(-1, 1, 1), Vector3(-1, 1, -1), Vector3(-1, -1, 1), Vector3(-1, -1, -1)]
 
 
+## On (or just round) a vortex's tidal-pool landing pad on this ball: no plant or scattered piece
+## grows there (owner, v96 phone test: a plant grew through a pad). The pads' directions come from
+## the level layout, so this works before the vortices themselves are built.
+func on_vortex_pad(d: Vector3) -> bool:
+	var lim := (Vortex.POOL_R + 0.8) / radius
+	for pair in Levels.LINKS:
+		var other := -1
+		if pair[0] == index:
+			other = pair[1]
+		elif pair[1] == index:
+			other = pair[0]
+		if other >= 0 and d.angle_to(Levels._vortex_dir(index, other)) < lim:
+			return true
+	return false
+
+
 ## Scatter instanced vegetation over the sphere. `accept` (optional) filters directions.
 ## Instances are chunked by direction so the far side of the ball is frustum culled.
 func scatter(mesh: Mesh, mat: Material, count: int, seed_v: int, scale_min: float, scale_max: float,
@@ -1226,7 +1242,7 @@ func scatter(mesh: Mesh, mat: Material, count: int, seed_v: int, scale_min: floa
 	while placed < count and tries < count * 6:
 		tries += 1
 		var d := Vector3(rng.randfn(), rng.randfn(), rng.randfn()).normalized()
-		if accept.is_valid() and not accept.call(d):
+		if (accept.is_valid() and not accept.call(d)) or on_vortex_pad(d):
 			continue
 		var key := _cube_cell(d, k)
 		var b := frame_at(d, rng.randf() * 360.0)

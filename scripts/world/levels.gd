@@ -1254,6 +1254,13 @@ static func _ball3(lb: LevelBuilder) -> void:
 	var ok_tall := func(dd: Vector3) -> bool: return ok.call(dd) and stands.call(dd)
 	var tall := b.make_veg_material(Color(0.06, 0.3, 0.06), Color(0.4, 0.7, 0.16), Vegetation.family_params("tall", 4.2).merged({"cam_fade": 2.4}, true))
 	b.scatter(MeshLib.tuft_mesh(3, 0.18, 4.2, 0.2, 5, 6, 0.25), tall, 4000, 31, 0.8, 1.4, ok_tall)
+	# The western reed bed (owner, v96 phone test): the reed stalker moved here by audit P6 hides low in
+	# tall reeds like every stalker; on open floor it stood out as a bare chain of beads.
+	Vegetation.field(b, "tall", MossBall.dir_ll(Ecosystem.GS_STALKER_LL.x, Ecosystem.GS_STALKER_LL.y), 7.5, 1100, 1031,
+			{"avoid": func(dd: Vector3) -> bool: return not ok.call(dd), "clumps": 8, "fill": 0.5, "edge": 0.65})
+	# (And the far jungle's original stalker at (-55, 95), which had almost none round it.)
+	Vegetation.field(b, "tall", MossBall.dir_ll(-55, 95), 10.0, 1500, 1032,
+			{"avoid": func(dd: Vector3) -> bool: return not ok.call(dd), "clumps": 9, "fill": 0.5, "edge": 0.65})
 	var fern := b.make_veg_material(Color(0.05, 0.28, 0.06), Color(0.3, 0.62, 0.14), Vegetation.family_params("medium", 1.2).merged({"sway": 0.16, "cam_fade": 1.6, "wake_gain": 0.8,
 			"variegate": 0.8, "vari_style": 0.0, "vari_edge": Color(0.9, 0.42, 0.55), "vari_stripe": Color(0.88, 0.93, 0.7)}, true))
 	b.scatter(MeshLib.broadleaf_mesh(7, 1.4, 6), fern, 1500, 32, 1.0, 1.8, ok)

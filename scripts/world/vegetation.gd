@@ -120,6 +120,13 @@ static func _plant(ball: MossBall, family: String, dirs: Array[Vector3], rng: Ra
 	var sc: Array = f["scale"]
 	for d in dirs:
 		var s := rng.randf_range(sc[0], sc[1])
+		# (Never on a vortex's landing pad. The scale is drawn first so the other plants' sizes and
+		# turns stay exactly as they were.)
+		if ball.on_vortex_pad(d):
+			rng.randf()
+			rng.randf_range(0.85, 1.15)
+			rng.randi()
+			continue
 		var bs := MossBall.frame_at(d, rng.randf() * 360.0).scaled(Vector3(s, s * rng.randf_range(0.85, 1.15), s))
 		lists[rng.randi() % 2].append(Transform3D(bs, d * (ball.radius + ball.terrain_height(d) - 0.05)))
 	var out := []
