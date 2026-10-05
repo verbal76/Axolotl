@@ -31,7 +31,7 @@ after a while; ambient life is never saved.
 |---|---|---|---|---|
 | **Reed stalker** | hidden hunter | tall reeds (Mossy Meadow reed bed and Fern Grove, the Reed Canyon floor and the Reed Maze, the Giant Stems far jungle and western jungle floor) | Prowls low in its patch, lower than the reeds. Stalks him a few metres off when he is in its patch. Then rears and hisses while the reeds thrash (0.9 s), and pounces along the line it locked. Lies low afterwards. Gives up when he leaves the patch | Watch the reeds. Sidestep the pounce, strike while it lies low (2 hits), or leave its patch. Driven off, it returns after 2 minutes |
 | **Crab guardian** | territorial | grotto mouths (Terrace Steps, Reed Canyon, Hollow Grotto) | Rests at its post. When he enters its territory (5 m) it faces him, raises its claws and clacks (1.2 s). If he stays within 3.8 m it charges sideways; only the charge hurts. Never leaves its territory, and walks back to its post | Back off after the warning, or fight it: 3 hits, sidestep the charge. Beaten, it stays beaten (a completion entry) |
-| **Cave eel** | ambush | grotto walls (Current Hollows, Reed Canyon, Hollow Grotto ×2) | Hidden in a dark cleft, eyes faintly glowing. When he is near, in front and in its line of sight, its eyes brighten and bubbles rise (0.9 s), then it strikes up to 2.3 m and pulls back. It never leaves the crevice; the strike stops short of rock or a ledge; it never notices him through the wall | Read the bubbles and step out of reach, or swipe it while it is out (2 hits). Beaten, it stays beaten (a completion entry) |
+| **Cave eel** | ambush | grotto walls (Current Hollows, Reed Canyon, Hollow Grotto ×3) | Hidden in a dark cleft, eyes faintly glowing. Once he is in its grotto the cleft's lip glows faintly and a couple of bubbles rise from it every few seconds (P7). When he is near, in front and in its line of sight, its eyes brighten and bubbles rise (0.9 s), then it strikes up to 2.3 m and pulls back. It never leaves the crevice; the strike stops short of rock or a ledge; it never notices him through the wall | Read the bubbles and step out of reach, or swipe it while it is out (2 hits): from the floor straight out in front of its cleft, just beyond its reach, its head fully out is inside his swipe. Beaten, it stays beaten (a completion entry) |
 | **Pufferfish** | avoid or beat | open water at jump height over ridges and open ground (Current Hollows ×2, Terrace Steps, Reed Canyon, Hollow Grotto) | Drifts slowly (the current carries it on Current Hollows). Calm, it is an elongated spotted fish with fins. Near him it puffs up over 0.6 s into a round ball, its spines standing out, sinks to face him and stays puffed a while | Go round it, or beat it: touching it puffed hurts, and three tail swipes that land beat it (each knocks it back about a body length with a flash; at most one hit per 0.35 s). Beaten, it deflates and is gone, back in its patch 120 s later when he is elsewhere. Beating it is not a completion entry |
 | **Shrimp shoal** | ambient | open moss and terraces (7 shoals of 9) | Graze and flick about together, drifting round their patch. Scatter in all directions when he rushes at them; drift back together | Life to run through |
 | **Canopy snail** | ambient | leaves and shelves: the Giant Stems canopy and jungle ladders, the Canopy Spire, shelves, the arch top (17) | Creeps back and forth along its leaf; tucks into its shell when he comes close | Life up high |
@@ -139,11 +139,29 @@ animal. Their behaviour, collision and timings are unchanged.
 |---|---|---|
 | Crab guardian | a smooth red balloon | a wide serrated carapace with a dark speckled dome, a red rim and a cream underside (`shaders/crab_shell.gdshader`); eight jointed legs, pincer claws and eye stalks. It flashes when hit |
 | Pufferfish | a sphere that grew | one mesh with two shapes (`shaders/puffer_body.gdshader`). Calm, an elongated tan porcupinefish with spots, fins, eyes and lips, its 170 spines lying flat. Puffed, the body morphs onto a sphere and the spines stand straight out |
-| Cave eel | a chain of beads | a moray: one continuous spotted body on the parasites' body shader, with a heavy head and a jaw. It sits in the grotto wall on the side away from the ledges, so its strike guards the floor and never knocks him off the optional climb |
+| Cave eel | a chain of beads | a moray: one continuous spotted body on the parasites' body shader, with a heavy head and a jaw. It sits in the grotto wall on the side away from the ledges, so its strike guards the floor and never knocks him off the optional climb. Since P7 it settles where its strike line is clear of the climb's ledges and a floor spot in front lets him hit it, and its cleft's lip glows faintly while he is in its grotto |
 | Burrowers (food) | hollow, clipped shapes on the sand | garden eels: a spotted, curled body rising out of a sand mound with a dark hole, swaying in the current |
 | Shrimp | simple primitive shapes | arched, banded shrimp |
 | Canopy snail | a simple primitive shell | a log-spiral shell with growth bands |
-| Parasites | a chain of beads | one continuous tapering body with faint rings (`shaders/parasite_body.gdshader`), drawn along a smooth curve through the segments. Defeated, it twitches and goes limp, and the body drifts down as a slack, rippling curve |
+| Parasites | a chain of beads | one continuous tapering body with faint rings (`shaders/parasite_body.gdshader`), drawn along a smooth curve through the segments. Defeated, it twitches and goes limp, and the body drifts down as a slack, rippling curve. Since P5 its eyes glow faintly sulphur yellow (flaring in the wind-up, out when it is drained), and the small one is a dark wine-magenta to burgundy instead of bright pink to orange |
+
+## Readability (cohesion audit P5 and P7, 2026-10-04)
+
+Details, evidence and before/after numbers: `docs/research/audit-2026-10-02/AUDIT.md`, "P5 and P7, done".
+
+- **Small parasites at 7-10 m** read as a dark wine body with two faint sulphur-yellow eye points,
+  not a pink smear of Gill's colour. All parasites' eyes glow (energy 1.6, flaring to 4 in the
+  wind-up, out when drained); only the small one's palette changed. No extra nodes, lights or draw
+  calls. A fresnel rim was tried and rejected (on a body this thin it turned the whole parasite
+  yellow at a distance). Shots: `--test=shots --only=p5read`. Test: `_test_parasite_readability`.
+- **Cave eels.** `CaveEel.late_place` keeps each eel on its grotto's wall but moves it round (8° steps,
+  never toward the door) until the floor straight out in front of its cleft, 2.8-3.3 m away, is a
+  fair place to fight it: standable, walkable from the door, seen by it, its whole strike line clear
+  of rock and ledges, its head fully out inside his swipe without touching him, and none of the
+  climb's ledges in its sight. That spot is `CaveEel.stand` (the bot fights from it). With him in its
+  grotto, the cleft's lip glows faintly and bubbles rise from it now and then (`cleft_glow()`).
+  Shots: `--only=p7eel`. Test: `_test_eel_reach` (a fan of standable spots per eel, the stand spot,
+  the ledges, a live swipe through the real input on every eel, the cue on and off).
 
 ## Vegetation
 
@@ -155,7 +173,7 @@ creature points, nearest first. The axolotl's own interaction is unchanged.
 
 ## Caves and high routes
 
-- **Caves:** every grotto has glow-worms. Three are guarded at the mouth by a crab, and four have
+- **Caves:** every grotto has glow-worms. Three are guarded at the mouth by a crab, and five have
   an eel in the wall; Reed Canyon's and Hollow Grotto's main grotto have both.
 - **High routes:** snails creep on the leaves and shelves of the climbs, and hoppers spring up the
   climbs ahead of the axolotl. Both stand on the stem-ladder leaves and never walk off them.
@@ -210,7 +228,7 @@ finish. Finishing with nothing optional is 58.5% (it was 65%). Details in `docs/
 |---|---|
 | World and fairness | `eco_species_in_their_habitats`, `eco_only_nearby_creatures_run`, `eco_leaves_gameplay_rng_alone`, `eco_deterministic`, `eco_no_threats_at_respawn_or_arrival`, `eco_tick_cheap` |
 | Crab | `crab_warns_before_charging`, `crab_charge_hurts`, `crab_stays_in_territory`, `crab_returns_to_post`, `crab_warning_only_at_the_edge`, `crab_defeated_counts_once` |
-| Eel | `eel_never_strikes_through_rock`, `eel_telegraphs_then_strikes`, `eel_stays_in_its_crevice`, `eel_defeated_while_out` |
+| Eel | `eel_never_strikes_through_rock`, `eel_telegraphs_then_strikes`, `eel_stays_in_its_crevice`, `eel_defeated_while_out`; reach and read (P7, `_test_eel_reach`): `eel_hittable_from_standable_spot`, `eel_stand_spot_strikes_clear`, `eel_never_sees_him_on_its_ledges`, `eel_swipe_lands_from_its_spot`, `eel_cleft_glows_when_he_is_in_its_grotto`, `eel_cleft_dark_when_he_is_away` |
 | Stalker | `stalker_moves_the_reeds_unseen`, `stalker_telegraphs_then_pounces`, `stalker_sidestep_avoids_pounce`, `stalker_pounce_hurts_in_line`, `stalker_gives_up_outside_its_patch`, `stalker_driven_off_then_returns` |
 | Pufferfish | `puffer_puffs_up_near`, `puffer_contact_hurts_once`, `puffer_beaten_by_tail_swipes`, `puffer_beaten_is_gone`, `puffer_returns_later` |
 | Ambient life and discovery | `shrimp_scatter_then_regroup`, `snail_tucks_in_when_near`, `hopper_leads_up_the_climb`, `glowworms_react_to_him`, `species_discovered_once` |

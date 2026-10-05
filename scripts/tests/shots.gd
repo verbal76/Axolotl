@@ -732,6 +732,10 @@ func run(runner) -> void:
 			g.cam.snap_behind()
 			await t.seconds(1.5)
 			await t.shot("coh2_%s" % key)
+	if only == "p5read":
+		await _p5_read(g)
+	if only == "p7eel":
+		await _p7_eels(g)
 	if only == "ballview":
 		# The whole-ball view on demand (ledger row 21): the menu row, then the view on three balls
 		# (Ball 5 sits by the tank's glass), then back.
@@ -3655,3 +3659,87 @@ func _vplat(g: Game, v: Vortex, li: int) -> void:
 			await t.seconds(2.0)
 			await t.shot("vplat_link%d_%dm_%s" % [li, int(dist), "ready" if rdy else "not_ready"])
 	v.connected = false
+
+## Audit P5 (2026-10-04): a small parasite at 7, 8.5 and 10 m in the murky (unrestored) water,
+## through the ordinary follow camera with Gill in frame and a food beside it, as on a phone. Logs
+## each subject's place on screen so the pixels can be measured (docs/ECOSYSTEM.md, Look).
+func _p5_read(g: Game) -> void:
+	Settings.input_mode = Settings.InputMode.TOUCH
+	var p := g.player
+	p.invuln_t = 9999
+	var b := g.balls[0]
+	var par: Parasite = null
+	for x in b.parasites:
+		if x.kind == Parasite.Kind.SMALL and x.is_alive() and x.zone_id != "tut" and b.altitude(x.global_position) < 0.6:
+			par = x
+			break
+	if par == null:
+		return
+	# Settle it grazing (posed), then hold every parasite still so the frames match before/after.
+	var up0 := b.up_at(par.global_position)
+	var space := p.get_world_3d().direct_space_state
+	var back := Vector3.ZERO
+	for k in 12:
+		var dir := MossBall.frame_at(up0, k * 30.0).z
+		var ok := true
+		for d in [7.0, 8.5, 10.0]:
+			var st := b.surface_point(b.up_at(par.global_position + dir * d), 0.2)
+			var hit := space.intersect_ray(PhysicsRayQueryParameters3D.create(st + b.up_at(st) * 1.6, par.global_position + up0 * 0.15, 1))
+			if not hit.is_empty() or absf(b.altitude(st)) > 0.8:
+				ok = false
+		if ok:
+			back = dir
+			break
+	if back == Vector3.ZERO:
+		back = MossBall.frame_at(up0, 0.0).z
+	var stand := b.surface_point(b.up_at(par.global_position + back * 9.0), 0.2)
+	_look(g, 0, stand, par.global_position - stand)
+	await t.seconds(1.5)
+	for x in b.parasites:
+		x.set_physics_process(false)
+		# (Tuning aid: --p5_eye=<energy> overrides the eyes' glow for these frames.)
+		if Settings.test_args.has("p5_eye") and x.has_method("eye_material"):
+			x.eye_material().emission_energy_multiplier = float(Settings.test_args["p5_eye"])
+	var food: Food = null
+	for f in b.foods:
+		if is_instance_valid(f) and f.type == Food.Type.DRIFTER:
+			food = f
+			break
+	var side := back.cross(up0).normalized()
+	if food != null:
+		food.set_physics_process(false)
+		food.set_process(false)
+		food.global_position = b.surface_point(b.up_at(par.global_position + side * 1.6), 0.35)
+	for d in [7.0, 8.5, 10.0]:
+		var st := b.surface_point(b.up_at(par.global_position + back * d + side * 0.6), 0.2)
+		_look(g, 0, st, par.global_position - st)
+		p.set_physics_process(false)
+		await t.seconds(1.2)
+		var cam := g.get_viewport().get_camera_3d()
+		var pp := cam.unproject_position(par.head_pos())
+		var pc := cam.unproject_position(par.body_center())
+		var gp := cam.unproject_position(p.body_center())
+		var fp := cam.unproject_position(food.global_position) if food != null else Vector2(-1, -1)
+		t.log_line("p5 d=%.1f parasite_head=%s parasite_body=%s gill=%s food=%s dist=%.2f" % [d, str(pp.round()), str(pc.round()), str(gp.round()), str(fp.round()), cam.global_position.distance_to(par.body_center())])
+		await t.shot("p5_small_%dm" % int(d * 10))
+		p.set_physics_process(true)
+
+
+## Audit P7 (2026-10-04): each cave eel as Gill sees it from the floor of its grotto, a few
+## seconds after he comes in (the cleft's cue), through the ordinary follow camera.
+func _p7_eels(g: Game) -> void:
+	Settings.input_mode = Settings.InputMode.TOUCH
+	var p := g.player
+	p.invuln_t = 9999
+	for b in g.balls:
+		for c in b.critters:
+			if not c is CaveEel:
+				continue
+			var e := c as CaveEel
+			var st = e.get("stand")
+			var at: Vector3 = st if st != null else b.surface_point(b.up_at(e.mouth + e.normal * (CaveEel.STRIKE_REACH + 0.45)), 0.1)
+			# A step further back than the fighting spot, so it is in view before it strikes.
+			var back := b.surface_point(b.up_at(at + (at - e.mouth).normalized() * 1.6), 0.2)
+			_look(g, b.index, back, e.mouth - back, 0.2)
+			await t.seconds(2.5)
+			await t.shot("p7_%s" % e.threat_id.replace(".", "_"))

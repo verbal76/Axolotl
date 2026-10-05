@@ -548,7 +548,12 @@ func _fight_eel(e: CaveEel) -> void:
 	for round_ in 12:
 		if e.defeated:
 			return
-		var front := b.surface_point(b.up_at(e.mouth + e.normal * (CaveEel.STRIKE_REACH + 0.45)), 0.1)
+		# (Knocked out by a strike, he re-forms at his last bloom, which may be on another ball.)
+		if p.ball != b:
+			await travel_to(b.index)
+		# The spot the eel offers in front of its crevice (cohesion audit P7: floor, clear strike line,
+		# its head fully out inside his swipe).
+		var front := b.surface_point(b.up_at(e.stand), 0.1)
 		if not cave_h.is_empty() and (_cave_of(p.global_position) != cave_h or height_of(p.global_position) > 1.2):
 			var ok_e := await goto(cave_h["entry"], 0.8, 60.0)
 			var at_e := p.global_position.distance_to(cave_h["entry"])

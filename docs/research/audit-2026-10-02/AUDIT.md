@@ -27,10 +27,10 @@ rests on the bot, the human-facing reason is stated and the size is hedged.
 | 2 | Readability / progression | Nothing in play says how restored the current ball is or how near its tunnel is | High | **Fixed** (whole-ball view caption; P2 built 2026-10-04: pause menu line) |
 | 3 | Readability | Arrivals on balls 4-7 show bare, dark ground with no landmark or lead | Medium | **P3 built** 2026-10-04 (first-arrival whole-ball view); the murk itself stays the look stream's |
 | 4 | Pacing | Ball 3's last 3% sits on the 17 m canopy top; falls cost fronds and the bot loops there | Medium | **Fixed** (P4, 2026-10-04) |
-| 5 | Readability | Small parasites at 7-10 m are a few pinkish pixels, close to Gill's own colour | Medium | Proposal P5 (look stream) |
+| 5 | Readability | Small parasites at 7-10 m are a few pinkish pixels, close to Gill's own colour | Medium | **Fixed** (P5, 2026-10-04) |
 | 6 | UI | Treasure Hunt box text at 15 / 17 px (about 1.4 / 1.6 mm on a phone) | Low-medium | **Fixed** |
 | 7 | UI | A starfish picked up during a Treasure Hunt drew its chip over the hunt box | Low | **Fixed** |
-| 7b | Pacing / readability | Cave eels: all 5 left at every normal finish; most bot stuck time is in their grottos | Medium | Proposal P7 |
+| 7b | Pacing / readability | Cave eels: all 5 left at every normal finish; most bot stuck time is in their grottos | Medium | **Fixed** (P7, 2026-10-04) |
 | 8 | Ecosystem | Creature threats are uneven: Reed Canyon has five kinds, Canopy Spire and Giant Stems almost none | Low | **Fixed** (P6, 2026-10-04) |
 | 9 | Docs | The ravine-fall comment and WORLD_EXPANSION.md still described "one frond, back on the rim" | Low (maintainers) | **Fixed** |
 | 10 | UI | Pause button 56 px (about 5.3 mm; 7.2 mm with its touch margin), under Android's 48 dp | Low | Note; deliberate (no accidental pauses) |
@@ -85,7 +85,7 @@ reads as a bug, and the parasite never comes to him.
 
 At 7-10 m in the murky (unrestored) water a small parasite is a few pinkish pixels, close in hue to
 Gill himself (pink) and to food glows; the threat reads only once it moves. Materials and colour are
-the look stream's; listed so it is not lost.
+the look stream's; listed so it is not lost. **Fixed (P5, 2026-10-04)**: see "P5 and P7, done" below.
 
 ### 6. Treasure Hunt box text too small (Low-medium) — fixed
 
@@ -228,8 +228,8 @@ outside play; camera never drawn unsafe). Shots: `--test=shots --only=ballprogre
   (as ground parasites do), or move the last Mote and parasite one leaf lower (about 12 m), so the
   last 3% is not the tallest climb on the ball.
 - **P5. Parasite read at distance** (look stream): a hue or value step away from Gill's pink in the
-  murky state, or a faint rim/eye glow that reads at 10 m.
-- **P7. Cave eels read and reach.** A faint glow or bubble trail from the eel's cleft once he is in its
+  murky state, or a faint rim/eye glow that reads at 10 m. **Done** (below).
+- **P7. Cave eels read and reach.** **Done** (below; eels stay in the catalog). A faint glow or bubble trail from the eel's cleft once he is in its
   grotto (it already has glowing eyes when alert), and keep its strike line clear of the grotto's
   ledges so a hit is always possible from a ledge he can stand on; or drop eels from the completion
   catalog's "wildlife" and keep them as optional fights (owner's call, catalog appends only).
@@ -287,3 +287,83 @@ clearing 554-927 s (`audit_pt1`: 653 s to 97%, then two more visits).
   was 100% on the first visit both times (408 / 381 s against 611 s before and 554-927 s earlier).
 - World hash: geometry hash changes (moved parasites, Mote and stalker); completion catalog hash
   (`9bf9a8d5…`, 348 ids) and starfish placement hash (`4d2b6438…`, 30 stars) identical before and after.
+
+## P5 and P7, done (owner-approved, 2026-10-04)
+
+### P5. Small parasites read apart from Gill at 7-10 m
+
+- **Value step.** The small parasite's body went from a bright pink-to-orange (0.95, 0.2, 0.62) →
+  (1.0, 0.62, 0.12) to a dark wine-magenta-to-burgundy (0.55, 0.05, 0.3) → (0.4, 0.05, 0.12):
+  luminance 0.17 / 0.13 against Gill's 0.72, and no longer the food's peach. Its green markings,
+  shape, size, motion and the medium and large palettes are unchanged.
+- **Eye glow.** Every parasite's eyes now glow faintly sulphur yellow (1.0, 0.85, 0.3; energy 1.6),
+  the threat colour of the eel's eyes, about 60° in hue from Gill's pink (his eyes are dark). They
+  flare in the wind-up (up to 4.0) and go out as the parasite is drained (the death drift is grey).
+- **Rejected: a fresnel rim.** Tried first (shader rim in the same yellow): on a body this thin,
+  most of what shows at 10 m is grazing surface, so even a faint rim turned the whole parasite into
+  a yellow-gold blob that read like a collectable. Removed.
+- **Cost.** No new nodes, lights or draw calls (the eyes existed; their material now emits). Same
+  draw calls and primitives in all three frames (399 / 359 / 361).
+- **Evidence.** `--test=shots --only=p5read` (new): Ball 1 unrestored, ordinary camera, Gill in
+  frame, a small parasite 7, 8.5 and 10 m ahead (11-14 m from the camera) and a food beside it.
+  `p5_parasite_7-10m.jpg`: full frame at 8.5 m, then ×3 crops, before | after. Before, a pink smear
+  of Gill's colour; after, a dark body with two bright yellow points. Measured on those frames: the
+  parasite's body pixels sit 0.23-0.33 below Gill's in HSL lightness (before 0.20-0.25), and its
+  brightest pixel is the eyes' yellow at lightness 0.73-0.78 (before the green marking at 0.54-0.63).
+  The parasite is 60-110 pixels at 1280×720, so per-pixel hue on the body is mostly the murk's.
+- **Tests** (`_test_parasite_readability`): `parasite_small_darker_than_gill`,
+  `parasite_small_not_food_coloured`, `parasite_eyes_glow_away_from_gill_and_food`,
+  `parasite_eyes_flare_in_windup_out_when_drained`, `parasite_eye_materials_own`.
+
+### P7. Cave eels read and reach
+
+Measured first (`_test_eel_reach` run on the old code): from the spot straight out in front of the
+crevice (where a player, and the bot, would stand), 3 of the 5 eels could not be hit. From there
+`b5.eel.0` and `b7.eel.1` never saw him at all (the grotto's tallest ledge, a pillar on the eel's
+side, stands between the crevice and the floor), so they never came out; for `b7.eel.0` the spot
+was not clear floor that can be walked to from the door. Every eel did have some spot it could be hit from (86-135 in a fan of candidates), which
+the old bot found only by chance.
+
+- **Placement.** On the first physics frame each eel now tries its given wall position, then up to
+  8 steps of 8° either way round the grotto (never within 55° of the door), and settles on the
+  first where: the floor straight out in front (2.8-3.3 m) is standable with room round him and
+  walkable from the door; it sees him there; its whole 2.3 m strike line is clear of rock and the
+  ledges; its head fully out is inside his swipe without touching him; and it cannot see him on any
+  of the climb's ledges (so it still never knocks him off the optional climb). That spot is
+  `CaveEel.stand`. Result: four eels moved 8°, `b7.eel.2` stayed. Ids, hit points, timings, reach
+  and the "never through rock" rules are unchanged.
+- **Read.** Once he is in its grotto, the cleft's lip (a thin ring flat on the rock) glows faintly
+  in the eyes' colour with a slow breath, and a couple of small bubbles rise from it every ~2.4 s
+  while it hides. Dark when he is away or it is beaten. One small mesh per eel, no light; no random
+  draws (cosmetic only). `p7_eel_clefts.jpg`: three grottos from a step behind the stand spot,
+  before | after (before, a ledge pillar fills the view in front of `b2.eel.0` and `b5.eel.0`).
+- **Bot.** The 100% eel tactic goes to `CaveEel.stand` (was: straight out at 2.75 m, unchecked),
+  and travels back to the eel's ball first after being knocked out (it used to spend the remaining
+  rounds on another ball).
+- **Tests** (`_test_eel_reach`): `eel_hittable_from_standable_spot`, `eel_stand_spot_strikes_clear`,
+  `eel_never_sees_him_on_its_ledges`, `eel_swipe_lands_from_its_spot` (live, through the real swipe
+  input: all 5), `eel_cleft_glows_when_he_is_in_its_grotto`, `eel_cleft_dark_when_he_is_away`.
+
+Playthrough (`--test=playthrough`, 24/24 both, 100% by play both), before → after:
+
+| | before | after |
+|---|---|---|
+| Eel phase of the 100% run (heartbeats on "100%: bN.eel.M") | 860 s | 300 s |
+| Rounds to beat the 5 eels (2 is the minimum each) | 15 | 10 |
+| Hurt near an eel / knocked out by one | 2 / 1 | 0 / 0 |
+| Stuck recoveries in eel grottos (of all) | 137 of 187 | 0 of 123 |
+| `--start=eels` scenario (each eel from outside its grotto, fresh world) | 3 of 5 beaten, 40 rounds | 4 of 5, 8 rounds + `b7.eel.2` |
+
+(`b7.eel.2` fails the debug scenario before and after alike: on a fresh world its grotto's chamber
+gate is still shut; in the playthrough it is beaten in 2 rounds both times.) The 5 eels are still
+left at the normal finish: the bot's main route does not fight optional eels; they are the 100%
+phase's. The normal finish itself (3221 s before, 4315 s after, 31 / 58 knock-outs) is the bot's
+run-to-run spread: the base code diverges from itself at the same place, Ball 1's ravine rim at
+about 225 s (finding 1), with none of the extra knock-outs near an eel.
+
+| Change | Files | Test |
+|---|---|---|
+| P5: small parasite palette, glowing eyes | `scripts/actors/parasite.gd` | `_test_parasite_readability` |
+| P7: eel placement and stand spot, cleft cue, bubbles | `scripts/actors/critters/cave_eel.gd`, `scripts/world/ecosystem.gd`, `scripts/world/water_fx.gd` | `_test_eel_reach` |
+| Bot uses the stand spot; returns to the eel's ball | `scripts/tests/playthrough_bot.gd` | playthrough |
+| Shots `p5read`, `p7eel` | `scripts/tests/shots.gd` | (tooling) |
