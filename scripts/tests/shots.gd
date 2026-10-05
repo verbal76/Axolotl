@@ -3648,7 +3648,8 @@ func _vplat(g: Game, v: Vortex, li: int) -> void:
 		var face := b0.surface_point(vd) - b0.surface_point(at)
 		for rdy in [false, true]:
 			v.connected = rdy
-			v.strength = 1.0 if rdy else 0.6
+			# (Not ready at 0.95: the worst case, just short of 70%, with the pool almost full size.)
+			v.strength = 1.0 if rdy else 0.95
 			g.player.place(b0, b0.surface_point(at, 0.2), face.normalized())
 			g.cam.snap_behind()
 			await t.seconds(2.0)
