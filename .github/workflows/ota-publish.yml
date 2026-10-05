@@ -219,7 +219,12 @@ jobs:
             echo "::error::$TAG already exists; OTA releases are immutable"; exit 1
           fi
           SEQ=$((10#${ID##*-}))
-          printf '%s\n' "# Mote v$SEQ" "" \
+          # Descriptive OTA name (owner, 2026-10-05): "Mote v97-hints-pads-reeds" when the released commit
+          # carries an "OTA-Name: hints-pads-reeds" trailer (letters, digits, dashes); else "Mote vN".
+          PURPOSE=$(git log -1 --format='%(trailers:key=OTA-Name,valueonly)' "$SHA" | head -1 | tr -cd 'a-z0-9-')
+          TITLE="Mote v$SEQ${PURPOSE:+-$PURPOSE}"
+          echo "release title: $TITLE"
+          printf '%s\n' "# $TITLE" "" \
             "**Nothing to download:** the Mote app on your phone installs Mote v$SEQ by itself (at launch, while Mote is loading)." \
             "New phone: install the Mote app once (Android, \`com.verbal76.axolotl\`); it then updates itself to the newest version." "" \
             "---" "Technical provenance (for engineers):" \
@@ -230,7 +235,7 @@ jobs:
             "- Built by run ${{ github.run_id }}" \
             "- Files: axolotl-$ID.pck (game payload), manifest.json + manifest.json.sig (signed)" > notes.md
           gh release create "$TAG" --target "$SHA" --latest \
-            --title "Mote v$SEQ" --notes-file notes.md \
+            --title "$TITLE" --notes-file notes.md \
             "out/axolotl-$ID.pck" out/manifest.json out/manifest.json.sig
 
       - name: Re-download published objects and verify them
@@ -298,7 +303,9 @@ jobs:
             --jq ".[] | select(.tagName | startswith(\"ota-$CHANNEL-\")) | [.tagName, .name] | @tsv" |
           while IFS=$'\t' read -r tag name; do
             want="Mote v$((10#${tag##*-}))"
-            [ "$name" = "$want" ] || gh release edit "$tag" --repo "$GITHUB_REPOSITORY" --title "$want" >/dev/null || true
+            # (A descriptive name, "Mote vN-purpose", is kept.)
+            case "$name" in "$want"|"$want"-*) continue ;; esac
+            gh release edit "$tag" --repo "$GITHUB_REPOSITORY" --title "$want" >/dev/null || true
           done
 
       - name: Publication receipt
