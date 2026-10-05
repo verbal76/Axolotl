@@ -238,7 +238,9 @@ func _crab(b: MossBall, h: Dictionary, i: int) -> void:
 
 ## An eel in a crevice of the grotto's side wall near the door, on the side away from the ledges
 ## (Expansion 6: its strike beside the climb knocked the axolotl off the ledges; it guards the
-## floor, not the optional climb).
+## floor, not the optional climb). With the grotto's hint it settles, on the first physics frame,
+## where its strike line is clear and a floor spot in front lets him hit it (CaveEel.late_place,
+## cohesion audit P7).
 func _eel(b: MossBall, h: Dictionary, i: int) -> void:
 	var centre: Vector3 = h["centre"]
 	var up := b.up_at(centre)
@@ -252,7 +254,7 @@ func _eel(b: MossBall, h: Dictionary, i: int) -> void:
 	if side == 0.0:
 		side = 1.0
 	var dir := (right * side + to_door * 0.2).normalized()
-	CaveEel.new().place(b, centre + up * 1.1, dir, float(h.get("radius", 8.0)), _seed(b, "eel", i))
+	CaveEel.new().place(b, centre + up * 1.1, dir, float(h.get("radius", 8.0)), _seed(b, "eel", i), h)
 
 
 # --- Running --------------------------------------------------------------------------------

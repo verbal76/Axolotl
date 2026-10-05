@@ -275,6 +275,13 @@ func stream(pos: Vector3, up: Vector3, strength: float) -> void:
 		_spawn_puff(pos + o, up * _fx_rng.randf_range(6.0, 10.0) * strength, 0.35, 0.035, Color(0.9, 1.0, 1.0, 0.6), 2.0)
 
 
+## A few small bubbles rising slowly from `pos` (a cave eel's cleft, cohesion audit P7).
+func bubbles(pos: Vector3, up: Vector3, count := 2) -> void:
+	for i in count:
+		var o := Vector3(_fx_rng.randf() - 0.5, _fx_rng.randf() - 0.5, _fx_rng.randf() - 0.5) * 0.12
+		_spawn_puff(pos + o, up * 0.2, _fx_rng.randf_range(1.6, 2.2), _fx_rng.randf_range(0.035, 0.055), Color(0.85, 0.95, 1.0, 0.65), 0.9, up * 0.7)
+
+
 func sparkle(pos: Vector3, col: Color, count := 14, speed := 1.5, size := 0.07, life := 1.0) -> void:
 	for i in count:
 		var d := Vector3(_fx_rng.randf() - 0.5, _fx_rng.randf() - 0.5, _fx_rng.randf() - 0.5).normalized()
