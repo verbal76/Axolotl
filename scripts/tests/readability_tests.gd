@@ -218,7 +218,8 @@ func parasite_readability() -> void:
 	var small: Parasite = null
 	for b in g.balls:
 		for x in b.parasites:
-			if x.kind == Parasite.Kind.SMALL and small == null:
+			# (A living one: earlier tests in the same world may have drained some, whose eyes are rightly out.)
+			if x.kind == Parasite.Kind.SMALL and small == null and x.is_alive() and x._gray < 0.01:
 				small = x
 	t.check("parasite_small_found", small != null, "")
 	if small == null:
