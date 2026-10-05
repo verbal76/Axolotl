@@ -843,13 +843,20 @@ func _test_vegetation() -> void:
 	var par_note := "no ground parasite left"
 	if par:
 		b = par.ball
-		place_at(b.index, b.surface_point(b.up_at(par.global_position + MossBall.frame_at(b.up_at(par.global_position), 0).x * 6.0), 0.2), p.facing)
 		p.invuln_t = 999
-		await t.seconds(0.4)
 		var nearest: Parasite = null
-		for pp in b.parasites:
-			if pp.is_alive() and pp.visible and (nearest == null or pp.global_position.distance_to(p.global_position) < nearest.global_position.distance_to(p.global_position)):
-				nearest = pp
+		# (A parasite that notices him closes in: if it is inside 3 m after the settle, where his own
+		# wake would count, step him 6 m off it again, up to three times.)
+		for attempt in 3:
+			var tgt: Parasite = par if nearest == null else nearest
+			place_at(b.index, b.surface_point(b.up_at(tgt.global_position + MossBall.frame_at(b.up_at(tgt.global_position), 0).x * 6.0), 0.2), p.facing)
+			await t.seconds(0.4)
+			nearest = null
+			for pp in b.parasites:
+				if pp.is_alive() and pp.visible and (nearest == null or pp.global_position.distance_to(p.global_position) < nearest.global_position.distance_to(p.global_position)):
+					nearest = pp
+			if nearest.global_position.distance_to(p.global_position) > 3.0:
+				break
 		var near_pts := 0
 		for i in g.wake.count:
 			var pa: Vector4 = g.wake.points_a[i]
