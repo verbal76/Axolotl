@@ -10075,18 +10075,23 @@ func _test_restore_hints() -> void:
 	var d_home := b.health_at(par.spawn_dir) - h_home
 	var d_away := b.health_at(away_dir) - h_away
 	t.check("kill_heals_home_not_death_spot", int(z["done"]) == done0 + 1 and d_home > 0.2 and absf(d_away) < 0.05, "home +%.2f, death spot %+.2f, zone %d -> %d" % [d_home, d_away, done0, int(z["done"])])
-	# Hints: quiet first, then plumes, then a guide toward the nearest, then a count once.
+	# Hints (owner, 2026-10-06: 30 s sooner, no count note): quiet first, then pink plumes from 60 s,
+	# then from 150 s strings of bubbles toward the nearest, their sound at most every SOUND_EVERY_S.
 	var h := RestoreHints.new()
 	var gp := b.surface_point(z["dir"], 0.1)
 	var stages := []
 	for sec in 320:
 		h.update(1.0, b, gp, false)
-		if sec in [80, 100, 200, 310]:
+		if sec in [50, 70, 160, 310]:
 			stages.append(h.stage)
 	left = RestoreHints.remaining(b, zid)
 	left.sort_custom(func(a: Vector3, c: Vector3) -> bool: return a.distance_squared_to(gp) < c.distance_squared_to(gp))
 	var want: Vector3 = (left[0] - (gp + (gp - b.global_position).normalized() * 0.7)).normalized()
-	t.check("hints_escalate_slowly", stages == [0, 1, 2, 3] and h.plumes > 0, "stages at 80/100/200/310 s: %s, plumes %d" % [stages, h.plumes])
+	t.check("hints_escalate_slowly", stages == [0, 1, 2, 2] and h.plumes > 0, "stages at 50/70/160/310 s: %s, plumes %d" % [stages, h.plumes])
+	var guide_s := 320.0 - RestoreHints.GUIDE_S
+	t.check("hints_bubbles_not_spammed", h.guides_sent >= int(guide_s / ceilf(RestoreHints.GUIDE_EVERY_S)) - 1 and h.guides_sent <= int(guide_s / RestoreHints.GUIDE_EVERY_S) + 1
+			and h.sounds <= int(guide_s / RestoreHints.SOUND_EVERY_S) + 1 and h.sounds >= 1 and h.guides.size() <= 2,
+			"%d strings in %.0f s, %d sounds, %d string nodes" % [h.guides_sent, guide_s, h.sounds, h.guides.size()])
 	t.check("hint_guides_to_nearest_in_3d", h.last_guide_dir.dot(want) > 0.999, "guide . nearest %.4f" % h.last_guide_dir.dot(want))
 	var st: float = h.stuck[h.zone]
 	h.update(30.0, b, gp, true)
@@ -10123,6 +10128,38 @@ func _test_restore_hints() -> void:
 	var gp2 := b.surface_point(outside, 0.1) if outside != Vector3.ZERO else gp
 	for sec in 200:
 		h2.update(1.0, b, gp2, false)
+	# The string itself: six bubbles leave him toward the target, weave (not a rigid clump), and pop
+	# one at a time, out of order, until none is left.
+	var gb := GuideBubbles.new()
+	g.add_child(gb)
+	var c0 := b.global_position
+	var from0 := b.surface_point(z["dir"], 0.8)
+	var fr0 := MossBall.frame_at(z["dir"], 0.0)
+	var tgt0 := b.surface_point((z["dir"] as Vector3).rotated(fr0.x, 12.0 / b.radius), 0.1)
+	gb.launch(c0, from0, tgt0)
+	var start_d := from0.distance_to(tgt0)
+	var alive_seen: Array[int] = []
+	var spreads := 0.0
+	var head_d := INF
+	for i in 45:
+		gb._process(0.08)
+		alive_seen.append(gb.alive)
+		if gb.t > 1.0 and gb.t < 1.3:
+			head_d = gb.bubble_pos(0, gb.t).distance_to(tgt0)
+			var line := (gb.bubble_pos(0, gb.t) - gb.bubble_pos(GuideBubbles.COUNT - 1, gb.t))
+			spreads = maxf(spreads, line.length())
+	var order_sorted := gb._pop_at.duplicate()
+	order_sorted.sort()
+	var descending := true
+	for i in range(1, alive_seen.size()):
+		descending = descending and alive_seen[i] <= alive_seen[i - 1] + (1 if alive_seen[i - 1] < GuideBubbles.COUNT and gb.t < 0.5 else 0)
+	var max_alive := 0
+	for a in alive_seen:
+		max_alive = maxi(max_alive, a)
+	t.check("guide_bubbles_string_weaves_toward_and_pops_one_by_one", max_alive == GuideBubbles.COUNT and head_d < start_d - 2.0 and spreads > 0.5
+			and gb._pop_at != order_sorted and alive_seen[-1] == 0 and not gb.visible,
+			"%d bubbles, head %.1f -> %.1f m from the target, string %.1f m long, pops out of order %s, left %d" % [max_alive, start_d, head_d, spreads, gb._pop_at != order_sorted, alive_seen[-1]])
+	gb.queue_free()
 	t.check("hints_also_between_areas", outside != Vector3.ZERO and h2.zone == "b%d.*" % b.index and h2.stage == 2 and h2.plumes > 0
 			and h2.last_guide_dir != Vector3.ZERO, "outside %s: zone '%s', stage %d, plumes %d" % [outside != Vector3.ZERO, h2.zone, h2.stage, h2.plumes])
 

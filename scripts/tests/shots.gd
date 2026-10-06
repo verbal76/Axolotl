@@ -690,6 +690,8 @@ func run(runner) -> void:
 		await _menus_shots(g)
 	if only == "primary":
 		await _primary_shots(g)
+	if only == "hintfx":
+		await _hint_fx_shots(g)
 	if only == "cohesion":
 		# Cohesion audit (2026-10-02): what a player sees on arriving at each ball, through the
 		# ordinary follow camera with the touch HUD: two headings each (as he lands, then turned).
@@ -3816,3 +3818,43 @@ func _primary_shot(g: Game, name_: String, b: Control) -> void:
 	crop.resize(px.size.x * 3, px.size.y * 3, Image.INTERPOLATE_NEAREST)
 	crop.save_png(t.out_dir.path_join(name_ + "_zoom.png"))
 	t.log_line("%s button %s text %s" % [name_, str(b.get_global_rect()), (b as Button).text if b is Button else ""])
+
+
+## The restoration hints as a lost player sees them (owner, 2026-10-06): the pink plumes over the
+## ball's curve, then a string of bubbles leaving Gill toward the nearest target, frame by frame.
+func _hint_fx_shots(g: Game) -> void:
+	g.player.invuln_t = 9999
+	var b: MossBall = g.balls[0]
+	var zid := ""
+	for q in b.parasites:
+		if q.zone_id != "tut" and q.hp > 0:
+			zid = q.zone_id
+			break
+	var z: Dictionary = b.zones[zid]
+	var left := RestoreHints.remaining(b, zid)
+	var tdir: Vector3 = (left[0] - b.global_position).normalized()
+	var tfr := MossBall.frame_at(tdir, 0)
+	# (Gill about 16 m from it, turned side-on, as a lost player would be: the plume shows over the
+	# curve and the bubbles cross the screen toward it.)
+	var d: Vector3 = tdir.rotated(tfr.x, 16.0 / b.radius).normalized()
+	var to_t: Vector3 = b.surface_point(tdir) - b.surface_point(d)
+	var face: Vector3 = to_t.rotated(d, 1.2)
+	g.player.place(b, b.surface_point(d, 0.1), face)
+	g.cam.snap_behind()
+	g.hints.enabled = true
+	g.hints.stuck["b%d.%s" % [b.index, zid]] = RestoreHints.SHIMMER_S + 1.0
+	await t.seconds(2.0)
+	await t.shot("hint_plumes")
+	g.hints.stuck["b%d.%s" % [b.index, zid]] = RestoreHints.GUIDE_S + 0.5
+	g.hints._guide_t = 0.0
+	for k in 6:
+		await t.seconds(0.45)
+		await t.shot("hint_bubbles_%d" % k)
+	var cam := g.get_viewport().get_camera_3d()
+	var all := []
+	for id in b.zones:
+		all.append_array(RestoreHints.remaining(b, id))
+	all.sort_custom(func(a: Vector3, c: Vector3) -> bool: return a.distance_to(g.player.global_position) < c.distance_to(g.player.global_position))
+	for k in mini(4, all.size()):
+		t.log_line("target %d: %.1f m, screen %s behind %s" % [k, (all[k] as Vector3).distance_to(g.player.global_position), str(cam.unproject_position(all[k])), cam.is_position_behind(all[k])])
+	t.log_line("guide dir . to nearest %.3f" % g.hints.last_guide_dir.dot(((all[0] as Vector3) - g.player.global_position).normalized()))

@@ -4,29 +4,40 @@ extends RefCounted
 ## missed something, without turning Mote into a checklist. Per zone of his ball, the play seconds
 ## Gill has spent in it since its last progress (a parasite killed or a mote restored there):
 ##  - under SHIMMER_S: nothing;
-##  - from SHIMMER_S: each of the zone's remaining targets sends up a slow green plume that shows over
-##    the terrain;
-##  - from GUIDE_S: also a faint drift of glimmers leaves Gill toward the nearest one (in 3D: up or
-##    down a slope, a pillar or into a cave mouth too);
-##  - at COUNT_S, once: a small fading note of how many are left in the area.
+##  - from SHIMMER_S: each of the zone's remaining targets sends up a tall, wispy, soft-pink plume that
+##    shows over the terrain and over the ball's curve (owner, 2026-10-06: the green one blended in);
+##  - from GUIDE_S: also, every GUIDE_EVERY_S, a little string of bubbles (GuideBubbles) leaves Gill
+##    toward the nearest one, weaving as it goes and popping one bubble at a time, with a soft
+##    "blub" now and then (at most every SOUND_EVERY_S).
+## Owner, 2026-10-06: both start 30 s sooner than before, and the "N left" note is gone (the world's
+## own cues are enough).
 ## Progress in the zone starts it over. Only authored targets that still count for restoration are
 ## used: never returners (Repopulation), never anything already done. The economy is untouched: this
 ## only reads. Not saved (a continued run starts quiet).
 
-const SHIMMER_S := 90.0
-const GUIDE_S := 180.0
-const COUNT_S := 300.0
+const SHIMMER_S := 60.0
+const GUIDE_S := 150.0
 const SHIMMER_EVERY_S := 2.6
-const GUIDE_EVERY_S := 1.7
+const GUIDE_EVERY_S := 3.6
+const SOUND_EVERY_S := 10.0
 const PLUMES_MAX := 4
-const COL := Color(0.55, 1.0, 0.62, 0.8)
+## Soft coral pink: organic, never neon; it stands apart from every green of the moss.
+const COL := Color(0.98, 0.6, 0.72, 0.62)
 
 ## Zone key ("b<ball>.<zone>") -> play seconds searched since its last progress.
 var stuck := {}
 var _done := {}
-var _counted := {}
 var _shim_t := 0.0
 var _guide_t := 0.0
+var _sound_t := 0.0
+## The plumes (one pool for all of them).
+var plume_fx: HintPlumes
+## The bubble strings (two, so one can finish popping while the next leaves him).
+var guides: Array[GuideBubbles] = []
+var _guide_next := 0
+## For tests: bubble strings sent and sounds played.
+var guides_sent := 0
+var sounds := 0
 ## For tests: the zone key Gill is in (unrestored only; "b<ball>.*" when he is in none, or in one with
 ## nothing left, while the ball still has targets), the stage there (0-3) and the last guide
 ## direction (unit, world space).
@@ -72,7 +83,6 @@ func update(dt: float, b: MossBall, gill_pos: Vector3, quiet: bool) -> void:
 		var d: int = b.zones[id]["done"]
 		if _done.get(key, d) != d:
 			stuck[key] = 0.0
-			_counted.erase(key)
 		_done[key] = d
 	var id := zone_at(b, (gill_pos - b.global_position).normalized())
 	var targets := remaining(b, id) if id != "" else []
@@ -92,7 +102,6 @@ func update(dt: float, b: MossBall, gill_pos: Vector3, quiet: bool) -> void:
 		var bk := "b%d.*" % b.index
 		if _done.get(bk, done_all) != done_all:
 			stuck[bk] = 0.0
-			_counted.erase(bk)
 		_done[bk] = done_all
 	zone = ("b%d.*" % b.index) if whole else "b%d.%s" % [b.index, id]
 	stage = 0
@@ -100,7 +109,7 @@ func update(dt: float, b: MossBall, gill_pos: Vector3, quiet: bool) -> void:
 		return
 	var t: float = stuck.get(zone, 0.0) + dt
 	stuck[zone] = t
-	stage = 3 if t >= COUNT_S else (2 if t >= GUIDE_S else (1 if t >= SHIMMER_S else 0))
+	stage = 2 if t >= GUIDE_S else (1 if t >= SHIMMER_S else 0)
 	if stage == 0:
 		return
 	targets.sort_custom(func(a: Vector3, c: Vector3) -> bool: return a.distance_squared_to(gill_pos) < c.distance_squared_to(gill_pos))
@@ -110,6 +119,7 @@ func update(dt: float, b: MossBall, gill_pos: Vector3, quiet: bool) -> void:
 		plumes = mini(PLUMES_MAX, targets.size())
 		for k in plumes:
 			_plume(b, targets[k])
+	_sound_t -= dt
 	if stage >= 2:
 		_guide_t -= dt
 		if _guide_t <= 0.0:
@@ -117,21 +127,41 @@ func update(dt: float, b: MossBall, gill_pos: Vector3, quiet: bool) -> void:
 			var up := (gill_pos - b.global_position).normalized()
 			var from := gill_pos + up * 0.7
 			last_guide_dir = (targets[0] - from).normalized()
-			if WaterFX.inst != null:
-				WaterFX.inst.wisp(from + last_guide_dir * 1.0, from + last_guide_dir * 5.0, 1.6, COL, 7)
-	if stage == 3 and not _counted.has(zone):
-		_counted[zone] = true
-		var hud = Game.inst.hud if Game.inst != null else null
-		if hud != null:
-			var where := "on this moss ball" if whole else "in this area"
-			hud.show_discovery("%d left to restore %s" % [targets.size(), where] if targets.size() != 1 else "1 left to restore %s" % where)
+			_send_guide(b, from, targets[0])
 
 
-## A slow plume rising from a target, tall enough to show over a ridge or out of a hollow.
-func _plume(b: MossBall, pos: Vector3) -> void:
-	if WaterFX.inst == null:
+## A string of bubbles from just above Gill toward `toward` (and, not too often, its soft sound).
+func _send_guide(b: MossBall, from: Vector3, toward: Vector3) -> void:
+	guides_sent += 1
+	if _sound_t <= 0.0:
+		_sound_t = SOUND_EVERY_S
+		sounds += 1
+		Sfx.play("hint_bubbles", from, -9.0, 0.06)
+	var parent := WaterFX.inst if WaterFX.inst != null else (Game.inst as Node)
+	if parent == null or not parent.is_inside_tree():
 		return
+	if guides.size() < 2:
+		var gb := GuideBubbles.new()
+		gb.name = "GuideBubbles%d" % guides.size()
+		parent.add_child(gb)
+		guides.append(gb)
+	var g: GuideBubbles = guides[_guide_next]
+	_guide_next = (_guide_next + 1) % guides.size()
+	g.launch(b.global_position, from, toward)
+
+
+## A tall, wispy plume rising from a target (owner, 2026-10-06; HintPlumes): taller than the ball's
+## curve hides near him, so it shows over a crest; soft pink against the moss. Each lasts about as
+## long as the old green puffs did (it is longer in space, not in time).
+func _plume(b: MossBall, pos: Vector3) -> void:
+	var parent := WaterFX.inst if WaterFX.inst != null else (Game.inst as Node)
+	if parent == null or not parent.is_inside_tree():
+		return
+	if plume_fx == null or not is_instance_valid(plume_fx):
+		plume_fx = HintPlumes.new()
+		plume_fx.name = "HintPlumes"
+		parent.add_child(plume_fx)
 	var up := (pos - b.global_position).normalized()
-	WaterFX.inst.sparkle(pos + up * 0.4, COL, 6, 0.5, 0.09, 1.3)
-	for k in 5:
-		WaterFX.inst._spawn_puff(pos + up * (0.3 + k * 0.5), up * 1.4, 2.4, 0.22 - k * 0.025, COL * Color(1, 1, 1, 0.75 - k * 0.1), 0.2)
+	plume_fx.emit(pos - up * 0.2, up)
+	if WaterFX.inst != null:
+		WaterFX.inst.sparkle(pos + up * 0.4, COL, 6, 0.5, 0.09, 1.3)

@@ -690,5 +690,18 @@ def gill():
     write_wav("sfx_gill_yawn", reverb(s, 0.18), peak=0.7)
 
 
+def hint_bubbles():
+    """Restoration hint (owner, 2026-10-06): a soft, short "blub-blub-blub" as a string of bubbles leaves
+    Gill. Gentle and round, never an alarm; quiet enough to repeat."""
+    global rng
+    rng = np.random.default_rng(4411)
+    dur = 0.55
+    buf = np.zeros(int(dur * SR))
+    for i, (t0, f0) in enumerate([(0.0, 520), (0.08, 640), (0.15, 560), (0.23, 720), (0.31, 610), (0.38, 780)]):
+        place(buf, t0, drop(f0, f0 * 1.7, 0.07), 0.75 - i * 0.07, wrap=False)
+    buf = lowpass_fast(buf, 2600)
+    write_wav("sfx_hint_bubbles", reverb(buf, 0.22), peak=0.6)
+
+
 if __name__ == "__main__":
     main()
