@@ -1015,9 +1015,15 @@ func magnet() -> void:
 	g.add_child(wall)
 	var mid := m.anchor + up * 1.0 + fwd * 1.6
 	wall.global_transform = Transform3D(MossBall.frame_at(up, 0), mid)
-	var hidden: float = await trial.call(3, 7771)
+	# (Over the same four wanders as above, so it is judged against like: one wander alone can drift
+	# 2 m closer by chance, the no-Magnet average being about 1 m. Behind the wall the Magnet must add
+	# less than half of what it adds in the open.)
+	var hidden := 0.0
+	for sd in [7771, 1009, 4242, 31337]:
+		hidden += await trial.call(3, sd) / 4.0
 	wall.queue_free()
-	t.check("magnet_needs_line_of_sight", hidden < gain3 * 0.5 and m.is_available(), "behind a wall it closed in %.2f m" % hidden)
+	t.check("magnet_needs_line_of_sight", hidden < gain0 + (gain3 - gain0) * 0.5 and m.is_available(),
+			"behind a wall it closed in %.2f m on average (%.2f m without the Magnet, %.2f m with it in the open)" % [hidden, gain0, gain3])
 	# No randomness: with no Magnet it never runs; its code draws nothing; and a Mote stepped with the
 	# same seed moves identically with Magnet III (out of his reach) and without.
 	tiers()
