@@ -17,17 +17,24 @@ extends RefCounted
 
 const SHIMMER_S := 60.0
 const GUIDE_S := 150.0
-const SHIMMER_EVERY_S := 2.6
-const GUIDE_EVERY_S := 3.6
+## Each of the nearest targets puffs on its own schedule, SHIMMER_MIN_S..SHIMMER_MAX_S apart, so
+## several plumes never fire together (owner, 2026-10-06: independent events, not markers).
+const SHIMMER_MIN_S := 2.6
+const SHIMMER_MAX_S := 5.2
+## Owner, 2026-10-06 (v101 phone test): a little slower, about 40% (was 3.6 s).
+const GUIDE_EVERY_S := 5.0
 const SOUND_EVERY_S := 10.0
 const PLUMES_MAX := 4
 ## Soft coral pink: organic, never neon; it stands apart from every green of the moss.
-const COL := Color(0.98, 0.6, 0.72, 0.62)
+const COL := Color(0.98, 0.62, 0.74, 0.55)
 
 ## Zone key ("b<ball>.<zone>") -> play seconds searched since its last progress.
 var stuck := {}
 var _done := {}
-var _shim_t := 0.0
+## Per plume slot (nearest first): seconds to its next puff.
+var _slot_t: Array[float] = []
+## Cosmetic timing only: never the gameplay random sequence.
+var _rng := RandomNumberGenerator.new()
 var _guide_t := 0.0
 var _sound_t := 0.0
 ## The plumes (one pool for all of them).
@@ -37,6 +44,8 @@ var guides: Array[GuideBubbles] = []
 var _guide_next := 0
 ## For tests: bubble strings sent and sounds played.
 var guides_sent := 0
+## For tests: plumes started.
+var plume_events := 0
 var sounds := 0
 ## For tests: the zone key Gill is in (unrestored only; "b<ball>.*" when he is in none, or in one with
 ## nothing left, while the ball still has targets), the stage there (0-3) and the last guide
@@ -113,12 +122,17 @@ func update(dt: float, b: MossBall, gill_pos: Vector3, quiet: bool) -> void:
 	if stage == 0:
 		return
 	targets.sort_custom(func(a: Vector3, c: Vector3) -> bool: return a.distance_squared_to(gill_pos) < c.distance_squared_to(gill_pos))
-	_shim_t -= dt
-	if _shim_t <= 0.0:
-		_shim_t = SHIMMER_EVERY_S
-		plumes = mini(PLUMES_MAX, targets.size())
-		for k in plumes:
+	plumes = mini(PLUMES_MAX, targets.size())
+	if _slot_t.is_empty():
+		for k in PLUMES_MAX:
+			# (A random start for each, so the first ones do not rise together either.)
+			_slot_t.append(_rng.randf_range(0.0, SHIMMER_MAX_S))
+	for k in plumes:
+		_slot_t[k] -= dt
+		if _slot_t[k] <= 0.0:
+			_slot_t[k] = _rng.randf_range(SHIMMER_MIN_S, SHIMMER_MAX_S)
 			_plume(b, targets[k])
+			plume_events += 1
 	_sound_t -= dt
 	if stage >= 2:
 		_guide_t -= dt

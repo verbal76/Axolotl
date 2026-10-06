@@ -47,9 +47,11 @@ func run(runner) -> void:
 	# (Nor are parasites drawn back to a roaming Gill: tests walk him far and long. _test_drawn_back
 	# drives it itself.)
 	g.drawn.enabled = false
+	# (Nor do spore blooms grow: tests stand him in many places. _test_spore_blooms grows its own.)
+	g.spores.enabled = false
 	await t.seconds(0.5)
 	var only: String = Settings.test_args.get("only", "")
-	var registry := ["_test_startup", "_test_ota_and_version", "_test_hag_infra", "_test_launch_update", "_test_mesh_winding", "_test_terrain", "_test_ravines", "_test_rim_fights_clear_of_ooze", "_test_edge_assist", "_test_ooze_bubbles", "_test_view_clearances", "_test_camera_rises_over", "_test_camera_invariant", "_test_ball_view", "_test_hud_corner", "_test_restore_hints", "_test_drawn_back", "_test_dead_area_sim", "_test_home_coherence", "_test_terrain_grounded", "_test_no_floating_platforms", "_test_parasite_locomotion", "_test_parasite_body_and_death", "_test_parasite_combat", "_test_organic_motion", "_test_gill_look", "_test_gill_idles", "_test_gill_colours", "_test_gill_patterns", "_test_tail_whip", "_test_gill_traction", "_test_gill_incline_transitions", "_test_traction_no_shortcuts", "_test_gill_body_follow", "_test_swim_body_follow", "_test_ambient_sway", "_test_placements", "_test_tutorial_route", "_test_sphere_walk", "_test_jump_and_burst", "_test_coyote_and_buffer", "_test_swipe_direction_and_stages", "_test_hard_landing", "_test_food", "_test_food_reach", "_test_darter_and_burrower", "_test_food_repopulates", "_test_motes", "_test_checkpoint_and_regen", "_test_crumble", "_test_restoration_gates", "_test_retract_gates_gone", "_test_bubble_columns", "_test_restoration_continuity", "_test_health_map", "_test_vortex", "_test_vortex_tints", "_test_vortex_ready_state", "_test_vortex_currents", "_test_vortex_currents_travel", "_test_current", "_test_current_brace", "_test_canopy", "_test_canopy_plain_jumps", "_test_canopy_guard_leaf", "_test_climbs_physical", "_test_jungle_ladders_physical", "_test_leaf_geometry", "_test_leaf_footing", "_test_caves", "_test_mounds", "_test_vegetation", "_test_vortex_mouths_clear", "_test_vortex_pads_clear_of_plants", "_test_stalkers_in_reeds", "_test_route_audit", "_test_new_areas", "_test_ecosystem", "_test_threat_spread", "_test_music", "_test_opening_audio", "_test_run_clock", "_test_completion_catalog", "_test_completion_frozen", "_test_run_save_file", "_test_run_timer_live", "_test_run_continue", "_test_timer_integrity", "_test_resume_points_safe", "_phase_continue_write", "_phase_continue_read", "_test_upgrades", "_test_quality_title_cap", "_test_ui", "_test_menus_no_scroll", "_test_menu_touch", "_test_primary_buttons", "_test_tier2_rules", "_test_tier2_world", "_test_ambient_fish", "_test_parasite_never_buried", "_test_tier2_loadout", "_test_aquarium_experiences", "_test_aquarium_polish", "_test_all_clear", "_test_treasure_unlock", "_test_treasure_generation", "_test_treasure_play", "_phase_treasure_stress", "_phase_live_fish_diag", "_phase_cpu_probe", "_phase_incline_survey", "_phase_loco_diag", "_phase_crawl_trace", "_phase_mouth_crawls", "_phase_organic_trace", "_phase_organic_cost", "_test_skilltree_graph", "_test_progress_store", "_test_starfish_spots", "_test_starfish_pickup", "_test_skill_ui", "_test_quick_gill", "_test_lunge_skills", "_test_burst_skills", "_test_glide_control", "_test_glide_transfers", "_test_mote_magnet", "_phase_starfish_survey", "_phase_starfish_sweep", "_phase_glide_probe", "_test_plants_terminal_growth", "_test_sea_fan_depth", "_test_repopulation", "_phase_repop_survey", "_phase_repop_sim", "_test_aquarium_gill", "_phase_aq_nav", "_test_tutorials_and_title", "_test_onb_progress", "_test_onb_owner_save", "_test_onb_per_run", "_test_onb_toggle", "_test_onb_intro", "_test_onb_feeding", "_test_onb_parasite", "_test_onb_feed_first", "_test_onb_tunnel", "_test_onb_starfish", "_test_onb_softlock", "_test_onb_relaunch", "_test_onb_restoration_equal", "_test_hard_mode", "_test_hard_mode_save", "_test_polish_a", "_test_leaf_motion", "_test_perf_veg_cull", "_test_death_and_arrival", "_test_pause_ball_progress", "_test_arrival_view", "_test_camera_never_drawn_unsafe", "_test_startup_build_identical", "_phase_world_hash", "_phase_th_bench", "_phase_hard_write", "_phase_hard_read", "_phase_hard_newrun", "_phase_hard_finish", "_phase_hard_sim", "_phase_hard_intervals", "_phase_onb_owner", "_phase_onb_write", "_phase_onb_read", "_phase_onb_kill", "_phase_onb_toggle", "_phase_cohesion_probe", "_test_eel_reach", "_test_parasite_readability"]
+	var registry := ["_test_startup", "_test_ota_and_version", "_test_hag_infra", "_test_launch_update", "_test_mesh_winding", "_test_terrain", "_test_ravines", "_test_rim_fights_clear_of_ooze", "_test_edge_assist", "_test_ooze_bubbles", "_test_view_clearances", "_test_camera_rises_over", "_test_camera_invariant", "_test_ball_view", "_test_hud_corner", "_test_restore_hints", "_test_spore_blooms", "_test_drawn_back", "_test_dead_area_sim", "_test_home_coherence", "_test_terrain_grounded", "_test_no_floating_platforms", "_test_parasite_locomotion", "_test_parasite_body_and_death", "_test_parasite_combat", "_test_organic_motion", "_test_gill_look", "_test_gill_idles", "_test_gill_colours", "_test_gill_patterns", "_test_tail_whip", "_test_gill_traction", "_test_gill_incline_transitions", "_test_traction_no_shortcuts", "_test_gill_body_follow", "_test_swim_body_follow", "_test_ambient_sway", "_test_placements", "_test_tutorial_route", "_test_sphere_walk", "_test_jump_and_burst", "_test_coyote_and_buffer", "_test_swipe_direction_and_stages", "_test_hard_landing", "_test_food", "_test_food_reach", "_test_darter_and_burrower", "_test_food_repopulates", "_test_motes", "_test_checkpoint_and_regen", "_test_crumble", "_test_restoration_gates", "_test_retract_gates_gone", "_test_bubble_columns", "_test_restoration_continuity", "_test_health_map", "_test_vortex", "_test_vortex_tints", "_test_vortex_ready_state", "_test_vortex_currents", "_test_vortex_currents_travel", "_test_current", "_test_current_brace", "_test_canopy", "_test_canopy_plain_jumps", "_test_canopy_guard_leaf", "_test_climbs_physical", "_test_jungle_ladders_physical", "_test_leaf_geometry", "_test_leaf_footing", "_test_caves", "_test_mounds", "_test_vegetation", "_test_vortex_mouths_clear", "_test_vortex_pads_clear_of_plants", "_test_stalkers_in_reeds", "_test_route_audit", "_test_new_areas", "_test_ecosystem", "_test_threat_spread", "_test_music", "_test_opening_audio", "_test_run_clock", "_test_completion_catalog", "_test_completion_frozen", "_test_run_save_file", "_test_run_timer_live", "_test_run_continue", "_test_timer_integrity", "_test_resume_points_safe", "_phase_continue_write", "_phase_continue_read", "_test_upgrades", "_test_quality_title_cap", "_test_ui", "_test_menus_no_scroll", "_test_menu_touch", "_test_primary_buttons", "_test_tier2_rules", "_test_tier2_world", "_test_ambient_fish", "_test_parasite_never_buried", "_test_tier2_loadout", "_test_aquarium_experiences", "_test_aquarium_polish", "_test_all_clear", "_test_treasure_unlock", "_test_treasure_generation", "_test_treasure_play", "_phase_treasure_stress", "_phase_live_fish_diag", "_phase_cpu_probe", "_phase_incline_survey", "_phase_loco_diag", "_phase_crawl_trace", "_phase_mouth_crawls", "_phase_organic_trace", "_phase_organic_cost", "_test_skilltree_graph", "_test_progress_store", "_test_starfish_spots", "_test_starfish_pickup", "_test_skill_ui", "_test_quick_gill", "_test_lunge_skills", "_test_burst_skills", "_test_glide_control", "_test_glide_transfers", "_test_mote_magnet", "_phase_starfish_survey", "_phase_starfish_sweep", "_phase_glide_probe", "_test_plants_terminal_growth", "_test_sea_fan_depth", "_test_repopulation", "_phase_repop_survey", "_phase_repop_sim", "_test_aquarium_gill", "_phase_aq_nav", "_test_tutorials_and_title", "_test_onb_progress", "_test_onb_owner_save", "_test_onb_per_run", "_test_onb_toggle", "_test_onb_intro", "_test_onb_feeding", "_test_onb_parasite", "_test_onb_feed_first", "_test_onb_tunnel", "_test_onb_starfish", "_test_onb_softlock", "_test_onb_relaunch", "_test_onb_restoration_equal", "_test_hard_mode", "_test_hard_mode_save", "_test_polish_a", "_test_leaf_motion", "_test_perf_veg_cull", "_test_death_and_arrival", "_test_pause_ball_progress", "_test_arrival_view", "_test_camera_never_drawn_unsafe", "_test_startup_build_identical", "_phase_world_hash", "_phase_th_bench", "_phase_hard_write", "_phase_hard_read", "_phase_hard_newrun", "_phase_hard_finish", "_phase_hard_sim", "_phase_hard_intervals", "_phase_onb_owner", "_phase_onb_write", "_phase_onb_read", "_phase_onb_kill", "_phase_onb_toggle", "_phase_cohesion_probe", "_test_eel_reach", "_test_parasite_readability"]
 	# A --only entry that names nothing is a typo (or a stale substring): fail loudly rather than run nothing.
 	for o in only.split(",", false):
 		if not registry.has(o) and not registry.has("_test_" + o):
@@ -10088,6 +10090,19 @@ func _test_restore_hints() -> void:
 	left.sort_custom(func(a: Vector3, c: Vector3) -> bool: return a.distance_squared_to(gp) < c.distance_squared_to(gp))
 	var want: Vector3 = (left[0] - (gp + (gp - b.global_position).normalized() * 0.7)).normalized()
 	t.check("hints_escalate_slowly", stages == [0, 1, 2, 2] and h.plumes > 0, "stages at 50/70/160/310 s: %s, plumes %d" % [stages, h.plumes])
+	# Plumes rise on their own schedules (owner, 2026-10-06): never all together at each beat.
+	var h3 := RestoreHints.new()
+	var stamps := []
+	for k in 400:
+		var before := h3.plume_events
+		h3.update(0.25, b, gp, false) if k > 0 else h3.update(RestoreHints.SHIMMER_S, b, gp, false)
+		if h3.plume_events > before:
+			stamps.append([k, h3.plume_events - before])
+	var together := 0
+	for st in stamps:
+		if int(st[1]) >= 2:
+			together += 1
+	t.check("hint_plumes_staggered", stamps.size() >= 12 and together <= stamps.size() / 6, "%d plume moments in 100 s, %d with two or more at once" % [stamps.size(), together])
 	var guide_s := 320.0 - RestoreHints.GUIDE_S
 	t.check("hints_bubbles_not_spammed", h.guides_sent >= int(guide_s / ceilf(RestoreHints.GUIDE_EVERY_S)) - 1 and h.guides_sent <= int(guide_s / RestoreHints.GUIDE_EVERY_S) + 1
 			and h.sounds <= int(guide_s / RestoreHints.SOUND_EVERY_S) + 1 and h.sounds >= 1 and h.guides.size() <= 2,
@@ -10162,6 +10177,112 @@ func _test_restore_hints() -> void:
 	gb.queue_free()
 	t.check("hints_also_between_areas", outside != Vector3.ZERO and h2.zone == "b%d.*" % b.index and h2.stage == 2 and h2.plumes > 0
 			and h2.last_guide_dir != Vector3.ZERO, "outside %s: zone '%s', stage %d, plumes %d" % [outside != Vector3.ZERO, h2.zone, h2.stage, h2.plumes])
+
+
+## Toxic spore blooms (owner, 2026-10-06): occasional, on the emptiest open ground only; each swells
+## and hisses before it bursts; its low yellow mist creeps out, lingers and thins; touching it while
+## thick costs one health, at most once per release; blooms keep their own staggered rhythms and never
+## touch the gameplay random sequence.
+func _test_spore_blooms() -> void:
+	var sp := SporeBlooms.new()
+	sp.place(g.balls, g.vortices, g.starfish.stars, g.get_world_3d().direct_space_state)
+	var bad: Array[String] = []
+	var per := {}
+	for sb in sp.blooms:
+		var b := sb.ball
+		per[b.index] = int(per.get(b.index, 0)) + 1
+		var at := b.surface_point(sb.dir)
+		for e in SporeBlooms.keep_out(b, g.vortices, g.starfish.stars):
+			if at.distance_to(e[0]) < float(e[1]) - 0.01:
+				bad.append("ball %d bloom %.1f m from something it must keep %.0f m from" % [b.index + 1, at.distance_to(e[0]), e[1]])
+				break
+		if b.ravine_at(sb.dir) != "" or DrawnBack.in_cave(b, at) or b.on_vortex_pad(sb.dir):
+			bad.append("ball %d bloom in a ravine, cave or on a pad" % (b.index + 1))
+		if b.index == 0 and sb.dir.angle_to(b.start_dir) < deg_to_rad(40.0):
+			bad.append("bloom in the tutorial meadow")
+		for o in sp.blooms:
+			if o != sb and o.ball == b and b.surface_point(o.dir).distance_to(at) < SporeBlooms.SPACING_M - 0.01:
+				bad.append("ball %d blooms %.0f m apart" % [b.index + 1, b.surface_point(o.dir).distance_to(at)])
+	var counts_ok := true
+	for k in per:
+		counts_ok = counts_ok and int(per[k]) <= SporeBlooms.count_for(g.balls[k].radius)
+	t.check("spores_only_on_empty_ground", bad.is_empty() and counts_ok and sp.blooms.size() >= g.balls.size(), "%d blooms %s; %s" % [sp.blooms.size(), str(per), "; ".join(bad)])
+	# A bloom's cycle, stepped by hand: idle, a warning of WARN_S, then the mist, then idle again.
+	var sb: SporeBloom = sp.blooms[0]
+	var dt := 1.0 / 30.0
+	var warn_s := 0.0
+	var seen := []
+	var max_reach := 0.0
+	var thick_s := 0.0
+	for i in int(60.0 / dt):
+		sb.step(dt, null)
+		if seen.is_empty() or seen[-1] != sb.state:
+			seen.append(sb.state)
+		if sb.state == "warn":
+			warn_s += dt
+		if sb.thick():
+			thick_s += dt
+		max_reach = maxf(max_reach, sb.reach())
+		if seen.size() >= 4 and sb.state == "idle":
+			break
+	t.check("spores_warn_then_mist_then_rest", seen.slice(0, 4) == ["idle", "warn", "mist", "idle"] and warn_s >= SporeBloom.WARN_S - dt * 2 and thick_s <= SporeBloom.THICK_S + dt * 2
+			and max_reach <= SporeBloom.SPREAD_M * 1.2 and not sb._mist.visible,
+			"states %s, warned %.1f s, thick %.1f s, reached %.1f m" % [seen, warn_s, thick_s, max_reach])
+	# Damage: once per release however long he stays in it (his own invulnerability cleared every frame
+	# to prove it is the bloom's gate); none outside it, none above it.
+	var hp0 := p.health
+	var place := func(off_m: float, h: float) -> void:
+		var fr := MossBall.frame_at(sb.up, 0.0)
+		p.global_position = sb.ball.surface_point((sb.ball.surface_point(sb.dir) + fr.x * off_m - sb.ball.global_position).normalized(), h)
+	var run := func(off_m: float, h: float) -> int:
+		p.health = p.max_health
+		var before := p.health
+		sb._enter("warn")
+		sb.t = SporeBloom.WARN_S
+		for i in int((SporeBloom.THICK_S + SporeBloom.FADE_S + 0.5) / dt):
+			place.call(off_m, h)
+			p.invuln_t = 0.0
+			sb.step(dt, p)
+			if sb.state == "idle":
+				break
+		return before - p.health
+	var release := _hold_threats(sb.ball)
+	var inside: int = run.call(2.0, 0.3)
+	var outside: int = run.call(SporeBloom.SPREAD_M * 1.4, 0.3)
+	var above: int = run.call(1.0, 3.5)
+	release.call()
+	p.health = hp0
+	p.invuln_t = 0.0
+	t.check("spores_hurt_once_per_cloud", inside == 1 and outside == 0 and above == 0, "in it the whole time: -%d; %.1f m away: -%d; 3.5 m above it: -%d" % [inside, SporeBloom.SPREAD_M * 1.4, outside, above])
+	# Rhythms: the blooms of one ball never release together; nothing draws the gameplay sequence.
+	seed(4242)
+	var want := randi()
+	seed(4242)
+	var firsts := {}
+	for b2 in sp.blooms:
+		if b2.ball == sp.blooms[0].ball:
+			b2._enter("idle")
+	var tt := 0.0
+	while tt < 60.0:
+		for b2 in sp.blooms:
+			if b2.ball != sp.blooms[0].ball:
+				continue
+			var was := b2.state
+			b2.step(0.1, null)
+			if was == "warn" and b2.state == "mist" and not firsts.has(b2):
+				firsts[b2] = tt
+		tt += 0.1
+	var times := firsts.values()
+	times.sort()
+	var apart := true
+	for i in range(1, times.size()):
+		apart = apart and times[i] - times[i - 1] > 0.5
+	t.check("spores_staggered_and_cosmetic_rng", randi() == want and apart, "first releases at %s s; global sequence untouched %s" % [str(times), true])
+	# (Gone now, not at the end of the frame: the next test counts the ball's children.)
+	for b2 in sp.blooms:
+		b2.get_parent().remove_child(b2)
+		b2.free()
+	sp.blooms.clear()
 
 
 ## Dead areas (owner finding, 2026-10-06; DrawnBack): after a dry spell of roaming with nothing

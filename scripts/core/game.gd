@@ -85,6 +85,8 @@ var _repop_t := 0.0
 var hints := RestoreHints.new()
 ## Dead areas (owner, 2026-10-06): an outstanding parasite drawn back to a roaming, stuck Gill.
 var drawn := DrawnBack.new()
+## Toxic spore blooms on the empty ground (owner, 2026-10-06; SporeBlooms).
+var spores := SporeBlooms.new()
 ## Hard Mode's tug of war (HardMode; ledger row 12): null in a Normal run.
 var hard: HardMode
 var _hard_t := 0.0
@@ -1047,6 +1049,7 @@ func _process(dt: float) -> void:
 	_update_repop(dt)
 	_update_hints(dt)
 	_update_drawn(dt)
+	_update_spores(dt)
 	_update_hard(dt)
 	_update_all_clear(dt)
 	_update_arrival_view()
@@ -1962,6 +1965,16 @@ func _update_drawn(dt: float) -> void:
 		return
 	drawn.update(dt, clock.play_s, player.ball, player.global_position, -cam.global_basis.z if cam != null else Vector3.ZERO, cam,
 			onboarding != null and (onboarding.objective != "" or onboarding.stage != ""), repop)
+
+
+## Every frame of play: the toxic spore blooms near him (grown on the first frame of play, once the
+## world has settled).
+func _update_spores(dt: float) -> void:
+	if state != "play" or player == null or not (player.ball is MossBall) or not spores.enabled:
+		return
+	if not spores.placed:
+		spores.place(balls, vortices, starfish.stars if starfish != null else [], get_world_3d().direct_space_state)
+	spores.update(dt, player)
 
 
 ## Four times a second of play: Hard Mode's tug of war (HardMode). Only in play (the clock's play

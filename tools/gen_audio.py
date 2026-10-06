@@ -703,5 +703,25 @@ def hint_bubbles():
     write_wav("sfx_hint_bubbles", reverb(buf, 0.22), peak=0.6)
 
 
+def spore_bloom():
+    """Toxic spore bloom (owner, 2026-10-06): a soft, rising, wet hiss while it swells (the warning),
+    then a muffled "pff" as it bursts. Organic, not mechanical; quiet."""
+    global rng
+    rng = np.random.default_rng(5521)
+    dur = 2.3
+    n = int(dur * SR)
+    tt = np.arange(n) / SR
+    hiss = sweep_noise(dur, 700, 2600, 2.2) * np.clip(tt / dur, 0, 1) ** 1.6 * (1.0 - np.clip((tt - dur + 0.12) / 0.12, 0, 1))
+    wob = 1.0 + 0.25 * np.sin(tt * 2 * np.pi * 7.0)
+    s = lowpass_fast(hiss * wob, 3200) + bubbles(dur, 4, 250, 600) * 0.15
+    write_wav("sfx_spore_hiss", reverb(s, 0.2), peak=0.45)
+    dur = 0.7
+    n = int(dur * SR)
+    tt = np.arange(n) / SR
+    puff = lowpass_fast(rng.standard_normal(n), 900) * np.exp(-tt / 0.16) * np.clip(tt / 0.015, 0, 1)
+    s = puff + sweep_noise(dur, 1800, 400, 1.8) * np.exp(-tt / 0.3) * 0.35
+    write_wav("sfx_spore_puff", reverb(s, 0.25), peak=0.55)
+
+
 if __name__ == "__main__":
     main()

@@ -692,6 +692,8 @@ func run(runner) -> void:
 		await _primary_shots(g)
 	if only == "hintfx":
 		await _hint_fx_shots(g)
+	if only == "spores":
+		await _spore_shots(g)
 	if only == "cohesion":
 		# Cohesion audit (2026-10-02): what a player sees on arriving at each ball, through the
 		# ordinary follow camera with the touch HUD: two headings each (as he lands, then turned).
@@ -3843,8 +3845,10 @@ func _hint_fx_shots(g: Game) -> void:
 	g.cam.snap_behind()
 	g.hints.enabled = true
 	g.hints.stuck["b%d.%s" % [b.index, zid]] = RestoreHints.SHIMMER_S + 1.0
-	await t.seconds(2.0)
-	await t.shot("hint_plumes")
+	for k in 3:
+		await t.seconds(1.6)
+		await t.shot("hint_plumes" if k == 0 else "hint_plumes_%d" % k)
+		t.log_line("plume events %d, live %d, stage %d" % [g.hints.plume_events, g.hints.plume_fx.live() if g.hints.plume_fx != null else -1, g.hints.stage])
 	g.hints.stuck["b%d.%s" % [b.index, zid]] = RestoreHints.GUIDE_S + 0.5
 	g.hints._guide_t = 0.0
 	for k in 6:
@@ -3858,3 +3862,44 @@ func _hint_fx_shots(g: Game) -> void:
 	for k in mini(4, all.size()):
 		t.log_line("target %d: %.1f m, screen %s behind %s" % [k, (all[k] as Vector3).distance_to(g.player.global_position), str(cam.unproject_position(all[k])), cam.is_position_behind(all[k])])
 	t.log_line("guide dir . to nearest %.3f" % g.hints.last_guide_dir.dot(((all[0] as Vector3) - g.player.global_position).normalized()))
+
+
+## A toxic spore bloom through its cycle, seen from where a player would come across it (owner,
+## 2026-10-06): at rest, swelling (the warning), the mist creeping out, and thinning away.
+func _spore_shots(g: Game) -> void:
+	g.player.invuln_t = 9999
+	g.spores.enabled = true
+	g.spores.place(g.balls, g.vortices, g.starfish.stars, g.get_world_3d().direct_space_state)
+	var sb: SporeBloom = null
+	for x in g.spores.blooms:
+		if x.ball == g.balls[1]:
+			sb = x
+			break
+	if sb == null:
+		sb = g.spores.blooms[0]
+	var b := sb.ball
+	var fr := MossBall.frame_at(sb.dir, 0.0)
+	var d := sb.dir.rotated(fr.x, 9.0 / b.radius).normalized()
+	g.player.place(b, b.surface_point(d, 0.1), b.surface_point(sb.dir) - b.surface_point(d))
+	g.cam.snap_behind()
+	g.spores.enabled = false
+	await t.seconds(1.5)
+	await t.shot("spore_idle")
+	sb._enter("warn")
+	for k in 3:
+		for i in 24:
+			sb.step(1.0 / 30.0, null)
+			await t.frames(1)
+		await t.shot("spore_warn_%d" % k)
+	for i in 30:
+		sb.step(1.0 / 30.0, null)
+		await t.frames(1)
+	for k in 4:
+		for i in 30:
+			sb.step(1.0 / 30.0, null)
+			await t.frames(1)
+		await t.shot("spore_mist_%d" % k)
+	for i in 75:
+		sb.step(1.0 / 30.0, null)
+		await t.frames(1)
+	await t.shot("spore_mist_thinning")
