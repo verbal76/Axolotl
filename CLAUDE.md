@@ -28,7 +28,8 @@
 
 Primary actions (Continue/Play, Resume, Begin/Got it, Unlock, New hunt: chosen by role, never by text) are
 wide pills with an organic, softly blended aqua/turquoise/aquatic-green/moss fill and razor-clean edges
-and typography; secondary controls stay quieter. Use the one shared component `UiStyle.make_primary()`
+and typography; every other menu button/toggle is a quiet pill of the same family (dark fill, faint
+aqua rim: `SecondaryButton`/`SecondaryToggle`, owner option 2, 2026-10-06). Use the one shared component `UiStyle.make_primary()`
 (never a per-screen copy). Style reference only: never copy another game's branding or assets.
 Details: `docs/UI_STYLE.md`. Tests: `primary_*` in `_test_primary_buttons`.
 

@@ -69,3 +69,11 @@ possible.
 - **Contrast:** text ≥ 7:1 against every fill colour, ≥ 4.5:1 at the darkest shading (`primary_text_contrast`).
 - **Renders:** `--test=shots --only=primary` (each screen plus 3x close-ups; run with `--resolution
   1560x720` for the phone shape).
+
+## Secondary pills (owner choice 2026-10-06, option 2)
+
+Every other menu button and toggle (`UiStyle.button()` gives `SecondaryButton`, `UiStyle.pill_toggle()`
+gives `SecondaryToggle`) shares the primary pill's shape and clean edge but keeps its own dark teal fill,
+with only a faint aqua rim (`SECONDARY_RIM` at 50%); hover and press keep the gold edge, focus is a gold
+pill ring. The one primary action per screen stays the only filled pill. Buttons that draw their own
+boxes (skill-tree nodes, colour and pattern swatches) keep them. Test `secondary_buttons_are_quiet_pills`.

@@ -153,11 +153,11 @@ func _ready() -> void:
 	last.name = "PatternRow"
 	last.add_theme_constant_override("separation", 10)
 	v.add_child(last)
-	_full_colour = CheckButton.new()
+	_full_colour = UiStyle.pill_toggle(CheckButton.new())
 	_full_colour.name = "FullColour"
 	_full_colour.text = "Full colour"
 	_full_colour.tooltip_text = "Off: the markings take the freckle colour"
-	_full_colour.custom_minimum_size = Vector2(200, 58)
+	_full_colour.custom_minimum_size = Vector2(228, 58)
 	_full_colour.add_theme_font_size_override("font_size", 22)
 	UiStyle.swipe_guard(_full_colour)
 	_full_colour.toggled.connect(func(on: bool) -> void:

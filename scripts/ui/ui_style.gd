@@ -16,6 +16,8 @@ const PRIMARY_INK := Color(0.02, 0.17, 0.16)
 ## The pill's fill colours (keep in step with shaders/primary_button.gdshader; tests check contrast).
 const PRIMARY_FILL: Array[Color] = [Color(0.40, 0.85, 0.86), Color(0.24, 0.79, 0.75), Color(0.40, 0.86, 0.58), Color(0.62, 0.80, 0.42)]
 const PRIMARY_SHADER := preload("res://shaders/primary_button.gdshader")
+## The secondary pills' faint rim: the aqua of the primary fill.
+const SECONDARY_RIM := Color(0.40, 0.85, 0.86)
 const GEAR := preload("res://assets/ui/settings_gear.png")
 
 static var _theme: Theme
@@ -81,6 +83,19 @@ static func theme() -> Theme:
 	t.set_color("font_pressed_color", "AccentButton", Color(0.2, 0.02, 0.08))
 	t.set_color("font_focus_color", "AccentButton", Color(0.2, 0.02, 0.08))
 	t.set_constant("outline_size", "AccentButton", 0)
+	# Every other menu button and toggle (owner choice 2026-10-06, option 2): the primary pill's shape
+	# and clean edge, its own dark fill, and only a faint hint of the aqua at the rim, so the menus read
+	# as one family while the one primary action still stands out. Set by UiStyle.button() and
+	# UiStyle.pill_toggle(); buttons that draw their own boxes (skill nodes, swatches) keep them.
+	for pair in [["SecondaryButton", "Button"], ["SecondaryToggle", "CheckButton"]]:
+		var v: String = pair[0]
+		t.set_type_variation(v, pair[1])
+		t.set_stylebox("normal", v, _pill(Color(0.05, 0.19, 0.18, 0.9), Color(SECONDARY_RIM, 0.5)))
+		t.set_stylebox("hover", v, _pill(Color(0.08, 0.27, 0.25, 0.94), Color(GOLD, 0.75)))
+		t.set_stylebox("pressed", v, _pill(Color(0.12, 0.36, 0.32, 0.97), GOLD, 2))
+		t.set_stylebox("hover_pressed", v, t.get_stylebox("pressed", v))
+		t.set_stylebox("disabled", v, _pill(Color(0.05, 0.14, 0.14, 0.6), Color(SECONDARY_RIM, 0.18)))
+		t.set_stylebox("focus", v, _ring(GOLD, 999))
 	# A glyph on its own (the Settings gear): no box, just the picture, dimmed when pressed.
 	t.set_type_variation("GlyphButton", "Button")
 	var none := StyleBoxEmpty.new()
@@ -169,6 +184,16 @@ static func _scroll_box(c: Color) -> StyleBoxFlat:
 	s.content_margin_right = SCROLL_DRAW_W
 	s.content_margin_top = 4
 	s.content_margin_bottom = 4
+	return s
+
+
+## A secondary pill: _box with fully round ends and a little more room for the text at them.
+static func _pill(bg: Color, border: Color, bw := 2) -> StyleBoxFlat:
+	var s := _box(bg, border, bw)
+	s.set_corner_radius_all(999)
+	s.corner_detail = 16
+	s.content_margin_left = 30
+	s.content_margin_right = 30
 	return s
 
 
@@ -270,6 +295,12 @@ static func _primary_state(b: Button, m: ShaderMaterial) -> void:
 	m.set_shader_parameter("lift", 1.0 if mode == BaseButton.DRAW_HOVER or b.has_focus() else 0.0)
 
 
+## A menu toggle in the secondary pill style.
+static func pill_toggle(c: CheckButton) -> CheckButton:
+	c.theme_type_variation = "SecondaryToggle"
+	return c
+
+
 ## A screen's primary action button (see make_primary).
 static func primary_button(text: String, cb: Callable) -> Button:
 	return make_primary(button(text, cb))
@@ -278,6 +309,7 @@ static func primary_button(text: String, cb: Callable) -> Button:
 static func button(text: String, cb: Callable) -> Button:
 	var b := Button.new()
 	b.text = text
+	b.theme_type_variation = "SecondaryButton"
 	b.custom_minimum_size = Vector2(340, 68)
 	if cb.is_valid():
 		b.pressed.connect(cb)

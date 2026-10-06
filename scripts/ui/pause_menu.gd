@@ -322,7 +322,7 @@ func _action(text: String, cb: Callable) -> Button:
 
 ## A toggle: 60 px tall, half the right column; a swipe across it never flips it.
 func _toggle(parent: Control, text: String, cb: Callable) -> CheckButton:
-	var c := CheckButton.new()
+	var c := UiStyle.pill_toggle(CheckButton.new())
 	c.text = text
 	c.custom_minimum_size = Vector2(0, 60)
 	c.size_flags_horizontal = Control.SIZE_EXPAND_FILL

@@ -7097,6 +7097,35 @@ func _test_primary_buttons() -> void:
 	var focus_ring := UiStyle.theme().get_stylebox("focus", "PrimaryButton") as StyleBoxFlat
 	t.check("primary_states_drawn", dim_on and lift_on and press_on and focus_ring != null and focus_ring.border_width_top >= 3,
 			"disabled %s, focus %s, held %s, gold focus ring %s" % [dim_on, lift_on, press_on, focus_ring != null])
+	# Option 2 (owner, 2026-10-06): every other menu button and toggle is a quiet pill of the same
+	# family (round ends, its own dark fill, a faint aqua rim), not the primary fill; buttons that
+	# draw their own boxes (skill nodes, colour and pattern swatches) keep them.
+	var th := UiStyle.theme()
+	var quiet: Array[String] = []
+	var n_sec := 0
+	for n in g.find_children("*", "BaseButton", true, false):
+		var b := n as BaseButton
+		var v := b.theme_type_variation
+		if v in ["SecondaryButton", "SecondaryToggle"]:
+			n_sec += 1
+			if b.get_node_or_null("PrimaryFill") != null:
+				quiet.append("%s has the primary fill" % b.name)
+	for v in ["SecondaryButton", "SecondaryToggle"]:
+		var sb := th.get_stylebox("normal", v) as StyleBoxFlat
+		var rim := sb.border_color
+		if sb.corner_radius_top_left < 100 or sb.bg_color.v > 0.3 or rim.a > 0.6 or absf(rim.r - UiStyle.SECONDARY_RIM.r) > 0.01 \
+				or (th.get_stylebox("focus", v) as StyleBoxFlat).corner_radius_top_left < 100:
+			quiet.append("%s is not a quiet aqua-rimmed pill" % v)
+	for name_ in ["NewRun", "ReturnToTitle", "Done", "Later", "Skills", "Aquarium", "AboutDiagnostics"]:
+		for n in g.find_children(name_, "Button", true, false):
+			var bv := (n as Button).theme_type_variation
+			if bv not in ["SecondaryButton", "AccentButton"]:
+				quiet.append("%s is '%s'" % [name_, bv])
+	for id in pm.skill_page.buttons:
+		if (pm.skill_page.buttons[id] as Button).theme_type_variation != "":
+			quiet.append("skill node %s lost its own box" % id)
+			break
+	t.check("secondary_buttons_are_quiet_pills", quiet.is_empty() and n_sec >= 20, "%d secondary pills; %s" % [n_sec, "; ".join(quiet)])
 	pm.skill_page.done.emit()
 	pm.close()
 	await t.frames(2)
