@@ -20,6 +20,12 @@ var swim_invert_y := false
 ## Tutorials (docs/ONBOARDING.md, owner ruling 2026-10-01): the intro and the three lessons on every
 ## new run. On by default, also for files from before it existed (absent = on).
 var tutorials := true
+## Video performance policy (owner, 2026-10-06; QualityScaler.set_mode): "auto" (Automatic, the
+## recommended adaptive thermal/load governor), "quality" (full visuals at 60 fps, only a failsafe
+## against severe sustained overload) or "cool" (Cool/Battery: lower sustained load and heat).
+## Visual cost only: never gameplay, input, camera, physics or timing. Absent in older files = auto.
+var video_mode := "auto"
+const VIDEO_MODES := ["auto", "quality", "cool"]
 var music_volume := 0.8
 var sfx_volume := 0.9
 var input_mode: int = InputMode.TOUCH
@@ -183,6 +189,9 @@ func _load() -> void:
 	haptics = cf.get_value("hud", "haptics", haptics)
 	swim_invert_y = bool(cf.get_value("controls", "swim_invert_y", swim_invert_y))
 	tutorials = bool(cf.get_value("onboarding", "tutorials", tutorials))
+	video_mode = str(cf.get_value("video", "mode", video_mode))
+	if video_mode not in VIDEO_MODES:
+		video_mode = "auto"
 	music_volume = cf.get_value("audio", "music", music_volume)
 	sfx_volume = cf.get_value("audio", "sfx", sfx_volume)
 	# (Added after dev-000024; absent in older files, which keep the original pink.)
@@ -224,6 +233,7 @@ func save() -> void:
 	cf.set_value("hud", "haptics", haptics)
 	cf.set_value("controls", "swim_invert_y", swim_invert_y)
 	cf.set_value("onboarding", "tutorials", tutorials)
+	cf.set_value("video", "mode", video_mode)
 	cf.set_value("audio", "music", music_volume)
 	cf.set_value("audio", "sfx", sfx_volume)
 	cf.set_value("gill", "morph", gill_morph)

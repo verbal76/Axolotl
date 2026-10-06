@@ -16,6 +16,16 @@ extends Node
 ## 35-50 and about half the work); it goes back to 60 only if 60 would clearly fit.
 ## Menus over a paused world run at 30 too (the world behind them does not move).
 ## Capable phones keep full quality: none of this acts unless the phone is working hard.
+##
+## The player's Video setting (owner, 2026-10-06; Settings.video_mode, set_mode) picks the policy:
+##  - "auto" (Automatic, recommended): all of the above.
+##  - "quality": full visuals at 60 fps; load alone never steps down. Only a failsafe against severe
+##    sustained overload acts (fps under QUALITY_SLOW of the target for QUALITY_SLOW_WINDOWS), and it
+##    climbs back quickly once full rate holds again.
+##  - "cool" (Cool/Battery): starts at, and never goes above, COOL_MIN_LEVEL (Balanced: no shadows, no
+##    MSAA, no glow), and steps down sooner (COOL_HOT_LOAD) to keep heat and battery use low.
+## Every mode only changes visual cost. Gameplay, input sampling, the camera, physics ticks, attack
+## timing, jump buffering and every other responsiveness system run exactly the same in all three.
 
 var level := 0
 var mote_lights := 3
@@ -46,6 +56,8 @@ var measure_fn: Callable
 var caps_in_tests := false
 var _fps0 := 60
 var _rid: RID
+## "auto", "quality" or "cool" (Settings.VIDEO_MODES).
+var mode := "auto"
 
 ## "shadow": the ceiling light's shadow distance in metres (0 = none; Expansion 6).
 const LEVELS := [
@@ -67,6 +79,17 @@ const HOT_CEILING_S := 300.0
 ## At 30 fps: go back to 60 only if 60 would fit with this share of its budget.
 const FPS30_FIT_LOAD := 0.6
 const FPS30_FIT_WINDOWS := 45
+## Quality mode's failsafe: severe overload only (fps under this share of the target, this many windows).
+const QUALITY_SLOW := 0.75
+const QUALITY_SLOW_WINDOWS := 5
+const QUALITY_UP_WINDOWS := 8
+## Cool/Battery: the best level it allows, and its earlier thresholds.
+const COOL_MIN_LEVEL := 2
+const COOL_HOT_LOAD := 0.6
+const COOL_COOL_LOAD := 0.3
+## For the menus and diagnostics.
+const TIER_NAMES := ["Full", "High", "Balanced", "Light", "Lowest"]
+const MODE_NAMES := {"auto": "Automatic", "quality": "Quality", "cool": "Cool/Battery"}
 
 
 func _ready() -> void:
@@ -77,7 +100,50 @@ func _ready() -> void:
 	# Mobile screens are dense; start slightly below native resolution for the 3D pass.
 	if OS.has_feature("mobile"):
 		get_viewport().scaling_3d_mode = Viewport.SCALING_3D_MODE_BILINEAR
+	level = maxi(level, min_level())
 	_apply()
+
+
+## Switches the policy (the Video setting). Starts it afresh, as on a cold launch with that setting:
+## Automatic and Quality at full quality, Cool/Battery at its own best level. Visual cost only.
+func set_mode(m: String) -> void:
+	mode = m if m in MODE_NAMES else "auto"
+	_reset_windows()
+	_acc = 0.0
+	_frames = 0
+	_ms_sum = 0.0
+	_load_n = 0
+	ceiling = 0
+	_ceiling_t = 0.0
+	fps30 = false
+	_fps30_entries = 0
+	_fps30_fit_windows = 0
+	level = min_level()
+	_cooldown = 6.0
+	if is_inside_tree():
+		_apply()
+
+
+## The best (lowest-numbered) level this mode allows.
+func min_level() -> int:
+	return COOL_MIN_LEVEL if mode == "cool" else 0
+
+
+func hot_load() -> float:
+	return COOL_HOT_LOAD if mode == "cool" else HOT_LOAD
+
+
+func cool_load() -> float:
+	return COOL_COOL_LOAD if mode == "cool" else COOL_LOAD
+
+
+func tier_name() -> String:
+	return TIER_NAMES[level]
+
+
+## The active tier for the menus, e.g. "Balanced, 60 fps".
+func tier_text() -> String:
+	return "%s, %s" % [tier_name(), "30 fps" if fps30 else "%d fps" % _fps0]
 
 
 ## The frame rate the game should run at now: the project's, or 30 at the lowest level when 60
@@ -160,7 +226,8 @@ func _process(dt: float) -> void:
 	_frames = 0
 	_ms_sum = 0.0
 	_load_n = 0
-	var slow := fps < target * 0.9
+	# (Quality: only a severe overload counts as slow; load alone never steps it down.)
+	var slow := fps < target * (QUALITY_SLOW if mode == "quality" else 0.9)
 	if slow:
 		_low_windows += 1
 		_high_windows = 0
@@ -170,9 +237,9 @@ func _process(dt: float) -> void:
 	else:
 		_low_windows = 0
 		_high_windows = 0
-	var hot := load >= HOT_LOAD and not slow
+	var hot := load >= hot_load() and not slow and mode != "quality"
 	_hot_windows = _hot_windows + 1 if hot else 0
-	var cool := load >= 0.0 and load < COOL_LOAD and not slow
+	var cool := load >= 0.0 and load < cool_load() and not slow
 	_cool_windows = _cool_windows + 1 if cool else 0
 	# At 30: does 60 now clearly fit (the same work in half the budget)?
 	if fps30:
@@ -185,7 +252,8 @@ func _process(dt: float) -> void:
 		return
 	var floor_level := LEVELS.size() - 1
 	# Can't keep up (slow) or keeps the phone flat out (hot): one step down.
-	var step_down := (_low_windows >= 2 or _hot_windows >= HOT_WINDOWS) and _cooldown <= 0.0
+	var slow_n := QUALITY_SLOW_WINDOWS if mode == "quality" else 2
+	var step_down := (_low_windows >= slow_n or _hot_windows >= HOT_WINDOWS) and _cooldown <= 0.0
 	if step_down and level < floor_level:
 		if _hot_windows >= HOT_WINDOWS:
 			ceiling = level + 1
@@ -199,7 +267,8 @@ func _process(dt: float) -> void:
 		fps30 = true
 		_fps30_entries += 1
 		_reset_windows()
-	elif level > maxi(0, ceiling) and _cooldown <= 0.0 and (_cool_windows >= COOL_WINDOWS or (load < 0.0 and _high_windows >= 15)):
+	elif level > maxi(min_level(), ceiling) and _cooldown <= 0.0 and (_cool_windows >= COOL_WINDOWS or (load < 0.0 and _high_windows >= 15) \
+			or (mode == "quality" and _high_windows >= QUALITY_UP_WINDOWS)):
 		# Plenty of room for a long while (or, with nothing to measure, a steady full rate): one step up.
 		level -= 1
 		_cooldown = 30.0
@@ -215,7 +284,7 @@ func _reset_windows() -> void:
 
 
 func force_level(l: int) -> void:
-	level = clampi(l, 0, LEVELS.size() - 1)
+	level = clampi(l, min_level(), LEVELS.size() - 1)
 	_apply()
 
 
@@ -241,5 +310,6 @@ func _apply() -> void:
 
 ## One line for the diagnostics page.
 func summary() -> String:
-	return "quality level %d/%d, %s, last load %s" % [level, LEVELS.size() - 1, "even 30 fps" if fps30 else "%d fps" % _fps0,
+	return "video %s: quality level %d/%d (%s), %s, last load %s" % [MODE_NAMES[mode], level, LEVELS.size() - 1, tier_name(),
+			"even 30 fps" if fps30 else "%d fps" % _fps0,
 			("%.0f%%" % (last_load * 100.0)) if last_load >= 0.0 else "n/a"]

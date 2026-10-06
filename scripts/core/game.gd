@@ -333,6 +333,8 @@ func _build_world() -> void:
 	title = TitleScreen.new()
 	add_child(title)
 	quality = QualityScaler.new()
+	# (The player's Video setting: visual cost only; Settings.video_mode.)
+	quality.mode = Settings.video_mode if Settings.video_mode in QualityScaler.MODE_NAMES else "auto"
 	add_child(quality)
 	presentation = Presentation.new()
 	presentation.g = self
