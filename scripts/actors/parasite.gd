@@ -200,16 +200,16 @@ func return_home_unseen() -> bool:
 	var spot := ball.surface_point(home_dir)
 	if Repopulation.on_camera(cam, global_position, up) or Repopulation.on_camera(cam, spot, home_dir):
 		return false
-	var h := spawn_h if home_dir.angle_to(spawn_dir) < 0.01 else 0.0
-	var q := PhysicsRayQueryParameters3D.create(ball.surface_point(home_dir, h + 3.0), ball.global_position, 1 | 2)
-	var hit := get_world_3d().direct_space_state.intersect_ray(q)
+	_settle_home()
+	return true
+
+
+## Puts it at its home spot now, grazing (the caller has made sure nobody sees either place).
+func _settle_home() -> void:
+	var g := ground_at(home_dir)
 	up = home_dir
-	standing_on = null
-	if hit.is_empty():
-		global_position = ball.surface_point(home_dir, _ground_offset)
-	else:
-		global_position = hit.position + up * _ground_offset
-		standing_on = hit.collider
+	global_position = g[0]
+	standing_on = g[1]
 	heading = heading - up * heading.dot(up)
 	if heading.length() < 0.01:
 		heading = MossBall.frame_at(up, 0.0).z * -1.0
@@ -223,6 +223,32 @@ func return_home_unseen() -> bool:
 	_graze_target = global_position
 	_away_t = 0.0
 	_update_segments(0.0)
+
+
+## Where it stands at the home spot `dir`: on whatever is there, from 3 m above (the spawn height at
+## its own spawn spot). Returns [position, collider or null].
+func ground_at(dir: Vector3) -> Array:
+	var h := spawn_h if dir.angle_to(spawn_dir) < 0.01 else 0.0
+	var q := PhysicsRayQueryParameters3D.create(ball.surface_point(dir, h + 3.0), ball.global_position, 1 | 2)
+	var hit := get_world_3d().direct_space_state.intersect_ray(q)
+	if hit.is_empty():
+		return [ball.surface_point(dir, _ground_offset), null]
+	return [hit.position + dir * _ground_offset, hit.collider]
+
+
+## Where it lived when the world was built (its zone's restoration regrows there).
+func origin_dir() -> Vector3:
+	return spawn_dir
+
+
+## Dead areas (DrawnBack): makes `dir` its home and settles it there now. The caller has checked
+## that neither where it is nor `dir` can be seen. Only a required parasite, alive, grazing; it keeps
+## its zone, id and everything else. Returns whether it moved.
+func move_home(dir: Vector3) -> bool:
+	if returner or hp <= 0 or state != "graze":
+		return false
+	home_dir = dir.normalized()
+	_settle_home()
 	return true
 
 

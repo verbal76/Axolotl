@@ -83,6 +83,8 @@ var repop: Repopulation
 var _repop_t := 0.0
 ## Gentle help finding what is left in an area he has searched a while (RestoreHints).
 var hints := RestoreHints.new()
+## Dead areas (owner, 2026-10-06): an outstanding parasite drawn back to a roaming, stuck Gill.
+var drawn := DrawnBack.new()
 ## Hard Mode's tug of war (HardMode; ledger row 12): null in a Normal run.
 var hard: HardMode
 var _hard_t := 0.0
@@ -916,6 +918,7 @@ func run_diagnostics_text() -> String:
 		L.append("  Frames " + frame_stats.line("play"))
 	if repop != null:
 		L.append("  " + repop.summary())
+	L.append("  " + drawn.summary())
 	if hard != null:
 		L.append("  " + hard.summary())
 	if onboarding != null:
@@ -1043,6 +1046,7 @@ func _process(dt: float) -> void:
 	_update_food(dt)
 	_update_repop(dt)
 	_update_hints(dt)
+	_update_drawn(dt)
 	_update_hard(dt)
 	_update_all_clear(dt)
 	_update_arrival_view()
@@ -1950,6 +1954,14 @@ func _update_hints(dt: float) -> void:
 	if state != "play" or player == null or not (player.ball is MossBall):
 		return
 	hints.update(dt, player.ball, player.global_position, onboarding != null and (onboarding.objective != "" or onboarding.stage != ""))
+
+
+## Every frame of play: DrawnBack (dead areas). Its clock waits while the tutorial speaks, as the hints' does.
+func _update_drawn(dt: float) -> void:
+	if state != "play" or player == null or not (player.ball is MossBall):
+		return
+	drawn.update(dt, clock.play_s, player.ball, player.global_position, -cam.global_basis.z if cam != null else Vector3.ZERO, cam,
+			onboarding != null and (onboarding.objective != "" or onboarding.stage != ""), repop)
 
 
 ## Four times a second of play: Hard Mode's tug of war (HardMode). Only in play (the clock's play

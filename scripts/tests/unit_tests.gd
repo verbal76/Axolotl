@@ -44,9 +44,12 @@ func run(runner) -> void:
 	if g.repop != null:
 		g.repop.enabled = false
 		g.hints.enabled = false
+	# (Nor are parasites drawn back to a roaming Gill: tests walk him far and long. _test_drawn_back
+	# drives it itself.)
+	g.drawn.enabled = false
 	await t.seconds(0.5)
 	var only: String = Settings.test_args.get("only", "")
-	var registry := ["_test_startup", "_test_ota_and_version", "_test_hag_infra", "_test_launch_update", "_test_mesh_winding", "_test_terrain", "_test_ravines", "_test_rim_fights_clear_of_ooze", "_test_edge_assist", "_test_ooze_bubbles", "_test_view_clearances", "_test_camera_rises_over", "_test_camera_invariant", "_test_ball_view", "_test_hud_corner", "_test_restore_hints", "_test_home_coherence", "_test_terrain_grounded", "_test_no_floating_platforms", "_test_parasite_locomotion", "_test_parasite_body_and_death", "_test_parasite_combat", "_test_organic_motion", "_test_gill_look", "_test_gill_idles", "_test_gill_colours", "_test_gill_patterns", "_test_tail_whip", "_test_gill_traction", "_test_gill_incline_transitions", "_test_traction_no_shortcuts", "_test_gill_body_follow", "_test_swim_body_follow", "_test_ambient_sway", "_test_placements", "_test_tutorial_route", "_test_sphere_walk", "_test_jump_and_burst", "_test_coyote_and_buffer", "_test_swipe_direction_and_stages", "_test_hard_landing", "_test_food", "_test_food_reach", "_test_darter_and_burrower", "_test_food_repopulates", "_test_motes", "_test_checkpoint_and_regen", "_test_crumble", "_test_restoration_gates", "_test_retract_gates_gone", "_test_bubble_columns", "_test_restoration_continuity", "_test_health_map", "_test_vortex", "_test_vortex_tints", "_test_vortex_ready_state", "_test_vortex_currents", "_test_vortex_currents_travel", "_test_current", "_test_current_brace", "_test_canopy", "_test_canopy_plain_jumps", "_test_canopy_guard_leaf", "_test_climbs_physical", "_test_jungle_ladders_physical", "_test_leaf_geometry", "_test_leaf_footing", "_test_caves", "_test_mounds", "_test_vegetation", "_test_vortex_mouths_clear", "_test_vortex_pads_clear_of_plants", "_test_stalkers_in_reeds", "_test_route_audit", "_test_new_areas", "_test_ecosystem", "_test_threat_spread", "_test_music", "_test_opening_audio", "_test_run_clock", "_test_completion_catalog", "_test_completion_frozen", "_test_run_save_file", "_test_run_timer_live", "_test_run_continue", "_test_timer_integrity", "_test_resume_points_safe", "_phase_continue_write", "_phase_continue_read", "_test_upgrades", "_test_quality_title_cap", "_test_ui", "_test_menus_no_scroll", "_test_menu_touch", "_test_primary_buttons", "_test_tier2_rules", "_test_tier2_world", "_test_ambient_fish", "_test_parasite_never_buried", "_test_tier2_loadout", "_test_aquarium_experiences", "_test_aquarium_polish", "_test_all_clear", "_test_treasure_unlock", "_test_treasure_generation", "_test_treasure_play", "_phase_treasure_stress", "_phase_live_fish_diag", "_phase_cpu_probe", "_phase_incline_survey", "_phase_loco_diag", "_phase_crawl_trace", "_phase_mouth_crawls", "_phase_organic_trace", "_phase_organic_cost", "_test_skilltree_graph", "_test_progress_store", "_test_starfish_spots", "_test_starfish_pickup", "_test_skill_ui", "_test_quick_gill", "_test_lunge_skills", "_test_burst_skills", "_test_glide_control", "_test_glide_transfers", "_test_mote_magnet", "_phase_starfish_survey", "_phase_starfish_sweep", "_phase_glide_probe", "_test_plants_terminal_growth", "_test_sea_fan_depth", "_test_repopulation", "_phase_repop_survey", "_phase_repop_sim", "_test_aquarium_gill", "_phase_aq_nav", "_test_tutorials_and_title", "_test_onb_progress", "_test_onb_owner_save", "_test_onb_per_run", "_test_onb_toggle", "_test_onb_intro", "_test_onb_feeding", "_test_onb_parasite", "_test_onb_feed_first", "_test_onb_tunnel", "_test_onb_starfish", "_test_onb_softlock", "_test_onb_relaunch", "_test_onb_restoration_equal", "_test_hard_mode", "_test_hard_mode_save", "_test_polish_a", "_test_leaf_motion", "_test_perf_veg_cull", "_test_death_and_arrival", "_test_pause_ball_progress", "_test_arrival_view", "_test_camera_never_drawn_unsafe", "_test_startup_build_identical", "_phase_world_hash", "_phase_th_bench", "_phase_hard_write", "_phase_hard_read", "_phase_hard_newrun", "_phase_hard_finish", "_phase_hard_sim", "_phase_hard_intervals", "_phase_onb_owner", "_phase_onb_write", "_phase_onb_read", "_phase_onb_kill", "_phase_onb_toggle", "_phase_cohesion_probe", "_test_eel_reach", "_test_parasite_readability"]
+	var registry := ["_test_startup", "_test_ota_and_version", "_test_hag_infra", "_test_launch_update", "_test_mesh_winding", "_test_terrain", "_test_ravines", "_test_rim_fights_clear_of_ooze", "_test_edge_assist", "_test_ooze_bubbles", "_test_view_clearances", "_test_camera_rises_over", "_test_camera_invariant", "_test_ball_view", "_test_hud_corner", "_test_restore_hints", "_test_drawn_back", "_test_dead_area_sim", "_test_home_coherence", "_test_terrain_grounded", "_test_no_floating_platforms", "_test_parasite_locomotion", "_test_parasite_body_and_death", "_test_parasite_combat", "_test_organic_motion", "_test_gill_look", "_test_gill_idles", "_test_gill_colours", "_test_gill_patterns", "_test_tail_whip", "_test_gill_traction", "_test_gill_incline_transitions", "_test_traction_no_shortcuts", "_test_gill_body_follow", "_test_swim_body_follow", "_test_ambient_sway", "_test_placements", "_test_tutorial_route", "_test_sphere_walk", "_test_jump_and_burst", "_test_coyote_and_buffer", "_test_swipe_direction_and_stages", "_test_hard_landing", "_test_food", "_test_food_reach", "_test_darter_and_burrower", "_test_food_repopulates", "_test_motes", "_test_checkpoint_and_regen", "_test_crumble", "_test_restoration_gates", "_test_retract_gates_gone", "_test_bubble_columns", "_test_restoration_continuity", "_test_health_map", "_test_vortex", "_test_vortex_tints", "_test_vortex_ready_state", "_test_vortex_currents", "_test_vortex_currents_travel", "_test_current", "_test_current_brace", "_test_canopy", "_test_canopy_plain_jumps", "_test_canopy_guard_leaf", "_test_climbs_physical", "_test_jungle_ladders_physical", "_test_leaf_geometry", "_test_leaf_footing", "_test_caves", "_test_mounds", "_test_vegetation", "_test_vortex_mouths_clear", "_test_vortex_pads_clear_of_plants", "_test_stalkers_in_reeds", "_test_route_audit", "_test_new_areas", "_test_ecosystem", "_test_threat_spread", "_test_music", "_test_opening_audio", "_test_run_clock", "_test_completion_catalog", "_test_completion_frozen", "_test_run_save_file", "_test_run_timer_live", "_test_run_continue", "_test_timer_integrity", "_test_resume_points_safe", "_phase_continue_write", "_phase_continue_read", "_test_upgrades", "_test_quality_title_cap", "_test_ui", "_test_menus_no_scroll", "_test_menu_touch", "_test_primary_buttons", "_test_tier2_rules", "_test_tier2_world", "_test_ambient_fish", "_test_parasite_never_buried", "_test_tier2_loadout", "_test_aquarium_experiences", "_test_aquarium_polish", "_test_all_clear", "_test_treasure_unlock", "_test_treasure_generation", "_test_treasure_play", "_phase_treasure_stress", "_phase_live_fish_diag", "_phase_cpu_probe", "_phase_incline_survey", "_phase_loco_diag", "_phase_crawl_trace", "_phase_mouth_crawls", "_phase_organic_trace", "_phase_organic_cost", "_test_skilltree_graph", "_test_progress_store", "_test_starfish_spots", "_test_starfish_pickup", "_test_skill_ui", "_test_quick_gill", "_test_lunge_skills", "_test_burst_skills", "_test_glide_control", "_test_glide_transfers", "_test_mote_magnet", "_phase_starfish_survey", "_phase_starfish_sweep", "_phase_glide_probe", "_test_plants_terminal_growth", "_test_sea_fan_depth", "_test_repopulation", "_phase_repop_survey", "_phase_repop_sim", "_test_aquarium_gill", "_phase_aq_nav", "_test_tutorials_and_title", "_test_onb_progress", "_test_onb_owner_save", "_test_onb_per_run", "_test_onb_toggle", "_test_onb_intro", "_test_onb_feeding", "_test_onb_parasite", "_test_onb_feed_first", "_test_onb_tunnel", "_test_onb_starfish", "_test_onb_softlock", "_test_onb_relaunch", "_test_onb_restoration_equal", "_test_hard_mode", "_test_hard_mode_save", "_test_polish_a", "_test_leaf_motion", "_test_perf_veg_cull", "_test_death_and_arrival", "_test_pause_ball_progress", "_test_arrival_view", "_test_camera_never_drawn_unsafe", "_test_startup_build_identical", "_phase_world_hash", "_phase_th_bench", "_phase_hard_write", "_phase_hard_read", "_phase_hard_newrun", "_phase_hard_finish", "_phase_hard_sim", "_phase_hard_intervals", "_phase_onb_owner", "_phase_onb_write", "_phase_onb_read", "_phase_onb_kill", "_phase_onb_toggle", "_phase_cohesion_probe", "_test_eel_reach", "_test_parasite_readability"]
 	# A --only entry that names nothing is a typo (or a stale substring): fail loudly rather than run nothing.
 	for o in only.split(",", false):
 		if not registry.has(o) and not registry.has("_test_" + o):
@@ -10093,6 +10096,255 @@ func _test_restore_hints() -> void:
 		h2.update(1.0, b, gp2, false)
 	t.check("hints_also_between_areas", outside != Vector3.ZERO and h2.zone == "b%d.*" % b.index and h2.stage == 2 and h2.plumes > 0
 			and h2.last_guide_dir != Vector3.ZERO, "outside %s: zone '%s', stage %d, plumes %d" % [outside != Vector3.ZERO, h2.zone, h2.stage, h2.plumes])
+
+
+## Dead areas (owner finding, 2026-10-06; DrawnBack): after a dry spell of roaming with nothing
+## required near him, one of the ball's own outstanding parasites is drawn back, unseen, to a cleared
+## zone's spot near him. Nothing is added, accounting is untouched, one at a time, never on a pad,
+## by a bloom, in a cave it did not come from, high up, or on top of him; nothing while the tutorial
+## speaks or while something required is already near.
+func _test_drawn_back() -> void:
+	var rp := Repopulation.new()
+	rp.build(g.balls, g.vortices)
+	rp._find_spots()
+	# A setup: a ball, a zone made to look cleared (its parasites' hp held at 0, no kill, no event),
+	# and a place for Gill with nothing required within NEAR_M, a cleared spot 20-28 m away and an
+	# outstanding parasite grazing 60 m or more away.
+	var found := {}
+	for b: MossBall in g.balls:
+		if not found.is_empty():
+			break
+		for zk in rp.zones:
+			var z: Dictionary = rp.zones[zk]
+			if int(z["ball"]) != b.index or (z["eligible"] as Array).size() < 2 or z["zone"] == "tut":
+				continue
+			var held := {}
+			for par in z["authored"]:
+				held[par] = par.hp
+				par.hp = 0
+			var dirs := DrawnBack.spots(b, rp)
+			var left := DrawnBack.outstanding(b)
+			for k in 600:
+				var y := 1.0 - 2.0 * (k + 0.5) / 600.0
+				var rr := sqrt(1.0 - y * y)
+				var dv := Vector3(cos(k * 2.39996) * rr, y, sin(k * 2.39996) * rr)
+				var gp := b.surface_point(dv, 0.1)
+				var near := false
+				var far := 0
+				for par: Parasite in left:
+					var dd := par.global_position.distance_to(gp)
+					near = near or dd < DrawnBack.NEAR_M
+					if dd >= DrawnBack.FAR_M and par.state == "graze":
+						far += 1
+				var spot_ok := false
+				for d: Vector3 in dirs:
+					var ds := b.surface_point(d).distance_to(gp)
+					spot_ok = spot_ok or (ds > 20.0 and ds < 28.0)
+				if not near and far > 0 and spot_ok:
+					found = {"b": b, "z": z, "held": held, "gp": gp, "dir": dv}
+					break
+			if not found.is_empty():
+				break
+			for par in held:
+				par.hp = held[par]
+	if found.is_empty():
+		t.check("drawn_back_setup", false, "no ball has a cleared-looking zone with a dry spot for Gill")
+		return
+	var b: MossBall = found["b"]
+	var gp: Vector3 = found["gp"]
+	var gp2 := b.surface_point((found["dir"] as Vector3).rotated(MossBall.frame_at(found["dir"], 0).x, 2.0 / b.radius), 0.1)
+	var fwd := MossBall.frame_at(found["dir"], 0).z
+	var count0 := [b.parasites.size(), b.returners.size(), b.events_total, b.events_done, b.get_child_count()]
+	var homes := {}
+	for par in b.parasites:
+		homes[par] = [par.home_dir, par.zone_id, par.get_meta("completion_id", "")]
+	var d := DrawnBack.new()
+	# (Gill really there, the camera behind him: nothing is drawn where it can be seen.)
+	var release := _hold_threats(b)
+	place_at(b.index, gp, fwd)
+	await t.seconds(0.6)
+	var cam: Camera3D = g.cam
+	# The tutorial speaking: its clock waits (60 s quiet, then 59 s roaming: still nothing).
+	for i in 60:
+		d.update(1.0, 1000.0 + i, b, gp if i % 2 == 0 else gp2, fwd, cam, true, rp)
+	var quiet_ok := d.moves.is_empty() and float(d.dry[b.index]["t"]) == 0.0
+	var moved: Parasite = null
+	var at_s := -1
+	for i in 120:
+		d._look_t = 0.0
+		var got := d.update(1.0, 1100.0 + i, b, gp if i % 2 == 0 else gp2, fwd, cam, false, rp)
+		if got != null:
+			moved = got
+			at_s = i + 1
+			break
+	t.check("drawn_back_after_dry_spell", quiet_ok and moved != null and at_s >= int(DrawnBack.DRY_S) and at_s <= int(DrawnBack.DRY_S) + 2,
+			"quiet held %s; drawn after %d s of roaming" % [quiet_ok, at_s])
+	if moved == null:
+		for par in found["held"]:
+			par.hp = found["held"][par]
+		release.call()
+		return
+	var mv: Dictionary = d.moves[-1]
+	var real := moved.global_position
+	var vortex_m := INF
+	for v in g.vortices:
+		if v.ball_a == b:
+			vortex_m = minf(vortex_m, real.distance_to(b.surface_point(v.dir_a)))
+		if v.ball_b == b:
+			vortex_m = minf(vortex_m, real.distance_to(b.surface_point(v.dir_b)))
+	var bloom_m := INF
+	for bl in b.blooms:
+		bloom_m = minf(bloom_m, real.distance_to(bl.global_position if bl.is_placed() else b.surface_point(bl.dir)))
+	var crowd := INF
+	for q in b.hostiles():
+		if q != moved and q.is_alive():
+			crowd = minf(crowd, q.global_position.distance_to(real))
+	var from_m: float = (mv["from"] as Vector3).distance_to(gp)
+	var cave_same := DrawnBack.in_cave(b, real) == DrawnBack.in_cave(b, b.surface_point(moved.spawn_dir))
+	var seen := bool(mv["on_camera"]) or Repopulation.on_camera(cam, (mv["from"] as Vector3), b.up_at(mv["from"]))
+	t.check("drawn_back_where", not seen and from_m >= DrawnBack.FAR_M - 2.5 and real.distance_to(gp) >= DrawnBack.DEST_MIN_M - 2.0 and real.distance_to(gp) <= DrawnBack.DEST_MAX_M + 2.0
+			and vortex_m >= 12.0 and bloom_m >= 11.0 and crowd >= DrawnBack.CROWD_M - 0.5 and cave_same and b.altitude(real) <= DrawnBack.MAX_SPOT_H + 1.2,
+			"unseen %s; from %.0f m to %.0f m from him; pad %.0f m, bloom %.0f m, nearest parasite %.1f m, cave kept %s, altitude %.2f m" % [not seen, from_m, real.distance_to(gp), vortex_m, bloom_m, crowd, cave_same, b.altitude(real)])
+	# Nothing added, nothing counted: the same parasite with its zone and id; its kill would still
+	# regrow its own home.
+	var same: bool = homes[moved][1] == moved.zone_id and homes[moved][2] == moved.get_meta("completion_id", "")
+	var count1 := [b.parasites.size(), b.returners.size(), b.events_total, b.events_done, b.get_child_count()]
+	var heal_home := g.restore_spot(moved).distance_to(b.surface_point(moved.spawn_dir)) < 0.01
+	t.check("drawn_back_accounting_unchanged", count0 == count1 and same and heal_home and moved.home_dir.angle_to(moved.spawn_dir) > 0.01,
+			"parasites/returners/events/done/children %s -> %s, zone+id kept %s, heals its home %s" % [count0, count1, same, heal_home])
+	# One at a time: no second while it is near him, and none during the cool-down.
+	for i in 60:
+		d._look_t = 0.0
+		d.update(1.0, 1300.0 + i, b, gp if i % 2 == 0 else gp2, fwd, cam, false, rp)
+	var one := d.moves.size() == 1
+	# Progress anywhere on the ball starts the dry spell over.
+	d.dry[b.index]["t"] = 50.0
+	b.events_done += 1
+	d.update(0.1, 1400.0, b, gp, fwd, cam, false, rp)
+	var reset := float(d.dry[b.index]["t"]) <= 0.11
+	b.events_done -= 1
+	t.check("drawn_back_one_at_a_time_and_resets", one and reset, "moves %d after another minute nearby; progress resets the spell %s" % [d.moves.size(), reset])
+	# Back where it lived (unseen), and the zone as it was.
+	var back := moved.move_home(moved.spawn_dir) and moved.global_position.distance_to(b.surface_point(moved.spawn_dir)) < 3.0
+	for par in found["held"]:
+		par.hp = found["held"][par]
+	release.call()
+	t.check("drawn_back_restored_for_later_tests", back, "home again %s" % back)
+
+
+## Dead areas, long run (owner, 2026-10-06: "exercise longer-running restoration scenarios"): on
+## every moss ball a simulated player clears every required parasite. He roams at 3 m/s, turning now
+## and then, and goes for any parasite he can see (within SEE_M). Two players: one who also follows
+## the plumes (RestoreHints) to the nearest one left after 90 s without progress, and one who never
+## notices them (the owner's finding: players wander cleared ground). Each runs with and without
+## DrawnBack, the same walk. With it, for both: every ball is finished inside CAP_S, the longest wait
+## between two kills stays under the limit, kills and restoration add up exactly to the authored
+## parasites, nothing is ever added, at most one parasite is drawn back per kill plus one per
+## cool-down, never two inside a cool-down. Without it the waits are logged (the failure mode).
+## The world is put back as it was (hp, homes, counts): nothing is killed for real.
+func _test_dead_area_sim() -> void:
+	var lines: Array[String] = []
+	var bad: Array[String] = []
+	for b: MossBall in g.balls:
+		var release := _hold_threats(b)
+		var rp := Repopulation.new()
+		rp.build(g.balls, g.vortices)
+		rp._find_spots()
+		var parts: Array[String] = []
+		for hint_s in [90.0, INF]:
+			var off := _dead_area_run(b, rp, false, hint_s)
+			var on := _dead_area_run(b, rp, true, hint_s)
+			var limit := 120.0 if hint_s < INF else 150.0
+			if not on["ok"] or float(on["gap"]) > limit:
+				bad.append("ball %d %s: %s" % [b.index + 1, "plumes" if hint_s < INF else "no plumes", on["why"]])
+			parts.append("%s: without %s, with %s (%d drawn back)" % ["plume-follower" if hint_s < INF else "wanderer",
+					_dead_area_fmt(off), _dead_area_fmt(on), int(on["moves"])])
+		release.call()
+		lines.append("ball %d (%d parasites) %s" % [b.index + 1, DrawnBack.outstanding(b).size(), "; ".join(parts)])
+	for l in lines:
+		t.log_line("dead-area sim " + l)
+	t.check("dead_area_sim_every_ball_finishes_without_long_waits", bad.is_empty() and lines.size() == g.balls.size(), "; ".join(bad if not bad.is_empty() else lines))
+
+
+static func _dead_area_fmt(r: Dictionary) -> String:
+	if int(r["kills"]) < int(r["total"]):
+		return "UNFINISHED %d/%d after %.0f s (longest wait %.0f s)" % [r["kills"], r["total"], r["time"], r["gap"]]
+	return "%.0f s (longest wait %.0f s)" % [r["time"], r["gap"]]
+
+
+## One simulated clearing of `b` (see _test_dead_area_sim); restores the world before returning.
+func _dead_area_run(b: MossBall, rp: Repopulation, with_db: bool, hint_s: float) -> Dictionary:
+	const SEE_M := 25.0
+	const STEP_S := 0.5
+	const SPEED := 3.0
+	const CAP_S := 2400.0
+	var held := {}
+	var homes := {}
+	for par in b.parasites:
+		held[par] = par.hp
+		homes[par] = par.home_dir
+	var done0 := b.events_done
+	var count0 := [b.parasites.size(), b.returners.size(), b.events_total, b.get_child_count()]
+	var d := DrawnBack.new()
+	var rng := RandomNumberGenerator.new()
+	rng.seed = 7100 + b.index
+	var dir: Vector3 = b.start_dir if b.index == 0 else b.arrival_dir
+	var heading := MossBall.frame_at(dir, 0.0).z
+	var now := 0.0
+	var last_kill := 0.0
+	var gap := 0.0
+	var kills := 0
+	var total := DrawnBack.outstanding(b).size()
+	var move_t: Array[float] = []
+	while now < CAP_S:
+		var left := DrawnBack.outstanding(b)
+		if left.is_empty():
+			break
+		# What he goes for: a parasite he can see, or (a plume-follower) the nearest plume.
+		var tgt: Parasite = null
+		var best := INF
+		for par: Parasite in left:
+			var ad := dir.angle_to((par.global_position - b.global_position).normalized()) * b.radius
+			if ad < best:
+				best = ad
+				tgt = par
+		var step := SPEED * STEP_S
+		if tgt != null and (best < SEE_M or now - last_kill >= hint_s):
+			if best < 2.5:
+				tgt.hp = 0
+				b.events_done += 1
+				kills += 1
+				gap = maxf(gap, now - last_kill)
+				last_kill = now
+				continue
+			var td := (tgt.global_position - b.global_position).normalized()
+			heading = (td - dir * dir.dot(td)).normalized()
+			step = minf(step, best - 1.0)
+		elif rng.randf() < 0.15:
+			heading = heading.rotated(dir, rng.randf_range(-1.2, 1.2))
+		dir = dir.rotated(dir.cross(heading).normalized(), step / b.radius).normalized()
+		heading = (heading - dir * dir.dot(heading)).normalized()
+		if with_db:
+			var n0 := d.moves.size()
+			d.update(STEP_S, now, b, b.surface_point(dir, 0.1), heading, null, false, rp)
+			if d.moves.size() > n0:
+				move_t.append(now)
+		now += STEP_S
+	if kills < total:
+		gap = maxf(gap, now - last_kill)
+	var count1 := [b.parasites.size(), b.returners.size(), b.events_total, b.get_child_count()]
+	var restored := b.events_done - done0
+	var spaced := true
+	for i in range(1, move_t.size()):
+		spaced = spaced and move_t[i] - move_t[i - 1] >= DrawnBack.COOLDOWN_S - 0.01
+	var why := "kills %d/%d, restored %d, counts %s -> %s, moves %d, spaced %s, longest wait %.0f s" % [kills, total, restored, count0, count1, d.moves.size(), spaced, gap]
+	var ok := kills == total and restored == total and count0 == count1 and spaced and d.moves.size() <= kills + int(now / DrawnBack.COOLDOWN_S)
+	b.events_done = done0
+	for par in held:
+		par.hp = held[par]
+		if par.home_dir != homes[par]:
+			par.move_home(par.spawn_dir)
+	return {"ok": ok, "why": why, "kills": kills, "total": total, "gap": gap, "time": now, "moves": d.moves.size()}
 
 
 ## Owner, 2026-10-02: a root curtain that has drawn up out of its doorway is gone, not left shrunk
