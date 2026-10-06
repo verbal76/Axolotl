@@ -144,7 +144,7 @@ func _ready() -> void:
 	v.add_child(spacer)
 	_buy = UiStyle.button("Unlock", _on_buy)
 	_buy.name = "Unlock"
-	_buy.theme_type_variation = "PrimaryButton"
+	UiStyle.make_primary(_buy)
 	_buy.custom_minimum_size = Vector2(0, 62)
 	v.add_child(_buy)
 	_done = UiStyle.button("Done", func() -> void: done.emit())

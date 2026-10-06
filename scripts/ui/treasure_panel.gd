@@ -124,6 +124,8 @@ func _ready() -> void:
 		_close_card()
 		tp.start())
 	again.name = "NewHunt"
+	# (Starting the next hunt is this card's primary action; Later is the quiet way out.)
+	UiStyle.make_primary(again)
 	buttons.add_child(again)
 	var later := UiStyle.button("Later", func():
 		_close_card()

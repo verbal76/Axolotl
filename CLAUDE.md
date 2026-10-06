@@ -24,12 +24,13 @@
   Driven only by `Vortex.travel_ready()` (the same call the entry check uses).
 - So a blue vortex can sit over a red pad or a green pad. Guarded by `vortex_identity_colour_never_follows_readiness`.
 
-## Primary action buttons (approved visual direction, owner 2026-10-05)
+## Primary action buttons (owner direction 2026-10-05, implemented 2026-10-06)
 
-Next UI pass (not implemented yet; feature freeze): primary actions (Continue, Start, Resume, Confirm…)
-become wide pills with an organic, softly blended aqua/turquoise/aquatic-green/moss fill and razor-clean
-edges and typography; secondary controls stay quieter. Style reference only: never copy another game's
-branding or assets. Details: `docs/UI_STYLE.md`.
+Primary actions (Continue/Play, Resume, Begin/Got it, Unlock, New hunt: chosen by role, never by text) are
+wide pills with an organic, softly blended aqua/turquoise/aquatic-green/moss fill and razor-clean edges
+and typography; secondary controls stay quieter. Use the one shared component `UiStyle.make_primary()`
+(never a per-screen copy). Style reference only: never copy another game's branding or assets.
+Details: `docs/UI_STYLE.md`. Tests: `primary_*` in `_test_primary_buttons`.
 
 ## Native freeze
 

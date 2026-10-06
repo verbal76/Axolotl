@@ -83,7 +83,7 @@ func _ready() -> void:
 	col.add_child(_body)
 	_btn = UiStyle.button("Got it", _on_button)
 	_btn.name = "Action"
-	_btn.theme_type_variation = "PrimaryButton"
+	UiStyle.make_primary(_btn)
 	_btn.size_flags_horizontal = Control.SIZE_SHRINK_CENTER
 	col.add_child(_btn)
 	get_viewport().size_changed.connect(_layout)

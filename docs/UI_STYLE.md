@@ -1,8 +1,7 @@
 # Mote UI style — primary action buttons (approved direction)
 
-Owner direction, 2026-10-05. **Approved visual reference for the next Mote UI pass.** Not yet implemented:
-Mote is feature-frozen and v97 is in physical test, so no button was changed. Apply it in the next
-authorized UI pass.
+Owner direction, 2026-10-05; implemented 2026-10-06 (owner go-ahead after v97 passed physical test).
+See "As built" at the end.
 
 ## Reference
 
@@ -48,3 +47,25 @@ possible.
 - Keep existing touch target sizes and the no-scroll menu fits (existing UI fit tests must still pass);
   check text contrast on every fill region.
 - Verify with menu screenshots (`--test=shots`) before any release.
+
+## As built (2026-10-06)
+
+- **One component:** `UiStyle.make_primary(button)` (or `UiStyle.primary_button(text, cb)`). It sets the
+  `PrimaryButton` theme variation (deep sea-teal text `PRIMARY_INK`, no outline, gold pill focus ring)
+  and adds an internal `PrimaryFill` control drawn by `shaders/primary_button.gdshader`, sized from the
+  button's own rect plus an 8 px shadow margin, so the round ends are computed, never stretched.
+- **Fill:** smooth value noise, domain-warped, turned and drawn out along the pill (round regions on a
+  pill five times wider than tall read as vertical stripes), mixing `PRIMARY_FILL` (aqua, turquoise,
+  aquatic green, moss); slightly brighter above, a hairline light rim at the top, a dark hairline outline,
+  a soft drop shadow, a whisper of dither against banding. Each button gets its own seed.
+- **Motion:** none. A slow drift was judged not clearly better than the still fill; still costs nothing
+  per frame (the shader reads no time; test `primary_fill_still`).
+- **States:** hover/focus lift a little, a press darkens and sinks 1.5 px, disabled turns to a quiet deep
+  teal pill with pale text (`primary_states_drawn`).
+- **Where (by role):** title Play/Continue, pause Resume, tutorial card action (Begin / Got it), skill
+  card Unlock, finished-hunt card New hunt. The About page's Close and the Aquarium's Live Tank keep the
+  pink they had, under their own `AccentButton` variation. Everything else is unchanged
+  (`primary_buttons_by_role`).
+- **Contrast:** text ≥ 7:1 against every fill colour, ≥ 4.5:1 at the darkest shading (`primary_text_contrast`).
+- **Renders:** `--test=shots --only=primary` (each screen plus 3x close-ups; run with `--resolution
+  1560x720` for the phone shape).

@@ -11,6 +11,11 @@ const GOLD := Color(1.0, 0.84, 0.45)
 const DANGER := Color(1.0, 0.32, 0.28)   # threat markers (the parasite to defeat)
 const PINK := Color(0.95, 0.56, 0.64)
 const PANEL := Color(0.03, 0.13, 0.13, 0.9)
+## Text on the primary pill: deep sea-teal, at least 7:1 against every colour of its fill.
+const PRIMARY_INK := Color(0.02, 0.17, 0.16)
+## The pill's fill colours (keep in step with shaders/primary_button.gdshader; tests check contrast).
+const PRIMARY_FILL: Array[Color] = [Color(0.40, 0.85, 0.86), Color(0.24, 0.79, 0.75), Color(0.40, 0.86, 0.58), Color(0.62, 0.80, 0.42)]
+const PRIMARY_SHADER := preload("res://shaders/primary_button.gdshader")
 const GEAR := preload("res://assets/ui/settings_gear.png")
 
 static var _theme: Theme
@@ -48,17 +53,34 @@ static func theme() -> Theme:
 		t.set_color("font_disabled_color", cls, Color(INK, 0.4))
 		t.set_color("font_outline_color", cls, Color(0.0, 0.08, 0.07, 0.6))
 		t.set_constant("outline_size", cls, 4)
-	# The one main action on a screen (Play / Continue): axolotl pink.
+	# The one main action on a screen (Play / Continue / Resume / Begin / Unlock): the aqua pill
+	# (docs/UI_STYLE.md). Its fill is drawn by make_primary(); the box itself only spaces the text.
 	t.set_type_variation("PrimaryButton", "Button")
-	t.set_stylebox("normal", "PrimaryButton", _box(PINK, Color(1.0, 0.86, 0.9, 0.9), 2, Color(0.35, 0.05, 0.12, 0.45)))
-	t.set_stylebox("hover", "PrimaryButton", _box(PINK.lightened(0.1), GOLD, 3, Color(0.35, 0.05, 0.12, 0.45)))
-	t.set_stylebox("pressed", "PrimaryButton", _box(PINK.darkened(0.12), GOLD, 3, Color(0.35, 0.05, 0.12, 0.3)))
-	t.set_stylebox("hover_pressed", "PrimaryButton", t.get_stylebox("pressed", "PrimaryButton"))
-	t.set_color("font_color", "PrimaryButton", Color(0.25, 0.04, 0.1))
-	t.set_color("font_hover_color", "PrimaryButton", Color(0.2, 0.02, 0.08))
-	t.set_color("font_pressed_color", "PrimaryButton", Color(0.2, 0.02, 0.08))
-	t.set_color("font_focus_color", "PrimaryButton", Color(0.2, 0.02, 0.08))
+	var clear := StyleBoxFlat.new()
+	clear.draw_center = false
+	clear.content_margin_left = 34
+	clear.content_margin_right = 34
+	clear.content_margin_top = 12
+	clear.content_margin_bottom = 12
+	for st in ["normal", "hover", "pressed", "hover_pressed", "disabled"]:
+		t.set_stylebox(st, "PrimaryButton", clear)
+	t.set_stylebox("focus", "PrimaryButton", _ring(GOLD, 999))
+	for k in ["font_color", "font_hover_color", "font_pressed_color", "font_focus_color", "font_hover_pressed_color"]:
+		t.set_color(k, "PrimaryButton", PRIMARY_INK)
+	t.set_color("font_disabled_color", "PrimaryButton", Color(INK, 0.5))
 	t.set_constant("outline_size", "PrimaryButton", 0)
+	# A strong action that is not a screen's primary one (the About page's Close, the Aquarium's
+	# Live Tank): the pink they have always had.
+	t.set_type_variation("AccentButton", "Button")
+	t.set_stylebox("normal", "AccentButton", _box(PINK, Color(1.0, 0.86, 0.9, 0.9), 2, Color(0.35, 0.05, 0.12, 0.45)))
+	t.set_stylebox("hover", "AccentButton", _box(PINK.lightened(0.1), GOLD, 3, Color(0.35, 0.05, 0.12, 0.45)))
+	t.set_stylebox("pressed", "AccentButton", _box(PINK.darkened(0.12), GOLD, 3, Color(0.35, 0.05, 0.12, 0.3)))
+	t.set_stylebox("hover_pressed", "AccentButton", t.get_stylebox("pressed", "AccentButton"))
+	t.set_color("font_color", "AccentButton", Color(0.25, 0.04, 0.1))
+	t.set_color("font_hover_color", "AccentButton", Color(0.2, 0.02, 0.08))
+	t.set_color("font_pressed_color", "AccentButton", Color(0.2, 0.02, 0.08))
+	t.set_color("font_focus_color", "AccentButton", Color(0.2, 0.02, 0.08))
+	t.set_constant("outline_size", "AccentButton", 0)
 	# A glyph on its own (the Settings gear): no box, just the picture, dimmed when pressed.
 	t.set_type_variation("GlyphButton", "Button")
 	var none := StyleBoxEmpty.new()
@@ -202,6 +224,55 @@ static func gear_button(cb: Callable, touch := 96.0, glyph := 64) -> Button:
 	b.button_down.connect(func() -> void: b.scale = Vector2.ONE * 0.9)
 	b.button_up.connect(func() -> void: b.scale = Vector2.ONE)
 	return b
+
+
+## Makes `b` a screen's primary action (docs/UI_STYLE.md: Continue, Start, Resume, Confirm and the
+## like, chosen by what the button does, never by its words): the PrimaryButton theme variation
+## (text, focus ring) and the pill drawn behind its text, sized from the button's own rect so the
+## round ends never stretch, following hover, focus, press and disabled. Returns `b`.
+static func make_primary(b: Button) -> Button:
+	b.theme_type_variation = "PrimaryButton"
+	if b.has_node("PrimaryFill"):
+		return b
+	var fill := Control.new()
+	fill.name = "PrimaryFill"
+	fill.show_behind_parent = true
+	fill.mouse_filter = Control.MOUSE_FILTER_IGNORE
+	fill.focus_mode = Control.FOCUS_NONE
+	var m := ShaderMaterial.new()
+	m.shader = PRIMARY_SHADER
+	m.set_shader_parameter("pad", PRIMARY_PAD)
+	m.set_shader_parameter("seed", float(hash(str(b.name) + b.text) % 997) / 97.0)
+	fill.material = m
+	fill.set_anchors_preset(Control.PRESET_FULL_RECT)
+	fill.offset_left = -PRIMARY_PAD
+	fill.offset_top = -PRIMARY_PAD
+	fill.offset_right = PRIMARY_PAD
+	fill.offset_bottom = PRIMARY_PAD
+	# (A Control draws nothing by itself: one plain rect for the shader to paint.)
+	fill.draw.connect(func() -> void: fill.draw_rect(Rect2(Vector2.ZERO, fill.size), Color.WHITE))
+	fill.resized.connect(func() -> void: m.set_shader_parameter("rect_size", fill.size))
+	b.add_child(fill, false, Node.INTERNAL_MODE_FRONT)
+	m.set_shader_parameter("rect_size", fill.size)
+	# The button redraws whenever its state changes: the pill follows.
+	b.draw.connect(func() -> void: _primary_state(b, m))
+	return b
+
+
+## Margin around the pill inside its fill rect (design px): room for its soft shadow.
+const PRIMARY_PAD := 8.0
+
+
+static func _primary_state(b: Button, m: ShaderMaterial) -> void:
+	var mode := b.get_draw_mode()
+	m.set_shader_parameter("dim", 1.0 if b.disabled else 0.0)
+	m.set_shader_parameter("press", 1.0 if mode == BaseButton.DRAW_PRESSED or mode == BaseButton.DRAW_HOVER_PRESSED else 0.0)
+	m.set_shader_parameter("lift", 1.0 if mode == BaseButton.DRAW_HOVER or b.has_focus() else 0.0)
+
+
+## A screen's primary action button (see make_primary).
+static func primary_button(text: String, cb: Callable) -> Button:
+	return make_primary(button(text, cb))
 
 
 static func button(text: String, cb: Callable) -> Button:

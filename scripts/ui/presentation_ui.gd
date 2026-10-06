@@ -53,7 +53,7 @@ func _ready() -> void:
 	_back.name = "AquariumBack"
 	_root.add_child(_back)
 	_live_btn = UiStyle.button("Live Tank", func(): p.go("live"))
-	_live_btn.theme_type_variation = "PrimaryButton"
+	_live_btn.theme_type_variation = "AccentButton"
 	_live_btn.name = "LiveTank"
 	_root.add_child(_live_btn)
 	_swim_btn = UiStyle.button("Swim", func(): p.go("swim"))

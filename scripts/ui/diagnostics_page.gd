@@ -96,7 +96,7 @@ func _ready() -> void:
 	spacer.size_flags_horizontal = Control.SIZE_EXPAND_FILL
 	row.add_child(spacer)
 	var close := _btn(row, "Close", "Close", close)
-	close.theme_type_variation = "PrimaryButton"
+	close.theme_type_variation = "AccentButton"
 	get_viewport().size_changed.connect(_layout)
 	visible = false
 

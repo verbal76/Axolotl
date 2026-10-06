@@ -77,7 +77,7 @@ func _ready() -> void:
 	_left.add_theme_constant_override("separation", 8)
 	cols.add_child(_left)
 	var resume := _action("Resume", close)
-	resume.theme_type_variation = "PrimaryButton"
+	UiStyle.make_primary(resume)
 	_resume = resume
 	# Return to Title directly beneath Resume (owner ruling 2026-09-30).
 	var title := _action("Return to Title", func(): Game.inst.return_to_title())

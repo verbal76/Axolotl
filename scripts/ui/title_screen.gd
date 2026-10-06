@@ -62,7 +62,7 @@ func _ready() -> void:
 	_root.add_child(_column)
 	_play = UiStyle.button("Play", _on_play)
 	_play.name = "Play"
-	_play.theme_type_variation = "PrimaryButton"
+	UiStyle.make_primary(_play)
 	_column.add_child(_play)
 	_new_run = UiStyle.confirm_button("New Run", NEW_RUN_QUESTION, "Normal", _on_new_run, "Hard", _on_new_run_hard)
 	_column.add_child(_new_run)

@@ -46,7 +46,7 @@ func run(runner) -> void:
 		g.hints.enabled = false
 	await t.seconds(0.5)
 	var only: String = Settings.test_args.get("only", "")
-	var registry := ["_test_startup", "_test_ota_and_version", "_test_hag_infra", "_test_launch_update", "_test_mesh_winding", "_test_terrain", "_test_ravines", "_test_rim_fights_clear_of_ooze", "_test_edge_assist", "_test_ooze_bubbles", "_test_view_clearances", "_test_camera_rises_over", "_test_camera_invariant", "_test_ball_view", "_test_hud_corner", "_test_restore_hints", "_test_home_coherence", "_test_terrain_grounded", "_test_no_floating_platforms", "_test_parasite_locomotion", "_test_parasite_body_and_death", "_test_parasite_combat", "_test_organic_motion", "_test_gill_look", "_test_gill_idles", "_test_gill_colours", "_test_gill_patterns", "_test_tail_whip", "_test_gill_traction", "_test_gill_incline_transitions", "_test_traction_no_shortcuts", "_test_gill_body_follow", "_test_swim_body_follow", "_test_ambient_sway", "_test_placements", "_test_tutorial_route", "_test_sphere_walk", "_test_jump_and_burst", "_test_coyote_and_buffer", "_test_swipe_direction_and_stages", "_test_hard_landing", "_test_food", "_test_food_reach", "_test_darter_and_burrower", "_test_food_repopulates", "_test_motes", "_test_checkpoint_and_regen", "_test_crumble", "_test_restoration_gates", "_test_retract_gates_gone", "_test_bubble_columns", "_test_restoration_continuity", "_test_health_map", "_test_vortex", "_test_vortex_tints", "_test_vortex_ready_state", "_test_vortex_currents", "_test_vortex_currents_travel", "_test_current", "_test_current_brace", "_test_canopy", "_test_canopy_plain_jumps", "_test_canopy_guard_leaf", "_test_climbs_physical", "_test_jungle_ladders_physical", "_test_leaf_geometry", "_test_leaf_footing", "_test_caves", "_test_mounds", "_test_vegetation", "_test_vortex_mouths_clear", "_test_vortex_pads_clear_of_plants", "_test_stalkers_in_reeds", "_test_route_audit", "_test_new_areas", "_test_ecosystem", "_test_threat_spread", "_test_music", "_test_opening_audio", "_test_run_clock", "_test_completion_catalog", "_test_completion_frozen", "_test_run_save_file", "_test_run_timer_live", "_test_run_continue", "_test_timer_integrity", "_test_resume_points_safe", "_phase_continue_write", "_phase_continue_read", "_test_upgrades", "_test_quality_title_cap", "_test_ui", "_test_menus_no_scroll", "_test_menu_touch", "_test_tier2_rules", "_test_tier2_world", "_test_ambient_fish", "_test_parasite_never_buried", "_test_tier2_loadout", "_test_aquarium_experiences", "_test_aquarium_polish", "_test_all_clear", "_test_treasure_unlock", "_test_treasure_generation", "_test_treasure_play", "_phase_treasure_stress", "_phase_live_fish_diag", "_phase_cpu_probe", "_phase_incline_survey", "_phase_loco_diag", "_phase_crawl_trace", "_phase_mouth_crawls", "_phase_organic_trace", "_phase_organic_cost", "_test_skilltree_graph", "_test_progress_store", "_test_starfish_spots", "_test_starfish_pickup", "_test_skill_ui", "_test_quick_gill", "_test_lunge_skills", "_test_burst_skills", "_test_glide_control", "_test_glide_transfers", "_test_mote_magnet", "_phase_starfish_survey", "_phase_starfish_sweep", "_phase_glide_probe", "_test_plants_terminal_growth", "_test_sea_fan_depth", "_test_repopulation", "_phase_repop_survey", "_phase_repop_sim", "_test_aquarium_gill", "_phase_aq_nav", "_test_tutorials_and_title", "_test_onb_progress", "_test_onb_owner_save", "_test_onb_per_run", "_test_onb_toggle", "_test_onb_intro", "_test_onb_feeding", "_test_onb_parasite", "_test_onb_feed_first", "_test_onb_tunnel", "_test_onb_starfish", "_test_onb_softlock", "_test_onb_relaunch", "_test_onb_restoration_equal", "_test_hard_mode", "_test_hard_mode_save", "_test_polish_a", "_test_leaf_motion", "_test_perf_veg_cull", "_test_death_and_arrival", "_test_pause_ball_progress", "_test_arrival_view", "_test_camera_never_drawn_unsafe", "_test_startup_build_identical", "_phase_world_hash", "_phase_th_bench", "_phase_hard_write", "_phase_hard_read", "_phase_hard_newrun", "_phase_hard_finish", "_phase_hard_sim", "_phase_hard_intervals", "_phase_onb_owner", "_phase_onb_write", "_phase_onb_read", "_phase_onb_kill", "_phase_onb_toggle", "_phase_cohesion_probe", "_test_eel_reach", "_test_parasite_readability"]
+	var registry := ["_test_startup", "_test_ota_and_version", "_test_hag_infra", "_test_launch_update", "_test_mesh_winding", "_test_terrain", "_test_ravines", "_test_rim_fights_clear_of_ooze", "_test_edge_assist", "_test_ooze_bubbles", "_test_view_clearances", "_test_camera_rises_over", "_test_camera_invariant", "_test_ball_view", "_test_hud_corner", "_test_restore_hints", "_test_home_coherence", "_test_terrain_grounded", "_test_no_floating_platforms", "_test_parasite_locomotion", "_test_parasite_body_and_death", "_test_parasite_combat", "_test_organic_motion", "_test_gill_look", "_test_gill_idles", "_test_gill_colours", "_test_gill_patterns", "_test_tail_whip", "_test_gill_traction", "_test_gill_incline_transitions", "_test_traction_no_shortcuts", "_test_gill_body_follow", "_test_swim_body_follow", "_test_ambient_sway", "_test_placements", "_test_tutorial_route", "_test_sphere_walk", "_test_jump_and_burst", "_test_coyote_and_buffer", "_test_swipe_direction_and_stages", "_test_hard_landing", "_test_food", "_test_food_reach", "_test_darter_and_burrower", "_test_food_repopulates", "_test_motes", "_test_checkpoint_and_regen", "_test_crumble", "_test_restoration_gates", "_test_retract_gates_gone", "_test_bubble_columns", "_test_restoration_continuity", "_test_health_map", "_test_vortex", "_test_vortex_tints", "_test_vortex_ready_state", "_test_vortex_currents", "_test_vortex_currents_travel", "_test_current", "_test_current_brace", "_test_canopy", "_test_canopy_plain_jumps", "_test_canopy_guard_leaf", "_test_climbs_physical", "_test_jungle_ladders_physical", "_test_leaf_geometry", "_test_leaf_footing", "_test_caves", "_test_mounds", "_test_vegetation", "_test_vortex_mouths_clear", "_test_vortex_pads_clear_of_plants", "_test_stalkers_in_reeds", "_test_route_audit", "_test_new_areas", "_test_ecosystem", "_test_threat_spread", "_test_music", "_test_opening_audio", "_test_run_clock", "_test_completion_catalog", "_test_completion_frozen", "_test_run_save_file", "_test_run_timer_live", "_test_run_continue", "_test_timer_integrity", "_test_resume_points_safe", "_phase_continue_write", "_phase_continue_read", "_test_upgrades", "_test_quality_title_cap", "_test_ui", "_test_menus_no_scroll", "_test_menu_touch", "_test_primary_buttons", "_test_tier2_rules", "_test_tier2_world", "_test_ambient_fish", "_test_parasite_never_buried", "_test_tier2_loadout", "_test_aquarium_experiences", "_test_aquarium_polish", "_test_all_clear", "_test_treasure_unlock", "_test_treasure_generation", "_test_treasure_play", "_phase_treasure_stress", "_phase_live_fish_diag", "_phase_cpu_probe", "_phase_incline_survey", "_phase_loco_diag", "_phase_crawl_trace", "_phase_mouth_crawls", "_phase_organic_trace", "_phase_organic_cost", "_test_skilltree_graph", "_test_progress_store", "_test_starfish_spots", "_test_starfish_pickup", "_test_skill_ui", "_test_quick_gill", "_test_lunge_skills", "_test_burst_skills", "_test_glide_control", "_test_glide_transfers", "_test_mote_magnet", "_phase_starfish_survey", "_phase_starfish_sweep", "_phase_glide_probe", "_test_plants_terminal_growth", "_test_sea_fan_depth", "_test_repopulation", "_phase_repop_survey", "_phase_repop_sim", "_test_aquarium_gill", "_phase_aq_nav", "_test_tutorials_and_title", "_test_onb_progress", "_test_onb_owner_save", "_test_onb_per_run", "_test_onb_toggle", "_test_onb_intro", "_test_onb_feeding", "_test_onb_parasite", "_test_onb_feed_first", "_test_onb_tunnel", "_test_onb_starfish", "_test_onb_softlock", "_test_onb_relaunch", "_test_onb_restoration_equal", "_test_hard_mode", "_test_hard_mode_save", "_test_polish_a", "_test_leaf_motion", "_test_perf_veg_cull", "_test_death_and_arrival", "_test_pause_ball_progress", "_test_arrival_view", "_test_camera_never_drawn_unsafe", "_test_startup_build_identical", "_phase_world_hash", "_phase_th_bench", "_phase_hard_write", "_phase_hard_read", "_phase_hard_newrun", "_phase_hard_finish", "_phase_hard_sim", "_phase_hard_intervals", "_phase_onb_owner", "_phase_onb_write", "_phase_onb_read", "_phase_onb_kill", "_phase_onb_toggle", "_phase_cohesion_probe", "_test_eel_reach", "_test_parasite_readability"]
 	# A --only entry that names nothing is a typo (or a stale substring): fail loudly rather than run nothing.
 	for o in only.split(",", false):
 		if not registry.has(o) and not registry.has("_test_" + o):
@@ -6993,6 +6993,112 @@ func _fit_problems(root: Control, area: Rect2, min_h: float) -> String:
 ## a drag that starts on any control scrolls nothing and changes nothing: swatches, pattern cells,
 ## sliders (on the thumb going up or down, or on the track away from it), toggles. A tap on a
 ## slider's track and a sideways drag of its thumb still work, as does a tap on a swatch.
+## The primary action pill (docs/UI_STYLE.md, owner 2026-10-05): one shared style, given by role to
+## each screen's single most important affirmative action and to nothing else; readable text on
+## every colour of its fill; a still fill (no per-frame cost); real touch targets; every state drawn.
+func _test_primary_buttons() -> void:
+	g.treasure._ensure_panel()
+	var pm := g.pause_menu
+	pm.open()
+	await t.frames(2)
+	pm._open_skills()
+	await t.frames(2)
+	# Primary by role: the title's Play / Continue, the pause menu's Resume, the tutorial card's one
+	# action (Begin / Got it), the skill card's Unlock, the finished hunt card's New hunt.
+	var want := {
+		"title Play/Continue": g.title._play, "pause Resume": pm._resume, "tutorial card action": g.onboarding.ui._btn,
+		"skill Unlock": pm.skill_page._buy, "treasure New hunt": g.treasure.panel._card.find_child("NewHunt", true, false)}
+	var bad: Array[String] = []
+	for k in want:
+		var b := want[k] as Button
+		if b == null or b.theme_type_variation != "PrimaryButton" or b.get_node_or_null("PrimaryFill") == null:
+			bad.append("%s is not the primary pill" % k)
+	# Everything else keeps its own style: no other button anywhere is primary, and every primary has
+	# its pill (a variation set by hand, without make_primary, would draw a bare label).
+	var primaries := []
+	for n in g.find_children("*", "Button", true, false):
+		var b := n as Button
+		var is_p := b.theme_type_variation == "PrimaryButton" or b.get_node_or_null("PrimaryFill") != null
+		if is_p:
+			primaries.append(b)
+			if not want.values().has(b):
+				bad.append("%s (%s) is primary but is not a primary action" % [b.get_path(), b.text])
+			elif b.get_node_or_null("PrimaryFill") == null or b.theme_type_variation != "PrimaryButton":
+				bad.append("%s is half primary" % b.get_path())
+	var close := g.diagnostics.find_child("Close", true, false) as Button
+	var live := g.presentation.ui.find_child("LiveTank", true, false) as Button if g.presentation.ui != null else null
+	for b in [close, live]:
+		if b != null and b.theme_type_variation != "AccentButton":
+			bad.append("%s lost its own (pink) style" % b.name)
+	for name_ in ["NewRun", "ReturnToTitle", "Done", "Later", "Cancel", "Yes", "Exit"]:
+		for n in g.find_children(name_, "Button", true, false):
+			if (n as Button).theme_type_variation == "PrimaryButton":
+				bad.append("%s (secondary / destructive / navigation) is primary" % name_)
+	t.check("primary_buttons_by_role", bad.is_empty() and primaries.size() == want.size(), "%d primary: %s" % [primaries.size(), "; ".join(bad)])
+	# Readable: the text is at least 7:1 against each fill colour, and 4.5:1 at its darkest shading.
+	var lum := func(c: Color) -> float:
+		var f := func(v: float) -> float: return v / 12.92 if v <= 0.04045 else pow((v + 0.055) / 1.055, 2.4)
+		return 0.2126 * f.call(c.r) + 0.7152 * f.call(c.g) + 0.0722 * f.call(c.b)
+	var ink: float = lum.call(UiStyle.PRIMARY_INK)
+	var worst := 99.0
+	var worst_dark := 99.0
+	for c in UiStyle.PRIMARY_FILL:
+		worst = minf(worst, (float(lum.call(c)) + 0.05) / (ink + 0.05))
+		worst_dark = minf(worst_dark, (float(lum.call(c * 0.93 * 0.88)) + 0.05) / (ink + 0.05))
+	var code := UiStyle.PRIMARY_SHADER.code
+	var palette_in_step := true
+	for c in UiStyle.PRIMARY_FILL:
+		if not code.contains("vec3(%.2f, %.2f, %.2f)" % [c.r, c.g, c.b]):
+			palette_in_step = false
+	t.check("primary_text_contrast", worst >= 7.0 and worst_dark >= 4.5 and palette_in_step,
+			"lightest-case %.1f:1, darkest shading %.1f:1, shader palette matches %s" % [worst, worst_dark, palette_in_step])
+	t.check("primary_fill_still", not code.contains("TIME"), "the pill's shader reads no TIME (a still fill: no per-frame redraw)")
+	# Touch targets and shape: every primary at least 62 px tall and wider than tall; its fill covers the
+	# button plus the shadow margin and knows its size (the round ends are drawn, never stretched).
+	await t.frames(2)
+	var sizes: Array[String] = []
+	var ok_size := true
+	var drawn := 0
+	for k in want:
+		var b := want[k] as Button
+		var ms := b.get_combined_minimum_size()
+		sizes.append("%s min %dx%d" % [k, ms.x, ms.y])
+		if ms.y < 62.0 or maxf(ms.x, b.size.x) < ms.y * 2.0:
+			ok_size = false
+		if b.is_visible_in_tree():
+			drawn += 1
+			var rs: Vector2 = ((b.get_node("PrimaryFill") as Control).material as ShaderMaterial).get_shader_parameter("rect_size")
+			if not rs.is_equal_approx(b.size + Vector2.ONE * UiStyle.PRIMARY_PAD * 2.0):
+				ok_size = false
+				sizes.append("(%s fill %s for %s)" % [k, str(rs), str(b.size)])
+	t.check("primary_touch_targets_and_shape", ok_size and drawn >= 1, "%s; %d on screen" % [", ".join(sizes), drawn])
+	# States: disabled mutes it, holding presses it, focus lifts it; the font colours stay legible.
+	var u := pm.skill_page._buy
+	var um := (u.get_node("PrimaryFill") as Control).material as ShaderMaterial
+	var u_was := u.disabled
+	u.disabled = true
+	await t.frames(2)
+	var dim_on := float(um.get_shader_parameter("dim")) == 1.0
+	u.disabled = false
+	u.grab_focus()
+	await t.frames(2)
+	var lift_on := float(um.get_shader_parameter("lift")) == 1.0 and float(um.get_shader_parameter("dim")) == 0.0
+	u.toggle_mode = true
+	u.button_pressed = true
+	await t.frames(2)
+	var press_on := float(um.get_shader_parameter("press")) == 1.0
+	u.button_pressed = false
+	u.toggle_mode = false
+	u.release_focus()
+	u.disabled = u_was
+	var focus_ring := UiStyle.theme().get_stylebox("focus", "PrimaryButton") as StyleBoxFlat
+	t.check("primary_states_drawn", dim_on and lift_on and press_on and focus_ring != null and focus_ring.border_width_top >= 3,
+			"disabled %s, focus %s, held %s, gold focus ring %s" % [dim_on, lift_on, press_on, focus_ring != null])
+	pm.skill_page.done.emit()
+	pm.close()
+	await t.frames(2)
+
+
 func _test_menu_touch() -> void:
 	var pm := g.pause_menu
 	var look := func() -> Array:

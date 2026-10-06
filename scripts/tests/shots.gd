@@ -688,6 +688,8 @@ func run(runner) -> void:
 		await _gill_shots(g, "gill_restored")
 	if only == "menus":
 		await _menus_shots(g)
+	if only == "primary":
+		await _primary_shots(g)
 	if only == "cohesion":
 		# Cohesion audit (2026-10-02): what a player sees on arriving at each ball, through the
 		# ordinary follow camera with the touch HUD: two headings each (as he lands, then turned).
@@ -3743,3 +3745,74 @@ func _p7_eels(g: Game) -> void:
 			_look(g, b.index, back, e.mouth - back, 0.2)
 			await t.seconds(2.5)
 			await t.shot("p7_%s" % e.threat_id.replace(".", "_"))
+
+
+## Every primary action (docs/UI_STYLE.md) where a player meets it, at 1280x720 and at a narrow
+## 19.5:9 phone shape, each with a 3x close-up of the button (states: normal, focused, held, disabled).
+func _primary_shots(g: Game) -> void:
+	g.player.invuln_t = 9999
+	for sz in [["", Vector2i(0, 0)], ["_phone", Vector2i(1560, 720)]]:
+		if sz[0] != "":
+			DisplayServer.window_set_size(sz[1])
+			await t.seconds(0.5)
+		var tag: String = sz[0]
+		g._enter_title()
+		await t.seconds(1.5)
+		g.title._play.release_focus()
+		await _primary_shot(g, "pb_title" + tag, g.title._play)
+		g.title._play.grab_focus()
+		await _primary_shot(g, "pb_title_focus" + tag, g.title._play)
+		g.start_play(true)
+		await t.seconds(1.0)
+		g.pause_menu.open()
+		await t.seconds(0.5)
+		var r: Button = g.pause_menu._resume
+		await _primary_shot(g, "pb_pause" + tag, r)
+		r.toggle_mode = true
+		r.button_pressed = true
+		await _primary_shot(g, "pb_pause_held" + tag, r)
+		r.button_pressed = false
+		r.toggle_mode = false
+		g.pause_menu._open_skills()
+		_set_progress(g, 12, ["lunge.1", "quick.1", "burst.1", "glide.1", "burst.2"])
+		var page: SkillTreePage = g.pause_menu.skill_page
+		page.refresh()
+		page.select("glide.2", false)
+		(page.buttons["glide.2"] as Button).grab_focus()
+		await _primary_shot(g, "pb_skill_available" + tag, page._buy)
+		_set_progress(g, 0, [])
+		page.refresh()
+		page.select("lunge.3", false)
+		(page.buttons["lunge.3"] as Button).grab_focus()
+		await _primary_shot(g, "pb_skill_disabled" + tag, page._buy)
+		page.done.emit()
+		g.pause_menu.close()
+		await t.seconds(0.3)
+		var tp: TreasurePlay = g.treasure
+		tp._ensure_panel()
+		if tp.panel != null:
+			tp.panel.show_complete(true)
+			await t.seconds(0.6)
+			await _primary_shot(g, "pb_treasure" + tag, tp.panel._card.find_child("NewHunt", true, false))
+			tp.panel._close_card()
+		var ou = g.onboarding.ui
+		ou.show_card("Welcome", ["A short line of text to read."], "Begin", func() -> void: ou.hide_card())
+		await _primary_shot(g, "pb_onboarding" + tag, g.onboarding.ui._btn)
+		g.onboarding.ui.tap()
+		await t.seconds(0.3)
+
+
+## A screenshot, and a 3x close-up of `b` from the same frame.
+func _primary_shot(g: Game, name_: String, b: Control) -> void:
+	await t.seconds(0.4)
+	await t.shot(name_)
+	if DisplayServer.get_name() == "headless" or b == null or not b.is_visible_in_tree():
+		return
+	var img := g.get_viewport().get_texture().get_image()
+	var k := Vector2(img.get_size()) / g.get_viewport().get_visible_rect().size
+	var r := b.get_global_rect().grow(14)
+	var px := Rect2i(Vector2i(r.position * k), Vector2i(r.size * k)).intersection(Rect2i(Vector2i.ZERO, img.get_size()))
+	var crop := img.get_region(px)
+	crop.resize(px.size.x * 3, px.size.y * 3, Image.INTERPOLATE_NEAREST)
+	crop.save_png(t.out_dir.path_join(name_ + "_zoom.png"))
+	t.log_line("%s button %s text %s" % [name_, str(b.get_global_rect()), (b as Button).text if b is Button else ""])
