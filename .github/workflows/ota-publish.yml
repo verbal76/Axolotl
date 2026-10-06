@@ -17,6 +17,10 @@ on:
     branches:
       - claude/axolotl-aquarium-platformer-3y0qyy
       - claude/mote-game-continuation-bov2x9
+    # (Actions budget policy, docs/ACTIONS_BUDGET.md: a push of only docs, Markdown or workflow files
+    # changes nothing in the game pack, so it publishes nothing and uses no minutes. Any push that also
+    # touches the game still publishes, with every gate.)
+    paths-ignore: ["**/*.md", "docs/**", ".github/**", "LICENSE*"]
   workflow_dispatch:
     inputs:
       ref:

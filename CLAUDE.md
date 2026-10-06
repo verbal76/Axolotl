@@ -33,6 +33,16 @@ aqua rim: `SecondaryButton`/`SecondaryToggle`, owner option 2, 2026-10-06). Use 
 (never a per-screen copy). Style reference only: never copy another game's branding or assets.
 Details: `docs/UI_STYLE.md`. Tests: `primary_*` in `_test_primary_buttons`.
 
+## GitHub Actions budget (standing owner directive, 2026-10-06)
+
+Actions minutes are scarce and shared. Before any GitHub-hosted run ask: "Does this need Actions, or can I
+prove it locally?" Validate locally first (check_scripts, runtime lock, both unit shards and the playthrough;
+recipe in `docs/ACTIONS_BUDGET.md`); push to the release branch only a locally-green release candidate (every
+push there publishes an OTA). Docs/Markdown/workflow-only changes start no workflow and carry `[skip ci]`.
+No re-runs to "see if a flaky test passes", no unrequested platform builds (iOS only by manual input; APK
+only on a native change or on request), no rebuilding a SHA with a verified result. Never trim the OTA
+release gates (tests, baked export, logo, signing, verification) to save minutes.
+
 ## Native freeze
 
 `project.godot`, `export_presets.cfg` and `scripts/boot/*` are frozen (runtime r5);
