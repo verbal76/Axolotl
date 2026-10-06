@@ -32,6 +32,7 @@ var _haptics: CheckButton
 var _swim_invert: CheckButton
 var _resume: Button
 var _tutorials: CheckButton
+var _video: Button
 var _music: TouchSlider
 var _sfx: TouchSlider
 var _left: VBoxContainer
@@ -167,6 +168,15 @@ func _ready() -> void:
 	_tutorials = _toggle(toggles, "Tutorials", _on_tutorials)
 	_tutorials.name = "Tutorials"
 	_tutorials.tooltip_text = "On: every new run starts with the intro and the three short lessons. Off: none."
+	# Video performance policy (owner, 2026-10-06; QualityScaler.set_mode): each tap cycles
+	# Automatic -> Quality -> Cool/Battery. Visual cost only; play feels the same in every mode.
+	_video = UiStyle.button("", _on_video)
+	_video.name = "VideoMode"
+	_video.custom_minimum_size = Vector2(0, 60)
+	_video.size_flags_horizontal = Control.SIZE_EXPAND_FILL
+	_video.add_theme_font_size_override("font_size", 22)
+	_video.tooltip_text = "Automatic (recommended): adapts to keep the phone cool and smooth. Quality: full visuals at 60 fps. Cool/Battery: lighter visuals, less heat and battery use. Controls and play are the same in every mode."
+	toggles.add_child(_video)
 	# Music | Sound.
 	var levels := HBoxContainer.new()
 	levels.name = "Levels"
@@ -459,8 +469,41 @@ func _refresh() -> void:
 	_music.set_value_no_signal(Settings.music_volume)
 	_sfx.set_value_no_signal(Settings.sfx_volume)
 	_status.text = Settings.controller_status()
+	_video.text = video_text()
+	_fit_video_text.call_deferred()
 	_startup.text = StartupTrace.summary()
 	_layout.call_deferred()
+
+
+## The setting and the tier running now, e.g. "Video: Automatic · High" (the full line, with the
+## frame rate, is in About / Diagnostics).
+func video_text() -> String:
+	var t := "Video: %s" % QualityScaler.MODE_NAMES.get(Settings.video_mode, "Automatic")
+	var g := Game.inst
+	if g != null and g.quality != null:
+		t += " · " + g.quality.tier_name()
+	return t
+
+
+## The menu has no room for another line: the longest Video label ("Cool/Battery · Balanced") takes
+## a slightly smaller font instead of widening or wrapping the button.
+func _fit_video_text() -> void:
+	var room := _video.size.x - 64.0
+	var f := _video.get_theme_font("font")
+	var fs := 22
+	while fs > 16 and room > 0.0 and f.get_string_size(_video.text, HORIZONTAL_ALIGNMENT_LEFT, -1, fs).x > room:
+		fs -= 1
+	_video.add_theme_font_size_override("font_size", fs)
+
+
+func _on_video() -> void:
+	var i := Settings.VIDEO_MODES.find(Settings.video_mode)
+	Settings.video_mode = Settings.VIDEO_MODES[(i + 1) % Settings.VIDEO_MODES.size()]
+	Settings.save()
+	if Game.inst != null and Game.inst.quality != null:
+		Game.inst.quality.set_mode(Settings.video_mode)
+	Sfx.play("ui_tap", null, -8.0)
+	_refresh()
 
 
 ## The current ball's line in the run panel (BallView.progress_line), or "" outside a run's play.
