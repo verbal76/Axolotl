@@ -877,37 +877,78 @@ func parasite() -> void:
 # --- Lesson 4: the first water tunnel (owner, 2026-10-01) -------------------------------------------
 
 func tunnel() -> void:
+	# Owner, 2026-10-07: the card FIRST (over the ordinary view), then ONE shot that pans across every
+	# tunnel that opened together (ball 1 opens two), and the card is never lost.
+	var b := g.balls[0]
+	var outs: Array = []
+	for vv in g.vortices:
+		if vv.ball_a == b:
+			outs.append(vv)
+	if outs.size() < 2:
+		t.check("tunnel_card_has_two_tunnels", false, "%d tunnels out of ball 1" % outs.size())
+		return
+	var reopen := func() -> void:
+		# (Earlier tests may leave ball 1 past 70%: held below it until the test opens them.)
+		b.restoration = 0.0
+		for vv in g.vortices:
+			vv.connected = false
+		g._pending_connect.clear()
+	# A moment it cannot be shown (a menu open): nothing is lost; it comes when the menu closes.
+	reopen.call()
 	await reset(["intro", "feeding", "parasite", "starfish"])
 	await home(0)
-	var b := p.ball
-	var v: Vortex = null
-	for vv in b.vortices:
-		if vv.ball_a == b:
-			v = vv
-			break
-	if v == null:
-		t.check("tunnel_card_has_a_tunnel", false, "no tunnel out of ball %d" % (b.index + 1))
-		return
-	# The real shot plays, then the card comes up as it ends.
-	g._start_cinematic("connect", {"v": v})
-	var carded := await wait_until(func() -> bool: return o.ui.waiting_for_tap(), 7.0)
+	g.pause_menu.open()
+	b.restoration = 0.72
+	await t.frames(30)
+	var held: bool = not o.ui.waiting_for_tap() and not on_disk().has("tunnel") and g.cinematic == ""
+	g.pause_menu.close()
+	# The real trigger: ball 1 reaches 70%. The card comes first, the camera still on Gill.
+	var starts := 0
+	var order: Array[String] = []
+	var carded := await wait_until(func() -> bool: return o.ui.waiting_for_tap(), 3.0)
+	order.append("card" if carded else "no card")
 	var texts: Array[String] = []
 	for l in o.ui.panel().find_children("*", "Label", true, false):
 		texts.append((l as Label).text)
 	var all_text := texts.has(Onboarding.TUNNEL_TITLE)
 	for w in Onboarding.TUNNEL_BODY:
 		all_text = all_text and texts.has(w)
-	t.check("tunnel_card_after_first_shot", carded and all_text and o.ui.button().text == "Got it" and g.cinematic == "lesson",
-			"card %s; cinematic '%s'; %s" % [carded, g.cinematic, ", ".join(texts)])
+	t.check("tunnel_card_waits_for_a_menu", held, "")
+	t.check("tunnel_card_before_the_shot", carded and all_text and g.cinematic == "lesson" and not g.cam.cinematic and o.ui.button().text == "Got it",
+			"card %s; cinematic '%s'; camera on Gill %s; %s" % [carded, g.cinematic, not g.cam.cinematic, ", ".join(texts)])
 	t.check("tunnel_flag_persisted", on_disk().has("tunnel"), "")
 	o.ui.tap()
-	await t.frames(3)
-	t.check("tunnel_card_gives_control_back", g.cinematic == "" and p.controls_enabled and o.stage == "", "cinematic '%s'" % g.cinematic)
-	# Once per run: the next tunnel's shot plays alone.
-	g._start_cinematic("connect", {"v": v})
+	# Then one shot for both tunnels, from start to end.
+	var tunnels := 0
+	var was := g.cinematic
+	for i in int(14.0 * 60.0):
+		if g.cinematic == "connect" and was != "connect":
+			starts += 1
+			tunnels = (g.cine_data.get("vs", []) as Array).size()
+		if o.ui.waiting_for_tap():
+			order.append("card again")
+			o.ui.tap()
+		was = g.cinematic
+		await t.frames(1)
+		if starts > 0 and g.cinematic == "":
+			break
+	t.check("tunnel_one_shot_for_both", starts == 1 and tunnels == outs.size() and g.cinematic == "" and p.controls_enabled,
+			"shots %d covering %d tunnels (want 1 covering %d); %s" % [starts, tunnels, outs.size(), order])
+	# Once per run: a later tunnel's shot plays alone.
+	g._start_connect_shot([outs[0]])
 	await wait_until(func() -> bool: return g.cinematic == "", 7.0)
 	await t.frames(3)
 	t.check("tunnel_card_once_per_run", not o.ui.waiting_for_tap() and g.cinematic == "", "cinematic '%s'" % g.cinematic)
+	# Missed (or a run from before it) with a tunnel open: the card comes at the next calm moment.
+	await reset(["intro", "feeding", "parasite", "starfish"])
+	var early := await wait_until(func() -> bool: return o.ui.waiting_for_tap(), Game.TUNNEL_CATCH_UP_S - 2.0)
+	var owed := not early and await wait_until(func() -> bool: return o.ui.waiting_for_tap(), 5.0)
+	t.check("tunnel_card_owed_comes_later", owed, "")
+	if owed:
+		o.ui.tap()
+	await t.frames(3)
+	reopen.call()
+	b.restoration = float(b.events_done) / maxf(1.0, float(b.events_total))
 	await all_done()
 
 

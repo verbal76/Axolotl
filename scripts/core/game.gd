@@ -1557,8 +1557,54 @@ func _check_vortex_connections() -> void:
 			_earn(v.get_meta("completion_id", ""))
 			_pending_connect.append(v)
 	# The connection shot waits for any running cinematic (e.g. regeneration) to finish.
-	if not _pending_connect.is_empty() and cinematic == "" and player.state == "normal":
-		_start_cinematic("connect", {"v": _pending_connect.pop_front()})
+	# Owner, 2026-10-07: tunnels that open together are ONE shot that pans from one to the next
+	# (ball 1 opens two at once and the shot used to play twice), and the first tunnel of a run
+	# explains itself before it, never after; the card is never skipped (Onboarding.show_tunnel_card).
+	if not _pending_connect.is_empty() and cinematic == "" and player.state == "normal" and state == "play":
+		var group: Array = _pending_connect.duplicate()
+		if onboarding != null and onboarding.tunnel_card_owed():
+			# (Not shown just now, e.g. a menu is open: both wait and it is tried again.)
+			if onboarding.show_tunnel_card(func() -> void: _start_connect_shot(group)):
+				_pending_connect.clear()
+			return
+		_pending_connect.clear()
+		_start_connect_shot(group)
+	elif _pending_connect.is_empty() and cinematic == "" and state == "play" and player.state == "normal" \
+			and onboarding != null and onboarding.tunnel_card_may_catch_up() and _any_tunnel_open():
+		# A run with a tunnel open whose card was never seen (it was missed, or the run predates it):
+		# after a stretch of calm play, so it never lands straight on top of another card.
+		_tunnel_owed_t += get_process_delta_time()
+		if _tunnel_owed_t >= TUNNEL_CATCH_UP_S and onboarding.show_tunnel_card():
+			_tunnel_owed_t = 0.0
+	else:
+		_tunnel_owed_t = 0.0
+
+
+const TUNNEL_CATCH_UP_S := 8.0
+var _tunnel_owed_t := 0.0
+
+
+func _any_tunnel_open() -> bool:
+	for v in vortices:
+		if v.connected:
+			return true
+	return false
+
+
+## The tunnel-opening shot for every tunnel in `group` (they opened together).
+func _start_connect_shot(group: Array) -> void:
+	if group.is_empty():
+		return
+	_start_cinematic("connect", {"v": group[0], "vs": group})
+
+
+## How long the opening shot lasts for `n` tunnels: the first, then a pan to each of the others.
+const CONNECT_FIRST_S := 4.8
+const CONNECT_NEXT_S := 3.6
+
+
+func connect_shot_length(n: int) -> float:
+	return CONNECT_FIRST_S + CONNECT_NEXT_S * maxi(0, n - 1)
 
 
 func _check_vortex_entry() -> void:
@@ -1654,22 +1700,35 @@ func _cine_frame() -> void:
 		get_tree().create_timer(1.0).timeout.connect(func(): _show_prompt("camera"))
 
 
-func _cine_connect() -> void:
-	var v: Vortex = cine_data["v"]
-	var k := clampf(cine_t / 4.6, 0.0, 1.0)
+## The opening shot's framing of tunnel `v`, `k` (0..1) of the way through revealing it:
+## [camera position, look-at point, up].
+func _connect_frame(v: Vortex, k: float) -> Array:
 	var a := v.mouth_pos(false)
 	var side := v.dir_a.cross(Vector3.UP).normalized()
 	if side.length() < 0.1:
 		side = Vector3.RIGHT
 	var look: Vector3 = v.visual_point(0.05 + 0.9 * smoothstep(0.0, 0.8, k))
-	cam.cine_pos = a + v.dir_a * 7.0 + side * 9.0 + (look - a) * 0.25
-	cam.cine_look = look
-	cam.cine_up = v.dir_a.cross(side).normalized() * -1.0 if false else (Vector3.UP - v.dir_a * Vector3.UP.dot(v.dir_a)).normalized()
-	if cine_t > 4.8:
+	return [a + v.dir_a * 7.0 + side * 9.0 + (look - a) * 0.25, look, (Vector3.UP - v.dir_a * Vector3.UP.dot(v.dir_a)).normalized()]
+
+
+func _cine_connect() -> void:
+	var vs: Array = cine_data.get("vs", [cine_data["v"]])
+	var f: Array
+	if cine_t < CONNECT_FIRST_S or vs.size() < 2:
+		f = _connect_frame(vs[0], clampf(cine_t / 4.6, 0.0, 1.0))
+	else:
+		# Then a pan to each of the others: from where the last one's reveal ended to this one's.
+		var i := mini(1 + int((cine_t - CONNECT_FIRST_S) / CONNECT_NEXT_S), vs.size() - 1)
+		var lt := cine_t - CONNECT_FIRST_S - CONNECT_NEXT_S * (i - 1)
+		var from := _connect_frame(vs[i - 1], 1.0)
+		var to := _connect_frame(vs[i], clampf((lt - 0.4) / 3.0, 0.0, 1.0))
+		var b := smoothstep(0.0, 1.4, lt)
+		f = [(from[0] as Vector3).lerp(to[0], b), (from[1] as Vector3).lerp(to[1], b), (from[2] as Vector3).slerp(to[2], b)]
+	cam.cine_pos = f[0]
+	cam.cine_look = f[1]
+	cam.cine_up = f[2]
+	if cine_t > connect_shot_length(vs.size()):
 		_end_cinematic()
-		# Owner, 2026-10-01: the first tunnel of a run explains itself (a tutorial card).
-		if onboarding != null:
-			onboarding.on_tunnel_opened()
 
 
 func _cine_travel(dt: float) -> void:

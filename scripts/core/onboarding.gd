@@ -53,6 +53,8 @@ const OBJ_PARASITE := "DEFEAT THE PARASITE"
 
 var g: Game
 var ui: OnboardingUi
+## What runs once the card now up is closed (the tunnel card's shot), if anything.
+var _after_card := Callable()
 
 ## The staged moment in progress: "" | "feed" | "kill" | "star" | "card" (waiting for Got it).
 var stage := ""
@@ -482,16 +484,30 @@ func on_starfish() -> void:
 
 # --- Lesson 4: the first water tunnel -----------------------------------------------------------------
 
-## Game._cine_connect, as the tunnel-opening shot ends (owner, 2026-10-01): once per run, a card that
-## says what just happened.
-func on_tunnel_opened() -> void:
-	if done("tunnel"):
-		return
+## Once per run, a card that says what a water tunnel is (owner, 2026-10-01). Owner, 2026-10-07: it
+## comes FIRST, over the ordinary view of Gill, and the tunnel-opening shot plays after "Got it"
+## (`then`); and it is never lost: the lesson is recorded only once the card is up (a moment it
+## cannot be shown, paused or mid-cinematic, it waits), and a run with a tunnel already open whose
+## card was never seen gets it at the next calm moment (Game._check_vortex_connections).
+func tunnel_card_owed() -> bool:
+	return not done("tunnel")
+
+
+## A missed tunnel card waits its turn: never over another lesson or its objective, and only once
+## the core lessons (intro, feeding, parasite) are behind him (the tunnel is the last lesson).
+func tunnel_card_may_catch_up() -> bool:
+	return tunnel_card_owed() and objective == "" and stage == "" and done("intro") and done("feeding") and done("parasite")
+
+
+## Shows the tunnel card now if it can (returns whether it is up); `then` runs once it is closed.
+func show_tunnel_card(then := Callable()) -> bool:
+	if done("tunnel") or stage != "" or not _can_stage():
+		return false
 	_mark("tunnel")
-	if not _can_stage():
-		return
 	_begin("tunnel", "tunnel", false)
+	_after_card = then
 	_card(TUNNEL_TITLE, TUNNEL_BODY)
+	return true
 
 
 # --- Staged moments ---------------------------------------------------------------------------------
@@ -533,6 +549,10 @@ func finish(why: String) -> void:
 		ui.hide_card()
 	if g.cinematic == "lesson":
 		g._end_cinematic()
+	if _after_card.is_valid():
+		var then := _after_card
+		_after_card = Callable()
+		then.call_deferred()
 	if _camera_prompt_after:
 		_camera_prompt_after = false
 		get_tree().create_timer(1.0).timeout.connect(func() -> void:

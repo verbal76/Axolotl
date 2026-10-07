@@ -10033,7 +10033,6 @@ func _test_onb_parasite() -> void:
 func _test_onb_feed_first() -> void:
 	await _onboarding().feed_first()
 
-
 func _test_onb_tunnel() -> void:
 	await _onboarding().tunnel()
 
