@@ -333,8 +333,6 @@ func _build_world() -> void:
 	title = TitleScreen.new()
 	add_child(title)
 	quality = QualityScaler.new()
-	# (The player's Video setting: visual cost only; Settings.video_mode.)
-	quality.mode = Settings.video_mode if Settings.video_mode in QualityScaler.MODE_NAMES else "auto"
 	add_child(quality)
 	presentation = Presentation.new()
 	presentation.g = self
@@ -923,8 +921,6 @@ func run_diagnostics_text() -> String:
 	if repop != null:
 		L.append("  " + repop.summary())
 	L.append("  " + drawn.summary())
-	if quality != null:
-		L.append("  " + quality.summary())
 	if hard != null:
 		L.append("  " + hard.summary())
 	if onboarding != null:
@@ -981,9 +977,9 @@ var _fps0 := -1
 func _title_pacing(dt: float) -> void:
 	if _fps0 < 0:
 		_fps0 = Engine.max_fps
-	# (The cap itself is set by QualityScaler.fps_cap(), the one owner of the frame rate.)
 	if state != "title" or (title != null and not title.visible) or Settings.test_mode != "":
 		if title_capped:
+			Engine.max_fps = _fps0
 			title_capped = false
 		_pace_frames.clear()
 		_pace_t = 0.0
@@ -995,6 +991,7 @@ func _title_pacing(dt: float) -> void:
 	if _pace_frames.size() < TITLE_PACE_WINDOW:
 		return
 	if title_should_cap(_pace_frames):
+		Engine.max_fps = 30
 		title_capped = true
 	_pace_frames.clear()
 
