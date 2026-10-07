@@ -155,19 +155,23 @@ void fragment() {
 	vec3 moss = mix(dead, healthy, h);
 	// Cushions of moss (E6f; owner reference: a sprouted moss ball): clumps a few centimetres
 	// across on lumps a hand wide, shaded gaps between them, and paler tips on the tallest strands.
-	// (The finest layer, 0.48 m tiles, fades out by mid-distance: there it is under a pixel and, at a
-	// grazing view, aliased into fine streaks across the slope.)
-	float fine = 1.0 - smoothstep(6.0, 18.0, length(VERTEX));
-	float clump = mix(0.5, tuft.r, fine) * 0.65 + det.g * 0.35;
+	// The finest layer (0.48 m tiles) only where a pixel covers a small part of a tile. Seen at a
+	// grazing angle a pixel spans many of them, and this layer and the relief made from it turned into
+	// fibrous streaks running toward the camera (2026-10-07, isolated by rendering without each
+	// ingredient). Fades by the pixel's footprint on the ground, so looking down close keeps it.
+	float footprint = length(fwidth(v_wpos)) * tex_scale * 13.1;
+	float fine = 1.0 - smoothstep(0.012, 0.035, footprint);
+	vec4 tuft_f = mix(vec4(0.5), tuft, fine);
+	float clump = tuft_f.r * 0.65 + det.g * 0.35;
 	moss *= mix(0.68, 1.1, smoothstep(0.22, 0.78, clump));
-	moss = mix(moss, moss * vec3(1.12, 1.12, 0.86) + vec3(0.02, 0.025, 0.0), smoothstep(0.62, 0.86, tuft.r) * 0.5 * h);
+	moss = mix(moss, moss * vec3(1.12, 1.12, 0.86) + vec3(0.02, 0.025, 0.0), smoothstep(0.62, 0.86, tuft_f.r) * 0.5 * h);
 
 	// Earth and stone: faint strata following the ball's layers, grains and dark seams.
 	float alt = length(v_wpos - ball_center);
 	float strata = sin(alt * 4.0 + (mid.g - 0.5) * 9.0 + (macro.b - 0.5) * 6.0) * 0.5 + 0.5;
-	float grain = strata * 0.4 + det.r * 0.6 + tuft.b * 0.2;
+	float grain = strata * 0.4 + det.r * 0.6 + tuft_f.b * 0.2;
 	vec3 stone = mix(stone_a, stone_b, smoothstep(0.1, 1.0, grain));
-	stone *= mix(0.8, 1.08, tuft.g);
+	stone *= mix(0.8, 1.08, tuft_f.g);
 	float seam = smoothstep(0.78, 0.92, det.b);
 	stone *= 1.0 - seam * 0.45;
 	// Stone near sick moss is a little greyer.
@@ -185,7 +189,7 @@ void fragment() {
 	// light. Faded out with distance, where it would only shimmer. (No branch round it: screen-space
 	// derivatives are undefined in divergent control flow.)
 	float near_ = 1.0 - smoothstep(10.0, 32.0, length(VERTEX));
-	float hgt = mix(grain * 0.7 + tuft.g * 0.3 - seam * 0.6, clump * 1.3, cover);
+	float hgt = mix(grain * 0.7 + tuft_f.g * 0.3 - seam * 0.6, clump * 1.3, cover);
 	vec3 bn = bump(wn, v_wpos, hgt, relief * near_);
 	NORMAL = normalize((VIEW_MATRIX * vec4(bn, 0.0)).xyz);
 	vec3 em = healthy_b * fres * sheen * h * 0.5 * cover;
