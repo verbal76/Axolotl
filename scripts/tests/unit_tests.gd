@@ -8177,6 +8177,14 @@ func _test_video_modes() -> void:
 	t.check("video_cool_stays_balanced_or_lighter", c_start == QualityScaler.COOL_MIN_LEVEL and c_light == QualityScaler.COOL_MIN_LEVEL
 			and c_forced == QualityScaler.COOL_MIN_LEVEL and c_hot == QualityScaler.COOL_MIN_LEVEL + 1 and a_mid == 0,
 			"start %d, 5 min light %d, forced 0 -> %d, 65%% load %d (Automatic at 65%%: %d)" % [c_start, c_light, c_forced, c_hot, a_mid])
+	# v103 corrective (owner, 2026-10-07: v103 froze his Pixel): no GPU frame timing and no MSAA
+	# switching mid-game, in any mode; the project's MSAA stays as set.
+	var gpu_words := []
+	for word in ["msaa", "measure_render_time", "render_time_gpu", "render_time_cpu", "RenderingServer"]:
+		if code.contains(word):
+			gpu_words.append(word)
+	t.check("quality_no_gpu_timing_no_msaa_switch", gpu_words.is_empty() and g.get_viewport().msaa_3d == ProjectSettings.get_setting("rendering/anti_aliasing/quality/msaa_3d"),
+			"scaler code mentions %s; viewport MSAA %d (project %d)" % [gpu_words, g.get_viewport().msaa_3d, ProjectSettings.get_setting("rendering/anti_aliasing/quality/msaa_3d")])
 	t.check("video_mode_never_touches_responsiveness", engine_same and touched.is_empty(),
 			"engine %s same %s; scaler code mentions %s" % [engine0, engine_same, touched])
 	t.check("video_menu_cycles_and_shows_tier", in_grid and texts == ["Video: Automatic", "Video: Quality", "Video: Cool/Battery"]

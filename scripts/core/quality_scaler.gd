@@ -2,15 +2,21 @@ class_name QualityScaler
 extends Node
 ## Quiet thermal/performance scaling (no messages, ever). Controls, camera, character, enemies,
 ## hints and restoration readability are never touched; only secondary visual cost is: the ceiling
-## light's shadows first, then MSAA, resolution scale, particles, vegetation density, glow and
-## secondary lights.
+## light's shadows first, then resolution scale, particles, vegetation density, glow and secondary
+## lights.
 ##
 ## Thermal pass (owner, 2026-10-06: a tester's phone, a Galaxy A14/A23/A26-class device, got hot):
 ## frame RATE alone is not enough. A phone that can just hold 60 fps at full quality would otherwise
-## run its GPU flat out for the whole session and heat up until it throttles. So the scaler also
-## watches how busy each frame is (the GPU's and the CPU's measured milliseconds against the frame
-## budget) and, when a phone stays near flat-out (HOT_LOAD) for HOT_WINDOWS in a row, steps down
-## although 60 still holds, to keep headroom. Light load (COOL_LOAD) for a long while steps back up,
+## run flat out for the whole session and heat up until it throttles. So the scaler also watches how
+## busy the game's own frame work is (process and physics milliseconds against the frame budget) and,
+## when a phone stays near flat-out (HOT_LOAD) for HOT_WINDOWS in a row, steps down although 60 still
+## holds, to keep headroom.
+##
+## v103 corrective (owner, 2026-10-07: v103 froze the owner's Pixel during play, again and again, and
+## stepped its quality down on every launch although it runs the game well): no GPU frame timing
+## (the GPU timestamp queries it needs are gone) and no MSAA switching mid-game (MSAA stays as the
+## project sets it, always). A phone that holds 60 fps with its game work well inside the budget is
+## never stepped down. Light load (COOL_LOAD) for a long while steps back up,
 ## never straight back into a level that ran hot (a ceiling for HOT_CEILING_S).
 ## A phone that cannot hold 60 even at the lowest level runs at an even 30 (smoother than an uneven
 ## 35-50 and about half the work); it goes back to 60 only if 60 would clearly fit.
@@ -23,7 +29,7 @@ extends Node
 ##    sustained overload acts (fps under QUALITY_SLOW of the target for QUALITY_SLOW_WINDOWS), and it
 ##    climbs back quickly once full rate holds again.
 ##  - "cool" (Cool/Battery): starts at, and never goes above, COOL_MIN_LEVEL (Balanced: no shadows, no
-##    MSAA, no glow), and steps down sooner (COOL_HOT_LOAD) to keep heat and battery use low.
+##    glow, a lower render scale), and steps down sooner (COOL_HOT_LOAD) to keep heat and battery use low.
 ## Every mode only changes visual cost. Gameplay, input sampling, the camera, physics ticks, attack
 ## timing, jump buffering and every other responsiveness system run exactly the same in all three.
 
@@ -50,24 +56,24 @@ var history: Array = []
 ## Per 2 s window: the measured load (0..1+ of the frame budget), for diagnostics and tests.
 var load_history: Array = []
 var last_load := -1.0
-## Tests: [gpu_ms, cpu_ms] for this frame instead of the measured ones. Empty = measure.
+## Tests: [unused, cpu_ms] for this frame instead of the measured ones (the first entry is kept for
+## the tests' shape; there is no GPU timing). Empty = measure.
 var measure_fn: Callable
 ## Tests may let the frame caps act under --test (otherwise a test run is never capped).
 var caps_in_tests := false
 var _fps0 := 60
-var _rid: RID
 ## "auto", "quality" or "cool" (Settings.VIDEO_MODES).
 var mode := "auto"
 
 ## "shadow": the ceiling light's shadow distance in metres (0 = none; Expansion 6).
 const LEVELS := [
-	{"scale": 1.0, "specks": 420, "veg": 1.0, "glow": true, "lights": 3, "shadow": 30.0, "msaa": true},
+	{"scale": 1.0, "specks": 420, "veg": 1.0, "glow": true, "lights": 3, "shadow": 30.0},
 	# (Shadows go first: they are most of what the Expansion 6 lighting costs.)
-	{"scale": 0.9, "specks": 300, "veg": 0.8, "glow": true, "lights": 2, "shadow": 0.0, "msaa": true},
-	{"scale": 0.8, "specks": 200, "veg": 0.6, "glow": false, "lights": 1, "shadow": 0.0, "msaa": false},
-	{"scale": 0.7, "specks": 120, "veg": 0.45, "glow": false, "lights": 1, "shadow": 0.0, "msaa": false},
+	{"scale": 0.9, "specks": 300, "veg": 0.8, "glow": true, "lights": 2, "shadow": 0.0},
+	{"scale": 0.8, "specks": 200, "veg": 0.6, "glow": false, "lights": 1, "shadow": 0.0},
+	{"scale": 0.7, "specks": 120, "veg": 0.45, "glow": false, "lights": 1, "shadow": 0.0},
 	# (Only a phone that needs it ever gets here: entry-level GPUs such as a Mali-G52 or Adreno 610.)
-	{"scale": 0.62, "specks": 60, "veg": 0.35, "glow": false, "lights": 1, "shadow": 0.0, "msaa": false},
+	{"scale": 0.62, "specks": 60, "veg": 0.35, "glow": false, "lights": 1, "shadow": 0.0},
 ]
 const WINDOW_S := 2.0
 ## Sustained share of the frame budget that counts as "running hot", and as "plenty of room".
@@ -95,8 +101,6 @@ const MODE_NAMES := {"auto": "Automatic", "quality": "Quality", "cool": "Cool/Ba
 func _ready() -> void:
 	process_mode = Node.PROCESS_MODE_ALWAYS
 	_fps0 = Engine.max_fps if Engine.max_fps > 0 else 60
-	_rid = get_viewport().get_viewport_rid()
-	RenderingServer.viewport_set_measure_render_time(_rid, true)
 	# Mobile screens are dense; start slightly below native resolution for the 3D pass.
 	if OS.has_feature("mobile"):
 		get_viewport().scaling_3d_mode = Viewport.SCALING_3D_MODE_BILINEAR
@@ -168,8 +172,8 @@ func _apply_fps() -> void:
 		Engine.max_fps = cap
 
 
-## This frame's [gpu_ms, cpu_ms]: what the GPU spent on the frame, and the main thread's process,
-## physics and render-submission time. 0 for a measure the platform does not give.
+## This frame's [0, cpu_ms]: the game's process and physics time (cheap engine counters; no GPU
+## timing, see the class notes).
 func _measure() -> Array:
 	if measure_fn.is_valid():
 		return measure_fn.call()
@@ -177,10 +181,8 @@ func _measure() -> Array:
 	# rate alone, as it always did, unless a test feeds it measurements.)
 	if Settings.test_mode != "":
 		return [0.0, 0.0]
-	var gpu := RenderingServer.viewport_get_measured_render_time_gpu(_rid)
-	var cpu := (Performance.get_monitor(Performance.TIME_PROCESS) + Performance.get_monitor(Performance.TIME_PHYSICS_PROCESS)) * 1000.0 \
-			+ RenderingServer.viewport_get_measured_render_time_cpu(_rid)
-	return [gpu, cpu]
+	var cpu := (Performance.get_monitor(Performance.TIME_PROCESS) + Performance.get_monitor(Performance.TIME_PHYSICS_PROCESS)) * 1000.0
+	return [0.0, cpu]
 
 
 func _process(dt: float) -> void:
@@ -291,9 +293,6 @@ func force_level(l: int) -> void:
 func _apply() -> void:
 	var q: Dictionary = LEVELS[level]
 	get_viewport().scaling_3d_scale = q["scale"] * (0.85 if OS.has_feature("mobile") else 1.0)
-	var msaa := Viewport.MSAA_2X if q["msaa"] else Viewport.MSAA_DISABLED
-	if get_viewport().msaa_3d != msaa:
-		get_viewport().msaa_3d = msaa
 	if WaterFX.inst:
 		WaterFX.inst.set_speck_density(q["specks"])
 	var g := Game.inst
