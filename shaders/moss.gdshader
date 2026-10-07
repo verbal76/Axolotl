@@ -13,6 +13,11 @@ render_mode cull_back, diffuse_lambert, specular_disabled;
 //   variation, the moss/stone boundary and strata, detail, and moss tufts.
 // - Near the camera the same samples also give the surface relief (bump from screen-space
 //   derivatives: no extra fetches), so moss clumps and stone grain catch the light (E6f).
+// - Anti-repetition (owner, 2026-10-07: "large streaks repeat across the moss balls"): the mid
+//   layer (one tile every ~10 m, where the repeats and streaks were) is read on two grids turned
+//   and scaled differently and cross-faded by the macro layer, so no two neighbouring tiles match;
+//   the warp that smeared it into streaks is gentler; bare-earth patches and a slow hue drift
+//   round the ball come from samples already taken (2 extra fetches in all, 10).
 
 #include "res://shaders/health_field.gdshaderinc"
 #include "res://shaders/aquarium_light.gdshaderinc"
@@ -33,7 +38,7 @@ uniform float sheen = 0.35;
 uniform float moss_slope = 0.5;
 uniform float moss_blend = 0.22;
 // How far the macro layer warps the mid one (m), and the height of the surface relief (m).
-uniform float warp = 8.0;
+uniform float warp = 3.0;
 uniform float relief = 0.035;
 // Nearby Regeneration Motes (xyz = world position, w = intensity). Cheap fake local light.
 uniform vec4 motes[6];
@@ -113,7 +118,12 @@ void fragment() {
 	// stripes seen from afar. The macro layer is read from a coarse mip (E6f): its fine grain,
 	// magnified by the warp, smeared the moss into marble swirls and streaks up close.)
 	vec4 macro = tri4(vec3(v_wpos.x * 0.6 - v_wpos.z * 0.8, v_wpos.y, v_wpos.x * 0.8 + v_wpos.z * 0.6) + 41.0, bl, tex_scale * 0.18, 24.0);
-	vec4 mid = tri4(v_wpos + (macro.rgb - 0.5) * warp, bl, tex_scale * 0.6, 1.0);
+	vec4 mid_a = tri4(v_wpos + (macro.rgb - 0.5) * warp, bl, tex_scale * 0.6, 1.0);
+	// The second grid: turned about 37 degrees on another axis pair and 1.37x the scale, so its
+	// tiles never line up with the first; the macro layer picks between them in soft patches.
+	vec3 p2 = vec3(v_wpos.x * 0.8 - v_wpos.y * 0.6, v_wpos.x * 0.6 + v_wpos.y * 0.8, v_wpos.z) + 73.0;
+	vec4 mid_b = tri4(p2 + (macro.gbr - 0.5) * warp, bl, tex_scale * 0.6 * 1.37, 1.0);
+	vec4 mid = mix(mid_a, mid_b, smoothstep(0.35, 0.65, macro.g * 0.7 + macro.r * 0.3));
 	vec4 det = tri4(v_wpos, bl, tex_scale * 2.2, 1.0);
 	// Tufts on a rotated, non-aligned grid, so the fine pattern does not visibly repeat.
 	vec4 tuft = tri4(vec3(v_wpos.x * 0.8 + v_wpos.z * 0.6, v_wpos.y, v_wpos.z * 0.8 - v_wpos.x * 0.6) + 17.0, bl, tex_scale * 13.1, 1.0);
@@ -123,7 +133,10 @@ void fragment() {
 	float slope = dot(wn, v_dir);
 	float in_cave = cave_factor(v_wpos);
 	// (Flat ground stays moss: the noise can only lower "grow" to about 0.8, above the blend.)
-	float grow = slope + (mid.b - 0.5) * 0.4 + smoothstep(0.62, 0.8, macro.b) * 0.3 - in_cave * 0.25;
+	// Bare earth on open ground (reference: moss with brown, earthy patches): soft-edged islands
+	// where the macro and mid layers both run low, a few metres across, never a grid.
+	float earth = smoothstep(0.58, 0.74, (1.0 - macro.b) * 0.55 + (1.0 - mid.g) * 0.45) * (1.0 - in_cave);
+	float grow = slope + (mid.b - 0.5) * 0.4 + smoothstep(0.62, 0.8, macro.b) * 0.3 - in_cave * 0.25 - earth * 0.55;
 	float cover = smoothstep(moss_slope - moss_blend, moss_slope + moss_blend, grow);
 
 	// Moss: health breaks up at the edges of healed patches, as before.
@@ -132,13 +145,20 @@ void fragment() {
 	float h = smoothstep(0.15, 0.85, clamp(v_health + (n1 - 0.5) * 0.7 * edge, 0.0, 1.0));
 	vec3 healthy = mix(healthy_a, healthy_b, smoothstep(0.25, 0.8, n1));
 	healthy = mix(healthy, moss_tint, smoothstep(0.55, 0.85, macro.g) * 0.45);
+	// A slow drift of hue round the whole ball (tens of metres; no texture): deeper, bluer greens in
+	// places and warmer, yellower ones in others, so distant ground never reads as one repeated tile.
+	float drift = sin(dot(v_dir, vec3(3.1, 2.3, 1.7)) * 2.0 + sin(dot(v_dir, vec3(-1.3, 2.9, 2.2)) * 3.0)) * 0.5 + 0.5;
+	healthy *= mix(vec3(0.86, 0.95, 1.04), vec3(1.1, 1.04, 0.84), drift);
 	vec3 dead = mix(dead_a, dead_b, n1);
 	float crack = smoothstep(0.86, 0.95, mid.g) * (1.0 - h);
 	dead *= 1.0 - crack * 0.55;
 	vec3 moss = mix(dead, healthy, h);
 	// Cushions of moss (E6f; owner reference: a sprouted moss ball): clumps a few centimetres
 	// across on lumps a hand wide, shaded gaps between them, and paler tips on the tallest strands.
-	float clump = tuft.r * 0.65 + det.g * 0.35;
+	// (The finest layer, 0.48 m tiles, fades out by mid-distance: there it is under a pixel and, at a
+	// grazing view, aliased into fine streaks across the slope.)
+	float fine = 1.0 - smoothstep(6.0, 18.0, length(VERTEX));
+	float clump = mix(0.5, tuft.r, fine) * 0.65 + det.g * 0.35;
 	moss *= mix(0.68, 1.1, smoothstep(0.22, 0.78, clump));
 	moss = mix(moss, moss * vec3(1.12, 1.12, 0.86) + vec3(0.02, 0.025, 0.0), smoothstep(0.62, 0.86, tuft.r) * 0.5 * h);
 

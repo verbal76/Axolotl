@@ -6,9 +6,11 @@ extends Node3D
 ##
 ## Expansion 6 (owner: "a spiral of water jets ... a revolving tidal pool spinning hurricane jet of
 ## water that he's circling through", not a solid tube with a cone jammed in the dirt): a swirling
-## tidal pool lies on the moss at each end, sand and bubbles spiral up out of it, and JETS jets of
-## water wind as a helix round the path between the balls, flaring out into the pools. The spiral
-## revolves (`spin_phase`), and the ride carries Gill round the path beside one of the jets.
+## tidal pool lies on the moss at each end, sand and bubbles spiral up out of it, and water winds as
+## a helix round the path between the balls, flaring out into the pools. The spiral revolves
+## (`spin_phase`), and the ride carries Gill round the path beside the first ribbon. Since 2026-10-07
+## (owner reference image) the water is a few broad, translucent ribbons and fine wisps
+## (RIBBONS, WISPS, shaders/vortex_ribbons.gdshader), no longer stacked tubes.
 ##
 ## Vortex currents (ledger row 14, owner: the tunnels read as straight pipes; they must read as moving
 ## water currents): the logical travel path `points` stays fixed, and the visible centreline is carried
@@ -23,9 +25,22 @@ extends Node3D
 const CONNECT_AT := 0.7
 ## Radius of the helix the jets wind along (and of the old tube, kept for the mouth clearance).
 const TUBE_RADIUS := 2.1
-const JETS := 5
-const JET_R := 0.42
-const STREAMS := 3
+## The water's ribbons (owner, 2026-10-07): [phase, radius (x TUBE_RADIUS), width (m), pace (x the
+## spiral's turns), twist (turns of the ribbon about its own line over the path), twist lean (rad)].
+## The first follows the spiral's own helix (helix_angle, phase 0), which the ride follows, so Gill
+## still rides beside the water. Different widths, radii, paces and twists so no two read as copies.
+const RIBBONS := [
+	[0.0, 1.0, 3.4, 1.0, 1.6, 0.45],
+	[2.3, 0.9, 4.4, 0.62, -1.1, 0.6],
+	[4.2, 1.18, 2.6, 0.74, 2.3, 0.4],
+	[1.2, 0.7, 2.2, 0.55, 0.8, 0.7],
+]
+## The fine wisps inside: narrow ribbons, quicker.
+const WISPS := [
+	[0.6, 0.5, 0.55, 1.25, 0.0, 0.2],
+	[2.7, 0.42, 0.45, 1.4, 0.0, 0.2],
+	[4.8, 0.55, 0.4, 1.18, 0.0, 0.2],
+]
 const POOL_R := 5.2
 ## Each connection's faint hue (owner, 2026-09-30: nearby vortices were mistaken for one another), by
 ## its index in Levels.LINKS: the same at both ends, stable, and chosen so no two connections that
@@ -153,18 +168,19 @@ func _ready() -> void:
 		_length += points[i].distance_to(points[i - 1])
 	turns = clampf(_length / 9.0, 3.0, 7.0)
 	_setup_current(p0, p3)
+	# The water (owner, 2026-10-07): a few broad ribbons twisting into a funnel, not tubes.
 	var jets := MeshInstance3D.new()
-	jets.mesh = _jet_mesh(JETS, TUBE_RADIUS, JET_R, 7, 0.0)
-	_jet_mat = _make_jet_mat(0.85, 9.0)
+	jets.mesh = _ribbon_mesh(RIBBONS, TUBE_RADIUS)
+	_jet_mat = _make_jet_mat(1.0, 7.0)
 	jets.material_override = _jet_mat
 	jets.cast_shadow = GeometryInstance3D.SHADOW_CASTING_SETTING_OFF
 	jets.name = "Jets"
 	jets.extra_cull_margin = current_bound()
 	add_child(jets)
-	# Thinner streams of spray further in, between the jets.
+	# Fine wisps of spray further in, between them.
 	var streams := MeshInstance3D.new()
-	streams.mesh = _jet_mesh(STREAMS, TUBE_RADIUS * 0.55, 0.11, 4, PI / STREAMS)
-	_stream_mat = _make_jet_mat(0.5, 13.0)
+	streams.mesh = _ribbon_mesh(WISPS, TUBE_RADIUS)
+	_stream_mat = _make_jet_mat(0.6, 11.0)
 	streams.material_override = _stream_mat
 	streams.cast_shadow = GeometryInstance3D.SHADOW_CASTING_SETTING_OFF
 	streams.name = "Streams"
@@ -270,7 +286,7 @@ func _update_current() -> void:
 
 func _make_jet_mat(opacity: float, flow: float) -> ShaderMaterial:
 	var m := ShaderMaterial.new()
-	m.shader = preload("res://shaders/vortex_jets.gdshader")
+	m.shader = preload("res://shaders/vortex_ribbons.gdshader")
 	m.set_shader_parameter("length_m", _length)
 	m.set_shader_parameter("opacity", opacity)
 	m.set_shader_parameter("flow_speed", flow)
@@ -311,50 +327,65 @@ func _helix_point(t: float, r: float, ph: float) -> Vector3:
 	return (f[0] as Vector3) + ((f[2] as Vector3) * cos(a) + (f[3] as Vector3) * sin(a)) * helix_radius(t, r)
 
 
-## `count` tubes wound round the path as a helix of radius `r`, `jr` thick with `sides` sides,
-## evenly spaced round it from `phase0`. CUSTOM0 = the path point each ring belongs to, CUSTOM1 =
-## the path's direction there (w = which jet), so the shader can revolve the spiral round the path.
-func _jet_mesh(count: int, r: float, jr: float, sides: int, phase0: float) -> ArrayMesh:
+## Ribbons wound round the path (RIBBONS / WISPS rows), radius in units of `r`. Each lies on the
+## funnel's surface (its width runs round the funnel, across its own line), leaning in and out by a
+## slow twist; three vertices across it (edge, a slightly raised middle, edge) so it has a little
+## body. CUSTOM0 = the path point each ring belongs to (w = u), CUSTOM1 = the path's direction there
+## (w = which ribbon), so the shader can revolve the spiral round the path. UV.x across, UV.y = u.
+func _ribbon_mesh(rows: Array, r: float) -> ArrayMesh:
 	var st := SurfaceTool.new()
 	st.begin(Mesh.PRIMITIVE_TRIANGLES)
 	st.set_custom_format(0, SurfaceTool.CUSTOM_RGBA_FLOAT)
 	st.set_custom_format(1, SurfaceTool.CUSTOM_RGBA_FLOAT)
-	var n := int(clampf(turns * 22.0, 90.0, 160.0))
+	var n := int(clampf(turns * 40.0, 160.0, 300.0))
 	var base := 0
-	for j in count:
-		var ph := phase0 + TAU * j / count
+	for j in rows.size():
+		var row: Array = rows[j]
+		var ph: float = row[0]
+		var rr: float = r * float(row[1])
+		var w: float = row[2]
+		var pace: float = row[3]
+		var tw: float = row[4]
+		var lean: float = row[5]
+		var at := func(t: float) -> Vector3:
+			var f := _frame(t)
+			var a := ph + t * turns * pace * TAU
+			return (f[0] as Vector3) + ((f[2] as Vector3) * cos(a) + (f[3] as Vector3) * sin(a)) * helix_radius(t, rr)
 		for i in n:
 			var t := float(i) / (n - 1)
 			var f := _frame(t)
-			var c := _helix_point(t, r, ph)
+			var c: Vector3 = at.call(t)
 			var dt := 0.5 / (n - 1)
-			var tang := (_helix_point(minf(t + dt, 1.0), r, ph) - _helix_point(maxf(t - dt, 0.0), r, ph)).normalized()
-			var n1 := (c - (f[0] as Vector3))
-			n1 = (n1 - tang * n1.dot(tang)).normalized()
-			var n2 := tang.cross(n1).normalized()
-			# Thin at the ends (they come out of the pools), swelling slightly along the way.
-			var th := jr * (0.6 + 0.4 * smoothstep(0.0, 0.05, t) * (1.0 - smoothstep(0.95, 1.0, t))) * (1.0 + 0.18 * sin(t * 37.0 + j * 2.3))
-			for k in sides + 1:
-				var a := TAU * k / sides
-				var nrm := n1 * cos(a) + n2 * sin(a)
+			var tang := ((at.call(minf(t + dt, 1.0)) as Vector3) - (at.call(maxf(t - dt, 0.0)) as Vector3)).normalized()
+			var radial := c - (f[0] as Vector3)
+			radial = (radial - tang * radial.dot(tang)).normalized()
+			var round_ := tang.cross(radial).normalized()
+			# Narrow where it leaves the pools, widest mid-way; it breathes a little along its length.
+			var env := smoothstep(0.0, 0.06, t) * (1.0 - smoothstep(0.94, 1.0, t))
+			var half := w * 0.5 * (0.35 + 0.65 * env) * (1.0 + 0.22 * sin(t * 23.0 + j * 1.9))
+			var lean_a := lean * sin(t * tw * TAU + j)
+			var across := round_ * cos(lean_a) + radial * sin(lean_a)
+			var nrm := tang.cross(across).normalized()
+			for k in 3:
+				var x := float(k) * 0.5
+				var pos := c + across * (x * 2.0 - 1.0) * half + nrm * (0.12 * half if k == 1 else 0.0)
 				st.set_normal(nrm)
-				st.set_uv(Vector2(float(k) / sides, t))
+				st.set_uv(Vector2(x, t))
 				st.set_custom(0, Color((f[0] as Vector3).x, (f[0] as Vector3).y, (f[0] as Vector3).z, t))
 				st.set_custom(1, Color((f[1] as Vector3).x, (f[1] as Vector3).y, (f[1] as Vector3).z, float(j)))
-				st.add_vertex(c + nrm * th)
+				st.add_vertex(pos)
 		for i in n - 1:
-			for k in sides:
-				var a0 := base + i * (sides + 1) + k
-				var b0 := a0 + sides + 1
+			for k in 2:
+				var a0 := base + i * 3 + k
+				var b0 := a0 + 3
 				st.add_index(a0)
 				st.add_index(b0)
 				st.add_index(a0 + 1)
 				st.add_index(a0 + 1)
 				st.add_index(b0)
 				st.add_index(b0 + 1)
-		base += n * (sides + 1)
-	var mesh := st.commit()
-	return mesh
+		base += n * 3
+	return st.commit()
 
 
 func _make_mouth(b: MossBall, d: Vector3) -> Node3D:

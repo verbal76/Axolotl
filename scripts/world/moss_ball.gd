@@ -1279,6 +1279,34 @@ func scatter(mesh: Mesh, mat: Material, count: int, seed_v: int, scale_min: floa
 	return out
 
 
+## Instanced vegetation from given placements (ball-local transforms), chunked into the same
+## ~35 m cells as `scatter`, so distance and horizon culling treat it the same way.
+func scatter_list(mesh: Mesh, mat: Material, xforms: Array, vis_end := 45.0) -> Array:
+	var k := clampi(int(ceil(sqrt(4.0 * PI * radius * radius / 6.0) / 35.0)), 1, 6)
+	var buckets := {}
+	for x: Transform3D in xforms:
+		var key := _cube_cell(x.origin.normalized(), k)
+		if not buckets.has(key):
+			buckets[key] = []
+		buckets[key].append(x)
+	var out := []
+	for key in buckets:
+		var list: Array = buckets[key]
+		var mmi := MultiMeshInstance3D.new()
+		mmi.material_override = mat
+		mmi.cast_shadow = GeometryInstance3D.SHADOW_CASTING_SETTING_OFF
+		mmi.visibility_range_end = vis_end
+		mmi.visibility_range_end_margin = 8.0
+		mmi.visibility_range_fade_mode = GeometryInstance3D.VISIBILITY_RANGE_FADE_SELF
+		fill_chunk(mmi, mesh, list)
+		var xfs: Array[Transform3D] = []
+		xfs.assign(list)
+		mmi.set_meta("veg_transforms", xfs)
+		_veg_parent.add_child(mmi)
+		out.append(mmi)
+	return out
+
+
 ## The cube-face grid cell (k x k per face) a direction falls in.
 static func _cube_cell(d: Vector3, k: int) -> int:
 	var a := d.abs()

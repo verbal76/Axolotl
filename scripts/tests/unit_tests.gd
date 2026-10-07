@@ -6784,6 +6784,39 @@ func _test_veg_stays_put() -> void:
 		if b0._veg_cull_dir[i].angle_to(d) < 0.15 and not b0._veg_cull[i].visible:
 			near_shown = false
 	b0.update_visibility(g.cam.global_position)
+	# Ground dressing (owner reference, 2026-10-07): small clumps on every ball, in clusters (not an
+	# even sprinkle), never on a vortex pad or in a ravine.
+	var dress := []
+	var on_bad := 0
+	var cv_min := INF
+	for b in g.balls:
+		var mb: MossBall = b
+		var n := 0
+		var cells := {}
+		for c in mb._veg_parent.get_children():
+			if not (c is GeometryInstance3D) or not c.has_meta("veg_transforms") or not is_equal_approx((c as GeometryInstance3D).visibility_range_end, Levels.DRESS_VIS_M):
+				continue
+			for x in c.get_meta("veg_transforms"):
+				var dd := (x as Transform3D).origin.normalized()
+				n += 1
+				if mb.on_vortex_pad(dd) or mb.ravine_at(dd) != "":
+					on_bad += 1
+				# Counts per ~4 m cell: clustered placement leaves most cells empty and a few full.
+				var key := Vector3i((dd * mb.radius / 4.0).round())
+				cells[key] = int(cells.get(key, 0)) + 1
+		var vals: Array = cells.values()
+		var mean := 0.0
+		for v in vals:
+			mean += float(v)
+		mean /= maxf(1.0, vals.size())
+		var var_ := 0.0
+		for v in vals:
+			var_ += (float(v) - mean) * (float(v) - mean)
+		var cv := sqrt(var_ / maxf(1.0, vals.size())) / maxf(mean, 0.001)
+		cv_min = minf(cv_min, cv)
+		dress.append(n)
+	t.check("ground_dressing_clustered", dress.min() > 800 and on_bad == 0 and cv_min > 0.8,
+			"clumps per ball %s; on pads/ravines %d; least clustering (cv of per-cell counts) %.2f" % [dress, on_bad, cv_min])
 	t.check("veg_never_thinned_by_quality", thinned == 0, "%d chunk states thinned across %d quality levels" % [thinned, QualityScaler.LEVELS.size()])
 	t.check("veg_ranges_clear_of_their_plants", chunks > 1000 and tight.is_empty(), "%d chunks; tight: %s" % [chunks, tight.slice(0, 4)])
 	t.check("veg_horizon_cull_follows_low_camera", hidden_far > 0 and near_shown, "far side hid %d; chunks under a camera 2 m below the radius shown %s" % [hidden_far, near_shown])

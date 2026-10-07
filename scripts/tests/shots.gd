@@ -353,6 +353,27 @@ func run(runner) -> void:
 				g.player.place(st[0], st[1], st[2])
 				g.cam.snap_behind()
 				await _perf_view("%s %s" % [st[3], step])
+	if only == "perfvx":
+		# The vortex's cost (2026-10-07 visual pass): near its pool, from mid-distance, and mid-ride.
+		var b0 := g.balls[0]
+		var v: Vortex = b0.vortex_out
+		v.connected = true
+		v.strength = 1.0
+		var vd := v.dir_a
+		var fr := MossBall.frame_at(vd, 0.0)
+		for k in [[9.0, 0.3, "near"], [20.0, 0.15, "mid"]]:
+			var off := vd.rotated(fr.x, deg_to_rad(float(k[0])))
+			_look(g, 0, b0.surface_point(off, 0.2), b0.surface_point(vd) - b0.surface_point(off), k[1])
+			await t.seconds(1.0)
+			await _perf_view("vortex_" + str(k[2]))
+		g._start_cinematic("travel", {"v": v, "reverse": false})
+		await t.seconds(2.4)
+		await RenderingServer.frame_post_draw
+		var t0 := Time.get_ticks_usec()
+		for i in 30:
+			await RenderingServer.frame_post_draw
+		t.log_line("PERF vortex_ride  %.1f ms/frame  draw calls %d  triangles %d" % [(Time.get_ticks_usec() - t0) / 1000.0 / 30.0,
+				Performance.get_monitor(Performance.RENDER_TOTAL_DRAW_CALLS_IN_FRAME), Performance.get_monitor(Performance.RENDER_TOTAL_PRIMITIVES_IN_FRAME)])
 	if only == "perf":
 		# Rendering cost at fixed views: frame time (software renderer here, so a proxy for GPU
 		# fill cost, not phone numbers), draw calls, triangles and video memory.

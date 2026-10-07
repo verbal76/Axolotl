@@ -76,6 +76,7 @@ static func build_ball(i: int, game: Node) -> MossBall:
 		6: WorldExpansion.hollow_grotto(lb)
 	_accent_flora(lb, i)
 	_sprouts(lb, i)
+	_ground_dressing(lb, i)
 	b.finalize_terrain()
 	if not b.carves.is_empty():
 		b.add_child(RavineOoze.build(b))
@@ -190,6 +191,56 @@ static func _accent_flora(lb: LevelBuilder, i: int) -> void:
 		var col: Array = ACCENTS[i][k]
 		var mat := b.make_veg_material(col[0], col[1], Vegetation.family_params("short", 0.45).merged({"sway": 0.12, "wake_gain": 0.7, "cam_fade": 1.0}, true))
 		b.coral_nodes += b.scatter(MeshLib.coral_mesh(5 + k * 2, 0.75 + k * 0.15, 900 + i * 10 + k), mat, per, 900 + i * 10 + k, 0.9, 1.8, ok, 70.0)
+
+
+## Ground dressing (owner, 2026-10-07, reference image): small algae, moss cushions and fine grass
+## in organic clusters, so the ground does not read as a texture wrapped round a sphere. Clusters
+## of very different sizes (most small, a few large), members scattered round each centre and
+## smaller toward its edge, every one turned and sized its own way; three looks mixed in each.
+## Its own random sequence (nothing else on the ball moves); kept off paths, pads and ravines like
+## the other plants; the vegetation shader (sway, wake, health colour), chunks and culling as the
+## rest; small, so drawn only to DRESS_VIS_M.
+const DRESS_CLUSTERS := 520
+const DRESS_VIS_M := 50.0
+
+
+static func _ground_dressing(lb: LevelBuilder, i: int) -> void:
+	var b := lb.ball
+	var keep := _veg_keep_clear(lb)
+	var rng := RandomNumberGenerator.new()
+	rng.seed = 5150 + i * 97
+	var clusters := int(DRESS_CLUSTERS * pow(float(RADII[i]) / 48.0, 2.0))
+	var lists := [[], [], []]
+	for c in clusters:
+		var cd := Vector3(rng.randfn(), rng.randfn(), rng.randfn()).normalized()
+		# Most clusters a few clumps, now and then a big patch (exponential sizes, mean ~5).
+		var size := int(clampf(-log(maxf(rng.randf(), 0.001)) * 5.0, 1.0, 18.0))
+		var spread_m := rng.randf_range(0.5, 2.4)
+		var fr := MossBall.frame_at(cd, rng.randf() * 360.0)
+		for m in size:
+			var off := Vector2(rng.randfn(), rng.randfn()) * spread_m
+			var d := (cd + fr.x * (off.x / b.radius) + fr.z * (off.y / b.radius)).normalized()
+			var look := rng.randi() % 3
+			var s := rng.randf_range(0.7, 1.35) * maxf(0.55, 1.0 - 0.25 * off.length() / spread_m)
+			var heading := rng.randf() * 360.0
+			var stretch := rng.randf_range(0.8, 1.2)
+			if keep.call(d) or b.on_vortex_pad(d) or b.ravine_at(d) != "":
+				continue
+			var bs := MossBall.frame_at(d, heading).scaled(Vector3(s, s * stretch, s))
+			lists[look].append(Transform3D(bs, d * (b.radius + b.terrain_height(d) - 0.04)))
+	var pa: Color = b.palette.get("moss_healthy_a", Color(0.1, 0.34, 0.08))
+	var pb: Color = b.palette.get("moss_healthy_b", Color(0.36, 0.66, 0.2))
+	# [mesh, colours]: olive algae with warm, dry tips; low bright moss cushions; fine grass.
+	var looks := [
+		[MeshLib.tuft_mesh(7, 0.06, 0.2, 0.16, 5200 + i, 2, 0.55), pa.lerp(Color(0.3, 0.22, 0.08), 0.45), pb.lerp(Color(0.66, 0.55, 0.22), 0.5)],
+		[MeshLib.tuft_mesh(9, 0.05, 0.11, 0.1, 5300 + i, 2, 0.4), pa.lightened(0.05), pb.lightened(0.12)],
+		[MeshLib.tuft_mesh(4, 0.035, 0.32, 0.08, 5400 + i, 2, 0.35), pa, pb],
+	]
+	for k in 3:
+		if (lists[k] as Array).is_empty():
+			continue
+		var mat := b.make_veg_material(looks[k][1], looks[k][2], Vegetation.family_params("short", 0.2).merged({"sway": 0.07, "wake_gain": 0.5, "cam_fade": 0.8}, true))
+		b.scatter_list(looks[k][0], mat, lists[k], DRESS_VIS_M)
 
 
 ## Ambient flap of platform and ladder leaves at the tip, in metres (dev-000024 playtest polish).

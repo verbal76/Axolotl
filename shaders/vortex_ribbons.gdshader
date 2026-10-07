@@ -1,15 +1,16 @@
 shader_type spatial;
-render_mode unshaded, blend_mix, depth_draw_never, cull_back, shadows_disabled;
+render_mode unshaded, blend_mix, depth_draw_never, cull_disabled, shadows_disabled;
 
-// The vortex's water jets (Expansion 6, owner: "a spiral of water jets ... a revolving tidal pool
-// spinning hurricane jet of water that he's circling through", never a solid tube).
-// Each jet is a tube wound as a helix round the vortex's path (built in Vortex._jet_mesh). The whole
-// spiral revolves round the path: every vertex turns about its own point on the path (CUSTOM0.xyz)
-// and the path's direction there (CUSTOM1.xyz) by `spin_phase`, which the script advances so it knows
-// where the jets are (Gill rides beside one). UV.x = round the jet, UV.y = t along the path (0 at A).
-// Water rushes along each jet: bright foam streaks over a glassy aqua body, lighter at the edges.
-// Vortex currents (ledger row 14): after the spin, the whole spiral is carried by the meandering
-// centreline offset D(u) (vortex_current.gdshaderinc), u = UV.y = CUSTOM0.w (0 at A, 0.5 mid, 1 at B).
+// The vortex's water (owner, 2026-10-07, reference image: "broad, smooth, translucent streams of
+// water twisting organically into a funnel", not the segmented corkscrew of tubes it replaces).
+// A few broad ribbons lie on the funnel's surface and wind round the vortex's path, each its own
+// width, radius, pace and twist (Vortex._ribbon_mesh); a few fine wisps run inside them. The look is
+// all in this shader: soft, wispy edges, a brighter core, long streaks racing along the flow, and
+// a luminous rim where a ribbon turns edge-on (aqua body, white foam, the connection's own tint).
+// Everything else is as the jets were: the spiral revolves round the path (spin_phase; CUSTOM0 =
+// path point and u, CUSTOM1 = path direction and ribbon index), the meandering current carries it
+// (vortex_current.gdshaderinc), it grows out along u, and Hard Mode distress pulses it.
+// UV.x = across the ribbon (0..1), UV.y = u along the connection (0 at A).
 
 #include "res://shaders/vortex_current.gdshaderinc"
 #include "res://shaders/vortex_distress.gdshaderinc"
@@ -75,13 +76,18 @@ void fragment() {
 		discard;
 	}
 	float tip = 1.0 - smoothstep(grow - 0.05, grow, t);
-	// Water rushing along the jet: long streaks that race toward the far end.
 	float along = t * length_m;
-	// (Round the jet by cos/sin, so the pattern has no seam where UV.x wraps.)
-	vec2 rd = vec2(cos(UV.x * 6.2832), sin(UV.x * 6.2832));
-	float n1 = vnoise(vec2(rd.x * 0.8 + v_jet * 3.1, along * 0.55 - TIME * flow_speed * 0.55 + rd.y * 0.8));
-	float n2 = vnoise(vec2(rd.x * 1.4 - v_jet * 1.3, along * 1.3 - TIME * flow_speed * 1.1 + rd.y * 1.4));
-	float streak = smoothstep(0.45, 0.8, n1 * 0.65 + n2 * 0.45);
+	float x = UV.x;
+	// Across the ribbon: soft, wispy edges (their width breathes along the flow), a brighter core.
+	float e = 1.0 - abs(x * 2.0 - 1.0);
+	float en = vnoise(vec2(along * 0.32 - TIME * flow_speed * 0.22, v_jet * 7.3));
+	float soft = smoothstep(0.0, 0.5 + 0.35 * en, e);
+	float core = e * e * e;
+	// Water racing along the ribbon: long, stretched streaks in two layers.
+	float n1 = vnoise(vec2(x * 2.6 + v_jet * 3.1, along * 0.22 - TIME * flow_speed * 0.32));
+	float n2 = vnoise(vec2(x * 6.0 - v_jet * 1.3, along * 0.75 - TIME * flow_speed * 0.85));
+	float streak = smoothstep(0.42, 0.88, n1 * 0.62 + n2 * 0.48);
+	// Edge-on, a sheet of water shines (the luminous rims of the reference).
 	float fres = pow(1.0 - clamp(abs(dot(NORMAL, VIEW)), 0.0, 1.0), 2.0);
 	vec3 foam_t = mix(foam, tint, tint_amt);
 	vec3 deep_t = mix(deep, deep * tint * 1.35, tint_amt * 0.7);
@@ -93,12 +99,14 @@ void fragment() {
 		// (The deep body only brightens and darkens: a stronger tint there would turn its hue.)
 		deep_t *= ds.x;
 	}
-	vec3 col = mix(deep_t, foam_t, clamp(streak * 0.85 + fres * 0.45 + pulse * 0.3, 0.0, 1.0));
+	vec3 col = mix(deep_t, foam_t, clamp(0.22 + streak * 0.55 + fres * 0.55 + core * 0.3 + pulse * 0.3, 0.0, 1.0));
+	// A touch over white in the brightest foam, so it glows a little with the scene's glow.
+	col *= 1.0 + streak * 0.2 + streak * fres * 0.4;
 	if (ds.z > 0.0) {
 		col = mix(col, vec3(1.0), ds.z);
 	}
 	float end_fade = smoothstep(0.0, 0.015, t) * (1.0 - smoothstep(0.985, 1.0, t));
-	float a = (0.42 + fres * 0.4 + streak * 0.4) * (0.25 + strength * 0.75) * (1.0 + pulse * 0.5);
+	float a = soft * (0.16 + streak * 0.32 + fres * 0.38 + core * 0.14) * (0.3 + strength * 0.7) * (1.0 + pulse * 0.5);
 	ALBEDO = col;
 	ALPHA = clamp(a * tip * end_fade * opacity, 0.0, 1.0);
 }
