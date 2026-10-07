@@ -607,9 +607,13 @@ func update_visibility(cam_pos: Vector3) -> void:
 	var to_cam := cam_pos - global_position
 	var dist := to_cam.length()
 	chunks_hidden = 0
-	if dist < radius + 1.0:
+	if dist < 0.001:
 		return
 	var cam_dir := to_cam / dist
+	# (A camera low in a ravine or cave mouth, under the ball's radius, is culled as if just over the
+	# surface there. The pass used to be skipped, leaving every chunk as it was when the camera went
+	# down, so plants ahead could stay hidden until it came back up.)
+	dist = maxf(dist, radius + 1.0)
 	# The camera sees over the bulge to this angle; tall things beyond it still show their tops.
 	var horizon := acos(clampf(radius / dist, -1.0, 1.0)) + acos(clampf(radius / (radius + terrain_max_h + 8.0), -1.0, 1.0))
 	for i in terrain_chunks.size():
@@ -1435,10 +1439,3 @@ static func _mesh_tris(mesh: Mesh) -> int:
 func far_vegetation() -> Node3D:
 	return _far_veg
 
-
-## Fraction of scattered vegetation instances kept visible (thermal scaling).
-func set_vegetation_density(f: float) -> void:
-	for c in _veg_parent.get_children():
-		if c is MultiMeshInstance3D:
-			var mm: MultiMesh = c.multimesh
-			mm.visible_instance_count = int(mm.instance_count * f) if f < 0.999 else -1
