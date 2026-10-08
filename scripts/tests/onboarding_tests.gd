@@ -1394,13 +1394,17 @@ func replay() -> void:
 	t.check("replay_resets_and_shows_intro", reset_ok and carded and texts.has(Onboarding.INTRO_TITLE) and o.done("intro"),
 			"reset %s, card %s: %s" % [reset_ok, carded, ", ".join(texts)])
 	var mx := p.max_health
+	var hp0 := p.health
 	o.ui.tap()
 	await t.frames(3)
-	t.check("replay_intro_then_frond_for_feeding", o.stage == "" and p.controls_enabled and p.health == mx - 1 and o.run_frond
-			and g.run_save.earned().size() == earned0, "hp %d/%d, earned %d -> %d" % [p.health, mx, earned0, g.run_save.earned().size()])
+	t.check("replay_keeps_the_run", o.stage == "" and p.controls_enabled and p.health == hp0 and p.max_health == mx
+			and g.run_save.earned().size() == earned0 and g.state == "play", "hp %d -> %d/%d, earned %d -> %d" % [hp0, p.health, mx, earned0, g.run_save.earned().size()])
+	# The lessons come again at their moments: short of a frond with a shrimp in view, the feeding one.
+	p.health = mx - 1
 	var f := jelly(4.0)
 	var on := await wait_until(func() -> bool: return o.objective == "feeding", 2.0)
 	t.check("replay_lessons_come_again", on, "objective '%s'" % o.objective)
+	p.restore_full()
 	if is_instance_valid(f):
 		p.ball.foods.erase(f)
 		f.queue_free()

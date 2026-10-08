@@ -448,23 +448,38 @@ func restart_experience(mode := "normal") -> void:
 
 ## Who's playing (owner, 2026-10-08; Players): this player's run is saved, the chosen player's
 ## colours are put on and the game comes back up on the title with that player's run.
-func switch_player(id: String) -> void:
+func switch_player(id: String) -> bool:
 	if id == Players.current() or not Players.list_ids().has(id):
-		return
-	if run_save != null and has_run_in_progress():
-		save_run()
+		return false
+	# (This player's run is saved first, and only a save that worked lets the other player in.)
+	if run_save != null and has_run_in_progress() and not save_for_leaving():
+		return false
 	Players.set_current(id)
 	Settings.load_player_look()
 	get_tree().paused = false
 	Settings.skip_title = false
 	get_tree().reload_current_scene()
+	return true
 
 
-func return_to_title() -> void:
-	save_run()
+## The run written through its one save path before leaving it, and confirmed: true once the save
+## has completed (written and atomically in place), or when there is nothing this build may write
+## (a run save from a newer format is read-only: what is on disk is already the newest).
+func save_for_leaving() -> bool:
+	if run_save == null or run_save.read_only:
+		return true
+	return save_run()
+
+
+## Save & Return to Title (owner, 2026-10-08): the run is saved and confirmed first; a save that
+## failed stays here (returns false) so the menu can say so and nothing is lost.
+func return_to_title() -> bool:
+	if not save_for_leaving():
+		return false
 	get_tree().paused = false
 	Settings.skip_title = false
 	get_tree().reload_current_scene()
+	return true
 
 
 # --- Run save, clock and completion --------------------------------------------------------
@@ -472,8 +487,9 @@ func return_to_title() -> void:
 static func run_save_path() -> String:
 	if Settings.test_args.has("run-save"):
 		return Settings.test_args["run-save"]
-	# Automated runs never touch the player's run save.
-	return "user://test_run.json" if Settings.test_mode != "" else Players.run_path()
+	# Automated runs never touch the player's run save (except the profile tests, --players: they
+	# play the real profiles in their own user://).
+	return "user://test_run.json" if Settings.test_mode != "" and not Settings.test_args.has("players") else Players.run_path()
 
 
 ## After the world is built: the catalog stamps ids on the world, the run save is opened (tests
@@ -481,7 +497,7 @@ static func run_save_path() -> String:
 func _open_run() -> void:
 	completion = Completion.build_from_world(balls, vortices)
 	var path := run_save_path()
-	if Settings.test_mode != "" and not Settings.test_args.has("run-save"):
+	if Settings.test_mode != "" and not Settings.test_args.has("run-save") and not Settings.test_args.has("players"):
 		RunSave.erase(path)
 	run_save = RunSave.open(path)
 	clock = RunClock.from_dict(run_save.run()["clock"])
@@ -526,8 +542,8 @@ func _open_run() -> void:
 static func gill_progress_path() -> String:
 	if Settings.test_args.has("gill-save"):
 		return Settings.test_args["gill-save"]
-	# Automated runs never touch the player's progress.
-	return "user://test_gill_progress.json" if Settings.test_mode != "" else Players.gill_path()
+	# Automated runs never touch the player's progress (except the profile tests, --players).
+	return "user://test_gill_progress.json" if Settings.test_mode != "" and not Settings.test_args.has("players") else Players.gill_path()
 
 
 ## The key food and repopulation hash from: the run id (a fixed key in seeded test runs, so a
@@ -542,7 +558,7 @@ func rng_key() -> String:
 ## file, and may grant skills with --skills=all or --skills=<id>,<id> (every starfish collected too).
 func _open_gill() -> void:
 	var path := gill_progress_path()
-	if Settings.test_mode != "" and not Settings.test_args.has("gill-save"):
+	if Settings.test_mode != "" and not Settings.test_args.has("gill-save") and not Settings.test_args.has("players"):
 		GillProgress.erase(path)
 	gill = GillProgress.open(path)
 	var grant := str(Settings.test_args.get("skills", "")) if Settings.test_mode != "" else ""

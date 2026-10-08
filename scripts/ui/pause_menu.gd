@@ -82,7 +82,9 @@ func _ready() -> void:
 	_resume = resume
 	# Return to Title directly beneath Resume (owner ruling 2026-09-30).
 	# (Owner, 2026-10-08: says what it does; the run is saved first, as it always was.)
-	var title := _action("Save & Return to Title", func(): Game.inst.return_to_title())
+	var title := _action("Save & Return to Title", func() -> void:
+		if not Game.inst.return_to_title():
+			(_panel.find_child("ReturnToTitle", true, false) as Button).text = "Not saved: try again")
 	title.name = "ReturnToTitle"
 	var restart := UiStyle.confirm_button("New Run", TitleScreen.NEW_RUN_QUESTION, "Normal", func(): Game.inst.restart_experience(),
 			"Hard", func(): Game.inst.restart_experience(HardMode.MODE))
@@ -182,7 +184,8 @@ func _ready() -> void:
 	# Replay tutorial (owner, 2026-10-08): this run's lessons, names and hints from the start (the
 	# intro on Resume, then each lesson at its moment), so a longtime player sees the new tutorial.
 	# Progress is untouched. In a run only (a session row).
-	_replay = UiStyle.button("Replay tutorial", _on_replay_tutorial)
+	_replay = UiStyle.button("Replay tutorial (keeps run)", _on_replay_tutorial)
+	_replay.tooltip_text = "Plays the tutorial again during this run. Your run, progress and Skills stay exactly as they are."
 	_replay.name = "ReplayTutorial"
 	_replay.custom_minimum_size = Vector2(0, 60)
 	_replay.size_flags_horizontal = Control.SIZE_EXPAND_FILL
@@ -437,6 +440,7 @@ func _open_aquarium() -> void:
 
 func open(from_title := false) -> void:
 	_from_title = from_title
+	(_panel.find_child("ReturnToTitle", true, false) as Button).text = "Save & Return to Title"
 	if not from_title and Game.inst != null:
 		Game.inst.save_run()
 	for r in _session_rows:

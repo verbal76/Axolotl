@@ -51,7 +51,7 @@ func run(runner) -> void:
 	g.spores.enabled = false
 	await t.seconds(0.5)
 	var only: String = Settings.test_args.get("only", "")
-	var registry := ["_test_startup", "_test_ota_and_version", "_test_hag_infra", "_test_launch_update", "_test_mesh_winding", "_test_terrain", "_test_ravines", "_test_rim_fights_clear_of_ooze", "_test_edge_assist", "_test_ooze_bubbles", "_test_view_clearances", "_test_camera_rises_over", "_test_camera_invariant", "_test_ball_view", "_test_owner_menus_and_players", "_test_hud_corner", "_test_restore_hints", "_test_spore_blooms", "_test_drawn_back", "_test_dead_area_sim", "_test_home_coherence", "_test_terrain_grounded", "_test_no_floating_platforms", "_test_parasite_locomotion", "_test_parasite_body_and_death", "_test_parasite_combat", "_test_organic_motion", "_test_gill_look", "_test_gill_idles", "_test_gill_colours", "_test_gill_patterns", "_test_tail_whip", "_test_gill_traction", "_test_gill_incline_transitions", "_test_traction_no_shortcuts", "_test_gill_body_follow", "_test_swim_body_follow", "_test_ambient_sway", "_test_placements", "_test_tutorial_route", "_test_sphere_walk", "_test_jump_and_burst", "_test_coyote_and_buffer", "_test_swipe_direction_and_stages", "_test_hard_landing", "_test_food", "_test_food_reach", "_test_food_catchable", "_test_assisted_lunge", "_test_glob_counterplay", "_test_darter_and_burrower", "_test_food_repopulates", "_test_motes", "_test_checkpoint_and_regen", "_test_crumble", "_test_restoration_gates", "_test_retract_gates_gone", "_test_bubble_columns", "_test_restoration_continuity", "_test_health_map", "_test_vortex", "_test_vortex_tints", "_test_vortex_ready_state", "_test_vortex_currents", "_test_vortex_currents_travel", "_test_current", "_test_current_brace", "_test_canopy", "_test_canopy_plain_jumps", "_test_canopy_guard_leaf", "_test_climbs_physical", "_test_jungle_ladders_physical", "_test_leaf_geometry", "_test_leaf_footing", "_test_caves", "_test_mounds", "_test_vegetation", "_test_vortex_mouths_clear", "_test_vortex_pads_clear_of_plants", "_test_stalkers_in_reeds", "_test_route_audit", "_test_new_areas", "_test_ecosystem", "_test_threat_spread", "_test_music", "_test_opening_audio", "_test_run_clock", "_test_completion_catalog", "_test_completion_frozen", "_test_run_save_file", "_test_run_timer_live", "_test_run_continue", "_test_timer_integrity", "_test_resume_points_safe", "_phase_continue_write", "_phase_continue_read", "_test_upgrades", "_test_quality_title_cap", "_test_ui", "_test_menus_no_scroll", "_test_menu_touch", "_test_primary_buttons", "_test_tier2_rules", "_test_tier2_world", "_test_ambient_fish", "_test_parasite_never_buried", "_test_tier2_loadout", "_test_aquarium_experiences", "_test_aquarium_polish", "_test_all_clear", "_test_treasure_unlock", "_test_treasure_generation", "_test_treasure_play", "_phase_treasure_stress", "_phase_live_fish_diag", "_phase_cpu_probe", "_phase_incline_survey", "_phase_loco_diag", "_phase_crawl_trace", "_phase_mouth_crawls", "_phase_organic_trace", "_phase_organic_cost", "_test_skilltree_graph", "_test_progress_store", "_test_starfish_spots", "_test_starfish_pickup", "_test_skill_ui", "_test_quick_gill", "_test_lunge_skills", "_test_burst_skills", "_test_glide_control", "_test_glide_transfers", "_test_mote_magnet", "_phase_starfish_survey", "_phase_starfish_sweep", "_phase_glide_probe", "_test_plants_terminal_growth", "_test_sea_fan_depth", "_test_repopulation", "_phase_repop_survey", "_phase_repop_sim", "_test_aquarium_gill", "_phase_aq_nav", "_test_tutorials_and_title", "_test_onb_progress", "_test_onb_owner_save", "_test_onb_per_run", "_test_onb_toggle", "_test_onb_intro", "_test_onb_feeding", "_test_onb_parasite", "_test_onb_feed_first", "_test_onb_tunnel", "_test_onb_starfish", "_test_onb_softlock", "_test_onb_guidance", "_test_onb_replay", "_test_onb_relaunch", "_test_onb_restoration_equal", "_test_hard_mode", "_test_hard_mode_save", "_test_polish_a", "_test_leaf_motion", "_test_perf_veg_cull", "_test_veg_stays_put", "_test_death_and_arrival", "_test_pause_ball_progress", "_test_arrival_view", "_test_camera_never_drawn_unsafe", "_test_startup_build_identical", "_phase_world_hash", "_phase_th_bench", "_phase_hard_write", "_phase_hard_read", "_phase_hard_newrun", "_phase_hard_finish", "_phase_hard_sim", "_phase_hard_intervals", "_phase_onb_owner", "_phase_onb_write", "_phase_onb_read", "_phase_onb_kill", "_phase_onb_toggle", "_phase_cohesion_probe", "_test_eel_reach", "_test_parasite_readability"]
+	var registry := ["_test_startup", "_test_ota_and_version", "_test_hag_infra", "_test_launch_update", "_test_mesh_winding", "_test_terrain", "_test_ravines", "_test_rim_fights_clear_of_ooze", "_test_edge_assist", "_test_ooze_bubbles", "_test_view_clearances", "_test_camera_rises_over", "_test_camera_invariant", "_test_ball_view", "_test_owner_menus_and_players", "_test_profiles_ab", "_phase_profile_write", "_phase_profile_check", "_test_hud_corner", "_test_restore_hints", "_test_spore_blooms", "_test_drawn_back", "_test_dead_area_sim", "_test_home_coherence", "_test_terrain_grounded", "_test_no_floating_platforms", "_test_parasite_locomotion", "_test_parasite_body_and_death", "_test_parasite_combat", "_test_organic_motion", "_test_gill_look", "_test_gill_idles", "_test_gill_colours", "_test_gill_patterns", "_test_tail_whip", "_test_gill_traction", "_test_gill_incline_transitions", "_test_traction_no_shortcuts", "_test_gill_body_follow", "_test_swim_body_follow", "_test_ambient_sway", "_test_placements", "_test_tutorial_route", "_test_sphere_walk", "_test_jump_and_burst", "_test_coyote_and_buffer", "_test_swipe_direction_and_stages", "_test_hard_landing", "_test_food", "_test_food_reach", "_test_food_catchable", "_test_assisted_lunge", "_test_glob_counterplay", "_test_darter_and_burrower", "_test_food_repopulates", "_test_motes", "_test_checkpoint_and_regen", "_test_crumble", "_test_restoration_gates", "_test_retract_gates_gone", "_test_bubble_columns", "_test_restoration_continuity", "_test_health_map", "_test_vortex", "_test_vortex_tints", "_test_vortex_ready_state", "_test_vortex_currents", "_test_vortex_currents_travel", "_test_current", "_test_current_brace", "_test_canopy", "_test_canopy_plain_jumps", "_test_canopy_guard_leaf", "_test_climbs_physical", "_test_jungle_ladders_physical", "_test_leaf_geometry", "_test_leaf_footing", "_test_caves", "_test_mounds", "_test_vegetation", "_test_vortex_mouths_clear", "_test_vortex_pads_clear_of_plants", "_test_stalkers_in_reeds", "_test_route_audit", "_test_new_areas", "_test_ecosystem", "_test_threat_spread", "_test_music", "_test_opening_audio", "_test_run_clock", "_test_completion_catalog", "_test_completion_frozen", "_test_run_save_file", "_test_run_timer_live", "_test_run_continue", "_test_timer_integrity", "_test_resume_points_safe", "_phase_continue_write", "_phase_continue_read", "_test_upgrades", "_test_quality_title_cap", "_test_ui", "_test_menus_no_scroll", "_test_menu_touch", "_test_primary_buttons", "_test_tier2_rules", "_test_tier2_world", "_test_ambient_fish", "_test_parasite_never_buried", "_test_tier2_loadout", "_test_aquarium_experiences", "_test_aquarium_polish", "_test_all_clear", "_test_treasure_unlock", "_test_treasure_generation", "_test_treasure_play", "_phase_treasure_stress", "_phase_live_fish_diag", "_phase_cpu_probe", "_phase_incline_survey", "_phase_loco_diag", "_phase_crawl_trace", "_phase_mouth_crawls", "_phase_organic_trace", "_phase_organic_cost", "_test_skilltree_graph", "_test_progress_store", "_test_starfish_spots", "_test_starfish_pickup", "_test_skill_ui", "_test_quick_gill", "_test_lunge_skills", "_test_burst_skills", "_test_glide_control", "_test_glide_transfers", "_test_mote_magnet", "_phase_starfish_survey", "_phase_starfish_sweep", "_phase_glide_probe", "_test_plants_terminal_growth", "_test_sea_fan_depth", "_test_repopulation", "_phase_repop_survey", "_phase_repop_sim", "_test_aquarium_gill", "_phase_aq_nav", "_test_tutorials_and_title", "_test_onb_progress", "_test_onb_owner_save", "_test_onb_per_run", "_test_onb_toggle", "_test_onb_intro", "_test_onb_feeding", "_test_onb_parasite", "_test_onb_feed_first", "_test_onb_tunnel", "_test_onb_starfish", "_test_onb_softlock", "_test_onb_guidance", "_test_onb_replay", "_test_onb_relaunch", "_test_onb_restoration_equal", "_test_hard_mode", "_test_hard_mode_save", "_test_polish_a", "_test_leaf_motion", "_test_perf_veg_cull", "_test_veg_stays_put", "_test_death_and_arrival", "_test_pause_ball_progress", "_test_arrival_view", "_test_camera_never_drawn_unsafe", "_test_startup_build_identical", "_phase_world_hash", "_phase_th_bench", "_phase_hard_write", "_phase_hard_read", "_phase_hard_newrun", "_phase_hard_finish", "_phase_hard_sim", "_phase_hard_intervals", "_phase_onb_owner", "_phase_onb_write", "_phase_onb_read", "_phase_onb_kill", "_phase_onb_toggle", "_phase_cohesion_probe", "_test_eel_reach", "_test_parasite_readability"]
 	# A --only entry that names nothing is a typo (or a stale substring): fail loudly rather than run nothing.
 	for o in only.split(",", false):
 		if not registry.has(o) and not registry.has("_test_" + o):
@@ -11489,6 +11489,14 @@ func _test_owner_menus_and_players() -> void:
 	var rp := pm.find_child("ReplayTutorial", true, false) as Button
 	var wb := pm.find_child("ViewWholeBall", true, false)
 	t.check("pause_save_and_return_label", rt != null and rt.text == "Save & Return to Title", rt.text if rt != null else "none")
+	# A save that cannot complete never leaves: the menu says so and the run stays in play.
+	var rs_path: String = g.run_save.path
+	g.run_save.path = "user://no_such_folder/deeper/run.json"
+	rt.pressed.emit()
+	await t.frames(2)
+	g.run_save.path = rs_path
+	t.check("save_and_return_never_leaves_unsaved", g.state == "play" and pm.visible and rt.text == "Not saved: try again" and is_instance_valid(g), rt.text)
+	t.check("save_and_return_confirms_the_save", g.save_for_leaving() and RunSave.open(rs_path).run()["clock"]["run_s"] == g.run_save.run()["clock"]["run_s"], "")
 	t.check("pause_replay_tutorial_in_run", rp != null and rp.is_visible_in_tree() and rp.get_global_rect().size.y >= 56.0, "")
 	t.check("pause_no_whole_ball_button", wb == null, "")
 	pm.close()
@@ -11536,22 +11544,35 @@ func _test_owner_menus_and_players() -> void:
 	Settings.load_player_look()
 	t.check("players_own_colours", kid_default and main_kept and kid_saved and Settings.gill_morph == main_morph,
 			"main %s kept %s; kid default %s, saved %s; back to %s" % [main_morph, main_kept, kid_default, kid_saved, Settings.gill_morph])
-	# Rename, the cap, delete (never the first player; the current one falls back to the first).
-	var renamed := Players.rename(kid, "Ella") and Players.name_of(kid) == "Ella"
-	var ids := [kid]
+	# Rename and the cap (no deleting in this pass).
+	var renamed := Players.rename(kid, "Ella") and Players.name_of(kid) == "Ella" and not Players.rename(kid, "   ")
 	while Players.can_add():
-		ids.append(Players.add("P%d" % ids.size()))
+		Players.add("P%d" % Players.list().size())
 	var capped := Players.list().size() == Players.MAX and Players.add("One more") == ""
-	Players.set_current(kid)
-	var gone := Players.remove(kid) and not Players.list_ids().has(kid) and Players.current() == Players.MAIN \
-			and not DirAccess.dir_exists_absolute(Players.dir_of(kid))
-	var main_stays := not Players.remove(Players.MAIN)
 	Players.reload()
-	var persisted := Players.list().size() == Players.MAX - 1
-	t.check("players_rename_cap_delete", renamed and capped and gone and main_stays and persisted and Players.clean_name("   ") == "",
-			"renamed %s, capped %s, gone %s, main stays %s, persisted %s" % [renamed, capped, gone, main_stays, persisted])
-	for id in ids:
-		Players.remove(id)
+	var persisted := Players.list().size() == Players.MAX and Players.name_of(kid) == "Ella"
+	# A damaged list: the previous copy (.bak) is read; with both damaged, every player's folder is
+	# still found (their saves are never lost, only names), and the first player stays the original.
+	var fw := FileAccess.open(Players.PATH, FileAccess.WRITE)
+	fw.store_string("{not json")
+	fw.close()
+	Players.reload()
+	var from_bak := Players.list().size() >= Players.MAX - 1 and Players.list_ids().has(kid) and Players.run_path() != ""
+	for path in [Players.PATH, Players.PATH + ".bak"]:
+		var fx := FileAccess.open(path, FileAccess.WRITE)
+		fx.store_string("garbage")
+		fx.close()
+	Players.reload()
+	var from_dirs := Players.list_ids().has(kid) and Players.current() == Players.MAIN and Players.run_path() == RunSave.PATH
+	t.check("players_rename_cap_and_damaged_list", renamed and capped and persisted and from_bak and from_dirs and Players.clean_name("   ") == "",
+			"renamed %s, capped %s, persisted %s, from .bak %s, from folders %s (%s)" % [renamed, capped, persisted, from_bak, from_dirs, Players.list_ids()])
+	# (Back to a clean slate for the rest of the suite.)
+	for path in [Players.PATH, Players.PATH + ".bak"]:
+		DirAccess.remove_absolute(path)
+	for sub in DirAccess.get_directories_at(Players.DIR):
+		for f in DirAccess.get_files_at(Players.DIR + sub):
+			DirAccess.remove_absolute(Players.DIR + sub + "/" + f)
+		DirAccess.remove_absolute(Players.DIR + sub)
 	Settings.test_args.erase("players")
 	Players.reload()
 	# The title names whose game it is.
@@ -11567,6 +11588,122 @@ func _test_owner_menus_and_players() -> void:
 	t.check("title_players_page_opens_and_back_closes", page_ok and not g.title.players_page.visible and g.state == "title", "")
 	g.start_play(true)
 	await t.frames(5)
+
+
+## Owner, 2026-10-08: two players on one phone, end to end in real game processes sharing one
+## user:// (as on a phone). A is the original pre-profile save (no registry yet): it must stay where
+## it is, byte for byte, when profiles appear. B starts its own fresh run; each plays and saves; each
+## comes back exactly as it left, untouched by the other. Device settings are shared; Gill is Gill.
+func _test_profiles_ab() -> void:
+	var base: Array = ["--headless", "--fixed-fps", "60", "--max-fps", "0"]
+	var project := ProjectSettings.globalize_path("res://")
+	if Settings.test_args.has("pack"):
+		base += ["--main-pack", Settings.test_args["pack"]]
+	elif project != "":
+		base += ["--path", project]
+	else:
+		t.check("profiles_children_ran", false, "running from an exported pack: pass --pack=<its file>")
+		return
+	# A clean phone with no registry: only the original files (as v105 has them).
+	Settings.test_args["players"] = "1"
+	for path in [Players.PATH, Players.PATH + ".bak", RunSave.PATH, RunSave.PATH + ".bak", GillProgress.PATH, GillProgress.PATH + ".bak"]:
+		DirAccess.remove_absolute(ProjectSettings.globalize_path(path))
+	Players.reload()
+	var codes := []
+	var child := func(args: Array) -> void:
+		var out := []
+		var cmd: Array = base + ["--", "--test=unit", "--players=1", "--onboarding=done", "--out=" + ProjectSettings.globalize_path("user://profiles_out")] + args
+		var code := OS.execute(OS.get_executable_path(), cmd, out, true)
+		codes.append(code)
+		if code != 0:
+			t.log_line("%s exited %d; output:\n%s" % [args, code, str(out[0]).right(3000)])
+		for line in str(out[0]).split("\n"):
+			if line.begins_with("[TEST] PASS") or line.begins_with("[TEST] FAIL"):
+				var parts := line.substr(7).split(" ", false, 2)
+				t.check("profiles/" + parts[1], parts[0] == "PASS", parts[2] if parts.size() > 2 else "")
+	# 1. Before profiles exist: the original save is played and saved (this is "the v105 run").
+	await child.call(["--only=_phase_profile_write", "--profile=a"])
+	var md5 := func(path: String) -> String: return FileAccess.get_md5(path)
+	var a_run: String = md5.call(RunSave.PATH)
+	var a_gill: String = md5.call(GillProgress.PATH)
+	# 2. Profiles appear: the original save becomes the first player, untouched, nothing moved.
+	Players.reload()
+	var kid := Players.add("Daughter")
+	Players.set_current(kid)
+	t.check("profiles_original_save_kept_in_place", a_run != "" and md5.call(RunSave.PATH) == a_run and md5.call(GillProgress.PATH) == a_gill
+			and Players.list()[0]["id"] == Players.MAIN and FileAccess.file_exists(Players.PATH), "run %s" % a_run.left(8))
+	# 3. B: its own fresh run; plays and saves differently.
+	await child.call(["--only=_phase_profile_write", "--profile=b"])
+	t.check("profiles_b_never_touched_a", md5.call(RunSave.PATH) == a_run and md5.call(GillProgress.PATH) == a_gill, "")
+	# 4. Back to A: exactly as it was. 5. Back to B: exactly as it was.
+	Players.set_current(Players.MAIN)
+	await child.call(["--only=_phase_profile_check", "--profile=a"])
+	Players.set_current(kid)
+	await child.call(["--only=_phase_profile_check", "--profile=b"])
+	t.check("profiles_children_ran", codes == [0, 0, 0, 0], str(codes))
+	# (Clean up: back to one original player, as the rest of the suite expects.)
+	Players.set_current(Players.MAIN)
+	for path in [Players.PATH, Players.PATH + ".bak"]:
+		DirAccess.remove_absolute(ProjectSettings.globalize_path(path))
+	for f in DirAccess.get_files_at(Players.dir_of(kid)):
+		DirAccess.remove_absolute(Players.dir_of(kid) + f)
+	DirAccess.remove_absolute(Players.dir_of(kid))
+	Settings.test_args.erase("players")
+	Players.reload()
+
+
+## What each player does in their own process: A clears parasite 0 and keeps a starfish, B clears
+## parasite 1 and keeps another; each picks a colour; the device's haptics are set by A.
+const PROFILE_PLAY := {"a": {"par": 0, "star": 0, "morph": "golden", "name": "Player 1"},
+		"b": {"par": 1, "star": 1, "morph": "copper", "name": "Daughter"}}
+
+
+func _profile_ids(k: String) -> Array:
+	var b0 := g.balls[0]
+	return [str((b0.parasites[PROFILE_PLAY[k]["par"]] as Parasite).get_meta("completion_id", "")), StarfishTable.ids()[PROFILE_PLAY[k]["star"]]]
+
+
+func _phase_profile_write() -> void:
+	var k := str(Settings.test_args.get("profile", "a"))
+	var other := "b" if k == "a" else "a"
+	var mine := _profile_ids(k)
+	var theirs := _profile_ids(other)
+	t.check("%s_is_this_player" % k, Players.current_name() == PROFILE_PLAY[k]["name"] and GameVersion.CHARACTER_NAME == "Gill", Players.current_name())
+	t.check("%s_starts_fresh_and_alone" % k, not g.run_save.earned().has(mine[0]) and not g.run_save.earned().has(theirs[0]) and not g.gill.has_star(theirs[1])
+			and Settings.gill_morph == "pink", "earned %d, stars %d, morph %s" % [g.run_save.earned().size(), g.gill.stars(), Settings.gill_morph])
+	if k == "a":
+		Settings.haptics = true
+	else:
+		t.check("b_shares_device_settings", Settings.haptics, "")
+	g.start_play(true)
+	await t.frames(5)
+	var par: Parasite = g.balls[0].parasites[PROFILE_PLAY[k]["par"]]
+	par.hit_cd = 0.0
+	par.hit(par.hp, par.global_position)
+	g.gill.collect(mine[1])
+	Settings.set_gill_look(PROFILE_PLAY[k]["morph"], 0.0, 1.0, 0.0, 1.0)
+	await t.seconds(1.0)
+	# Save & Return to Title's save: written through the one save path and confirmed.
+	var saved := g.save_for_leaving()
+	var disk := RunSave.open(Players.run_path())
+	t.check("%s_saved_and_confirmed" % k, saved and disk.earned().has(mine[0]) and GillProgress.open(Players.gill_path()).has_star(mine[1]),
+			"saved %s to %s" % [saved, Players.run_path()])
+	Settings.save()
+
+
+func _phase_profile_check() -> void:
+	var k := str(Settings.test_args.get("profile", "a"))
+	var other := "b" if k == "a" else "a"
+	var mine := _profile_ids(k)
+	var theirs := _profile_ids(other)
+	var par: Parasite = g.balls[0].parasites[PROFILE_PLAY[k]["par"]]
+	var par_other: Parasite = g.balls[0].parasites[PROFILE_PLAY[other]["par"]]
+	t.check("%s_returns_as_left" % k, Players.current_name() == PROFILE_PLAY[k]["name"] and g.has_run_in_progress()
+			and g.run_save.earned().has(mine[0]) and not par.is_alive() and g.gill.has_star(mine[1]) and Settings.gill_morph == PROFILE_PLAY[k]["morph"],
+			"earned %s, cleared %s, star %s, morph %s" % [g.run_save.earned().has(mine[0]), not par.is_alive(), g.gill.has_star(mine[1]), Settings.gill_morph])
+	t.check("%s_untouched_by_the_other" % k, not g.run_save.earned().has(theirs[0]) and par_other.is_alive() and not g.gill.has_star(theirs[1]),
+			"", )
+	t.check("%s_still_gill" % k, GameVersion.CHARACTER_NAME == "Gill" and Settings.haptics, "")
 
 
 func _test_ball_view() -> void:

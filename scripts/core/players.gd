@@ -4,7 +4,8 @@ extends RefCounted
 ## to my daughter ... she can save her own character"). Each player has their own run (and so their
 ## own completion, best finishes, Treasure Hunt, Hard Mode and lessons), their own Red Starfish and
 ## Skills, and their own colours and pattern. Device settings (sound, haptics, HUD, tutorials) are
-## shared. Every character is still called Gill (GameVersion.CHARACTER_NAME); the player's name only
+## shared. Players are created, chosen and renamed (owner scope 2026-10-08: create / select / resume;
+## no deleting). Every character is still called Gill (GameVersion.CHARACTER_NAME); the player's name only
 ## picks whose save it is.
 ##
 ## Storage, chosen so nothing an older build knows ever changes:
@@ -35,11 +36,25 @@ static func _tests() -> bool:
 static func _load() -> Dictionary:
 	if not _doc.is_empty():
 		return _doc
+	# The registry, else its previous copy (.bak), else (both unreadable) the players' folders
+	# themselves: no player's saves are ever lost to a damaged list, only their names.
 	var d: Variant = null
-	if not _tests() and FileAccess.file_exists(PATH):
-		d = JSON.parse_string(FileAccess.get_file_as_string(PATH))
+	if not _tests():
+		for path in [PATH, PATH + ".bak"]:
+			if FileAccess.file_exists(path):
+				d = JSON.parse_string(FileAccess.get_file_as_string(path))
+				if d is Dictionary and d.get("players") is Array:
+					break
+				d = null
 	if not (d is Dictionary) or not (d.get("players") is Array):
-		d = {}
+		d = {"players": [], "seq": 1}
+		if not _tests():
+			var n := 1
+			for sub in DirAccess.get_directories_at(DIR):
+				if sub.begins_with("p") and sub.substr(1).is_valid_int():
+					n += 1
+					(d["players"] as Array).append({"id": sub, "name": "Player %d" % n})
+					d["seq"] = maxi(int(d["seq"]), int(sub.substr(1)) + 1)
 	_doc = d
 	_doc["players"] = (_doc.get("players", []) as Array).filter(func(e) -> bool:
 		return e is Dictionary and str(e.get("id", "")) != "" and str(e.get("name", "")) != "")
@@ -59,6 +74,10 @@ static func _save() -> bool:
 		return false
 	f.store_string(JSON.stringify(_doc, "\t"))
 	f.close()
+	# (The previous list is kept as .bak: a damaged write never costs the list.)
+	if FileAccess.file_exists(PATH):
+		DirAccess.remove_absolute(PATH + ".bak")
+		DirAccess.rename_absolute(PATH, PATH + ".bak")
 	return DirAccess.rename_absolute(tmp, PATH) == OK
 
 
@@ -129,23 +148,6 @@ static func rename(id: String, n: String) -> bool:
 			e["name"] = nm
 			return _save()
 	return false
-
-
-## Removes a player and their saves for good. The main player (the original save) is never removed;
-## removing the current player makes the main player current.
-static func remove(id: String) -> bool:
-	if id == MAIN or not list_ids().has(id):
-		return false
-	var d := _load()
-	d["players"] = (d["players"] as Array).filter(func(e: Dictionary) -> bool: return str(e["id"]) != id)
-	if str(d["current"]) == id:
-		d["current"] = MAIN
-	var dir := DirAccess.open(dir_of(id))
-	if dir != null:
-		for f in dir.get_files():
-			dir.remove(f)
-		DirAccess.remove_absolute(dir_of(id))
-	return _save()
 
 
 static func set_current(id: String) -> bool:

@@ -2,8 +2,8 @@ class_name PlayersPage
 extends Control
 ## Who's playing? (owner, 2026-10-08; Players): opened from the title's player button. One row per
 ## player (up to Players.MAX): tap a name to play as them (their own run, Skills and colours; every
-## character is still Gill), Rename, and Delete behind a confirm (never the first player, whose save
-## is the original one). New player asks for a name. Nothing scrolls.
+## character is still Gill) and Rename; New player asks for a name. No deleting (owner scope,
+## 2026-10-08: create, select, resume). Nothing scrolls.
 
 signal done
 
@@ -119,11 +119,6 @@ func refresh() -> void:
 		ren.name = "Rename"
 		ren.custom_minimum_size = Vector2(140, 60)
 		row.add_child(ren)
-		if id != Players.MAIN:
-			var del := UiStyle.confirm_button("Delete", "Delete %s and their saves for good?" % e["name"], "Delete", func() -> void: _delete(id))
-			del.name = "Delete"
-			(del.get_node("Ask") as Button).custom_minimum_size = Vector2(140, 60)
-			row.add_child(del)
 	_new.visible = Players.can_add()
 
 
@@ -132,19 +127,6 @@ func _pick(id: String) -> void:
 		done.emit()
 		return
 	Game.inst.switch_player(id)
-
-
-func _delete(id: String) -> void:
-	var was_current := id == Players.current()
-	Players.remove(id)
-	if was_current:
-		# (Their run is gone: back to the first player, from the title.)
-		Settings.load_player_look()
-		Settings.skip_title = false
-		get_tree().reload_current_scene()
-		return
-	refresh()
-	_layout()
 
 
 func _open_ask(id: String) -> void:

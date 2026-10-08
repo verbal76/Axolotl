@@ -233,9 +233,10 @@ func _on_intro_begin() -> void:
 # --- Replay (owner, 2026-10-08) ----------------------------------------------------------------
 
 ## Settings' Replay tutorial: this run's lessons, names and hints start over (tutorials on), so a
-## longtime player sees the tutorial as a new run does. Progress is untouched. The intro card comes
-## at the next calm moment of play (the menu has closed); after its Begin, one frond is emptied as on
-## a new run (the feeding lesson's visible heal), and each lesson comes at its own moment.
+## longtime player sees the tutorial as a new run does. Only the lesson record changes: the run, its
+## progress, Skills and Gill's health are untouched (owner scope, 2026-10-08: no frond is emptied; the
+## feeding lesson comes the first time he is short of a frond with a shrimp in view). The intro card
+## comes at the next calm moment of play (the menu has closed); each lesson then comes at its moment.
 var replay_pending := false
 
 
@@ -260,18 +261,7 @@ func _update_replay() -> void:
 	stage = "card"
 	# (Seen once it is up: an interruption ends it like any card, never replays it.)
 	_mark("intro")
-	ui.show_card(INTRO_TITLE, INTRO_BODY, "Begin", func() -> void:
-		finish("done")
-		# As on a new run: one frond down, so the first shrimp visibly heals him.
-		var p := g.player
-		if not done("feeding") and p.max_health > 1:
-			run_frond = true
-			g.run_save.lessons()["frond"] = true
-			if p.health == p.max_health:
-				p.health -= 1
-				p.model.set_health(p.health, p.max_health, false)
-				p.health_changed.emit(p.health, p.max_health)
-			g.save_run())
+	ui.show_card(INTRO_TITLE, INTRO_BODY, "Begin", func() -> void: finish("done"))
 
 
 # --- Play starts ------------------------------------------------------------------------------
