@@ -4,6 +4,8 @@ extends Control
 ## player (up to Players.MAX): tap a name to play as them (their own run, Skills and colours; every
 ## character is still Gill) and Rename; New player asks for a name. No deleting (owner scope,
 ## 2026-10-08: create, select, resume). Nothing scrolls.
+## While a name is asked for, the page shrinks to its heading and the name line and sits at the top
+## of the screen: the phone's keyboard covers the lower half (owner, v106 phone test 2026-10-08).
 
 signal done
 
@@ -132,9 +134,13 @@ func _pick(id: String) -> void:
 func _open_ask(id: String) -> void:
 	_ask_id = id
 	_ask_label.text = "New player's name:" if id == "" else "New name for %s:" % Players.name_of(id)
-	_edit.text = "" if id == "" else Players.name_of(id)
+	# (Empty, the old name only as the placeholder: typing never lands in front of the old name.)
+	_edit.text = ""
+	_edit.placeholder_text = "Name" if id == "" else Players.name_of(id)
 	_ask.visible = true
 	_new.visible = false
+	_note.visible = false
+	_list.visible = false
 	_layout()
 	_edit.grab_focus.call_deferred()
 
@@ -142,6 +148,8 @@ func _open_ask(id: String) -> void:
 func _close_ask() -> void:
 	_ask.visible = false
 	_new.visible = Players.can_add()
+	_note.visible = true
+	_list.visible = true
 	_layout()
 
 
@@ -177,7 +185,11 @@ func _layout() -> void:
 	for l in [_note, _ask_label]:
 		(l as Label).custom_minimum_size.x = w - 60.0
 	_panel.size = Vector2(w, _panel.get_combined_minimum_size().y)
-	_panel.position = Vector2(area.position.x + (area.size.x - w) * 0.5, area.position.y + maxf(0.0, (area.size.y - _panel.size.y) * 0.5))
+	var top := area.position.y + maxf(0.0, (area.size.y - _panel.size.y) * 0.5)
+	if _ask.visible:
+		# (At the top, above the keyboard.)
+		top = area.position.y
+	_panel.position = Vector2(area.position.x + (area.size.x - w) * 0.5, top)
 	if visible and not _relaid:
 		# (Wrapped lines settle a frame later.)
 		_relaid = true

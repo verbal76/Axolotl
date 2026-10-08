@@ -10420,19 +10420,19 @@ func _test_restore_hints() -> void:
 	var d_home := b.health_at(par.spawn_dir) - h_home
 	var d_away := b.health_at(away_dir) - h_away
 	t.check("kill_heals_home_not_death_spot", int(z["done"]) == done0 + 1 and d_home > 0.2 and absf(d_away) < 0.05, "home +%.2f, death spot %+.2f, zone %d -> %d" % [d_home, d_away, done0, int(z["done"])])
-	# Hints (owner, 2026-10-06: 30 s sooner, no count note): quiet first, then pink plumes from 60 s,
-	# then from 150 s strings of bubbles toward the nearest, their sound at most every SOUND_EVERY_S.
+	# Hints (owner, 2026-10-08: one clock per ball, sooner): quiet first, then pink plumes from 30 s,
+	# then from 75 s strings of bubbles toward the nearest, their sound at most every SOUND_EVERY_S.
 	var h := RestoreHints.new()
 	var gp := b.surface_point(z["dir"], 0.1)
 	var stages := []
 	for sec in 320:
 		h.update(1.0, b, gp, false)
-		if sec in [50, 70, 160, 310]:
+		if sec in [20, 40, 80, 310]:
 			stages.append(h.stage)
 	left = RestoreHints.remaining(b, zid)
 	left.sort_custom(func(a: Vector3, c: Vector3) -> bool: return a.distance_squared_to(gp) < c.distance_squared_to(gp))
 	var want: Vector3 = (left[0] - (gp + (gp - b.global_position).normalized() * 0.7)).normalized()
-	t.check("hints_escalate_slowly", stages == [0, 1, 2, 2] and h.plumes > 0, "stages at 50/70/160/310 s: %s, plumes %d" % [stages, h.plumes])
+	t.check("hints_escalate_slowly", stages == [0, 1, 2, 2] and h.plumes > 0, "stages at 20/40/80/310 s: %s, plumes %d" % [stages, h.plumes])
 	# Plumes rise on their own schedules (owner, 2026-10-06): never all together at each beat.
 	# (Their schedules are random: judged over eight fixed seeds, so the check measures the design,
 	# not one lucky or unlucky draw; 2026-10-08, it had failed 15 of 82 on an unseeded run.)
@@ -10479,6 +10479,23 @@ func _test_restore_hints() -> void:
 				break
 	h.update(1.0, b, gp, false)
 	t.check("hints_quiet_in_tutorial_and_reset_on_progress", quiet_ok and h.stage == 0 and h.stuck[h.zone] <= 1.01, "after progress: stage %d, %.0f s searched" % [h.stage, h.stuck[h.zone]])
+	# Owner, 2026-10-08 (v106 phone test: "only if I stand on one spot for a while"): roaming from area
+	# to area keeps one clock, so a wanderer gets the plumes and then the bubbles on time.
+	var areas: Array = []
+	for id in b.zones:
+		if not b.zones[id]["completed"] and not RestoreHints.remaining(b, id).is_empty():
+			areas.append(id)
+		if areas.size() == 2:
+			break
+	var hr := RestoreHints.new()
+	var roam_stages := []
+	for sec in 90:
+		var zd: Vector3 = b.zones[areas[sec % areas.size()]]["dir"]
+		hr.update(1.0, b, b.surface_point(zd, 0.1), false)
+		if sec in [25, 35, 80]:
+			roam_stages.append(hr.stage)
+	t.check("hints_roaming_keeps_one_clock", areas.size() == 2 and roam_stages == [0, 1, 2] and hr.guides_sent >= 2,
+			"%d areas, stages at 25/35/80 s %s, %d bubble strings" % [areas.size(), roam_stages, hr.guides_sent])
 	# Owner, v96 phone test: idle between areas (in no unrestored area) still gets the hints, toward
 	# what is left anywhere on the ball.
 	var outside := Vector3.ZERO
@@ -11604,6 +11621,21 @@ func _test_owner_menus_and_players() -> void:
 	g.title.player_button.pressed.emit()
 	await t.frames(3)
 	var page_ok := g.title.players_page.visible and g.title.players_page.find_child("NewPlayer", true, false) != null
+	# Owner, v106 phone test: the name prompt sits above the keyboard (the top ~45% of the screen) and
+	# starts empty (the old name only as the placeholder), for a new player and for a rename.
+	var pp: PlayersPage = g.title.players_page
+	var vp_h := pp.get_viewport_rect().size.y
+	var ask_lines: Array[String] = []
+	for who in ["", Players.MAIN]:
+		pp._open_ask(who)
+		await t.frames(3)
+		var edit_r := pp._edit.get_global_rect()
+		var ok_r := (pp.find_child("OK", true, false) as Control).get_global_rect()
+		if edit_r.end.y > vp_h * 0.45 or ok_r.end.y > vp_h * 0.45 or pp._edit.text != "" or not pp._edit.is_visible_in_tree():
+			ask_lines.append("%s: edit bottom %.0f, OK bottom %.0f of %.0f, text '%s'" % [who if who != "" else "new", edit_r.end.y, ok_r.end.y, vp_h, pp._edit.text])
+		pp._close_ask()
+		await t.frames(2)
+	t.check("players_name_prompt_above_keyboard", ask_lines.is_empty() and pp._list.is_visible_in_tree(), "; ".join(ask_lines))
 	g._go_back()
 	await t.frames(2)
 	t.check("title_players_page_opens_and_back_closes", page_ok and not g.title.players_page.visible and g.state == "title", "")

@@ -1,22 +1,26 @@
 class_name RestoreHints
 extends RefCounted
 ## Owner, 2026-10-02: help a player who has searched an unrestored area for a while and clearly
-## missed something, without turning Mote into a checklist. Per zone of his ball, the play seconds
-## Gill has spent in it since its last progress (a parasite killed or a mote restored there):
+## missed something, without turning Mote into a checklist. Per moss ball, the play seconds since
+## its last progress anywhere on it (a parasite killed or a mote restored):
 ##  - under SHIMMER_S: nothing;
-##  - from SHIMMER_S: each of the zone's remaining targets sends up a tall, wispy, soft-pink plume that
-##    shows over the terrain and over the ball's curve (owner, 2026-10-06: the green one blended in);
+##  - from SHIMMER_S: each of the nearest remaining targets sends up a tall, wispy, soft-pink plume
+##    that shows over the terrain and over the ball's curve (owner, 2026-10-06: the green one blended in);
 ##  - from GUIDE_S: also, every GUIDE_EVERY_S, a little string of bubbles (GuideBubbles) leaves Gill
 ##    toward the nearest one, weaving as it goes and popping one bubble at a time, with a soft
 ##    "blub" now and then (at most every SOUND_EVERY_S).
-## Owner, 2026-10-06: both start 30 s sooner than before, and the "N left" note is gone (the world's
-## own cues are enough).
-## Progress in the zone starts it over. Only authored targets that still count for restoration are
-## used: never returners (Repopulation), never anything already done. The economy is untouched: this
-## only reads. Not saved (a continued run starts quiet).
+## Owner, 2026-10-08 (v106 phone test: "only if I stand on one spot for a while"): one clock for the
+## whole ball, not one per area. Roaming from area to area used to start each area's own clock, so a
+## player who kept moving never saw the bubbles. Now it is simply the time since his last kill (or
+## restored mote) on this ball, wherever he wanders, and both come sooner: plumes from 30 s, bubbles
+## from 75 s (were 60 s / 150 s per area).
+## The targets: what is left in the area he is in, else (none there, or between areas) what is left
+## anywhere on the ball. Only authored targets that still count for restoration are used: never
+## returners (Repopulation), never anything already done. The economy is untouched: this only reads.
+## Not saved (a continued run starts quiet).
 
-const SHIMMER_S := 60.0
-const GUIDE_S := 150.0
+const SHIMMER_S := 30.0
+const GUIDE_S := 75.0
 ## Each of the nearest targets puffs on its own schedule, SHIMMER_MIN_S..SHIMMER_MAX_S apart, so
 ## several plumes never fire together (owner, 2026-10-06: independent events, not markers).
 const SHIMMER_MIN_S := 2.6
@@ -28,7 +32,7 @@ const PLUMES_MAX := 4
 ## Soft coral pink: organic, never neon; it stands apart from every green of the moss.
 const COL := Color(0.98, 0.62, 0.74, 0.55)
 
-## Zone key ("b<ball>.<zone>") -> play seconds searched since its last progress.
+## Ball key (key(b): "b<ball>.*") -> play seconds since its last progress.
 var stuck := {}
 var _done := {}
 ## Per plume slot (nearest first): seconds to its next puff.
@@ -47,10 +51,10 @@ var guides_sent := 0
 ## For tests: plumes started.
 var plume_events := 0
 var sounds := 0
-## For tests: the zone key Gill is in (unrestored only; "b<ball>.*" when he is in none, or in one with
-## nothing left, while the ball still has targets), the stage there (0-3) and the last guide
-## direction (unit, world space).
+## For tests: the clock's key (key(b)), the area the targets come from ("" = the whole ball), the
+## stage (0-2) and the last guide direction (unit, world space).
 var zone := ""
+var area := ""
 var stage := 0
 var last_guide_dir := Vector3.ZERO
 var plumes := 0
@@ -85,34 +89,31 @@ static func remaining(b: MossBall, zone_id: String) -> Array:
 	return out
 
 
+## The clock's key for a ball (one clock per ball).
+static func key(b: MossBall) -> String:
+	return "b%d.*" % b.index
+
+
 ## Every frame of play. `quiet`: the tutorial is speaking (no hints, no clock).
 func update(dt: float, b: MossBall, gill_pos: Vector3, quiet: bool) -> void:
-	for id in b.zones:
-		var key := "b%d.%s" % [b.index, id]
-		var d: int = b.zones[id]["done"]
-		if _done.get(key, d) != d:
-			stuck[key] = 0.0
-		_done[key] = d
+	# Progress anywhere on the ball starts its clock over.
+	var done_all := 0
+	for zid in b.zones:
+		done_all += int(b.zones[zid]["done"])
+	zone = key(b)
+	if _done.get(zone, done_all) != done_all:
+		stuck[zone] = 0.0
+	_done[zone] = done_all
 	var id := zone_at(b, (gill_pos - b.global_position).normalized())
 	var targets := remaining(b, id) if id != "" else []
 	# Owner, v96 phone test: waiting between areas (or in one already cleared while others are not)
-	# must not leave him without help. Then the clock is the ball's own, its progress anywhere starts
-	# it over, and the hints point to what is left anywhere on the ball.
-	var whole := false
+	# must not leave him without help: the hints point to what is left anywhere on the ball.
 	if targets.is_empty():
-		whole = true
 		id = ""
 		for zid in b.zones:
 			if not b.zones[zid]["completed"]:
 				targets.append_array(remaining(b, zid))
-		var done_all := 0
-		for zid in b.zones:
-			done_all += int(b.zones[zid]["done"])
-		var bk := "b%d.*" % b.index
-		if _done.get(bk, done_all) != done_all:
-			stuck[bk] = 0.0
-		_done[bk] = done_all
-	zone = ("b%d.*" % b.index) if whole else "b%d.%s" % [b.index, id]
+	area = id
 	stage = 0
 	if quiet or not enabled or targets.is_empty():
 		return

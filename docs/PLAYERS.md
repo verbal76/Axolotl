@@ -5,7 +5,10 @@ character on there. But all the characters are still called Gill."
 
 - **Who's playing?** The title's player button (beside the gear) opens the page: tap a name to play
   as them (create / select / resume), Rename, New player (asks for a name, up to 6 players, names up
-  to 16 characters). No deleting in this pass (owner scope, 2026-10-08).
+  to 16 characters). No deleting in this pass (owner scope, 2026-10-08). While a name is asked
+  for, the page shrinks to its heading and the name line at the top of the screen, above the phone's
+  keyboard, and the box starts empty (a rename shows the old name only as the placeholder: v106 phone
+  test, typing landed in front of it).
 - **Per player:** the run (completion, best finishes, Treasure Hunt, Hard Mode, lessons), the Red
   Starfish and Skills, and Gill's colours and pattern. **Shared:** sound, haptics, HUD, tutorials,
   controls (device settings).

@@ -83,6 +83,12 @@ func run(runner) -> void:
 		g.title.players_page._open_ask("")
 		await t.seconds(0.4)
 		await t.shot("owner2_players")
+		g.title.players_page._open_ask(Players.MAIN)
+		await t.seconds(0.4)
+		await t.shot("owner2_players_rename")
+		g.title.players_page._close_ask()
+		await t.seconds(0.4)
+		await t.shot("owner2_players_list")
 	if only == "applying":
 		# The activation modal over the title (HOT_ATTIC_INFRA.md §2).
 		g._enter_title()
@@ -4015,12 +4021,12 @@ func _hint_fx_shots(g: Game) -> void:
 	g.player.place(b, b.surface_point(d, 0.1), face)
 	g.cam.snap_behind()
 	g.hints.enabled = true
-	g.hints.stuck["b%d.%s" % [b.index, zid]] = RestoreHints.SHIMMER_S + 1.0
+	g.hints.stuck[RestoreHints.key(b)] = RestoreHints.SHIMMER_S + 1.0
 	for k in 3:
 		await t.seconds(1.6)
 		await t.shot("hint_plumes" if k == 0 else "hint_plumes_%d" % k)
 		t.log_line("plume events %d, live %d, stage %d" % [g.hints.plume_events, g.hints.plume_fx.live() if g.hints.plume_fx != null else -1, g.hints.stage])
-	g.hints.stuck["b%d.%s" % [b.index, zid]] = RestoreHints.GUIDE_S + 0.5
+	g.hints.stuck[RestoreHints.key(b)] = RestoreHints.GUIDE_S + 0.5
 	g.hints._guide_t = 0.0
 	for k in 6:
 		await t.seconds(0.45)
