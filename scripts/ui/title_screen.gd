@@ -15,6 +15,8 @@ var _colours: Button
 var _skills: Button
 var _aquarium: Button
 var gear: Button
+var player_button: Button
+var players_page: PlayersPage
 ## Exit (owner, 2026-10-01): bottom right, away from the menu column, behind a confirm.
 var exit_box: VBoxContainer
 var version_label: Label
@@ -88,6 +90,16 @@ func _ready() -> void:
 	# Continue (owner, 2026-09-30): the owner's gear, top right, always on screen.
 	gear = UiStyle.gear_button(_on_settings)
 	_root.add_child(gear)
+	# Who's playing (owner, 2026-10-08; Players): the player's name, beside the gear; it opens the
+	# page to switch, add, rename or delete players.
+	player_button = UiStyle.button("", _on_players)
+	player_button.name = "PlayerButton"
+	_root.add_child(player_button)
+	players_page = PlayersPage.new()
+	_root.add_child(players_page)
+	players_page.done.connect(func() -> void:
+		players_page.visible = false
+		player_button.grab_focus.call_deferred())
 	exit_box = UiStyle.confirm_button("Exit", "Leave Mote? Your run is saved.", "Exit", func(): Game.inst.exit_game())
 	exit_box.name = "Exit"
 	exit_box.alignment = BoxContainer.ALIGNMENT_END
@@ -101,6 +113,8 @@ func _ready() -> void:
 	ver.add_theme_color_override("font_color", Color(0.85, 0.95, 0.92, 0.7))
 	_root.add_child(ver)
 	version_label = ver
+	# (Who's playing covers the whole title, Exit and the version line included.)
+	_root.move_child(players_page, -1)
 	get_viewport().size_changed.connect(_layout)
 	visible = false
 
@@ -155,6 +169,11 @@ func _layout() -> void:
 	gear.add_theme_constant_override("icon_max_width", int(62 * s))
 	gear.pivot_offset = gear.size * 0.5
 	gear.position = Vector2(area.end.x - gear.size.x - 4 * s, area.position.y + 4 * s)
+	player_button.text = "Player: %s" % Players.current_name()
+	player_button.add_theme_font_size_override("font_size", int(24 * s))
+	player_button.custom_minimum_size = Vector2(0, 64 * s)
+	player_button.reset_size()
+	player_button.position = Vector2(gear.position.x - player_button.size.x - 14 * s, gear.position.y + (gear.size.y - player_button.size.y) * 0.5)
 	version_label.add_theme_font_size_override("font_size", int(20 * s))
 	version_label.reset_size()
 	version_label.position = area.end - version_label.size - Vector2(8, 4) * s
@@ -246,6 +265,10 @@ func _on_skills() -> void:
 	Sfx.play("ui_tap", null, -6.0)
 	Game.inst.pause_menu.open(true)
 	Game.inst.pause_menu._open_skills(true)
+
+
+func _on_players() -> void:
+	players_page.open()
 
 
 func _on_settings() -> void:

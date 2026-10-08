@@ -1,5 +1,10 @@
 class_name BallView
 extends CanvasLayer
+## Owner, 2026-10-08: opened by the player (the HUD's whole-ball button, top left; a controller's
+## Back / View), it stays until that same button is pressed again: the thumb turns the ball (a drag
+## orbits the camera all round it, so every side can be seen) and other touches do nothing. A
+## controller's buttons still return. The first-arrival view (`auto`) is unchanged: any press skips.
+##
 ## The whole-ball view on demand (ledger row 21): the tutorial's reveal shot (the camera ~30 m past
 ## the ball's ground, looking back at the whole moss ball) whenever the player asks for it, from the
 ## pause menu ("View whole ball") or a controller's Back / View button (keyboard V). It is also the
@@ -40,6 +45,20 @@ var _saved := {}
 ## FROM_S instead of jumping, since the camera's own blend is already complete.
 var _from := {}
 const FROM_S := 0.8
+## How far a drag turns the view (radians per pixel at 720 px tall).
+const DRAG_RATE := 0.008
+## The camera never comes nearer the ball's centre than its radius plus this (m): where the tank's
+## glass or floor would push it closer, that turn is not taken.
+const MIN_CLEAR_M := 20.0
+
+## Opened by the player (stays until the button again), not the timed first-arrival view.
+var manual := false
+## The manual view's orbit: the direction from the ball's centre to the camera, and the camera's up.
+var _dir := Vector3.ZERO
+var _up := Vector3.UP
+## The thumb has turned it (the slow circling stops).
+var dragged := false
+var _icon: Control
 
 
 func _ready() -> void:
@@ -63,7 +82,26 @@ func _ready() -> void:
 	_label.offset_bottom = -28
 	_label.mouse_filter = Control.MOUSE_FILTER_IGNORE
 	root.add_child(_label)
+	# The whole-ball button, where the HUD draws it: here it means "back to play".
+	_icon = _Icon.new()
+	_icon.name = "BallViewButton"
+	_icon.view = self
+	_icon.set_anchors_preset(Control.PRESET_FULL_RECT)
+	_icon.mouse_filter = Control.MOUSE_FILTER_IGNORE
+	root.add_child(_icon)
 	visible = false
+
+
+class _Icon extends Control:
+	var view: BallView
+
+	func _process(_dt: float) -> void:
+		queue_redraw()
+
+	func _draw() -> void:
+		if view.manual and view.g != null and view.g.hud != null:
+			var k := clampf(get_viewport_rect().size.y / 720.0, 0.75, 1.4)
+			Hud.HudCanvas.draw_ball_icon(self, view.g.hud.ball_rect(), k, 1.0)
 
 
 ## Whether the view can open now: ordinary play only (not mid-cinematic, mid-fall, dead, or in the
@@ -83,6 +121,8 @@ func open(auto := 0.0) -> bool:
 	returning = false
 	t = 0.0
 	auto_s = auto
+	manual = auto <= 0.0
+	dragged = false
 	if auto > 0.0:
 		arrivals_shown += 1
 	_saved = {"yaw": cam.yaw_dir, "pitch": cam.pitch, "up": cam.cam_up, "dist": cam._cur_dist,
@@ -102,12 +142,16 @@ func open(auto := 0.0) -> bool:
 	g.hud.visible = false
 	if _saved["onb"]:
 		g.onboarding.ui.visible = false
-	var how := "Press any button to return" if Settings.input_mode == Settings.InputMode.PAD else "Tap anywhere to return"
+	var how := "Press any button to return" if Settings.input_mode == Settings.InputMode.PAD \
+			else "Drag to turn the ball  ·  tap the ball button to return"
 	if auto > 0.0:
 		how = "Press any button to skip" if Settings.input_mode == Settings.InputMode.PAD else "Tap anywhere to skip"
 	_label.text = "%s\n%s" % [caption(g.player.ball, g.vortices), how]
 	visible = true
 	_aim(0.0)
+	var s0 := shot(g.player.ball, g.player.up, g.player.facing, 0.0)
+	_dir = ((s0[0] as Vector3) - g.player.ball.global_position).normalized()
+	_up = (s0[2] as Vector3).normalized()
 	return true
 
 
@@ -198,6 +242,8 @@ func _process(dt: float) -> void:
 
 func _aim(at_t: float) -> void:
 	var s := shot(g.player.ball, g.player.up, g.player.facing, at_t * ORBIT_RATE)
+	if dragged:
+		s = orbit_shot(g.player.ball, _dir, _up)
 	if not _from.is_empty() and at_t < FROM_S:
 		var k := smoothstep(0.0, 1.0, at_t / FROM_S)
 		s = [(_from["pos"] as Vector3).lerp(s[0], k), (_from["look"] as Vector3).lerp(s[1], k),
@@ -224,6 +270,43 @@ static func shot(b: MossBall, up: Vector3, facing: Vector3, orbit := 0.0) -> Arr
 	return [pos, look, cu]
 
 
+## The manual view's shot: from `dir` (centre to camera), up `up`: [camera place, look-at, up].
+static func orbit_shot(b: MossBall, dir: Vector3, up: Vector3) -> Array:
+	var c := b.global_position
+	var pos := in_tank(c + dir * (b.radius + PAST_SURFACE_M))
+	var dd := (pos - c).normalized()
+	var cu := (up - dd * up.dot(dd)).normalized()
+	if cu.length() < 0.1:
+		cu = Vector3.UP
+	return [pos, c, cu]
+
+
+## Turns the manual view by a drag of `rel` pixels (left/right round the camera's up, up/down over
+## the top and bottom). A turn that would bring the camera too near the ball (the tank's glass or
+## floor in the way) is not taken.
+func turn(rel: Vector2) -> void:
+	var b: MossBall = g.player.ball
+	if not dragged:
+		# (From wherever the slow circling has got to.)
+		_dir = (g.cam.cine_pos - b.global_position).normalized()
+		_up = g.cam.cine_up.normalized()
+	var k := DRAG_RATE * 720.0 / maxf(1.0, get_viewport().get_visible_rect().size.y)
+	var d := _dir.rotated(_up, -rel.x * k)
+	var u := _up
+	var right := u.cross(d).normalized()
+	if right.length() > 0.1:
+		d = d.rotated(right, rel.y * k)
+		u = u.rotated(right, rel.y * k)
+	d = d.normalized()
+	u = (u - d * u.dot(d)).normalized()
+	var s := orbit_shot(b, d, u)
+	if (s[0] as Vector3).distance_to(b.global_position) < b.radius + MIN_CLEAR_M:
+		return
+	_dir = d
+	_up = u
+	dragged = true
+
+
 ## `p` kept TANK_MARGIN_M inside the glass and above the tank's floor.
 static func in_tank(p: Vector3) -> Vector3:
 	var lo := Aquarium.TANK_MIN + Vector3.ONE * TANK_MARGIN_M
@@ -233,14 +316,30 @@ static func in_tank(p: Vector3) -> Vector3:
 	return out
 
 
-## Any touch, click, key or button closes it (after the opening press); nothing reaches play.
+## The first-arrival view: any touch, click, key or button closes it (after the opening press).
+## The player's view: a drag turns the ball, a tap on the whole-ball button returns, and a key or a
+## controller button returns. Nothing reaches play either way.
 func _input(event: InputEvent) -> void:
 	if not active:
 		return
 	get_viewport().set_input_as_handled()
-	if returning or t < GRACE_S:
+	if returning:
 		return
-	var press: bool = (event is InputEventScreenTouch and event.pressed) or (event is InputEventMouseButton and event.pressed) \
-			or (event is InputEventKey and event.pressed and not event.echo) or (event is InputEventJoypadButton and event.pressed)
-	if press:
+	if manual:
+		if event is InputEventScreenDrag:
+			turn((event as InputEventScreenDrag).relative)
+			return
+		if event is InputEventMouseMotion and (event as InputEventMouseMotion).button_mask & MOUSE_BUTTON_MASK_LEFT:
+			turn((event as InputEventMouseMotion).relative)
+			return
+	if t < GRACE_S:
+		return
+	var tap: bool = (event is InputEventScreenTouch and event.pressed) or (event is InputEventMouseButton and event.pressed)
+	var press: bool = (event is InputEventKey and event.pressed and not event.echo) or (event is InputEventJoypadButton and event.pressed)
+	if manual and tap:
+		var at: Vector2 = event.position
+		if g.hud.ball_rect().grow(10).has_point(at):
+			close()
+		return
+	if tap or press:
 		close()

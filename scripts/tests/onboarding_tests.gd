@@ -1372,3 +1372,36 @@ func guidance() -> void:
 	t.check("guide_page_done_returns_to_menu", not page.visible and g.pause_menu.visible, "")
 	g.pause_menu.close()
 	await t.frames(3)
+
+
+## Replay tutorial (owner, 2026-10-08): the run's lessons start over, the intro comes at the next
+## calm moment, then a frond is emptied for the feeding lesson; progress is untouched.
+func replay() -> void:
+	await all_done()
+	await home(0)
+	p.invuln_t = 999.0
+	var earned0 := g.run_save.earned().size()
+	Settings.tutorials = false
+	g.pause_menu.open()
+	await t.frames(3)
+	(g.pause_menu.find_child("ReplayTutorial", true, false) as Button).pressed.emit()
+	var reset_ok := Settings.tutorials and not o.done("intro") and not o.done("feeding") and not o.done("parasite") and o.replay_pending \
+			and not g.pause_menu.visible
+	var carded := await wait_until(func() -> bool: return o.ui.waiting_for_tap(), 2.0)
+	var texts: Array[String] = []
+	for l in o.ui.panel().find_children("*", "Label", true, false):
+		texts.append((l as Label).text)
+	t.check("replay_resets_and_shows_intro", reset_ok and carded and texts.has(Onboarding.INTRO_TITLE) and o.done("intro"),
+			"reset %s, card %s: %s" % [reset_ok, carded, ", ".join(texts)])
+	var mx := p.max_health
+	o.ui.tap()
+	await t.frames(3)
+	t.check("replay_intro_then_frond_for_feeding", o.stage == "" and p.controls_enabled and p.health == mx - 1 and o.run_frond
+			and g.run_save.earned().size() == earned0, "hp %d/%d, earned %d -> %d" % [p.health, mx, earned0, g.run_save.earned().size()])
+	var f := jelly(4.0)
+	var on := await wait_until(func() -> bool: return o.objective == "feeding", 2.0)
+	t.check("replay_lessons_come_again", on, "objective '%s'" % o.objective)
+	if is_instance_valid(f):
+		p.ball.foods.erase(f)
+		f.queue_free()
+	await all_done()

@@ -51,7 +51,7 @@ func run(runner) -> void:
 	g.spores.enabled = false
 	await t.seconds(0.5)
 	var only: String = Settings.test_args.get("only", "")
-	var registry := ["_test_startup", "_test_ota_and_version", "_test_hag_infra", "_test_launch_update", "_test_mesh_winding", "_test_terrain", "_test_ravines", "_test_rim_fights_clear_of_ooze", "_test_edge_assist", "_test_ooze_bubbles", "_test_view_clearances", "_test_camera_rises_over", "_test_camera_invariant", "_test_ball_view", "_test_hud_corner", "_test_restore_hints", "_test_spore_blooms", "_test_drawn_back", "_test_dead_area_sim", "_test_home_coherence", "_test_terrain_grounded", "_test_no_floating_platforms", "_test_parasite_locomotion", "_test_parasite_body_and_death", "_test_parasite_combat", "_test_organic_motion", "_test_gill_look", "_test_gill_idles", "_test_gill_colours", "_test_gill_patterns", "_test_tail_whip", "_test_gill_traction", "_test_gill_incline_transitions", "_test_traction_no_shortcuts", "_test_gill_body_follow", "_test_swim_body_follow", "_test_ambient_sway", "_test_placements", "_test_tutorial_route", "_test_sphere_walk", "_test_jump_and_burst", "_test_coyote_and_buffer", "_test_swipe_direction_and_stages", "_test_hard_landing", "_test_food", "_test_food_reach", "_test_food_catchable", "_test_assisted_lunge", "_test_glob_counterplay", "_test_darter_and_burrower", "_test_food_repopulates", "_test_motes", "_test_checkpoint_and_regen", "_test_crumble", "_test_restoration_gates", "_test_retract_gates_gone", "_test_bubble_columns", "_test_restoration_continuity", "_test_health_map", "_test_vortex", "_test_vortex_tints", "_test_vortex_ready_state", "_test_vortex_currents", "_test_vortex_currents_travel", "_test_current", "_test_current_brace", "_test_canopy", "_test_canopy_plain_jumps", "_test_canopy_guard_leaf", "_test_climbs_physical", "_test_jungle_ladders_physical", "_test_leaf_geometry", "_test_leaf_footing", "_test_caves", "_test_mounds", "_test_vegetation", "_test_vortex_mouths_clear", "_test_vortex_pads_clear_of_plants", "_test_stalkers_in_reeds", "_test_route_audit", "_test_new_areas", "_test_ecosystem", "_test_threat_spread", "_test_music", "_test_opening_audio", "_test_run_clock", "_test_completion_catalog", "_test_completion_frozen", "_test_run_save_file", "_test_run_timer_live", "_test_run_continue", "_test_timer_integrity", "_test_resume_points_safe", "_phase_continue_write", "_phase_continue_read", "_test_upgrades", "_test_quality_title_cap", "_test_ui", "_test_menus_no_scroll", "_test_menu_touch", "_test_primary_buttons", "_test_tier2_rules", "_test_tier2_world", "_test_ambient_fish", "_test_parasite_never_buried", "_test_tier2_loadout", "_test_aquarium_experiences", "_test_aquarium_polish", "_test_all_clear", "_test_treasure_unlock", "_test_treasure_generation", "_test_treasure_play", "_phase_treasure_stress", "_phase_live_fish_diag", "_phase_cpu_probe", "_phase_incline_survey", "_phase_loco_diag", "_phase_crawl_trace", "_phase_mouth_crawls", "_phase_organic_trace", "_phase_organic_cost", "_test_skilltree_graph", "_test_progress_store", "_test_starfish_spots", "_test_starfish_pickup", "_test_skill_ui", "_test_quick_gill", "_test_lunge_skills", "_test_burst_skills", "_test_glide_control", "_test_glide_transfers", "_test_mote_magnet", "_phase_starfish_survey", "_phase_starfish_sweep", "_phase_glide_probe", "_test_plants_terminal_growth", "_test_sea_fan_depth", "_test_repopulation", "_phase_repop_survey", "_phase_repop_sim", "_test_aquarium_gill", "_phase_aq_nav", "_test_tutorials_and_title", "_test_onb_progress", "_test_onb_owner_save", "_test_onb_per_run", "_test_onb_toggle", "_test_onb_intro", "_test_onb_feeding", "_test_onb_parasite", "_test_onb_feed_first", "_test_onb_tunnel", "_test_onb_starfish", "_test_onb_softlock", "_test_onb_guidance", "_test_onb_relaunch", "_test_onb_restoration_equal", "_test_hard_mode", "_test_hard_mode_save", "_test_polish_a", "_test_leaf_motion", "_test_perf_veg_cull", "_test_veg_stays_put", "_test_death_and_arrival", "_test_pause_ball_progress", "_test_arrival_view", "_test_camera_never_drawn_unsafe", "_test_startup_build_identical", "_phase_world_hash", "_phase_th_bench", "_phase_hard_write", "_phase_hard_read", "_phase_hard_newrun", "_phase_hard_finish", "_phase_hard_sim", "_phase_hard_intervals", "_phase_onb_owner", "_phase_onb_write", "_phase_onb_read", "_phase_onb_kill", "_phase_onb_toggle", "_phase_cohesion_probe", "_test_eel_reach", "_test_parasite_readability"]
+	var registry := ["_test_startup", "_test_ota_and_version", "_test_hag_infra", "_test_launch_update", "_test_mesh_winding", "_test_terrain", "_test_ravines", "_test_rim_fights_clear_of_ooze", "_test_edge_assist", "_test_ooze_bubbles", "_test_view_clearances", "_test_camera_rises_over", "_test_camera_invariant", "_test_ball_view", "_test_owner_menus_and_players", "_test_hud_corner", "_test_restore_hints", "_test_spore_blooms", "_test_drawn_back", "_test_dead_area_sim", "_test_home_coherence", "_test_terrain_grounded", "_test_no_floating_platforms", "_test_parasite_locomotion", "_test_parasite_body_and_death", "_test_parasite_combat", "_test_organic_motion", "_test_gill_look", "_test_gill_idles", "_test_gill_colours", "_test_gill_patterns", "_test_tail_whip", "_test_gill_traction", "_test_gill_incline_transitions", "_test_traction_no_shortcuts", "_test_gill_body_follow", "_test_swim_body_follow", "_test_ambient_sway", "_test_placements", "_test_tutorial_route", "_test_sphere_walk", "_test_jump_and_burst", "_test_coyote_and_buffer", "_test_swipe_direction_and_stages", "_test_hard_landing", "_test_food", "_test_food_reach", "_test_food_catchable", "_test_assisted_lunge", "_test_glob_counterplay", "_test_darter_and_burrower", "_test_food_repopulates", "_test_motes", "_test_checkpoint_and_regen", "_test_crumble", "_test_restoration_gates", "_test_retract_gates_gone", "_test_bubble_columns", "_test_restoration_continuity", "_test_health_map", "_test_vortex", "_test_vortex_tints", "_test_vortex_ready_state", "_test_vortex_currents", "_test_vortex_currents_travel", "_test_current", "_test_current_brace", "_test_canopy", "_test_canopy_plain_jumps", "_test_canopy_guard_leaf", "_test_climbs_physical", "_test_jungle_ladders_physical", "_test_leaf_geometry", "_test_leaf_footing", "_test_caves", "_test_mounds", "_test_vegetation", "_test_vortex_mouths_clear", "_test_vortex_pads_clear_of_plants", "_test_stalkers_in_reeds", "_test_route_audit", "_test_new_areas", "_test_ecosystem", "_test_threat_spread", "_test_music", "_test_opening_audio", "_test_run_clock", "_test_completion_catalog", "_test_completion_frozen", "_test_run_save_file", "_test_run_timer_live", "_test_run_continue", "_test_timer_integrity", "_test_resume_points_safe", "_phase_continue_write", "_phase_continue_read", "_test_upgrades", "_test_quality_title_cap", "_test_ui", "_test_menus_no_scroll", "_test_menu_touch", "_test_primary_buttons", "_test_tier2_rules", "_test_tier2_world", "_test_ambient_fish", "_test_parasite_never_buried", "_test_tier2_loadout", "_test_aquarium_experiences", "_test_aquarium_polish", "_test_all_clear", "_test_treasure_unlock", "_test_treasure_generation", "_test_treasure_play", "_phase_treasure_stress", "_phase_live_fish_diag", "_phase_cpu_probe", "_phase_incline_survey", "_phase_loco_diag", "_phase_crawl_trace", "_phase_mouth_crawls", "_phase_organic_trace", "_phase_organic_cost", "_test_skilltree_graph", "_test_progress_store", "_test_starfish_spots", "_test_starfish_pickup", "_test_skill_ui", "_test_quick_gill", "_test_lunge_skills", "_test_burst_skills", "_test_glide_control", "_test_glide_transfers", "_test_mote_magnet", "_phase_starfish_survey", "_phase_starfish_sweep", "_phase_glide_probe", "_test_plants_terminal_growth", "_test_sea_fan_depth", "_test_repopulation", "_phase_repop_survey", "_phase_repop_sim", "_test_aquarium_gill", "_phase_aq_nav", "_test_tutorials_and_title", "_test_onb_progress", "_test_onb_owner_save", "_test_onb_per_run", "_test_onb_toggle", "_test_onb_intro", "_test_onb_feeding", "_test_onb_parasite", "_test_onb_feed_first", "_test_onb_tunnel", "_test_onb_starfish", "_test_onb_softlock", "_test_onb_guidance", "_test_onb_replay", "_test_onb_relaunch", "_test_onb_restoration_equal", "_test_hard_mode", "_test_hard_mode_save", "_test_polish_a", "_test_leaf_motion", "_test_perf_veg_cull", "_test_veg_stays_put", "_test_death_and_arrival", "_test_pause_ball_progress", "_test_arrival_view", "_test_camera_never_drawn_unsafe", "_test_startup_build_identical", "_phase_world_hash", "_phase_th_bench", "_phase_hard_write", "_phase_hard_read", "_phase_hard_newrun", "_phase_hard_finish", "_phase_hard_sim", "_phase_hard_intervals", "_phase_onb_owner", "_phase_onb_write", "_phase_onb_read", "_phase_onb_kill", "_phase_onb_toggle", "_phase_cohesion_probe", "_test_eel_reach", "_test_parasite_readability"]
 	# A --only entry that names nothing is a typo (or a stale substring): fail loudly rather than run nothing.
 	for o in only.split(",", false):
 		if not registry.has(o) and not registry.has("_test_" + o):
@@ -7208,7 +7208,7 @@ func _test_tutorials_and_title() -> void:
 	await t.frames(3)
 	var tb := pm._panel.find_child("Tutorials", true, false) as CheckButton
 	t.check("tutorials_toggle_from_title_settings", tb != null and tb.is_visible_in_tree() and tb.button_pressed == Settings.tutorials
-			and pm._panel.find_child("ReplayTutorial", true, false) == null, "toggle %s" % (tb != null))
+			and not (pm._panel.find_child("ReplayTutorial", true, false) as Control).is_visible_in_tree(), "toggle %s" % (tb != null))
 	pm.close()
 	await t.frames(1)
 	pm.open()
@@ -7363,9 +7363,8 @@ func _test_primary_buttons() -> void:
 				bad.append("%s (%s) is primary but is not a primary action" % [b.get_path(), b.text])
 			elif b.get_node_or_null("PrimaryFill") == null or b.theme_type_variation != "PrimaryButton":
 				bad.append("%s is half primary" % b.get_path())
-	var close := g.diagnostics.find_child("Close", true, false) as Button
 	var live := g.presentation.ui.find_child("LiveTank", true, false) as Button if g.presentation.ui != null else null
-	for b in [close, live]:
+	for b in [live]:
 		if b != null and b.theme_type_variation != "AccentButton":
 			bad.append("%s lost its own (pink) style" % b.name)
 	for name_ in ["NewRun", "ReturnToTitle", "Done", "Later", "Cancel", "Yes", "Exit"]:
@@ -10298,6 +10297,10 @@ func _test_onb_guidance() -> void:
 	await _onboarding().guidance()
 
 
+func _test_onb_replay() -> void:
+	await _onboarding().replay()
+
+
 func _test_onb_softlock() -> void:
 	await _onboarding().softlock()
 
@@ -11465,6 +11468,107 @@ func _phase_cohesion_probe() -> void:
 ## The whole-ball view, on every ball: opened from the pause menu (and the pad's Back), the run stands
 ## still (no movement, damage or clock), the camera is far out and inside the tank, never drawn
 ## unsafe; any touch or button returns, to exactly the follow place it left, with control back.
+## Owner, 2026-10-08: About's Advanced gone and Close is Back; Save & Return to Title; Replay
+## tutorial; the whole-ball button clear of the recovery corner; player profiles kept apart.
+func _test_owner_menus_and_players() -> void:
+	# About / Diagnostics.
+	g.diagnostics.open()
+	await t.frames(2)
+	var adv := g.diagnostics.find_child("Advanced", true, false)
+	var back := g.diagnostics.find_child("Back", true, false) as Button
+	var back_ok := back != null and back.text == "‹ Back" and back.is_visible_in_tree()
+	if back != null:
+		back.pressed.emit()
+	await t.frames(2)
+	t.check("about_no_advanced_and_back", adv == null and back_ok and not g.diagnostics.visible, "advanced %s, back %s" % [adv != null, back_ok])
+	# The pause menu.
+	var pm := g.pause_menu
+	pm.open()
+	await t.frames(3)
+	var rt := pm.find_child("ReturnToTitle", true, false) as Button
+	var rp := pm.find_child("ReplayTutorial", true, false) as Button
+	var wb := pm.find_child("ViewWholeBall", true, false)
+	t.check("pause_save_and_return_label", rt != null and rt.text == "Save & Return to Title", rt.text if rt != null else "none")
+	t.check("pause_replay_tutorial_in_run", rp != null and rp.is_visible_in_tree() and rp.get_global_rect().size.y >= 56.0, "")
+	t.check("pause_no_whole_ball_button", wb == null, "")
+	pm.close()
+	pm.open(true)
+	await t.frames(3)
+	t.check("pause_replay_tutorial_not_from_title", not rp.is_visible_in_tree(), "")
+	pm.close()
+	await t.frames(2)
+	# The whole-ball button: the pause button's size, clear of the installed app's recovery corner
+	# (five taps in the top 10% x 14% of the screen), the run timer beside it.
+	var vp := g.hud.root.get_viewport_rect().size
+	var br := g.hud.ball_rect()
+	var grown := br.grow(10)
+	Settings.show_run_timer = true
+	await t.frames(2)
+	t.check("ball_button_clear_of_recovery_corner", grown.position.x > vp.x * 0.1 and is_equal_approx(br.size.x, g.hud.pause_rect().size.x)
+			and g.hud.timer_label.position.x >= br.end.x, "button %s, recovery corner x < %.0f, timer at %.0f" % [br, vp.x * 0.1, g.hud.timer_label.position.x])
+	Settings.show_run_timer = false
+	# Player profiles (the registry for real, in this test's own user://).
+	Settings.test_args["players"] = "1"
+	Players.reload()
+	var fresh := Players.list().size() == 1 and Players.current() == Players.MAIN and Players.current_name() == Players.MAIN_DEFAULT_NAME
+	var main_run := Players.run_path()
+	var kid := Players.add("  Daughter  ")
+	Players.set_current(kid)
+	var kid_paths := Players.run_path() != main_run and Players.run_path().begins_with(Players.dir_of(kid)) \
+			and Players.gill_path().begins_with(Players.dir_of(kid)) and Players.pattern_path().begins_with(Players.dir_of(kid))
+	t.check("players_first_is_the_original_save", fresh and main_run == RunSave.PATH, main_run)
+	t.check("players_each_their_own_saves", kid != "" and Players.name_of(kid) == "Daughter" and kid_paths, Players.run_path())
+	# Their own colours: the first player's stay in settings.cfg untouched.
+	Players.set_current(Players.MAIN)
+	Settings.load_player_look()
+	var main_morph := Settings.gill_morph
+	Players.set_current(kid)
+	Settings.load_player_look()
+	var kid_default := Settings.gill_morph == "pink"
+	var other := "golden" if main_morph != "golden" else "copper"
+	Settings.set_gill_look(other, 0.0, 1.0, 0.0, 1.0)
+	var cf := ConfigFile.new()
+	cf.load(Settings.SETTINGS_PATH)
+	var main_kept := str(cf.get_value("gill", "morph", "")) == main_morph
+	var kf := ConfigFile.new()
+	var kid_saved := kf.load(Players.look_path()) == OK and str(kf.get_value("gill", "morph", "")) == other
+	Players.set_current(Players.MAIN)
+	Settings.load_player_look()
+	t.check("players_own_colours", kid_default and main_kept and kid_saved and Settings.gill_morph == main_morph,
+			"main %s kept %s; kid default %s, saved %s; back to %s" % [main_morph, main_kept, kid_default, kid_saved, Settings.gill_morph])
+	# Rename, the cap, delete (never the first player; the current one falls back to the first).
+	var renamed := Players.rename(kid, "Ella") and Players.name_of(kid) == "Ella"
+	var ids := [kid]
+	while Players.can_add():
+		ids.append(Players.add("P%d" % ids.size()))
+	var capped := Players.list().size() == Players.MAX and Players.add("One more") == ""
+	Players.set_current(kid)
+	var gone := Players.remove(kid) and not Players.list_ids().has(kid) and Players.current() == Players.MAIN \
+			and not DirAccess.dir_exists_absolute(Players.dir_of(kid))
+	var main_stays := not Players.remove(Players.MAIN)
+	Players.reload()
+	var persisted := Players.list().size() == Players.MAX - 1
+	t.check("players_rename_cap_delete", renamed and capped and gone and main_stays and persisted and Players.clean_name("   ") == "",
+			"renamed %s, capped %s, gone %s, main stays %s, persisted %s" % [renamed, capped, gone, main_stays, persisted])
+	for id in ids:
+		Players.remove(id)
+	Settings.test_args.erase("players")
+	Players.reload()
+	# The title names whose game it is.
+	g._enter_title()
+	await t.frames(3)
+	t.check("title_names_the_player", g.title.player_button.is_visible_in_tree() and g.title.player_button.text == "Player: " + Players.current_name()
+			and not g.title.player_button.get_global_rect().intersects(g.title.gear.get_global_rect()), g.title.player_button.text)
+	g.title.player_button.pressed.emit()
+	await t.frames(3)
+	var page_ok := g.title.players_page.visible and g.title.players_page.find_child("NewPlayer", true, false) != null
+	g._go_back()
+	await t.frames(2)
+	t.check("title_players_page_opens_and_back_closes", page_ok and not g.title.players_page.visible and g.state == "title", "")
+	g.start_play(true)
+	await t.frames(5)
+
+
 func _test_ball_view() -> void:
 	var bv: BallView = g.ball_view
 	var cam: FollowCam = g.cam
@@ -11506,11 +11610,18 @@ func _test_ball_view() -> void:
 		p.velocity = p.facing * 3.0
 		var opened := true
 		if b.index % 2 == 0:
-			g.pause_menu.open()
-			await t.frames(2)
-			var btn := g.pause_menu.find_child("ViewWholeBall", true, false) as Button
-			opened = btn != null and btn.visible and not btn.disabled and btn.size.y >= PauseMenu.MIN_TOUCH
-			btn.pressed.emit()
+			# The HUD's whole-ball button, top left (owner, 2026-10-08).
+			var br := g.hud.ball_rect()
+			opened = g.hud.ball_button_shown() and br.size.x >= 40.0
+			var oev := InputEventScreenTouch.new()
+			oev.pressed = true
+			# (Events come in window pixels; the HUD lays out in the viewport's.)
+			oev.position = g.get_viewport().get_final_transform() * br.get_center()
+			push.call(oev)
+			await t.frames(1)
+			var oev2 := oev.duplicate() as InputEventScreenTouch
+			oev2.pressed = false
+			push.call(oev2)
 		else:
 			var ev := InputEventJoypadButton.new()
 			ev.button_index = JOY_BUTTON_BACK
@@ -11534,16 +11645,38 @@ func _test_ball_view() -> void:
 			frozen = frozen and not p.can_process() and not g.can_process() and not g.ecosystem.can_process()
 			far = maxf(far, cam.global_position.distance_to(b.global_position) - b.radius)
 		var still := frozen and p.global_position.distance_to(pos0) < 0.01 and p.health == hp0 and absf(g.clock.run_s - run0) < 0.001
-		# Any touch returns (a key on odd balls).
+		# The player's view stays until its button: a touch elsewhere does nothing, a drag turns the
+		# ball, and the whole-ball button returns (a pad button on odd balls).
 		if b.index % 2 == 0:
 			var tev := InputEventScreenTouch.new()
 			tev.pressed = true
 			tev.position = Vector2(640, 360)
 			push.call(tev)
-			await t.frames(1)
+			var cam_a := cam.global_position
+			for k in 12:
+				var dev := InputEventScreenDrag.new()
+				dev.position = Vector2(640 + k * 20, 360)
+				dev.relative = Vector2(20, 4)
+				push.call(dev)
+				await t.frames(1)
 			var tev2 := tev.duplicate() as InputEventScreenTouch
 			tev2.pressed = false
 			push.call(tev2)
+			await t.frames(20)
+			var turned := cam.global_position.distance_to(cam_a)
+			var stayed := bv.active and not bv.returning
+			still = still and stayed and bv.dragged and turned > 3.0 \
+					and cam.global_position.distance_to(b.global_position) > b.radius + BallView.MIN_CLEAR_M - 0.5
+			if not (stayed and bv.dragged and turned > 3.0):
+				rows.append("ball %d: stayed %s, dragged %s, camera turned %.1f m" % [b.index + 1, stayed, bv.dragged, turned])
+			var cev := InputEventScreenTouch.new()
+			cev.pressed = true
+			cev.position = g.get_viewport().get_final_transform() * g.hud.ball_rect().get_center()
+			push.call(cev)
+			await t.frames(1)
+			var cev2 := cev.duplicate() as InputEventScreenTouch
+			cev2.pressed = false
+			push.call(cev2)
 		else:
 			var kev := InputEventJoypadButton.new()
 			kev.button_index = JOY_BUTTON_A
@@ -11573,10 +11706,7 @@ func _test_ball_view() -> void:
 	place_at(0, b0.surface_point(b0.start_dir, 0.2), MossBall.frame_at(b0.start_dir, 0).z)
 	g._start_cinematic("frame", {})
 	await t.frames(2)
-	g.pause_menu.open()
-	await t.frames(2)
-	var greyed := (g.pause_menu.find_child("ViewWholeBall", true, false) as Button).disabled
-	g.pause_menu.close()
+	var greyed := not g.hud.ball_button_shown()
 	var refused := not bv.open()
 	for f in 60 * 6:
 		await t.frames(1)

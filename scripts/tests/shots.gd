@@ -55,6 +55,34 @@ func run(runner) -> void:
 		await t.seconds(1.0)
 		await t.shot("guide_name_and_hint")
 		g.onboarding._end_hint()
+	if only == "owner2":
+		# Owner, 2026-10-08: the whole-ball button over play, the view it opens (turned by a drag),
+		# About without Advanced, and Who's playing.
+		Settings.show_run_timer = true
+		await t.seconds(1.0)
+		await t.shot("owner2_hud_ball_button")
+		g.ball_view.open()
+		await t.seconds(1.0)
+		g.ball_view.turn(Vector2(260, 140))
+		await t.seconds(1.5)
+		await t.shot("owner2_ball_view_turned")
+		g.ball_view.close()
+		await t.seconds(1.5)
+		g.pause_menu.open()
+		await t.seconds(0.4)
+		await t.shot("owner2_pause")
+		g.diagnostics.open()
+		await t.seconds(0.4)
+		await t.shot("owner2_about")
+		g.diagnostics.close()
+		g.pause_menu.close()
+		g._enter_title()
+		await t.seconds(1.5)
+		await t.shot("owner2_title")
+		g.title.players_page.open()
+		g.title.players_page._open_ask("")
+		await t.seconds(0.4)
+		await t.shot("owner2_players")
 	if only == "applying":
 		# The activation modal over the title (HOT_ATTIC_INFRA.md §2).
 		g._enter_title()

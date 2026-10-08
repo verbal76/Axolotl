@@ -28,6 +28,11 @@ var _cam_touches := {}          # index -> last position
 var _btn_touch := {}            # index -> action
 var _buttons := {}              # action -> {center, radius}
 var _pause_rect := Rect2()
+## The whole-ball button, top left (owner, 2026-10-08): the pause button's size. Tap it to look at
+## the whole moss ball (BallView: play stands still, the thumb turns the ball), tap it again to
+## come back. Kept clear of the installed app's hidden recovery corner (five taps in the top 10% x
+## 14% of the screen open it), and the run timer sits beside it.
+var _ball_rect := Rect2()
 var _safe := Rect2()
 var _alpha := 1.0
 var _target_alpha := 1.0
@@ -155,8 +160,10 @@ func _layout() -> void:
 	if _stick_touch < 0:
 		_stick_origin = _stick_rest
 	_pause_rect = Rect2(Vector2(_safe.end.x - 64 * s, _safe.position.y + 6), Vector2(56, 56) * s)
+	# (Its whole touch area, grown 10 px, starts right of the recovery corner's 10% of the width.)
+	_ball_rect = Rect2(Vector2(maxf(_safe.position.x + 6, vp.x * 0.1 + 16), _safe.position.y + 6), Vector2(56, 56) * s)
 	if timer_label:
-		timer_label.position = _safe.position + Vector2(6, 4)
+		timer_label.position = Vector2(_ball_rect.end.x + 10, _safe.position.y + 4 + 14 * s)
 	if star_chip:
 		star_chip.k = s
 		star_chip.position = _safe.position + Vector2(6, 40 * s)
@@ -282,6 +289,11 @@ func _touch_down(idx: int, pos: Vector2) -> void:
 	if _pause_rect.grow(10).has_point(pos):
 		Game.inst.pause_menu.open()
 		get_viewport().set_input_as_handled()
+		return
+	if _ball_rect.grow(10).has_point(pos):
+		get_viewport().set_input_as_handled()
+		if ball_button_shown():
+			Game.inst.ball_view.open()
 		return
 	var action := button_at(pos)
 	if action != "":
@@ -446,6 +458,16 @@ func pause_rect() -> Rect2:
 	return _pause_rect
 
 
+func ball_rect() -> Rect2:
+	return _ball_rect
+
+
+## The whole-ball button shows (and works) whenever the view could open: ordinary play.
+func ball_button_shown() -> bool:
+	var g := Game.inst
+	return _controls_visible and not _cinematic and g != null and g.ball_view != null and g.ball_view.can_open()
+
+
 func pressed_glow(action: String) -> float:
 	return _pressed.get(action, 0.0) + (0.6 if Input.is_action_pressed(action) else 0.0)
 
@@ -468,6 +490,9 @@ class HudCanvas extends Control:
 		draw_circle(pc, pr.size.x * 0.45, Color(0, 0, 0, 0.18 * pause_a))
 		draw_rect(Rect2(pc + Vector2(-9, -11) * scale_k, Vector2(6, 22) * scale_k), Color(1, 1, 1, 0.7 * pause_a))
 		draw_rect(Rect2(pc + Vector2(3, -11) * scale_k, Vector2(6, 22) * scale_k), Color(1, 1, 1, 0.7 * pause_a))
+		# The whole-ball button: the same faint disc, a ball with an orbit round it.
+		if hud.ball_button_shown():
+			draw_ball_icon(self, hud.ball_rect(), scale_k, pause_a)
 		if a > 0.001:
 			_draw_stick(a)
 			for action in hud.button_info():
@@ -478,6 +503,19 @@ class HudCanvas extends Control:
 				_draw_button(action, a)
 		if hud.prompts_shown():
 			_draw_prompts(pa)
+
+	## The whole-ball glyph in `r` (also drawn by BallView over the view, where it means "back").
+	static func draw_ball_icon(ci: CanvasItem, r: Rect2, k: float, a: float) -> void:
+		var c := r.get_center()
+		ci.draw_circle(c, r.size.x * 0.45, Color(0, 0, 0, 0.18 * a))
+		var col := Color(1, 1, 1, 0.7 * a)
+		ci.draw_arc(c, 11.0 * k, 0, TAU, 40, col, 2.6 * k, true)
+		ci.draw_circle(c + Vector2(-3.5, -3.5) * k, 3.0 * k, Color(1, 1, 1, 0.35 * a))
+		var pts := PackedVector2Array()
+		for i in 33:
+			var t := TAU * i / 32.0
+			pts.append(c + Vector2(cos(t) * 19.0, sin(t) * 6.5).rotated(-0.35) * k)
+		ci.draw_polyline(pts, Color(1, 1, 1, 0.55 * a), 2.0 * k, true)
 
 	func _draw_stick(a: float) -> void:
 		var info := hud.stick_info()

@@ -446,6 +446,20 @@ func restart_experience(mode := "normal") -> void:
 	get_tree().reload_current_scene()
 
 
+## Who's playing (owner, 2026-10-08; Players): this player's run is saved, the chosen player's
+## colours are put on and the game comes back up on the title with that player's run.
+func switch_player(id: String) -> void:
+	if id == Players.current() or not Players.list_ids().has(id):
+		return
+	if run_save != null and has_run_in_progress():
+		save_run()
+	Players.set_current(id)
+	Settings.load_player_look()
+	get_tree().paused = false
+	Settings.skip_title = false
+	get_tree().reload_current_scene()
+
+
 func return_to_title() -> void:
 	save_run()
 	get_tree().paused = false
@@ -459,7 +473,7 @@ static func run_save_path() -> String:
 	if Settings.test_args.has("run-save"):
 		return Settings.test_args["run-save"]
 	# Automated runs never touch the player's run save.
-	return "user://test_run.json" if Settings.test_mode != "" else RunSave.PATH
+	return "user://test_run.json" if Settings.test_mode != "" else Players.run_path()
 
 
 ## After the world is built: the catalog stamps ids on the world, the run save is opened (tests
@@ -513,7 +527,7 @@ static func gill_progress_path() -> String:
 	if Settings.test_args.has("gill-save"):
 		return Settings.test_args["gill-save"]
 	# Automated runs never touch the player's progress.
-	return "user://test_gill_progress.json" if Settings.test_mode != "" else GillProgress.PATH
+	return "user://test_gill_progress.json" if Settings.test_mode != "" else Players.gill_path()
 
 
 ## The key food and repopulation hash from: the run id (a fixed key in seeded test runs, so a
@@ -881,6 +895,8 @@ func _go_back() -> void:
 		diagnostics.close()
 	elif ball_view != null and ball_view.active:
 		ball_view.close()
+	elif title != null and title.players_page != null and title.players_page.visible:
+		title.players_page.done.emit()
 	elif presentation != null and presentation.active():
 		presentation.back()
 	elif pause_menu.visible:

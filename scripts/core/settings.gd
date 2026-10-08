@@ -68,6 +68,9 @@ func _enter_tree() -> void:
 		elif a.begins_with("--") and a.contains("="):
 			var kv := a.substr(2).split("=", true, 1)
 			test_args[kv[0]] = kv[1]
+	# (After the command line: automated runs are always the main player.)
+	if Players.current() != Players.MAIN:
+		load_player_look()
 	_apply_audio()
 	Input.joy_connection_changed.connect(_on_joy_connection_changed)
 	_pad_connected = Input.get_connected_joypads().size() > 0
@@ -217,6 +220,52 @@ func set_gill_pattern(id: String, mode: int, size: int) -> void:
 	gill_look_changed.emit()
 
 
+## The colour fields (one player's look). The main player's live in settings.cfg's "gill" section;
+## any other player's in their own look.cfg (Players), same section and keys.
+const LOOK_KEYS := {"morph": "gill_morph", "body_hue": "gill_body_hue", "body_bright": "gill_body_bright",
+		"dots_hue": "gill_dots_hue", "dots_bright": "gill_dots_bright", "pattern": "gill_pattern",
+		"pattern_mode": "gill_pattern_mode", "pattern_size": "gill_pattern_size", "pattern_alpha": "gill_pattern_alpha"}
+## The main player's look as read from settings.cfg, while another player is playing (written back
+## there unchanged on every save, so the main player's colours are never touched).
+var _main_look := {}
+
+
+func _look() -> Dictionary:
+	var d := {}
+	for k in LOOK_KEYS:
+		d[k] = get(LOOK_KEYS[k])
+	return d
+
+
+func _set_look(d: Dictionary) -> void:
+	for k in LOOK_KEYS:
+		if d.has(k):
+			set(LOOK_KEYS[k], type_convert(d[k], typeof(get(LOOK_KEYS[k]))))
+
+
+## Puts on the current player's colours (at launch, and when the player changes). A new player
+## starts with the default look.
+func load_player_look() -> void:
+	if not _main_look.is_empty():
+		_set_look(_main_look)
+		_main_look = {}
+	var path := Players.look_path()
+	if path == "":
+		gill_look_changed.emit()
+		return
+	_main_look = _look()
+	var defaults := {"morph": "pink", "body_hue": 0.0, "body_bright": 1.0, "dots_hue": 0.0, "dots_bright": 1.0,
+			"pattern": "none", "pattern_mode": 0, "pattern_size": 3, "pattern_alpha": false}
+	_set_look(defaults)
+	var cf := ConfigFile.new()
+	if cf.load(path) == OK:
+		var d := {}
+		for k in LOOK_KEYS:
+			d[k] = cf.get_value("gill", k, defaults[k])
+		_set_look(d)
+	gill_look_changed.emit()
+
+
 func save() -> void:
 	var cf := ConfigFile.new()
 	cf.set_value("hud", "reduced", reduced_hud)
@@ -237,6 +286,17 @@ func save() -> void:
 	cf.set_value("gill", "pattern_alpha", gill_pattern_alpha)
 	for k in save_meta():
 		cf.set_value("meta", k, save_meta()[k])
+	if not _main_look.is_empty():
+		# Another player is playing: settings.cfg keeps the main player's colours, theirs go to
+		# their own file.
+		var mine := ConfigFile.new()
+		for k in LOOK_KEYS:
+			mine.set_value("gill", k, get(LOOK_KEYS[k]))
+			cf.set_value("gill", k, _main_look[k])
+		var lp := Players.look_path()
+		if lp != "":
+			DirAccess.make_dir_recursive_absolute(lp.get_base_dir())
+			mine.save(lp)
 	cf.save(SETTINGS_PATH)
 	_apply_audio()
 	settings_changed.emit()

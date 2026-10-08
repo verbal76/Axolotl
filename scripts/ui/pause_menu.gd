@@ -16,7 +16,6 @@ const MIN_TOUCH := 56.0
 
 var _loadout: Tier2Loadout
 var _aquarium: Button
-var _view_ball: Button
 var _treasure: Button
 var _root: Control
 var _panel: PanelContainer
@@ -43,6 +42,7 @@ var _gill_direct := false        # opened straight from the title screen
 ## The skill tree (docs/SKILL_TREE.md): a page of its own beside the colours page.
 var skill_page: SkillTreePage
 var guide_page: FieldGuidePage
+var _replay: Button
 var _skills_direct := false
 var _skills_button: Button
 
@@ -81,7 +81,8 @@ func _ready() -> void:
 	UiStyle.make_primary(resume)
 	_resume = resume
 	# Return to Title directly beneath Resume (owner ruling 2026-09-30).
-	var title := _action("Return to Title", func(): Game.inst.return_to_title())
+	# (Owner, 2026-10-08: says what it does; the run is saved first, as it always was.)
+	var title := _action("Save & Return to Title", func(): Game.inst.return_to_title())
 	title.name = "ReturnToTitle"
 	var restart := UiStyle.confirm_button("New Run", TitleScreen.NEW_RUN_QUESTION, "Normal", func(): Game.inst.restart_experience(),
 			"Hard", func(): Game.inst.restart_experience(HardMode.MODE))
@@ -93,24 +94,16 @@ func _ready() -> void:
 		(c as Label).add_theme_font_size_override("font_size", 20)
 		(c as Label).custom_minimum_size.x = LEFT_W
 	_left.add_child(restart)
-	# The aquarium experiences (the run is saved and stands still meanwhile).
-	# Beside it, the whole moss ball seen from afar (ledger row 21; BallView): any touch or button
-	# returns. (Two half-width buttons in one row: the column has no room for another.)
+	# The aquarium experiences (the run is saved and stands still meanwhile). (The whole moss ball
+	# is the HUD's top-left button since 2026-10-08, owner: no longer here.)
 	var looks := HBoxContainer.new()
 	looks.name = "Looks"
-	looks.add_theme_constant_override("separation", 8)
 	_left.add_child(looks)
 	_aquarium = _action("Aquarium", _open_aquarium)
 	_aquarium.name = "Aquarium"
-	_view_ball = _action("Whole ball", _open_ball_view)
-	_view_ball.name = "ViewWholeBall"
-	_view_ball.tooltip_text = "See the whole moss ball from afar. Touch anywhere or press any button to come back."
-	for half in [_aquarium, _view_ball]:
-		_left.remove_child(half)
-		looks.add_child(half)
-		half.custom_minimum_size = Vector2((LEFT_W - 8.0) / 2.0, 64)
-		half.size_flags_horizontal = Control.SIZE_EXPAND_FILL
-		half.add_theme_font_size_override("font_size", 26)
+	_left.remove_child(_aquarium)
+	looks.add_child(_aquarium)
+	_aquarium.size_flags_horizontal = Control.SIZE_EXPAND_FILL
 	# Treasure Hunt (postgame, docs/TREASURE_HUNT.md): only once the run is at 100%.
 	_treasure = _action("Treasure Hunt", _toggle_treasure)
 	_treasure.name = "TreasureHunt"
@@ -186,6 +179,15 @@ func _ready() -> void:
 	_tutorials = _toggle(toggles, "Tutorials", _on_tutorials)
 	_tutorials.name = "Tutorials"
 	_tutorials.tooltip_text = "On: every new run starts with the intro and short lessons, and names new creatures as you meet them. Off: none. The Field guide is always here."
+	# Replay tutorial (owner, 2026-10-08): this run's lessons, names and hints from the start (the
+	# intro on Resume, then each lesson at its moment), so a longtime player sees the new tutorial.
+	# Progress is untouched. In a run only (a session row).
+	_replay = UiStyle.button("Replay tutorial", _on_replay_tutorial)
+	_replay.name = "ReplayTutorial"
+	_replay.custom_minimum_size = Vector2(0, 60)
+	_replay.size_flags_horizontal = Control.SIZE_EXPAND_FILL
+	_replay.add_theme_font_size_override("font_size", 22)
+	toggles.add_child(_replay)
 	# Music | Sound.
 	var levels := HBoxContainer.new()
 	levels.name = "Levels"
@@ -223,7 +225,7 @@ func _ready() -> void:
 	about.add_theme_font_size_override("font_size", 24)
 	about.size_flags_vertical = Control.SIZE_SHRINK_CENTER
 	foot.add_child(about)
-	_session_rows = [restart, title, _run_time, _run_detail, _loadout, looks, _treasure]
+	_session_rows = [restart, title, _run_time, _run_detail, _loadout, looks, _treasure, _replay]
 	# His colours: a page of its own in place of the menu.
 	gill_page = GillPage.new()
 	gill_page.visible = false
@@ -339,6 +341,14 @@ func _slider(parent: Control, text: String) -> TouchSlider:
 	return s
 
 
+func _on_replay_tutorial() -> void:
+	if Game.inst == null or Game.inst.onboarding == null:
+		return
+	Game.inst.onboarding.replay()
+	_tutorials.set_pressed_no_signal(true)
+	close()
+
+
 func _on_tutorials(on: bool) -> void:
 	Settings.tutorials = on
 	Settings.save()
@@ -425,11 +435,6 @@ func _open_aquarium() -> void:
 	Game.inst.presentation.enter("play")
 
 
-func _open_ball_view() -> void:
-	close()
-	Game.inst.ball_view.open()
-
-
 func open(from_title := false) -> void:
 	_from_title = from_title
 	if not from_title and Game.inst != null:
@@ -467,7 +472,6 @@ func _refresh() -> void:
 		_loadout.visible = _loadout.visible and not _from_title
 		# (Not mid-cinematic, mid-fall or while dead: only from ordinary play.)
 		_aquarium.disabled = g.cinematic != "" or g.player.state != "normal"
-		_view_ball.disabled = g.ball_view == null or not g.ball_view.can_open()
 		var tp: TreasurePlay = g.treasure
 		_treasure.visible = not _from_title and tp != null and tp.eligible()
 		if tp != null and _treasure.visible:

@@ -5,10 +5,10 @@ extends CanvasLayer
 ## Updates are automatic now (AutoUpdate), so this page shows the state first (version, the
 ## running OTA, whether Mote is up to date) with the full diagnostics text under it, and keeps
 ## only what a player needs: Check for updates, Install now (only while an update waits and the
-## title is showing), Copy diagnostics, Close. The About block is a few lines (AppInfo.about_lines);
+## title is showing), Copy diagnostics, Back. The About block is a few lines (AppInfo.about_lines);
 ## the full report (AppInfo.report_text, then the native diagnostics) is under Technical, the only
 ## part that scrolls, and only when opened. Every recovery tool (download, activate, roll back, bundled
-## baseline, close app) stays in the native panel behind Advanced, unchanged: that panel is part
+## baseline, close app) stays in the native panel (five taps top-left; no button here), unchanged: that panel is part
 ## of the installed app (scripts/boot), which an OTA cannot change, and its safety checks are the
 ## same ones this page relies on.
 
@@ -90,13 +90,14 @@ func _ready() -> void:
 	_check = _btn(row, "Check", "Check for updates", _on_check)
 	_install = _btn(row, "Install", "Install now", _on_install)
 	_btn(row, "Copy", "Copy diagnostics", copy_diagnostics)
-	var adv := _btn(row, "Advanced", "Advanced", func(): Boot.show_diagnostics())
-	adv.modulate = Color(1, 1, 1, 0.75)
+	# (Owner, 2026-10-08: no Advanced button; everything a player needs is here or in Settings. The
+	# installed app's own recovery panel is unchanged and still opens without the game: five quick
+	# taps in the top-left corner, or on its own when a launch fails.)
 	var spacer := Control.new()
 	spacer.size_flags_horizontal = Control.SIZE_EXPAND_FILL
 	row.add_child(spacer)
-	var close := _btn(row, "Close", "Close", close)
-	close.theme_type_variation = "AccentButton"
+	# Back, as everywhere else (the aquarium's "‹ Back"), not a pink Close.
+	_btn(row, "Back", "‹ Back", close)
 	get_viewport().size_changed.connect(_layout)
 	visible = false
 

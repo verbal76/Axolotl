@@ -68,6 +68,11 @@ static func current() -> Dictionary:
 const PATTERNS := [["none", "Freckles"], ["spots", "Spots"], ["stripes", "Stripes"], ["hearts", "Hearts"], ["stars", "Stars"], ["leopard", "Leopard"]]
 const UPLOAD := "upload"
 const UPLOAD_PATH := "user://gill_pattern.png"
+
+
+## The current player's uploaded pattern (Players: the main player's is UPLOAD_PATH).
+static func upload_path() -> String:
+	return Players.pattern_path()
 const PATTERN_PX := 256
 static var _cache := {}
 ## Built-in patterns drawn ahead on a worker thread (warm_patterns), waiting to become textures.
@@ -119,8 +124,8 @@ static func pattern_texture(id: String) -> Texture2D:
 		return _cache[id]
 	var img: Image = null
 	if id == UPLOAD:
-		if FileAccess.file_exists(UPLOAD_PATH):
-			img = Image.load_from_file(UPLOAD_PATH)
+		if FileAccess.file_exists(upload_path()):
+			img = Image.load_from_file(upload_path())
 	else:
 		_drawn_lock.lock()
 		img = _drawn.get(id, null)
@@ -155,7 +160,7 @@ static func import_pattern(path: String) -> String:
 				break
 		if see_through:
 			break
-	if img.save_png(UPLOAD_PATH) != OK:
+	if img.save_png(upload_path()) != OK:
 		return "The picture could not be saved."
 	_cache.erase(UPLOAD)
 	Settings.gill_pattern_alpha = see_through
@@ -163,7 +168,7 @@ static func import_pattern(path: String) -> String:
 
 
 static func has_upload() -> bool:
-	return FileAccess.file_exists(UPLOAD_PATH)
+	return FileAccess.file_exists(upload_path())
 
 
 ## Draws a built-in pattern: tileable, coloured shapes on a clear background.
