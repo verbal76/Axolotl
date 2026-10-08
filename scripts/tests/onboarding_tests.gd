@@ -1290,7 +1290,7 @@ func guidance() -> void:
 			"%s; label '%s'" % [o.idents_shown.slice(shown0), g.hud.discovery_label.text])
 	var f2 := jelly(3.0, 1.0)
 	await t.seconds(1.0)
-	t.check("guide_named_once_per_run", o.idents_shown.count("food.0") == 1, str(o.idents_shown))
+	t.check("guide_named_once_per_run", o.idents_shown.slice(shown0).count("food.0") == 1, str(o.idents_shown.slice(shown0)))
 	for ff in [f, f2]:
 		if is_instance_valid(ff):
 			p.ball.foods.erase(ff)
@@ -1304,7 +1304,7 @@ func guidance() -> void:
 	g.run_save.lessons().erase("seen.food.0")
 	var f3 := jelly(4.0)
 	await t.seconds(0.8)
-	t.check("guide_no_names_with_tutorials_off", o.idents_shown.count("food.0") == 1, str(o.idents_shown))
+	t.check("guide_no_names_with_tutorials_off", o.idents_shown.slice(shown0).count("food.0") == 1, str(o.idents_shown.slice(shown0)))
 	Settings.tutorials = true
 	if is_instance_valid(f3):
 		p.ball.foods.erase(f3)
