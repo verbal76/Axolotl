@@ -879,6 +879,10 @@ func _test_vegetation() -> void:
 	for fps in [30, 60]:
 		place_at(0, b.surface_point(open_, 0.2), -MossBall.frame_at(open_, 0.0).x)
 		p.set_physics_process(false)
+		# (The simulated walk is on the ground: with physics off, "grounded" would otherwise be
+		# whatever the last sub-test left, and an airborne one records no trail at all: 0.000 at
+		# both rates, as the release gate saw on 2026-10-08.)
+		p.grounded = true
 		g.wake._trail.clear()
 		g.wake._prev.clear()
 		g.wake._speed_s = 0.0
