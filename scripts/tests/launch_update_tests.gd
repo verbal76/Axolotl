@@ -238,7 +238,10 @@ func _test_download_failure() -> void:
 	t.check("launch_download_failure_starts_normally", str(r[0]).contains("download did not complete") and not str(r[2]).contains("activate")
 			and c.slot("pending").is_empty(), "%s, %s" % [r[0], r[2]])
 	srv.modes["/dev-000004.pck"] = "hang"
-	up.download_timeout = 3.0
+	# (The request's timeout runs on game time, the cap on the wall clock: with a 3 s timeout a fast
+	# headless runner reached it in 481 ms of real time, before the 600 ms cap (release gate,
+	# 2026-10-08). 30 game seconds can never come first; the hang still ends on its own after.)
+	up.download_timeout = 30.0
 	r = await _run(up, FakeLoading.new(), {"download_cap_ms": 600})
 	t.check("launch_download_cap_starts_normally", str(r[0]).begins_with("download still running") and int(r[1]) < 600 + AutoUpdate.CHECK_WAIT_MS
 			and not str(r[2]).contains("activate"), "%s in %d ms" % [r[0], r[1]])
