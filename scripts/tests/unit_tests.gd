@@ -10762,11 +10762,15 @@ func _test_drawn_back() -> void:
 	b.events_done -= 1
 	t.check("drawn_back_one_at_a_time_and_resets", one and reset, "moves %d after another minute nearby; progress resets the spell %s" % [d.moves.size(), reset])
 	# Back where it lived (unseen), and the zone as it was.
-	var back := moved.move_home(moved.spawn_dir) and moved.global_position.distance_to(b.surface_point(moved.spawn_dir)) < 3.0
+	# (Measured from where it really lives: some homes are raised, a mound or a canopy shelf up to 13 m
+	# above the ground, and a 3 m test from the ground failed whenever one of those was the one drawn;
+	# release gate, 2026-10-08.)
+	var home_at: Vector3 = moved.ground_at(moved.spawn_dir)[0]
+	var back := moved.move_home(moved.spawn_dir) and moved.global_position.distance_to(home_at) < 0.5
 	for par in found["held"]:
 		par.hp = found["held"][par]
 	release.call()
-	t.check("drawn_back_restored_for_later_tests", back, "home again %s" % back)
+	t.check("drawn_back_restored_for_later_tests", back, "home again %s (%s, %.1f m from its home spot)" % [back, moved.get_meta("completion_id", "?"), moved.global_position.distance_to(home_at)])
 
 
 ## Dead areas, long run (owner, 2026-10-06: "exercise longer-running restoration scenarios"): on
