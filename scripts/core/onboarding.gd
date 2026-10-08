@@ -37,9 +37,9 @@ const SCAN_S := 0.2
 
 static var FEED_TITLE: String = "FOOD HEALS %s" % GameVersion.CHARACTER_NAME.to_upper()
 # (The character's name comes from GameVersion, never typed here; the owner's wording is otherwise verbatim.)
-static var FEED_BODY: Array = ["%s's glowing fronds are his health." % GameVersion.CHARACTER_NAME, "Food restores them."]
+static var FEED_BODY: Array = ["%s's glowing fronds are his health." % GameVersion.CHARACTER_NAME, "Lunge at food, like shrimp, to restore them."]
 const KILL_TITLE := "DID YOU SEE THAT?"
-const KILL_BODY := ["Removing parasites lets the moss recover."]
+const KILL_BODY := ["Removing parasites lets the moss recover.", "Catching the glowing Motes heals it too."]
 const STAR_TITLE := "RED STARFISH FOUND!"
 static var STAR_BODY: Array = ["%s found a Red Starfish!" % GameVersion.CHARACTER_NAME, "Spend Red Starfish on new abilities in the Skills tab, available from the Main Menu or Settings."]
 static var INTRO_TITLE: String = "THIS IS %s'S HOME." % GameVersion.CHARACTER_NAME.to_upper()
@@ -48,7 +48,7 @@ static var INTRO_BODY: Array = ["Parasites have infested the aquarium and damage
 const TUNNEL_TITLE := "A WATER TUNNEL OPENED!"
 static var TUNNEL_BODY: Array = ["This is a water tunnel.",
 		"Once you have a moss ball almost completely cleared, it'll let you travel to another. Swim into the swirl to ride it."]
-const OBJ_FEED := "EAT THE JELLYFISH"
+const OBJ_FEED := "EAT THE SHRIMP"
 const OBJ_PARASITE := "DEFEAT THE PARASITE"
 
 var g: Game

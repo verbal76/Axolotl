@@ -46,9 +46,12 @@ const COUNT := 15
 const TIERS := {
 	# Ground run speed (the ground target only; the air target and so every jump is unchanged).
 	"quick": {"run_scale": [1.0, 1.06, 1.11, 1.16]},
-	# Lunge I: a longer lunge (0.28 s -> 0.31 s, 2.3 m -> 2.6 m of travel). II: the stick steers it.
+	# Lunge I: a longer lunge. II: the stick steers it.
 	# III: a surer catch (food and Motes within a larger radius of the mouth's sweep).
-	"lunge": {"time": [0.28, 0.31, 0.31, 0.31], "steer": [0.0, 0.0, 9.0, 9.0], "catch": [0.0, 0.0, 0.0, 0.2]},
+	# Owner, 2026-10-07: every Lunge tier lengthens it too, and the assisted lunge looks further
+	# (reach, m) without widening its cone: 2.3 / 2.6 / 2.9 / 3.1 m of travel.
+	"lunge": {"time": [0.28, 0.32, 0.35, 0.38], "steer": [0.0, 0.0, 9.0, 9.0], "catch": [0.0, 0.0, 0.0, 0.2],
+			"reach": [3.3, 3.6, 3.9, 4.2]},
 	# Water Burst I: a stronger DIRECTIONAL burst (further, and a little higher, but never above the
 	# up-only burst's height). The up-only burst is unchanged at every tier, so the highest he can
 	# ever reach stays exactly the shipped game's (3.76 m at 60 Hz, feet above the takeoff; the
@@ -74,9 +77,9 @@ const GLIDE_ENTER := 1.0
 
 ## One line per node for the page's card: what buying it changes.
 const EFFECTS := {
-	"lunge.1": "Your lunge reaches further (about 2.6 m instead of 2.3 m).",
-	"lunge.2": "Steer your lunge with the stick while it flies.",
-	"lunge.3": "A surer catch: food and Motes are caught from a little further.",
+	"lunge.1": "Your lunge reaches further and snaps at food from further away.",
+	"lunge.2": "Steer your lunge with the stick while it flies, and it reaches further still.",
+	"lunge.3": "A surer catch from your longest lunge: food and Motes are caught from further.",
 	"quick.1": "Run a little faster on the ground (+6%).",
 	"quick.2": "Run faster on the ground (+11%).",
 	"quick.3": "Run fastest on the ground (+16%). Jumps stay the same.",

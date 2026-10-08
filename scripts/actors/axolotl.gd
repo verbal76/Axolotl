@@ -139,6 +139,7 @@ var _run_scale := 1.0              # Quick Gill: the GROUND run target only
 var _lunge_time := LUNGE_TIME
 var _lunge_steer := 0.0            # Lunge II: rad/s the stick turns a lunge
 var catch_bonus := 0.0             # Lunge III: added to food and Mote catch radii (Game.lunge_contact)
+var lunge_reach := Game.LUNGE_AIM_RANGE  # how far the assisted lunge looks for food (grows with Lunge)
 var _lunge_aimed := false          # this lunge was aimed by Treasure Hunt (never steered)
 var _burst_h := BURST_H
 var _burst_up := BURST_UP
@@ -174,6 +175,7 @@ func apply_skills(tiers: Dictionary) -> void:
 	_lunge_time = T["lunge"]["time"][l] if l > 0 else LUNGE_TIME
 	_lunge_steer = T["lunge"]["steer"][l]
 	catch_bonus = T["lunge"]["catch"][l]
+	lunge_reach = T["lunge"]["reach"][l]
 	_burst_h = T["burst"]["h"][b] if b > 0 else BURST_H
 	_burst_up = T["burst"]["up"][b] if b > 0 else BURST_UP
 	_burst_up_only = T["burst"]["up_only"][b] if b > 0 else BURST_UP_ONLY
@@ -428,7 +430,9 @@ func _physics_process(dt: float) -> void:
 			var flat := _lunge_food.catch_point() - global_position
 			flat -= up * flat.dot(up)
 			if flat.length() > 0.2:
-				facing = _slerp_tangent(facing, flat.normalized(), minf(1.0, 25.0 * dt))
+				# The head comes round to it over the lunge's first moments (the body follows the head
+				# as it does when he turns while running), not an instant snap.
+				facing = _slerp_tangent(facing, flat.normalized(), minf(1.0, 13.0 * dt))
 		elif _lunge_steer > 0.0 and not _lunge_aimed and wish.length() > 0.2:
 			# Lunge II: the stick steers a lunge that is not homing on anything.
 			facing = _slerp_tangent(facing, wish.normalized(), minf(1.0, _lunge_steer * dt))
@@ -489,7 +493,7 @@ func _physics_process(dt: float) -> void:
 	if lunge_t >= 0.0 and not lunge_hit and _lunge_target_valid():
 		var dh := (_lunge_food.catch_point() - head_position()).dot(up)
 		if absf(dh) > 0.1:
-			vup = clampf(dh / 0.12, -8.0, 10.0)
+			vup = clampf(dh / 0.16, -7.0, 9.0)
 
 	# Jump / water burst / buffering.
 	if want_jump:

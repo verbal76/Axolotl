@@ -8,6 +8,22 @@ enum Type { DRIFTER, DARTER, BURROWER }
 
 const HOVER_MIN := 0.3
 const HOVER_MAX := 0.9
+## Catchable by a new player (owner, 2026-10-07: "I've never been able to eat one"; a person's
+## reaction is ~0.25 s, and the old worm gave 0.28 s once it began to duck): drawn larger so they
+## read on a phone; Gill's own lunge no longer scares them (only a fast run close by, or a missed
+## lunge: Game.lunge_miss startles them); a hopper pauses longer after a hop, a worm ducks slower.
+const VIS_SCALE := [1.8, 1.5, 1.3]
+const DART_SENSE_M := 2.2
+## A hop a lunge can still follow: 1.6 m (it was 13 m/s for 0.18 s, 2.3 m, out of the lunge's reach).
+const DART_SPEED := 8.0
+const DART_S := 0.2
+const DART_SENSE_SPEED := 3.0
+const DART_PAUSE_S := 1.3
+const BURROW_SENSE_M := 1.8
+const BURROW_SENSE_SPEED := 3.0
+const BURROW_EMERGE_M := 2.6
+const BURROW_DUCK_RATE := 0.45
+const BURROW_CATCH_EXPOSE := 0.15
 
 var type: int = Type.DRIFTER
 var ball: MossBall
@@ -35,6 +51,9 @@ var anchor := Vector3.INF
 var rng := RandomNumberGenerator.new()
 ## The food region (index into ball.food_regions) it belongs to, or -1 (FoodDirector).
 var region := -1
+## Its materials and their resting glow, for the lunge's target highlight (set_targeted).
+var _glow: Array = []
+var targeted := false
 
 
 ## `seed_v`: its generator's seed (-1: one drawn from the global sequence, for test stand-ins).
@@ -66,6 +85,7 @@ func _ready() -> void:
 		Type.DRIFTER: _build_drifter()
 		Type.DARTER: _build_darter()
 		Type.BURROWER: _build_burrower()
+	_vis.scale = Vector3.ONE * VIS_SCALE[type]
 
 
 func _mat(c: Color, em := 0.25) -> StandardMaterial3D:
@@ -75,6 +95,7 @@ func _mat(c: Color, em := 0.25) -> StandardMaterial3D:
 	m.emission_enabled = true
 	m.emission = c
 	m.emission_energy_multiplier = em
+	_glow.append([m, em])
 	m.rim_enabled = true
 	m.rim = 0.6
 	return m
@@ -136,6 +157,7 @@ func _build_burrower() -> void:
 	m.emission_enabled = true
 	m.emission = Color(0.55, 0.3, 0.3)
 	m.emission_energy_multiplier = 0.35
+	_glow.append([m, 0.35])
 	var body := MeshInstance3D.new()
 	body.mesh = _eel_mesh()
 	body.material_override = m
@@ -259,9 +281,39 @@ static func _mound_mesh() -> ArrayMesh:
 func is_catchable() -> bool:
 	match type:
 		Type.BURROWER:
-			return (state == "exposed" or state == "emerging" or state == "retreating") and expose > 0.25
+			return (state == "exposed" or state == "emerging" or state == "retreating") and expose > BURROW_CATCH_EXPOSE
 		_:
 			return state != "eaten"
+
+
+## Startled (a fast rush close by, or a lunge that missed near it): a hopper hops away, a worm ducks.
+func startle(from: Vector3) -> void:
+	match type:
+		Type.DARTER:
+			if state != "idle":
+				return
+			var up := ball.up_at(global_position)
+			var away := global_position - from
+			away -= up * away.dot(up)
+			var side := away.cross(up).normalized() * rng.randf_range(-1.0, 1.0)
+			_dart_dir = (away.normalized() * 0.8 + side * 0.6 + up * rng.randf_range(-0.1, 0.3)).normalized()
+			state = "dart"
+			_t = 0.0
+			Sfx.play("dart", global_position, -10.0)
+		Type.BURROWER:
+			if state == "exposed" or state == "emerging":
+				state = "retreating"
+				_t = 0.0
+				Sfx.play("burrow", _hole_pos, -8.0)
+
+
+## The one the lunge would go for now glows a little brighter, so a player sees what Gill will snap at.
+func set_targeted(on: bool) -> void:
+	if on == targeted:
+		return
+	targeted = on
+	for gm in _glow:
+		(gm[0] as StandardMaterial3D).emission_energy_multiplier = float(gm[1]) * 3.0 + 0.6 if on else float(gm[1])
 
 
 func catch_point() -> Vector3:
@@ -355,24 +407,18 @@ func _update_darter(dt: float, pl: Axolotl) -> void:
 				vel += WaterFX.inst.push_at(global_position) * 2.0 * dt
 			vel *= 1.0 - 1.5 * dt
 			var pl_speed := pl.velocity.length()
-			if d < 3.3 and _cd <= 0.0 and (pl_speed > 1.0 or pl.lunge_t >= 0.0):
-				# Senses the axolotl: sudden short hop, then a pause.
-				var away := global_position - pl.global_position
-				away -= up * away.dot(up)
-				var side := away.cross(up).normalized() * rng.randf_range(-1.0, 1.0)
-				_dart_dir = (away.normalized() * 0.8 + side * 0.6 + up * rng.randf_range(-0.1, 0.3)).normalized()
-				state = "dart"
-				_t = 0.0
-				Sfx.play("dart", global_position, -10.0)
+			if d < DART_SENSE_M and _cd <= 0.0 and pl_speed > DART_SENSE_SPEED and pl.lunge_t < 0.0:
+				# Senses the axolotl rushing at it: sudden short hop, then a pause.
+				startle(pl.global_position)
 		"dart":
-			vel = _dart_dir * 13.0
-			if _t > 0.18:
+			vel = _dart_dir * DART_SPEED
+			if _t > DART_S:
 				state = "pause"
 				_t = 0.0
 				vel *= 0.1
 		"pause":
 			vel *= 1.0 - 4.0 * dt
-			if _t > 0.9:
+			if _t > DART_PAUSE_S:
 				state = "idle"
 				_cd = 0.3
 	_keep_in_region(up, dt, 1.0)
@@ -392,11 +438,12 @@ func _update_burrower(dt: float, pl: Axolotl) -> void:
 		if _mound != null:
 			_mound.global_transform = Transform3D(MossBall.frame_at(_hole_up, 0.0), _hole_pos)
 	var d := pl.global_position.distance_to(_hole_pos)
-	var disturbed := d < 2.6 and (pl.velocity.length() > 1.5 or pl.lunge_t >= 0.0) or WaterFX.inst.push_at(_hole_pos).length() > 0.9
+	var disturbed := (d < BURROW_SENSE_M and pl.velocity.length() > BURROW_SENSE_SPEED and pl.lunge_t < 0.0) \
+			or (_calm_t <= 0.0 and WaterFX.inst.push_at(_hole_pos).length() > 0.9)
 	match state:
 		"hidden":
 			expose = move_toward(expose, 0.0, dt * 3.0)
-			if _cd <= 0.0 and d > 3.2:
+			if _cd <= 0.0 and d > BURROW_EMERGE_M:
 				state = "emerging"
 		"emerging":
 			expose = move_toward(expose, 0.5, dt * 0.6)
@@ -413,7 +460,7 @@ func _update_burrower(dt: float, pl: Axolotl) -> void:
 				Sfx.play("burrow", _hole_pos, -8.0)
 		"retreating":
 			# Short catch window while it pulls back into the moss.
-			expose = move_toward(expose, 0.0, dt * 0.9)
+			expose = move_toward(expose, 0.0, dt * BURROW_DUCK_RATE)
 			if expose <= 0.0:
 				state = "hidden"
 				_cd = rng.randf_range(4.0, 7.0)

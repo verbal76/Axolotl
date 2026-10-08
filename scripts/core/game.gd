@@ -1046,6 +1046,7 @@ func _process(dt: float) -> void:
 	_update_restoration(dt)
 	_update_mote_lights()
 	_update_food(dt)
+	_update_food_highlight()
 	_update_repop(dt)
 	_update_hints(dt)
 	_update_drawn(dt)
@@ -1111,10 +1112,14 @@ const SWIPE_FRONT_DOT := 0.7071
 ## The feeding lunge homes in on food within this range and cone, and catches it within the radius.
 ## It rises at most LUNGE_AIM_ABOVE, kept below the jump's height: the lunge never out-jumps the jump.
 const LUNGE_CATCH_RADIUS := 0.95
-const LUNGE_AIM_RANGE := 3.5
+## (The unupgraded reach; Lunge tiers add to it: Axolotl.lunge_reach, SkillTree "lunge" "reach".)
+const LUNGE_AIM_RANGE := 3.3
 const LUNGE_AIM_ABOVE := 1.5
 const LUNGE_AIM_BELOW := 1.5
-const LUNGE_AIM_CONE := deg_to_rad(65.0)
+## Owner, 2026-10-07: an assisted lunge that keeps the player's intent first: food well to the side
+## (beyond this half-angle of where Gill faces) or behind is never chosen, and among the rest the one
+## nearest the line he is aiming along wins over a nearer one off to the side.
+const LUNGE_AIM_CONE := deg_to_rad(55.0)
 ## Aim assist turns the body at most this far so the nearest parasite sits inside the arc.
 const SWIPE_AIM_MAX := deg_to_rad(60.0)
 const SWIPE_AIM_TARGET := deg_to_rad(80.0)
@@ -1217,22 +1222,44 @@ func pressure_wave(p: Axolotl, pos: Vector3, radius: float, stages: int) -> void
 ## [param dir]), up to LUNGE_AIM_RANGE away along the ground and a little above or below.
 func lunge_target(p: Axolotl, dir: Vector3) -> Food:
 	var best: Food = null
-	var bd := INF
+	var bs := INF
 	var chest := p.body_center()
+	var reach := p.lunge_reach
 	for f: Food in p.ball.foods:
 		if not is_instance_valid(f) or not f.is_catchable():
 			continue
 		var d := f.catch_point() - chest
 		var vert := d.dot(p.up)
 		var flat := d - p.up * vert
-		if flat.length() > LUNGE_AIM_RANGE or vert > LUNGE_AIM_ABOVE or vert < -LUNGE_AIM_BELOW:
+		if flat.length() > reach or vert > LUNGE_AIM_ABOVE or vert < -LUNGE_AIM_BELOW:
 			continue
-		if flat.length() > 0.3 and dir.angle_to(flat) > LUNGE_AIM_CONE:
+		var ang := dir.angle_to(flat) if flat.length() > 0.3 else 0.0
+		if ang > LUNGE_AIM_CONE:
 			continue
-		if d.length() < bd:
-			bd = d.length()
+		# (Aim first, then distance: what he is pointing at, not merely what is closest.)
+		var score := 0.6 * ang / LUNGE_AIM_CONE + 0.4 * d.length() / reach
+		if score < bs:
+			bs = score
 			best = f
 	return best
+
+
+## The food a lunge pressed now would go for glows (Food.set_targeted); refreshed each frame of play.
+var _food_lit: Food = null
+
+
+func _update_food_highlight() -> void:
+	var p := player
+	var want: Food = null
+	if state == "play" and p != null and p.ball is MossBall and p.lunge_t < 0.0 and p.controls_enabled:
+		want = lunge_target(p, p.facing)
+	if want == _food_lit:
+		return
+	if is_instance_valid(_food_lit):
+		_food_lit.set_targeted(false)
+	_food_lit = want
+	if want != null:
+		want.set_targeted(true)
 
 
 func lunge_contact(p: Axolotl) -> bool:
@@ -1268,6 +1295,10 @@ func _seg_dist(pt: Vector3, a: Vector3, b: Vector3) -> float:
 func lunge_miss(p: Axolotl) -> void:
 	var head := p.head_position()
 	WaterFX.inst.impulse(head, 1.4, 0.4)
+	# A miss startles the food near it (a hopper hops, a worm ducks): they still escape a bad lunge.
+	for f in p.ball.foods:
+		if is_instance_valid(f) and f.catch_point().distance_to(head) < 3.5:
+			f.startle(head)
 	for m in p.ball.motes:
 		if not m.is_available():
 			continue
