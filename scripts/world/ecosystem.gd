@@ -15,6 +15,18 @@ const SPECIES := {
 	"eel": "Cave eel",
 	"puffer": "Pufferfish",
 }
+## What each species is to Gill, said with its discovery (owner, 2026-10-08: the shoal is shrimp
+## too, but not the food kind, and a player should never have to guess).
+const ROLES := {
+	"shrimp": "Harmless: too quick to eat",
+	"snail": "Harmless",
+	"hopper": "Harmless",
+	"glowworm": "Harmless",
+	"stalker": "Threat",
+	"crab": "Guardian: defeat it",
+	"eel": "Threat",
+	"puffer": "Threat",
+}
 ## How often activation and discovery are re-checked (they need not be exact per frame).
 const CHECK_DT := 0.25
 ## Giant Stems' second reed stalker (audit P6): its patch centre (lat, lon) on the jungle floor.

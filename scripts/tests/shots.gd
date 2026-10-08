@@ -39,6 +39,22 @@ func run(runner) -> void:
 		await t.shot("about_technical")
 		g.diagnostics.close()
 		g.pause_menu.close()
+	if only == "guide":
+		# The holistic tutorial pass (owner, 2026-10-08): the pause menu with the Field guide, the
+		# guide itself, a first-encounter name and a moment-of-use hint over play.
+		g.pause_menu.open()
+		await t.seconds(0.5)
+		await t.shot("guide_pause_menu")
+		g.pause_menu._open_guide()
+		await t.seconds(0.5)
+		await t.shot("guide_field_guide")
+		g.pause_menu.close()
+		await t.seconds(0.5)
+		g.hud.show_discovery(Onboarding.IDENTS["spitter"])
+		g.onboarding._show_hint("hint.shot", Onboarding.HINT_GLOB, "swipe")
+		await t.seconds(1.0)
+		await t.shot("guide_name_and_hint")
+		g.onboarding._end_hint()
 	if only == "applying":
 		# The activation modal over the title (HOT_ATTIC_INFRA.md §2).
 		g._enter_title()

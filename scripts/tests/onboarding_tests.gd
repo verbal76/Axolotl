@@ -1235,3 +1235,140 @@ func _state(b: MossBall) -> Dictionary:
 	return {"restoration": snappedf(b.restoration, 1e-6), "events_done": b.events_done, "completed": b.completed, "zones": zones,
 			"heals_growing": heals.size(), "earned": earned, "completion": snappedf(g.completion_percent(), 1e-6),
 			"map": img_md5(b.health_img), "kills": g.stats["kills"]}
+
+
+# --- The holistic tutorial pass (owner, 2026-10-08): owed cards, hints, names, the Field guide --------
+
+func guidance() -> void:
+	# A lesson interrupted before its card: the moment is done (never staged twice), the card owed,
+	# kept in the run, and it comes back by itself after calm play, alone (no camera).
+	await _start_kill_stage()
+	var staged := o.stage == "kill"
+	g.pause_menu.open()
+	await t.frames(3)
+	g.pause_menu.close()
+	await t.frames(3)
+	t.check("guide_interrupted_card_owed", staged and o.done("parasite") and o.owed_card() == "parasite" and on_disk().has("owed.parasite"),
+			"staged %s, owed '%s'" % [staged, o.owed_card()])
+	await home(0)
+	p.invuln_t = 999.0
+	var early := await wait_until(func() -> bool: return o.ui.card_kind() != "", Onboarding.CATCH_UP_S - 1.0)
+	var came := await wait_until(func() -> bool: return o.ui.waiting_for_tap(), Onboarding.CATCH_UP_S + 6.0)
+	var texts: Array[String] = []
+	for l in o.ui.panel().find_children("*", "Label", true, false):
+		texts.append((l as Label).text)
+	t.check("guide_owed_card_catches_up", not early and came and texts.has(Onboarding.KILL_TITLE) and not g.cam.cinematic,
+			"early %s, came %s; %s" % [early, came, ", ".join(texts)])
+	t.check("guide_owed_card_seen_once_shown", o.owed_card() == "" and not on_disk().has("owed.parasite"), str(on_disk()))
+	o.ui.tap()
+	await t.frames(3)
+	var again := await wait_until(func() -> bool: return o.ui.card_kind() != "", Onboarding.CATCH_UP_S + 2.0)
+	t.check("guide_owed_card_once", not again and p.controls_enabled and g.cinematic == "", "card '%s'" % o.ui.card_kind())
+	# A moment that cannot be staged at all (Gill not in normal play) owes its card the same way.
+	await reset(["intro", "feeding", "parasite"])
+	p.state = "regen"
+	o.on_starfish()
+	p.state = "normal"
+	t.check("guide_unstaged_card_owed", o.done("starfish") and o.owed_card() == "starfish" and o.ui.card_kind() == "", "owed '%s'" % o.owed_card())
+	# Tutorials off: nothing owed comes.
+	Settings.tutorials = false
+	await home(0)
+	var off_card := await wait_until(func() -> bool: return o.ui.card_kind() != "", Onboarding.CATCH_UP_S + 1.5)
+	Settings.tutorials = true
+	t.check("guide_owed_card_waits_while_tutorials_off", not off_card, "")
+	# ... and the tunnel's catch-up never goes ahead of an owed card.
+	t.check("guide_tunnel_waits_for_owed_card", not o.tunnel_card_may_catch_up(), "")
+
+	# First-encounter names: the first shrimp near and in view is named, once per run.
+	await all_done()
+	g.run_save.lessons().erase("seen.food.0")
+	await home(0)
+	var shown0 := o.idents_shown.size()
+	var f := jelly(4.0)
+	var named := await wait_until(func() -> bool: return o.idents_shown.size() > shown0, 1.5)
+	t.check("guide_first_shrimp_named", named and o.idents_shown.back() == "food.0" and g.hud.discovery_label.text == Onboarding.IDENTS["food.0"],
+			"%s; label '%s'" % [o.idents_shown.slice(shown0), g.hud.discovery_label.text])
+	var f2 := jelly(3.0, 1.0)
+	await t.seconds(1.0)
+	t.check("guide_named_once_per_run", o.idents_shown.count("food.0") == 1, str(o.idents_shown))
+	for ff in [f, f2]:
+		if is_instance_valid(ff):
+			p.ball.foods.erase(ff)
+			ff.queue_free()
+	t.check("guide_every_food_has_a_name", Onboarding.IDENTS.has("food.0") and Onboarding.IDENTS.has("food.1") and Onboarding.IDENTS.has("food.2")
+			and Onboarding.IDENTS.has("mote") and Onboarding.IDENTS.has("parasite") and Onboarding.IDENTS.has("spitter"), "")
+	t.check("guide_names_say_what_it_is", (Onboarding.IDENTS["food.0"] as String).contains("Food") and (Onboarding.IDENTS["parasite"] as String).contains("Threat")
+			and (Onboarding.IDENTS["mote"] as String).contains("moss"), "")
+	# Tutorials off: no names.
+	Settings.tutorials = false
+	g.run_save.lessons().erase("seen.food.0")
+	var f3 := jelly(4.0)
+	await t.seconds(0.8)
+	t.check("guide_no_names_with_tutorials_off", o.idents_shown.count("food.0") == 1, str(o.idents_shown))
+	Settings.tutorials = true
+	if is_instance_valid(f3):
+		p.ball.foods.erase(f3)
+		f3.queue_free()
+
+	# The glob hint: the first glob flying at him says Tail Swipe bats it back, with the real prompt.
+	await all_done()
+	await home(0)
+	p.invuln_t = 999.0
+	var gl := ParasiteGlob.new()
+	gl.launch(null, p.ball, p.body_center() + p.facing * 6.0, p.body_center())
+	var hinted := await wait_until(func() -> bool: return o.hint == Onboarding.HINT_GLOB, 1.0)
+	t.check("guide_glob_hint", hinted and o.ui.objective_text() == Onboarding.HINT_GLOB and g.hud.prompts.has("swipe") and p.controls_enabled and g.cinematic == "",
+			"hint '%s'" % o.hint)
+	var gone := await wait_until(func() -> bool: return o.hint == "", Onboarding.HINT_S + 1.0)
+	t.check("guide_hint_goes_by_itself", gone and o.ui.objective_text() == "" and not g.hud.prompts.has("swipe"), "chip '%s'" % o.ui.objective_text())
+	var gl2 := ParasiteGlob.new()
+	gl2.launch(null, p.ball, p.body_center() + p.facing * 6.0, p.body_center())
+	await t.seconds(0.6)
+	t.check("guide_glob_hint_once", o.hint == "", "hint '%s'" % o.hint)
+	# The last-frond hint.
+	await t.seconds(1.5)
+	p.invuln_t = 0.0
+	p.health = 1
+	var low := await wait_until(func() -> bool: return o.hint == Onboarding.HINT_LOW, 1.0)
+	t.check("guide_last_frond_hint", low and g.hud.prompts.has("lunge"), "hint '%s'" % o.hint)
+	o._end_hint()
+	p.restore_full()
+
+	# Species are named with what they are to Gill (the shrimp shoal is not food).
+	t.check("guide_species_roles", Ecosystem.ROLES.size() == Ecosystem.SPECIES.size() and (Ecosystem.ROLES["shrimp"] as String).contains("Harmless"), "")
+	# Notes never overwrite one another: the second waits its turn.
+	await t.seconds(5.0)
+	g.hud.show_discovery("note one")
+	g.hud.show_discovery("note two")
+	var first := g.hud.discovery_label.text
+	var second := await wait_until(func() -> bool: return g.hud.discovery_label.text == "note two", 6.0)
+	t.check("guide_notes_queue", first == "note one" and second, "first '%s'" % first)
+
+	# The Field guide: in the pause menu, one page, nothing cut off, the core facts, back to the menu.
+	await all_done()
+	g.pause_menu.open()
+	await t.frames(3)
+	var gb := g.pause_menu.find_child("FieldGuide", true, false) as Button
+	t.check("guide_button_in_pause_menu", gb != null and gb.is_visible_in_tree() and gb.get_global_rect().size.y >= 56.0, "")
+	if gb != null:
+		gb.pressed.emit()
+	await t.frames(3)
+	var page: FieldGuidePage = g.pause_menu.guide_page
+	var all := "\n".join(page.texts())
+	t.check("guide_page_opens", page.visible and page.texts().size() >= 18, "%d lines" % page.texts().size())
+	t.check("guide_page_core_facts", all.contains("not food") and all.contains("Shrimp") and all.contains("Spitters") and all.contains("70%")
+			and all.contains("Tail Swipe") and all.contains("Motes"), all.left(200))
+	t.check("guide_pearl_is_a_mystery_until_found", FieldGuidePage.pearl_found() or all.contains("Something rare"), "")
+	var bad: Array[String] = []
+	for sz in [Vector2(1280, 720), Vector2(2400, 1080), Vector2(1600, 720), Vector2(1024, 768)]:
+		page.layout_in(Rect2(Vector2(24, 16), sz * (720.0 / sz.y) - Vector2(48, 32)))
+		await t.frames(2)
+		if not page.fits():
+			bad.append(str(sz))
+	page._layout()
+	t.check("guide_page_fits_without_scrolling", bad.is_empty(), "cut off at " + str(bad))
+	(page.find_child("Done", true, false) as Button).pressed.emit()
+	await t.frames(3)
+	t.check("guide_page_done_returns_to_menu", not page.visible and g.pause_menu.visible, "")
+	g.pause_menu.close()
+	await t.frames(3)

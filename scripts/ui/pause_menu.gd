@@ -42,6 +42,7 @@ var gill_page: GillPage
 var _gill_direct := false        # opened straight from the title screen
 ## The skill tree (docs/SKILL_TREE.md): a page of its own beside the colours page.
 var skill_page: SkillTreePage
+var guide_page: FieldGuidePage
 var _skills_direct := false
 var _skills_button: Button
 
@@ -118,6 +119,24 @@ func _ready() -> void:
 	# The skill tree (00036).
 	_skills_button = _action("Skills", _open_skills)
 	_skills_button.name = "Skills"
+	# The Field guide (owner, 2026-10-08): the permanent reference for what the lessons teach
+	# (FieldGuidePage), in a run and from the title alike. Half-width beside the colours, in one
+	# row as Aquarium | Whole ball (the column has no room for another).
+	var guide := _action("Field guide", _open_guide)
+	guide.name = "FieldGuide"
+	var pair := HBoxContainer.new()
+	pair.name = "ColoursGuide"
+	pair.add_theme_constant_override("separation", 8)
+	_left.add_child(pair)
+	_left.move_child(pair, colours.get_index())
+	for half in [colours, guide]:
+		_left.remove_child(half)
+		pair.add_child(half)
+		half.custom_minimum_size = Vector2((LEFT_W - 8.0) / 2.0, 64)
+		half.size_flags_horizontal = Control.SIZE_EXPAND_FILL
+		half.add_theme_font_size_override("font_size", 20)
+		# (Never wider than half: a long name never pushes the column, and the menu, wider.)
+		half.clip_text = true
 	# --- Right: this run, then the settings ---
 	_right = VBoxContainer.new()
 	_right.name = "Details"
@@ -166,7 +185,7 @@ func _ready() -> void:
 	# every new run. Off skips them; turned off mid-lesson, the lesson ends at once.
 	_tutorials = _toggle(toggles, "Tutorials", _on_tutorials)
 	_tutorials.name = "Tutorials"
-	_tutorials.tooltip_text = "On: every new run starts with the intro and the three short lessons. Off: none."
+	_tutorials.tooltip_text = "On: every new run starts with the intro and short lessons, and names new creatures as you meet them. Off: none. The Field guide is always here."
 	# Music | Sound.
 	var levels := HBoxContainer.new()
 	levels.name = "Levels"
@@ -214,6 +233,10 @@ func _ready() -> void:
 	skill_page.visible = false
 	_root.add_child(skill_page)
 	skill_page.done.connect(_close_skills)
+	guide_page = FieldGuidePage.new()
+	guide_page.visible = false
+	_root.add_child(guide_page)
+	guide_page.done.connect(_close_guide)
 	resume.name = "Resume"
 	visible = false
 	get_viewport().size_changed.connect(_layout)
@@ -246,6 +269,18 @@ func _close_skills() -> void:
 		return
 	_refresh()
 	(_panel.find_child("Skills", true, false) as Button).grab_focus.call_deferred()
+
+
+func _open_guide() -> void:
+	_panel.visible = false
+	guide_page.open()
+
+
+func _close_guide() -> void:
+	guide_page.visible = false
+	_panel.visible = true
+	Sfx.play("ui_tap", null, -8.0)
+	(_panel.find_child("FieldGuide", true, false) as Button).grab_focus.call_deferred()
 
 
 func _close_gill() -> void:
@@ -380,6 +415,8 @@ func _toggle_treasure() -> void:
 func _open_aquarium() -> void:
 	if gill_page.visible:
 		_close_gill()
+	if guide_page.visible:
+		_close_guide()
 	if skill_page.visible:
 		_close_skills()
 	visible = false
@@ -409,6 +446,9 @@ func open(from_title := false) -> void:
 func close() -> void:
 	if gill_page.visible:
 		_close_gill()
+	if guide_page.visible:
+		guide_page.visible = false
+		_panel.visible = true
 	if skill_page.visible:
 		skill_page.visible = false
 		_panel.visible = true
@@ -473,6 +513,10 @@ func ball_line() -> String:
 
 func _unhandled_input(event: InputEvent) -> void:
 	if visible and skill_page.visible:
+		return
+	if visible and guide_page.visible and (event.is_action_pressed("pause") or event.is_action_pressed("ui_cancel")):
+		_close_guide()
+		get_viewport().set_input_as_handled()
 		return
 	if visible and event.is_action_pressed("pause"):
 		close()

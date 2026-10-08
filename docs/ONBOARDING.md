@@ -240,6 +240,56 @@ Then implement it at its queued position without disturbing anything already pub
 Continue the autonomous train afterward.
 ```
 
+## Holistic tutorial pass (owner, 2026-10-08): the whole teaching flow
+
+Authoritative for teaching from 2026-10-08. The lessons above stay; this pass makes them one flow,
+fills the gaps the playtests found (prey, Motes vs food, spitters), and guarantees nothing is lost.
+
+### Player-knowledge map
+
+| Concept | Class | Taught by |
+|---|---|---|
+| Gill's home, parasites infest it | A: card | Intro (new run) |
+| Move, camera, jump, burst | B: prompt | HUD button pulses at the moment of use |
+| Fronds = health; food heals; lunge eats | A: staged | Feeding lesson (EAT THE SHRIMP, frond close-up, card) |
+| Lunge homes in on food ahead | B: prompt | Lunge prompt during the feeding objective; Field guide |
+| Parasites hurt; Tail Swipe defeats them; removing them heals the moss | A: staged | Parasite lesson (DEFEAT THE PARASITE, moss reveal, card) |
+| Motes heal the moss, are not food | A + C | Parasite card's 2nd line; first-encounter name; Field guide |
+| Spitter globs: Tail Swipe bats them back | B + C | First-encounter name; glob hint (SWIPE TO BAT THE GLOB BACK + swipe prompt) |
+| Last frond: eat to heal | B | Low-health hint (LAST FROND: EAT FOOD TO HEAL + lunge prompt), once |
+| Food kinds (shrimp, water flea, worm) | C | First-encounter names; Field guide |
+| Species (shoal, snail, stalker ...) and what they are to Gill | C | Species discovery note now carries a role ("Harmless", "Threat") |
+| Red Starfish -> Skills | A: card | Starfish card |
+| 70% restored opens tunnels; pad green = ready; tunnel colour = destination | A + B | Tunnel card; pads; Field guide |
+| Ravine ooze is deadly | D/C | Field guide (the ravine cinematic shows it) |
+| Pearls | (reserved) | Field guide keeps a mystery entry until one is found; never taught as food |
+| Aquarium, colours, Treasure Hunt, Hard Mode, Tier-2 | D | Discoverable in menus; Tier-2 has its own discovery note |
+
+A = must be taught explicitly (card / staged), B = contextual hint near the moment of use,
+C = first-encounter identification, D = discoverable, no teaching.
+
+### Flow and rules
+
+- Order on a new run: Intro -> (first shrimp in view) feeding -> (first parasite in view) parasite ->
+  starfish / tunnel when they happen. Names and hints never appear over a lesson, its objective or
+  a card; species notes and names queue (never overwrite each other).
+- **Never lost (reliability):** a lesson's moment is recorded when it happens (never staged twice),
+  but its card is OWED (`owed.<lesson>` in the run's lesson record) until it has really been on
+  screen. An owed card comes back alone, without the camera, after `CATCH_UP_S` (6 s) of calm play
+  (normal play, no objective or hint, nothing hostile within 8 m). The tunnel's catch-up waits for
+  owed cards. First-encounter names and hints are marked `seen.<key>` only when shown.
+- Tutorials off: no lessons, no names, no hints, nothing owed comes. The Field guide is always there.
+- Copy: FEED/KILL texts from the prey pass are kept and reconciled (the KILL card says Motes help the
+  moss and are not food); no other card text changed.
+
+### Field guide
+
+Pause menu (in play and from the title): "Field guide", half-width beside the colours. One page, two
+columns, nothing to scroll or earn: fronds, food, Motes, restoring the moss, parasites, spitters,
+ravine ooze, water tunnels, Red Starfish, Pearl (a mystery until one is found).
+`FieldGuidePage`; tests `guide_*` in `onboarding_tests.gd` (`_test_onb_guidance`); renders
+`--test=shots --only=guide`.
+
 ## Implementation notes (build session; must stay consistent with the text above and the ruling)
 
 - **Persistence (once per run, ledger row 24):** four independent flags (`intro`, `feeding`,

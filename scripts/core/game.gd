@@ -1379,7 +1379,7 @@ func species_known(sp: String) -> bool:
 ## The first close look at a species (once per run).
 func discover_species(sp: String) -> void:
 	if _earn("species." + sp):
-		hud.show_discovery("New species: %s" % Ecosystem.SPECIES.get(sp, sp))
+		hud.show_discovery("New species: %s — %s" % [Ecosystem.SPECIES.get(sp, sp), Ecosystem.ROLES.get(sp, "Harmless")])
 		Sfx.play("discover", null, -4.0)
 
 

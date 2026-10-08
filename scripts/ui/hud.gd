@@ -375,13 +375,27 @@ func show_all_clear(finish_text := "") -> void:
 		tw.tween_property(l, "modulate:a", 0.0, 3.0)
 
 
-## A short note that a new species was discovered ("New species: Canopy snail").
+## A short note that a new species was discovered ("New species: Canopy snail"), or a first-encounter
+## name ("Shrimp — Food"). Notes that come while one is up wait their turn (never overwritten).
 func show_discovery(text: String) -> void:
+	if _discovery_busy:
+		if text != discovery_label.text and not _discovery_queue.has(text):
+			_discovery_queue.append(text)
+		return
+	_discovery_busy = true
 	discovery_label.text = text
 	var tw := create_tween()
 	tw.tween_property(discovery_label, "modulate:a", 1.0, 0.6)
 	tw.tween_interval(2.6)
 	tw.tween_property(discovery_label, "modulate:a", 0.0, 1.2)
+	tw.finished.connect(func() -> void:
+		_discovery_busy = false
+		if not _discovery_queue.is_empty():
+			show_discovery(_discovery_queue.pop_front()))
+
+
+var _discovery_busy := false
+var _discovery_queue: Array[String] = []
 
 
 func _update_timer() -> void:

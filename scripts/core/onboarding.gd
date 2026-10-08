@@ -1,8 +1,17 @@
 class_name Onboarding
 extends Node
-## Onboarding (docs/ONBOARDING.md, ledger rows 20 and 24): the intro screen, then three lessons, all
+## Onboarding (docs/ONBOARDING.md, ledger rows 20 and 24): the intro screen, then the lessons, all
 ## once per RUN while Settings.tutorials is on: feeding (his fronds are his health), the first
-## parasite (removing parasites restores the moss) and the first Red Starfish (Skills).
+## parasite (removing parasites restores the moss), the first Red Starfish (Skills) and the first
+## water tunnel. Around them, never stopping play (owner, 2026-10-08, the holistic tutorial pass):
+## - first-encounter names: the first time each kind of food, Mote or parasite is near and in view,
+##   one short line says what it is ("Shrimp — Food", "Spitter — Threat: swipe its globs back");
+## - two moment-of-use hints: the first glob flying at him (Tail Swipe bats it back) and the first
+##   time he is down to his last frond (food heals);
+## - a lesson's card is never lost: its moment is recorded when it happens (so it is never staged
+##   twice), but the card is owed until it has really been on screen, and an owed card comes back
+##   on its own at the next calm moment (CATCH_UP_S of quiet play).
+## The permanent reference is the Field guide (pause menu; FieldGuidePage).
 ##
 ## Rules this keeps:
 ## - Flags live in the run save (RunSave.lessons): Continue keeps them, New Run starts them again.
@@ -16,7 +25,7 @@ extends Node
 ## - A staged moment always ends: a hard time cap, and it ends cleanly on pause, the app going to
 ##   the background, leaving play, or Gill not being in normal play. Input is always given back.
 ##   The flag is set the moment the event happens, so an interrupted lesson is never replayed.
-## - During the interactive parts (find and eat the jellyfish, defeat the parasite) Gill is never
+## - During the interactive parts (find and eat the shrimp, defeat the parasite) Gill is never
 ##   held: only a small objective and the real control's prompt are shown.
 
 const FLAGS := ["intro", "feeding", "parasite", "starfish", "tunnel"]
@@ -39,7 +48,7 @@ static var FEED_TITLE: String = "FOOD HEALS %s" % GameVersion.CHARACTER_NAME.to_
 # (The character's name comes from GameVersion, never typed here; the owner's wording is otherwise verbatim.)
 static var FEED_BODY: Array = ["%s's glowing fronds are his health." % GameVersion.CHARACTER_NAME, "Lunge at food, like shrimp, to restore them."]
 const KILL_TITLE := "DID YOU SEE THAT?"
-const KILL_BODY := ["Removing parasites lets the moss recover.", "Catching the glowing Motes heals it too."]
+const KILL_BODY := ["Removing parasites lets the moss recover.", "Catching the glowing Motes (they are not food) helps it recover too."]
 const STAR_TITLE := "RED STARFISH FOUND!"
 static var STAR_BODY: Array = ["%s found a Red Starfish!" % GameVersion.CHARACTER_NAME, "Spend Red Starfish on new abilities in the Skills tab, available from the Main Menu or Settings."]
 static var INTRO_TITLE: String = "THIS IS %s'S HOME." % GameVersion.CHARACTER_NAME.to_upper()
@@ -50,6 +59,28 @@ static var TUNNEL_BODY: Array = ["This is a water tunnel.",
 		"Once you have a moss ball almost completely cleared, it'll let you travel to another. Swim into the swirl to ride it."]
 const OBJ_FEED := "EAT THE SHRIMP"
 const OBJ_PARASITE := "DEFEAT THE PARASITE"
+## The moment-of-use hints (shown in the objective's chip for HINT_S, with the real control's prompt).
+const HINT_GLOB := "SWIPE TO BAT THE GLOB BACK"
+const HINT_LOW := "LAST FROND: EAT FOOD TO HEAL"
+const HINT_S := 4.5
+## Within how far a glob flying at him, or a thing to be named, is noticed (metres).
+const GLOB_SEE_M := 8.0
+const IDENT_SEE_M := 9.0
+## An owed lesson card comes back after this much calm play (seconds).
+const CATCH_UP_S := 6.0
+## Nothing hostile nearer than this for play to count as calm (metres).
+const CALM_M := 8.0
+## The lessons whose cards may be owed (the intro and tunnel cards are shown before anything happens).
+const CARD_LESSONS := ["feeding", "parasite", "starfish"]
+## First-encounter names: kind -> the line shown. Food kinds are "food.<Food.Type>".
+const IDENTS := {
+	"food.0": "Shrimp — Food",
+	"food.1": "Water flea — Food: it hops, get close",
+	"food.2": "Worm — Food: heals every frond",
+	"mote": "Mote — Catch it to heal the moss",
+	"parasite": "Parasite — Threat: defeat it to heal the moss",
+	"spitter": "Spitter — Threat: swipe its globs back",
+}
 
 var g: Game
 var ui: OnboardingUi
@@ -80,6 +111,14 @@ var _kill_claim := false
 var _intro_cb := Callable()
 ## A stage's end reasons seen this session (tests).
 var ends: Array[String] = []
+## The hint up now ("" for none), its control's prompt and how long it has left.
+var hint := ""
+var _hint_prompt := ""
+var _hint_t := 0.0
+## How long play has been calm with a card owed.
+var _calm_t := 0.0
+## The first-encounter lines shown this session, in order (tests).
+var idents_shown: Array[String] = []
 
 
 func _ready() -> void:
@@ -109,7 +148,34 @@ func _mark(flag: String) -> void:
 	if rs == null or not rs.has_lessons() or rs.lessons().has(flag):
 		return
 	rs.lessons()[flag] = true
+	if flag in CARD_LESSONS:
+		# Its card is owed until it has really been shown (_card).
+		rs.lessons()["owed." + flag] = true
 	g.save_run()
+
+
+## The lesson whose card is owed (its moment happened, its card never seen), or "".
+func owed_card() -> String:
+	var rs := g.run_save
+	if not Settings.tutorials or rs == null or not rs.has_lessons():
+		return ""
+	for f in CARD_LESSONS:
+		if rs.lessons().has("owed." + f):
+			return f
+	return ""
+
+
+## Something seen this run (a first-encounter name, a hint): the record's "seen.<key>".
+func seen(key: String) -> bool:
+	var rs := g.run_save
+	return not Settings.tutorials or rs == null or not rs.has_lessons() or rs.lessons().has("seen." + key)
+
+
+func _mark_seen(key: String) -> void:
+	var rs := g.run_save
+	if rs != null and rs.has_lessons():
+		rs.lessons()["seen." + key] = true
+		g._save_dirty = true
 
 
 ## The record for this run: a new run's (nothing done), or every lesson done (a run from before the
@@ -134,6 +200,7 @@ func tutorials_changed(on: bool) -> void:
 		return
 	if stage != "":
 		finish("off")
+	_end_hint()
 	_set_objective("")
 
 
@@ -166,7 +233,7 @@ func _on_intro_begin() -> void:
 # --- Play starts ------------------------------------------------------------------------------
 
 ## Called by Game.start_play. A new run, tutorials on: one unlocked frond starts empty, so the first
-## jellyfish visibly heals him; a Continue of that run keeps it empty until the lesson is done.
+## shrimp visibly heals him; a Continue of that run keeps it empty until the lesson is done.
 ## Tutorials off: none (he starts at full health).
 func on_play_started(continuing: bool) -> void:
 	var rs := g.run_save
@@ -207,10 +274,18 @@ func _process(dt: float) -> void:
 		return
 	if get_tree().paused:
 		return
+	if _hint_t > 0.0:
+		_hint_t -= dt
+		if _hint_t <= 0.0:
+			_end_hint()
 	_scan -= dt
 	if _scan <= 0.0:
 		_scan = SCAN_S
 		_update_objective()
+		if objective == "" and _playing() and Settings.tutorials:
+			_update_hints()
+			_update_idents()
+	_update_catch_up(dt)
 	ui.update_marker(_marker_pos())
 
 
@@ -231,7 +306,7 @@ func _playing() -> bool:
 func _update_objective() -> void:
 	var want := ""
 	if _playing():
-		# Owner, 2026-10-01: the food lesson starts the first time a jellyfish comes into view
+		# Owner, 2026-10-01: the food lesson starts the first time a shrimp comes into view
 		# (he starts a frond down for it), ahead of the parasite; a parasite lesson already
 		# under way is not interrupted.
 		var hungry := not done("feeding") and g.player.health < g.player.max_health
@@ -257,12 +332,18 @@ func _set_objective(want: String) -> void:
 	match want:
 		"feeding":
 			ui.show_objective(OBJ_FEED)
+			# (The objective has named the shrimp, and the parasite: no first-encounter line after.)
+			_mark_seen("food.%d" % Food.Type.DRIFTER)
 		"parasite":
 			ui.show_objective(OBJ_PARASITE)
+			_mark_seen("parasite")
 		_:
-			ui.hide_objective()
-	_prompt("lunge", want == "feeding")
-	_prompt("swipe", want == "parasite")
+			if hint != "":
+				ui.show_objective(hint)
+			else:
+				ui.hide_objective()
+	_prompt("lunge", want == "feeding" or _hint_prompt == "lunge")
+	_prompt("swipe", want == "parasite" or _hint_prompt == "swipe")
 
 
 ## The real control's prompt (the HUD's pulsing ring on the Lunge or Tail Swipe button).
@@ -295,12 +376,12 @@ func visible_to_player(pos: Vector3, max_d: float, ignore: Object = null) -> boo
 	return hit.is_empty() or hit["collider"] == ignore or (hit["position"] as Vector3).distance_to(pos) < 0.8
 
 
-func _food_ok(f) -> bool:  # (untyped: a freed jellyfish must read as "not ok", not error)
+func _food_ok(f) -> bool:  # (untyped: a freed shrimp must read as "not ok", not error)
 	return is_instance_valid(f) and f.type == Food.Type.DRIFTER and f.state == "idle" and f.is_catchable() \
 			and f.ball == g.player.ball
 
 
-## Keeps the current jellyfish while it is valid (wherever it is), else the nearest one in view.
+## Keeps the current shrimp while it is valid (wherever it is), else the nearest one in view.
 func _find_food() -> bool:
 	if _food_ok(food_target) and food_target.global_position.distance_to(g.player.global_position) < 40.0:
 		return true
@@ -494,9 +575,11 @@ func tunnel_card_owed() -> bool:
 
 
 ## A missed tunnel card waits its turn: never over another lesson or its objective, and only once
-## the core lessons (intro, feeding, parasite) are behind him (the tunnel is the last lesson).
+## the core lessons (intro, feeding, parasite) are behind him and their cards seen (the tunnel is
+## the last lesson).
 func tunnel_card_may_catch_up() -> bool:
-	return tunnel_card_owed() and objective == "" and stage == "" and done("intro") and done("feeding") and done("parasite")
+	return tunnel_card_owed() and objective == "" and stage == "" and hint == "" and owed_card() == "" \
+			and done("intro") and done("feeding") and done("parasite")
 
 
 ## Shows the tunnel card now if it can (returns whether it is up); `then` runs once it is closed.
@@ -528,6 +611,128 @@ func _begin(kind: String, lesson: String, camera: bool) -> void:
 func _card(title: String, body: Array) -> void:
 	stage = "card"
 	ui.show_card(title, body, "Got it", func() -> void: finish("done"))
+	# Really on screen now: no longer owed.
+	var rs := g.run_save
+	if rs != null and rs.has_lessons() and rs.lessons().has("owed." + stage_lesson):
+		rs.lessons().erase("owed." + stage_lesson)
+		g.save_run()
+
+
+func _card_text(lesson: String) -> Array:
+	match lesson:
+		"feeding": return [FEED_TITLE, FEED_BODY]
+		"parasite": return [KILL_TITLE, KILL_BODY]
+		"starfish": return [STAR_TITLE, STAR_BODY]
+	return ["", []]
+
+
+# --- Owed cards, hints and first-encounter names ---------------------------------------------------
+
+## Calm play: normal play, no objective, nothing hostile close.
+func _calm() -> bool:
+	if objective != "" or hint != "" or not _playing() or not _can_stage():
+		return false
+	for par in g.player.ball.hostiles():
+		if par.is_alive() and par.global_position.distance_to(g.player.global_position) < CALM_M:
+			return false
+	return true
+
+
+## An owed card (its moment was interrupted, or could not be staged) comes back by itself, alone
+## (no camera), after CATCH_UP_S of calm play.
+func _update_catch_up(dt: float) -> void:
+	var owed := owed_card()
+	if owed == "" or not _calm():
+		_calm_t = 0.0
+		return
+	_calm_t += dt
+	if _calm_t < CATCH_UP_S:
+		return
+	_calm_t = 0.0
+	var tx := _card_text(owed)
+	_begin("card", owed, false)
+	_card(tx[0], tx[1])
+
+
+## The two moment-of-use hints, once per run each, marked seen as they are shown.
+func _update_hints() -> void:
+	if hint != "":
+		return
+	var p := g.player
+	if not seen("hint.glob"):
+		for gl in ParasiteGlob.live:
+			if not is_instance_valid(gl) or gl.reflected or gl.ball != p.ball:
+				continue
+			var to: Vector3 = p.body_center() - gl.global_position
+			if to.length() < GLOB_SEE_M and gl.vel.dot(to) > 0.0:
+				_show_hint("hint.glob", HINT_GLOB, "swipe")
+				return
+	if not seen("hint.low") and done("feeding") and p.health == 1 and p.max_health > 1:
+		_show_hint("hint.low", HINT_LOW, "lunge")
+
+
+func _show_hint(key: String, text: String, prompt: String) -> void:
+	_mark_seen(key)
+	hint = text
+	_hint_prompt = prompt
+	_hint_t = HINT_S
+	ui.show_objective(text)
+	_prompt(prompt, true)
+
+
+func _end_hint() -> void:
+	if hint == "":
+		return
+	hint = ""
+	_hint_prompt = ""
+	_hint_t = 0.0
+	if objective == "":
+		ui.hide_objective()
+	_prompt("lunge", objective == "feeding")
+	_prompt("swipe", objective == "parasite")
+
+
+## The kind of a thing for its first-encounter name ("" for none).
+static func ident_kind(n: Node) -> String:
+	if n is Food:
+		return "food.%d" % (n as Food).type
+	if n is Mote:
+		return "mote"
+	if n is Parasite:
+		return "spitter" if (n as Parasite).variant == "spitter" else "parasite"
+	return ""
+
+
+## The nearest thing in reach whose kind has not been named this run: named if it is really in view
+## (one visibility check per scan).
+func _update_idents() -> void:
+	var p := g.player
+	var here := p.global_position
+	var best: Node3D = null
+	var bd := IDENT_SEE_M
+	for list in [p.ball.foods, p.ball.motes, p.ball.hostiles()]:
+		for n in list:
+			if not is_instance_valid(n):
+				continue
+			if n is Food and not (n as Food).is_catchable():
+				continue
+			if n is Mote and not (n as Mote).is_available():
+				continue
+			if n is Parasite and not (n as Parasite).is_alive():
+				continue
+			var d: float = (n as Node3D).global_position.distance_to(here)
+			if d < bd and not seen(ident_kind(n)):
+				bd = d
+				best = n
+	if best == null:
+		return
+	var at := best.global_position + p.ball.up_at(best.global_position) * 0.3
+	if not visible_to_player(at, IDENT_SEE_M, best):
+		return
+	var k := ident_kind(best)
+	_mark_seen(k)
+	idents_shown.append(k)
+	g.hud.show_discovery(IDENTS[k])
 
 
 ## Ends the staged moment now, whatever it was doing: the presentation is brought to the true state
@@ -571,4 +776,6 @@ func status_text() -> String:
 	for f in FLAGS:
 		L.append("%s %s" % [f, "done" if rs != null and rs.lessons().has(f) else "-"])
 	var rec := "this run: " + ", ".join(L) if rs != null and rs.has_lessons() else "no record (a run from before it: all done)"
-	return "Tutorials %s; %s; stage '%s', objective '%s'" % ["on" if Settings.tutorials else "off", rec, stage, objective]
+	var owed := owed_card()
+	return "Tutorials %s; %s; stage '%s', objective '%s'%s" % ["on" if Settings.tutorials else "off", rec, stage, objective,
+			", card owed: " + owed if owed != "" else ""]
