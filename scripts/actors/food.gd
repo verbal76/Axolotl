@@ -117,20 +117,41 @@ func _ball_mesh(r: float, m: Material, p: Node3D, pos: Vector3, scl: Vector3) ->
 	return mi
 
 
+## The shrimp's meshes, built once and shared by every shrimp (CreatureMeshes).
+static var _shrimp_body: ArrayMesh
+static var _shrimp_leg: ArrayMesh
+
+
 func _build_drifter() -> void:
-	var m := _mat(Color(1.0, 0.62, 0.42), 0.35)
-	for i in 4:
-		_ball_mesh(0.045 - i * 0.008, m, _vis, Vector3(0, 0, i * 0.06), Vector3(1, 1, 1.5))
+	# A little shrimp (owner, 2026-10-07: it read as a few balls): a smooth arched body, rostrum, eyes,
+	# antennae and a tail fan in one mesh, and five pairs of swimmerets that paddle.
+	if _shrimp_body == null:
+		_shrimp_body = CreatureMeshes.shrimp_body()
+		_shrimp_leg = CreatureMeshes.shrimp_leg()
+	var m := StandardMaterial3D.new()
+	m.vertex_color_use_as_albedo = true
+	m.roughness = 0.4
+	m.emission_enabled = true
+	m.emission = Color(1.0, 0.55, 0.35)
+	m.emission_energy_multiplier = 0.3
+	m.rim_enabled = true
+	m.rim = 0.6
+	_glow.append([m, 0.3])
+	var body := MeshInstance3D.new()
+	body.mesh = _shrimp_body
+	body.material_override = m
+	body.cast_shadow = GeometryInstance3D.SHADOW_CASTING_SETTING_OFF
+	body.visibility_range_end = 35.0
+	_vis.add_child(body)
 	for i in 5:
-		var leg := Node3D.new()
-		leg.position = Vector3(0, -0.02, 0.02 + i * 0.03)
+		var leg := MeshInstance3D.new()
+		leg.mesh = _shrimp_leg
+		leg.material_override = m
+		leg.cast_shadow = GeometryInstance3D.SHADOW_CASTING_SETTING_OFF
+		leg.visibility_range_end = 35.0
+		leg.position = Vector3(0, 0, -0.05 + i * 0.022)
 		_vis.add_child(leg)
-		_ball_mesh(0.01, m, leg, Vector3(0.05, -0.02, 0), Vector3(4, 0.6, 1.2))
-		_ball_mesh(0.01, m, leg, Vector3(-0.05, -0.02, 0), Vector3(4, 0.6, 1.2))
 		_parts.append(leg)
-	var eye := _mat(Color(0.05, 0.05, 0.05), 0.0)
-	_ball_mesh(0.012, eye, _vis, Vector3(0.03, 0.02, -0.03), Vector3.ONE)
-	_ball_mesh(0.012, eye, _vis, Vector3(-0.03, 0.02, -0.03), Vector3.ONE)
 
 
 func _build_darter() -> void:

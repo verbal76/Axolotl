@@ -21,7 +21,7 @@ const SHARD_ONE := [
 	"_test_parasite_combat", "_test_organic_motion", "_test_gill_look", "_test_gill_idles", "_test_gill_patterns",
 	"_test_gill_traction", "_test_traction_no_shortcuts", "_test_tutorial_route",
 	"_test_sphere_walk", "_test_coyote_and_buffer", "_test_swipe_direction_and_stages", "_test_hard_landing",
-	"_test_food_reach", "_test_food_catchable", "_test_assisted_lunge", "_test_assisted_lunge", "_test_darter_and_burrower", "_test_motes", "_test_vortex", "_test_vortex_tints",
+	"_test_food_reach", "_test_food_catchable", "_test_assisted_lunge", "_test_glob_counterplay", "_test_assisted_lunge", "_test_darter_and_burrower", "_test_motes", "_test_vortex", "_test_vortex_tints",
 	"_test_vortex_currents", "_test_vortex_currents_travel", "_test_current", "_test_canopy", "_test_caves",
 	"_test_route_audit", "_test_new_areas", "_test_ecosystem", "_test_music", "_test_completion_frozen",
 	"_test_run_save_file", "_test_timer_integrity", "_test_resume_points_safe", "_test_ui", "_test_menus_no_scroll",
@@ -51,7 +51,7 @@ func run(runner) -> void:
 	g.spores.enabled = false
 	await t.seconds(0.5)
 	var only: String = Settings.test_args.get("only", "")
-	var registry := ["_test_startup", "_test_ota_and_version", "_test_hag_infra", "_test_launch_update", "_test_mesh_winding", "_test_terrain", "_test_ravines", "_test_rim_fights_clear_of_ooze", "_test_edge_assist", "_test_ooze_bubbles", "_test_view_clearances", "_test_camera_rises_over", "_test_camera_invariant", "_test_ball_view", "_test_hud_corner", "_test_restore_hints", "_test_spore_blooms", "_test_drawn_back", "_test_dead_area_sim", "_test_home_coherence", "_test_terrain_grounded", "_test_no_floating_platforms", "_test_parasite_locomotion", "_test_parasite_body_and_death", "_test_parasite_combat", "_test_organic_motion", "_test_gill_look", "_test_gill_idles", "_test_gill_colours", "_test_gill_patterns", "_test_tail_whip", "_test_gill_traction", "_test_gill_incline_transitions", "_test_traction_no_shortcuts", "_test_gill_body_follow", "_test_swim_body_follow", "_test_ambient_sway", "_test_placements", "_test_tutorial_route", "_test_sphere_walk", "_test_jump_and_burst", "_test_coyote_and_buffer", "_test_swipe_direction_and_stages", "_test_hard_landing", "_test_food", "_test_food_reach", "_test_food_catchable", "_test_assisted_lunge", "_test_darter_and_burrower", "_test_food_repopulates", "_test_motes", "_test_checkpoint_and_regen", "_test_crumble", "_test_restoration_gates", "_test_retract_gates_gone", "_test_bubble_columns", "_test_restoration_continuity", "_test_health_map", "_test_vortex", "_test_vortex_tints", "_test_vortex_ready_state", "_test_vortex_currents", "_test_vortex_currents_travel", "_test_current", "_test_current_brace", "_test_canopy", "_test_canopy_plain_jumps", "_test_canopy_guard_leaf", "_test_climbs_physical", "_test_jungle_ladders_physical", "_test_leaf_geometry", "_test_leaf_footing", "_test_caves", "_test_mounds", "_test_vegetation", "_test_vortex_mouths_clear", "_test_vortex_pads_clear_of_plants", "_test_stalkers_in_reeds", "_test_route_audit", "_test_new_areas", "_test_ecosystem", "_test_threat_spread", "_test_music", "_test_opening_audio", "_test_run_clock", "_test_completion_catalog", "_test_completion_frozen", "_test_run_save_file", "_test_run_timer_live", "_test_run_continue", "_test_timer_integrity", "_test_resume_points_safe", "_phase_continue_write", "_phase_continue_read", "_test_upgrades", "_test_quality_title_cap", "_test_ui", "_test_menus_no_scroll", "_test_menu_touch", "_test_primary_buttons", "_test_tier2_rules", "_test_tier2_world", "_test_ambient_fish", "_test_parasite_never_buried", "_test_tier2_loadout", "_test_aquarium_experiences", "_test_aquarium_polish", "_test_all_clear", "_test_treasure_unlock", "_test_treasure_generation", "_test_treasure_play", "_phase_treasure_stress", "_phase_live_fish_diag", "_phase_cpu_probe", "_phase_incline_survey", "_phase_loco_diag", "_phase_crawl_trace", "_phase_mouth_crawls", "_phase_organic_trace", "_phase_organic_cost", "_test_skilltree_graph", "_test_progress_store", "_test_starfish_spots", "_test_starfish_pickup", "_test_skill_ui", "_test_quick_gill", "_test_lunge_skills", "_test_burst_skills", "_test_glide_control", "_test_glide_transfers", "_test_mote_magnet", "_phase_starfish_survey", "_phase_starfish_sweep", "_phase_glide_probe", "_test_plants_terminal_growth", "_test_sea_fan_depth", "_test_repopulation", "_phase_repop_survey", "_phase_repop_sim", "_test_aquarium_gill", "_phase_aq_nav", "_test_tutorials_and_title", "_test_onb_progress", "_test_onb_owner_save", "_test_onb_per_run", "_test_onb_toggle", "_test_onb_intro", "_test_onb_feeding", "_test_onb_parasite", "_test_onb_feed_first", "_test_onb_tunnel", "_test_onb_starfish", "_test_onb_softlock", "_test_onb_relaunch", "_test_onb_restoration_equal", "_test_hard_mode", "_test_hard_mode_save", "_test_polish_a", "_test_leaf_motion", "_test_perf_veg_cull", "_test_veg_stays_put", "_test_death_and_arrival", "_test_pause_ball_progress", "_test_arrival_view", "_test_camera_never_drawn_unsafe", "_test_startup_build_identical", "_phase_world_hash", "_phase_th_bench", "_phase_hard_write", "_phase_hard_read", "_phase_hard_newrun", "_phase_hard_finish", "_phase_hard_sim", "_phase_hard_intervals", "_phase_onb_owner", "_phase_onb_write", "_phase_onb_read", "_phase_onb_kill", "_phase_onb_toggle", "_phase_cohesion_probe", "_test_eel_reach", "_test_parasite_readability"]
+	var registry := ["_test_startup", "_test_ota_and_version", "_test_hag_infra", "_test_launch_update", "_test_mesh_winding", "_test_terrain", "_test_ravines", "_test_rim_fights_clear_of_ooze", "_test_edge_assist", "_test_ooze_bubbles", "_test_view_clearances", "_test_camera_rises_over", "_test_camera_invariant", "_test_ball_view", "_test_hud_corner", "_test_restore_hints", "_test_spore_blooms", "_test_drawn_back", "_test_dead_area_sim", "_test_home_coherence", "_test_terrain_grounded", "_test_no_floating_platforms", "_test_parasite_locomotion", "_test_parasite_body_and_death", "_test_parasite_combat", "_test_organic_motion", "_test_gill_look", "_test_gill_idles", "_test_gill_colours", "_test_gill_patterns", "_test_tail_whip", "_test_gill_traction", "_test_gill_incline_transitions", "_test_traction_no_shortcuts", "_test_gill_body_follow", "_test_swim_body_follow", "_test_ambient_sway", "_test_placements", "_test_tutorial_route", "_test_sphere_walk", "_test_jump_and_burst", "_test_coyote_and_buffer", "_test_swipe_direction_and_stages", "_test_hard_landing", "_test_food", "_test_food_reach", "_test_food_catchable", "_test_assisted_lunge", "_test_glob_counterplay", "_test_darter_and_burrower", "_test_food_repopulates", "_test_motes", "_test_checkpoint_and_regen", "_test_crumble", "_test_restoration_gates", "_test_retract_gates_gone", "_test_bubble_columns", "_test_restoration_continuity", "_test_health_map", "_test_vortex", "_test_vortex_tints", "_test_vortex_ready_state", "_test_vortex_currents", "_test_vortex_currents_travel", "_test_current", "_test_current_brace", "_test_canopy", "_test_canopy_plain_jumps", "_test_canopy_guard_leaf", "_test_climbs_physical", "_test_jungle_ladders_physical", "_test_leaf_geometry", "_test_leaf_footing", "_test_caves", "_test_mounds", "_test_vegetation", "_test_vortex_mouths_clear", "_test_vortex_pads_clear_of_plants", "_test_stalkers_in_reeds", "_test_route_audit", "_test_new_areas", "_test_ecosystem", "_test_threat_spread", "_test_music", "_test_opening_audio", "_test_run_clock", "_test_completion_catalog", "_test_completion_frozen", "_test_run_save_file", "_test_run_timer_live", "_test_run_continue", "_test_timer_integrity", "_test_resume_points_safe", "_phase_continue_write", "_phase_continue_read", "_test_upgrades", "_test_quality_title_cap", "_test_ui", "_test_menus_no_scroll", "_test_menu_touch", "_test_primary_buttons", "_test_tier2_rules", "_test_tier2_world", "_test_ambient_fish", "_test_parasite_never_buried", "_test_tier2_loadout", "_test_aquarium_experiences", "_test_aquarium_polish", "_test_all_clear", "_test_treasure_unlock", "_test_treasure_generation", "_test_treasure_play", "_phase_treasure_stress", "_phase_live_fish_diag", "_phase_cpu_probe", "_phase_incline_survey", "_phase_loco_diag", "_phase_crawl_trace", "_phase_mouth_crawls", "_phase_organic_trace", "_phase_organic_cost", "_test_skilltree_graph", "_test_progress_store", "_test_starfish_spots", "_test_starfish_pickup", "_test_skill_ui", "_test_quick_gill", "_test_lunge_skills", "_test_burst_skills", "_test_glide_control", "_test_glide_transfers", "_test_mote_magnet", "_phase_starfish_survey", "_phase_starfish_sweep", "_phase_glide_probe", "_test_plants_terminal_growth", "_test_sea_fan_depth", "_test_repopulation", "_phase_repop_survey", "_phase_repop_sim", "_test_aquarium_gill", "_phase_aq_nav", "_test_tutorials_and_title", "_test_onb_progress", "_test_onb_owner_save", "_test_onb_per_run", "_test_onb_toggle", "_test_onb_intro", "_test_onb_feeding", "_test_onb_parasite", "_test_onb_feed_first", "_test_onb_tunnel", "_test_onb_starfish", "_test_onb_softlock", "_test_onb_relaunch", "_test_onb_restoration_equal", "_test_hard_mode", "_test_hard_mode_save", "_test_polish_a", "_test_leaf_motion", "_test_perf_veg_cull", "_test_veg_stays_put", "_test_death_and_arrival", "_test_pause_ball_progress", "_test_arrival_view", "_test_camera_never_drawn_unsafe", "_test_startup_build_identical", "_phase_world_hash", "_phase_th_bench", "_phase_hard_write", "_phase_hard_read", "_phase_hard_newrun", "_phase_hard_finish", "_phase_hard_sim", "_phase_hard_intervals", "_phase_onb_owner", "_phase_onb_write", "_phase_onb_read", "_phase_onb_kill", "_phase_onb_toggle", "_phase_cohesion_probe", "_test_eel_reach", "_test_parasite_readability"]
 	# A --only entry that names nothing is a typo (or a stale substring): fail loudly rather than run nothing.
 	for o in only.split(",", false):
 		if not registry.has(o) and not registry.has("_test_" + o):
@@ -3785,6 +3785,63 @@ func _test_assisted_lunge() -> void:
 	t.check("lunge_assist_prefers_aim_over_nearness", pick == aimed and lit, "picked the aimed one %s; it glows %s" % [pick == aimed, lit])
 	t.check("lunge_without_target_goes_straight", moved > 1.5 and straight, "%.2f m ahead, straight %s" % [moved, straight])
 	t.check("lunge_reach_grows_with_upgrade", not r0 and r3, "3.8 m: unupgraded %s, Lunge III %s" % [r0, r3])
+
+## Owner, 2026-10-07: a spitter's glob can be stopped with the tail swipe (the existing deflect): the
+## window a thumb has, never a hit after it is batted, never two hits from one glob, and several in
+## flight at once behave.
+func _test_glob_counterplay() -> void:
+	var fire := func(dist: float) -> ParasiteGlob:
+		var gl := ParasiteGlob.new()
+		gl.launch(null, p.ball, p.body_center() + p.facing * dist, p.body_center())
+		return gl
+	var window := []
+	var hurt_after := 0
+	for k in 12:
+		place(0, -12, -130, 0.1, 90)
+		await wait_grounded()
+		p.invuln_t = 0.0
+		p.health = p.max_health
+		p.hurt_lock = 0.0
+		var gl: ParasiteGlob = fire.call(4.0)
+		var press_at := 0.1 + k * 0.05
+		var hp0 := p.health
+		var swiped := false
+		var deflected := false
+		for i in 90:
+			var tt := i / 60.0
+			if not swiped and tt >= press_at:
+				await press("swipe")
+				swiped = true
+			if is_instance_valid(gl) and gl.reflected:
+				deflected = true
+			await t.frames(1)
+		if deflected:
+			window.append(snappedf(press_at, 0.01))
+			if p.health < hp0:
+				hurt_after += 1
+		await t.frames(30)
+	# One glob that is not stopped hurts once, however long it overlaps him.
+	place(0, -12, -130, 0.1, 90)
+	await wait_grounded()
+	p.invuln_t = 0.0
+	p.health = p.max_health
+	var hp1 := p.health
+	var g1: ParasiteGlob = fire.call(2.0)
+	await t.seconds(1.2)
+	var once := hp1 - p.health
+	# Several at once: all fly, all end (no glob is left behind).
+	p.invuln_t = 999
+	for k in 6:
+		fire.call(3.0 + k * 0.5)
+	var flying := ParasiteGlob.live.size()
+	await t.seconds(4.0)
+	var left := ParasiteGlob.live.size()
+	p.invuln_t = 0.0
+	var span: float = (window.max() - window.min() + 0.05) if not window.is_empty() else 0.0
+	t.check("glob_swipe_window_fits_a_thumb", span >= 0.2, "deflected when the swipe landed at %s s after the spit (a %.2f s window at 4 m)" % [window, span])
+	t.check("glob_never_hurts_after_deflect", hurt_after == 0 and not window.is_empty(), "%d deflected globs still hurt" % hurt_after)
+	t.check("glob_hits_once", once == 1, "an unstopped glob took %d" % once)
+	t.check("globs_many_in_flight_all_end", flying >= 6 and left == 0, "%d flying, %d left after 4 s" % [flying, left])
 
 func _catch_trials(lunge_at: float, react_s := 0.0) -> Dictionary:
 	var tiers0: Dictionary = p.skill_tiers.duplicate()

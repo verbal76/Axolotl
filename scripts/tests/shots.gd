@@ -353,6 +353,70 @@ func run(runner) -> void:
 				g.player.place(st[0], st[1], st[2])
 				g.cam.snap_behind()
 				await _perf_view("%s %s" % [st[3], step])
+	if only == "creatures":
+		# The creature/projectile pass (2026-10-07): the edible shrimp, the reed stalker prowling and
+		# rearing, and a spitter's glob in flight, each close up.
+		g.player.invuln_t = 9999
+		g.hud.visible = false
+		var shrimp: Food = null
+		var stalker: ReedStalker = null
+		for b in g.balls:
+			for f in b.foods:
+				if shrimp == null and is_instance_valid(f) and f.type == Food.Type.DRIFTER:
+					shrimp = f
+		for c in g.ecosystem.all_critters():
+			if stalker == null and c is ReedStalker:
+				stalker = c
+		if shrimp != null:
+			var b: MossBall = shrimp.ball
+			var up := b.up_at(shrimp.global_position)
+			g.player.place(b, b.surface_point(up, 0.2) + MossBall.frame_at(up, 0.0).z * 6.0, -MossBall.frame_at(up, 0.0).z)
+			shrimp.set_physics_process(false)
+			_close(g, shrimp.global_position + up * 0.25 + MossBall.frame_at(up, 60.0).z * 0.75, shrimp.global_position, up)
+			await t.seconds(0.6)
+			await t.shot("cr_shrimp")
+			shrimp.set_physics_process(true)
+		if stalker != null:
+			var b: MossBall = stalker.ball
+			# (Out of its reeds onto open moss for the picture, its behaviour held: it lives low in
+			# the reeds, where a close camera sees only reeds.)
+			var d1 := MossBall.dir_ll(-12, -130)
+			b = g.balls[0]
+			stalker.set_process(false)
+			stalker.set_physics_process(false)
+			stalker.global_position = b.surface_point(d1)
+			stalker.heading = -MossBall.frame_at(d1, 0.0).z
+			for i in 8:
+				stalker._trail.push_front(stalker.global_position - stalker.heading * 0.3 * i)
+			stalker._update_body(0.0)
+			var at := stalker.global_position
+			var up := b.up_at(at)
+			g.player.place(b, b.surface_point(up, 0.2) + MossBall.frame_at(up, 90.0).z * 10.0, -MossBall.frame_at(up, 0.0).z)
+			await t.seconds(0.3)
+			_close(g, at + up * 1.1 + stalker.heading.rotated(up, 0.9) * 2.6, at + up * 0.3, up)
+			await t.seconds(0.4)
+			await t.shot("cr_stalker")
+			stalker.state = "telegraph"
+			stalker.state_t = 0.35
+			stalker._update_body(0.0)
+			await t.seconds(0.1)
+			await t.shot("cr_stalker_rear")
+		# A glob in flight past the camera, then its splat.
+		_open(g)
+		var b0: MossBall = g.balls[0]
+		var d0 := MossBall.dir_ll(-12, -130)
+		g.player.place(b0, b0.surface_point(d0, 0.2), -MossBall.frame_at(d0, 0.0).z)
+		await t.seconds(0.8)
+		var pl := g.player
+		var gl := ParasiteGlob.new()
+		gl.launch(null, b0, pl.body_center() + pl.facing * 4.0 + pl.up * 0.6, pl.body_center() + pl.up * 0.6)
+		var side := pl.facing.cross(pl.up).normalized()
+		_close(g, pl.body_center() + pl.facing * 3.0 + side * 1.4 + pl.up * 0.9, pl.body_center() + pl.facing * 3.0 + pl.up * 0.6, pl.up)
+		await t.seconds(0.15)
+		await t.shot("cr_glob_flight")
+		await t.seconds(0.6)
+		await t.shot("cr_glob_splat")
+		_open(g)
 	if only == "perfvx":
 		# The vortex's cost (2026-10-07 visual pass): near its pool, from mid-distance, and mid-ride.
 		var b0 := g.balls[0]

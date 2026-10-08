@@ -40,6 +40,9 @@ var _trail: Array[Vector3] = []
 var _mm: MultiMesh
 var _head: Node3D
 var _frill: MeshInstance3D
+static var _seg_mesh: ArrayMesh
+static var _head_mesh: ArrayMesh
+static var _frill_mesh: ArrayMesh
 var _near_t := 0.0
 
 
@@ -72,7 +75,12 @@ func _build() -> void:
 	_mm = MultiMesh.new()
 	_mm.transform_format = MultiMesh.TRANSFORM_3D
 	_mm.use_colors = true
-	_mm.mesh = Critter.sphere(0.2, 8)
+	# (Owner, 2026-10-07: armoured, crested segments with legs, not spheres: CreatureMeshes.)
+	if _seg_mesh == null:
+		_seg_mesh = CreatureMeshes.stalker_segment()
+		_head_mesh = CreatureMeshes.stalker_head()
+		_frill_mesh = CreatureMeshes.stalker_frill()
+	_mm.mesh = _seg_mesh
 	_mm.instance_count = SEGS
 	for i in SEGS:
 		_mm.set_instance_color(i, Color(0.34, 0.4, 0.16) if i % 2 == 0 else Color(0.52, 0.46, 0.2))
@@ -86,11 +94,10 @@ func _build() -> void:
 	_head = Node3D.new()
 	_head.top_level = true
 	add_child(_head)
-	var head := [[Critter.sphere(0.2, 10), Color(0.34, 0.4, 0.16), Critter.xf(Vector3.ZERO, Vector3(0.85, 0.6, 1.5))]]
-	for side in [-1.0, 1.0]:
-		head.append([Critter.sphere(0.04, 6), Color(0.95, 0.85, 0.3), Critter.xf(Vector3(side * 0.1, 0.07, -0.2))])
-	Critter.part(Critter.merge(head), Critter.vc_mat(), _head)
-	_frill = Critter.part(Critter.sphere(0.25, 10), Critter.mat(Color(0.75, 0.4, 0.14)), _head, Vector3(0, 0.06, 0.14), Vector3(1.4, 0.8, 0.2))
+	Critter.part(_head_mesh, Critter.vc_mat(), _head)
+	_frill = Critter.part(_frill_mesh, Critter.vc_mat(), _head, Vector3(0, 0.08, 0.1), Vector3(1.0, 0.45, 1.0))
+	# (Leaning back over the neck, so the fan reads from the side as well as head-on.)
+	_frill.rotation.x = deg_to_rad(-40.0)
 
 
 func _in_patch(pos: Vector3, margin := 0.0) -> bool:
@@ -264,7 +271,8 @@ func _update_body(_dt: float) -> void:
 		hp_ += up * org.lift
 		hb = Basis(up, org.look) * hb * Basis(Vector3.RIGHT, org.nod)
 	_head.global_transform = Transform3D(hb, hp_)
-	_frill.scale = Vector3(1.4, 0.8 + rear * 1.4, 0.2)
+	# (Folded flat along the neck while it prowls; fanned wide and tall as it rears.)
+	_frill.scale = Vector3(0.7 + rear * 0.5, 0.45 + rear * 0.75, 1.0)
 
 
 ## Head and mid-body: the reeds part where it really is. The telegraph thrashes them.
