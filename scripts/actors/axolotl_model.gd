@@ -68,6 +68,21 @@ var land_variant := 0
 var land_strength := 1.0
 var look_target := Vector3.ZERO
 var has_look := false
+## v107 game feel (owner, 2026-10-08): presentation only. Everything below poses this visual rig;
+## his collision is the sphere on the axolotl body, never this, and nothing here is read by play.
+var soft_land_t := -1.0
+var soft_land_k := 0.0
+var takeoff_t := -1.0
+var gulp_t := -1.0
+var gulp_k := 0.0
+var teeter_t := -1.0
+## 0..1: the shimmer weight while his existing post-hit invulnerability runs (Juice reads
+## Axolotl.invuln_t and sets this; no timer of its own).
+var invuln := 0.0
+var _look_w := 0.0
+var _grow_i := -1
+var _grow_k := 1.0
+var _skin_glow := 0.08
 var camera_pos := Vector3.ZERO
 var dissolve := 0.0          # 0 visible .. 1 gone
 
@@ -933,9 +948,51 @@ func fall_flicker() -> void:
 	_fall_flicker = 1.2
 
 
+## v107 game feel. A soft landing's squash (k 0..1 from how hard he came down) springing back.
+func soft_land(k: float) -> void:
+	soft_land_k = clampf(k, 0.0, 1.0)
+	soft_land_t = 0.0
+
+
+## The push-off: a quick stretch up as he leaves the ground (never before: the jump is not delayed).
+func takeoff() -> void:
+	takeoff_t = 0.0
+
+
+## A gulp: mouth wide then snapped shut, chin up, a swallow along the body; k is the prey's weight.
+func gulp(k: float) -> void:
+	gulp_k = clampf(k, 0.0, 1.0)
+	gulp_t = 0.0
+
+
+## The edge assist caught him at a rim: a small wobble over the drop, eyes wide.
+func teeter() -> void:
+	teeter_t = 0.0
+
+
+## A frond just gained (a cave's health upgrade) grows in from small over about a second.
+func grow_frond(i: int) -> void:
+	_grow_i = i
+	_grow_k = 0.0
+
+
+## v107: while his existing post-hit invulnerability runs, his skin breathes a soft glow (a calm
+## pulse, never a blink). Written only when it changes.
+func _update_invuln_glow() -> void:
+	var target := 0.08
+	if invuln > 0.0:
+		target += 0.22 * invuln * (0.55 + 0.45 * sin(_t * TAU * 2.2))
+	if absf(target - _skin_glow) < 0.004:
+		return
+	_skin_glow = target
+	for m in _skin_mats:
+		m.set_shader_parameter("glow", target)
+
+
 ## Gill i: active (i < health) glows in colour; any other gill (lost, or not yet restored
 ## by a cave upgrade) is dull and faded with a slight droop. All six are always visible.
 func _update_gills(dt: float, back: float, flap: float, flare: float) -> void:
+	_update_invuln_glow()
 	_flash = maxf(0.0, _flash - dt)
 	_fall_flicker = maxf(0.0, _fall_flicker - dt)
 	_slow_k = minf(1.0, _slow_k + dt / _slow_dur)
@@ -948,8 +1005,13 @@ func _update_gills(dt: float, back: float, flap: float, flare: float) -> void:
 		var base := _gill_base(side, k)
 		var rot := base + Vector3(back * 0.9 + droop * 0.6 + sway * 0.4, side * sway * 0.3, side * (droop * 0.5 - flare * 0.35 + back * 0.15))
 		gills[i].rotation = gills[i].rotation.lerp(rot, minf(1.0, dt * 12.0))
-		# All six gills are always there at full size; health shows only as glow vs dull.
-		gills[i].scale = Vector3.ONE
+		# All six gills are always there at full size; health shows only as glow vs dull. (v107: a
+		# frond just gained grows in from small with a little spring.)
+		if i == _grow_i and _grow_k < 1.0:
+			var gk := 1.0 - exp(-_grow_k * 5.0) * cos(_grow_k * PI * 2.5)
+			gills[i].scale = Vector3.ONE * lerpf(0.2, 1.0, clampf(gk, 0.0, 1.15))
+		else:
+			gills[i].scale = Vector3.ONE
 		var m := gill_mats[i]
 		if active:
 			var e := 0.34 + sin(_t * 2.0 + i) * 0.07
@@ -1196,6 +1258,20 @@ func _advance_timers(dt: float) -> void:
 	if land_t >= 0.0:
 		land_t += dt / 0.9
 		if land_t > 1.0: land_t = -1.0
+	if soft_land_t >= 0.0:
+		soft_land_t += dt / 0.34
+		if soft_land_t > 1.0: soft_land_t = -1.0
+	if takeoff_t >= 0.0:
+		takeoff_t += dt / 0.26
+		if takeoff_t > 1.0: takeoff_t = -1.0
+	if gulp_t >= 0.0:
+		gulp_t += dt / 0.34
+		if gulp_t > 1.0: gulp_t = -1.0
+	if teeter_t >= 0.0:
+		teeter_t += dt / 0.6
+		if teeter_t > 1.0: teeter_t = -1.0
+	if _grow_k < 1.0:
+		_grow_k = minf(1.0, _grow_k + dt / 1.1)
 	_blink -= dt
 	if _blink < -0.12:
 		_blink = _fx.randf_range(1.8, 4.5)
@@ -1386,6 +1462,31 @@ func _animate(dt: float) -> void:
 		gill_flap = maxf(gill_flap, l["flap"])
 		wave_amp *= 0.4
 
+	# v107 game feel: short springs layered on whatever else he is doing (presentation only).
+	if soft_land_t >= 0.0:
+		# Squash, a little overshoot, settle: a damped spring over about a third of a second.
+		var sp := exp(-soft_land_t * 3.2) * cos(soft_land_t * PI * 2.4) * soft_land_k
+		rig_scale *= Vector3(1.0 + 0.1 * sp, 1.0 - 0.17 * sp, 1.0 + 0.04 * sp)
+		rig_pos.y -= 0.03 * maxf(0.0, sp)
+	if takeoff_t >= 0.0:
+		var sp := exp(-takeoff_t * 3.0) * cos(takeoff_t * PI * 2.0)
+		rig_scale *= Vector3(1.0 - 0.06 * sp, 1.0 + 0.13 * sp, 1.0 - 0.03 * sp)
+		gill_back = maxf(gill_back, 0.6 * maxf(0.0, sp))
+	if gulp_t >= 0.0:
+		var k := sin(gulp_t * PI) * gulp_k
+		mouth_open = 1.0 if gulp_t < 0.22 else lerpf(mouth_open, 0.05, smoothstep(0.22, 0.4, gulp_t))
+		head_rot.x += 0.14 * k
+		rig_scale *= Vector3(1.0 + 0.05 * k, 1.0 - 0.04 * k, 1.0 + 0.02 * k)
+		gill_flap = maxf(gill_flap, 0.45 * k)
+		eye_scale = eye_scale * Vector3(1.0, lerpf(1.0, 0.55, k), 1.0)
+	if teeter_t >= 0.0:
+		var sp := sin(teeter_t * PI * 3.0) * exp(-teeter_t * 2.6)
+		rig_rot.x += 0.16 * sp
+		eye_scale = eye_scale * (1.0 + 0.25 * exp(-teeter_t * 3.0))
+		gill_flap = maxf(gill_flap, 0.3 * absf(sp))
+		if teeter_t < 0.5:
+			leg_mode = 2
+
 	var ip := {}
 	if idle_kind != Idle.NONE:
 		ip = _idle_pose_at(idle_kind, idle_s, idle_side)
@@ -1406,9 +1507,12 @@ func _animate(dt: float) -> void:
 	elif grounded and s < 0.3:
 		# Breathing.
 		rig_scale.y *= 1.0 + 0.012 * sin(_t * 1.7)
-	if has_look and land_t < 0.0 and swipe_t < 0.0 and idle_kind == Idle.NONE:
+	# (Eased in and out, never snapped: v107's glances come and go calmly.)
+	var look_ok := has_look and land_t < 0.0 and swipe_t < 0.0 and lunge_t < 0.0 and idle_kind == Idle.NONE
+	_look_w = move_toward(_look_w, 1.0 if look_ok else 0.0, dt * 2.5)
+	if _look_w > 0.0:
 		var local := to_local(look_target)
-		head_rot.y += clampf(atan2(-local.x, -local.z), -0.7, 0.7)
+		head_rot.y += clampf(atan2(-local.x, -local.z), -0.7, 0.7) * smoothstep(0.0, 1.0, _look_w)
 	if _blink < 0.0:
 		eye_scale.y *= 0.1
 

@@ -284,7 +284,8 @@ class Upgrade extends Node3D:
 		_leaf.position = Vector3(0, 0.6, 0)
 		add_child(_leaf)
 		var l := OmniLight3D.new()
-		l.light_color = Color(0.4, 1.0, 0.9)
+		# (v107: a pearl's light is its own warm peach, not the health upgrade's aqua.)
+		l.light_color = Color(1.0, 0.8, 0.66) if kind == "pearl" else Color(0.4, 1.0, 0.9)
 		l.omni_range = 4.0
 		l.light_energy = 1.2
 		l.position = Vector3(0, 0.7, 0)

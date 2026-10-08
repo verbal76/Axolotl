@@ -272,16 +272,29 @@ func visual_point(u: float) -> Vector3:
 	return (sample(u)[0] as Vector3) + current_offset(u)
 
 
+const _AMP_N := ["cur_amp0", "cur_amp1", "cur_amp2"]
+const _PH_N := ["cur_ph0", "cur_ph1", "cur_ph2"]
+const _KAP_N := ["cur_kap0", "cur_kap1", "cur_kap2"]
+## What the materials last got for the current's constant terms (v107 hygiene: written when they
+## change, not every frame; the phases still move every frame).
+var _cur_const_key := []
+
+
 func _update_current() -> void:
 	var on := 1.0 if currents else 0.0
+	var key := [on, cur_amp.duplicate(), cur_kap.duplicate(), _cur_mats.size()]
+	var consts := key != _cur_const_key
+	if consts:
+		_cur_const_key = key
 	for k in 3:
 		var ph := Vector3.ZERO
 		for ax in 3:
 			ph[ax] = fposmod(cur_omega[k][ax] * current_time + cur_phi[k][ax], TAU)
 		for m in _cur_mats:
-			m.set_shader_parameter("cur_amp%d" % k, cur_amp[k] * on)
-			m.set_shader_parameter("cur_ph%d" % k, ph)
-			m.set_shader_parameter("cur_kap%d" % k, cur_kap[k])
+			if consts:
+				m.set_shader_parameter(_AMP_N[k], cur_amp[k] * on)
+				m.set_shader_parameter(_KAP_N[k], cur_kap[k])
+			m.set_shader_parameter(_PH_N[k], ph)
 
 
 func _make_jet_mat(opacity: float, flow: float) -> ShaderMaterial:

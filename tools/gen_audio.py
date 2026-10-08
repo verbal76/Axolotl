@@ -578,6 +578,10 @@ def main():
         tunnel_and_ooze()
         print("audio written to", os.path.abspath(OUT))
         return
+    if "--only=juice" in sys.argv:
+        juice()
+        print("audio written to", os.path.abspath(OUT))
+        return
     if "--only=skills" not in sys.argv:
         sfx()
         ambience()
@@ -586,6 +590,7 @@ def main():
         parasites()
         gill()
         tunnel_and_ooze()
+        juice()
     skills()
     print("audio written to", os.path.abspath(OUT))
 
@@ -721,6 +726,35 @@ def spore_bloom():
     puff = lowpass_fast(rng.standard_normal(n), 900) * np.exp(-tt / 0.16) * np.clip(tt / 0.015, 0, 1)
     s = puff + sweep_noise(dur, 1800, 400, 1.8) * np.exp(-tt / 0.3) * 0.35
     write_wav("sfx_spore_puff", reverb(s, 0.25), peak=0.55)
+
+
+def juice():
+    """v107 game feel (owner, 2026-10-08): three new sounds, each on its own seed so no other file
+    changes. A moss ball fully restored: a warm, rising, bubbly bloom (shorter and smaller than the
+    whole tank's all-clear). A pearl: a glassy, peach-warm shimmer. A step on moss: a tiny soft
+    muffled pat, quiet enough to sit under everything."""
+    global rng
+    rng = np.random.default_rng(7101)
+    n = lambda d: int(d * SR)
+    s = np.zeros(n(2.6))
+    for k, f in enumerate([392, 523, 659, 784, 1046]):
+        place(s, k * 0.11, marimba(f, 1.4, 0.8), 0.32 - k * 0.02, wrap=False)
+    for k, f in enumerate([1568, 2093]):
+        place(s, 0.62 + k * 0.12, bell(f, 1.6), 0.12, wrap=False)
+    s += np.pad(pad([note_f(55), note_f(60), note_f(64), note_f(67)], 2.2, 0.35, 0.5), (0, n(0.4))) * 0.45
+    s[:n(2.6)] += np.pad(bubbles(1.2, 10, 600, 1700), (n(0.3), n(2.6) - n(0.3) - n(1.2))) * 0.25
+    write_wav("sfx_ball_restored", reverb(s, 0.45), peak=0.8)
+    rng = np.random.default_rng(7102)
+    s = np.zeros(n(1.3))
+    for k, f in enumerate([1318, 1661, 1976, 2637]):
+        place(s, k * 0.05, bell(f, 1.1) * (1.0 + 0.004 * k), 0.28 - k * 0.04, wrap=False)
+    s += np.pad(sweep_noise(0.5, 2600, 5200) * np.exp(-np.arange(n(0.5)) / SR / 0.18) * 0.12, (0, n(1.3) - n(0.5)))
+    write_wav("sfx_pearl", reverb(lowpass_fast(s, 7000), 0.4), peak=0.7)
+    rng = np.random.default_rng(7103)
+    tt = np.arange(n(0.09)) / SR
+    pat = lowpass_fast(rng.standard_normal(len(tt)), 520) * np.exp(-tt / 0.022) * np.clip(tt / 0.004, 0, 1)
+    pat += np.sin(2 * np.pi * 140 * tt) * np.exp(-tt / 0.03) * 0.35
+    write_wav("sfx_moss_step", pat, peak=0.5)
 
 
 if __name__ == "__main__":

@@ -350,11 +350,23 @@ func heal_amount(max_health: int) -> int:
 	return max_health
 
 
-func eaten() -> void:
+## Eaten: out of play at once (state "eaten", never catchable, already off its ball's list). v107:
+## given `to` (his mouth), what is left is only its picture, drawn in and shrunk over a tenth of a
+## second before it is freed; nothing in play sees it meanwhile (no processing, no state).
+func eaten(to := Vector3.INF) -> void:
 	state = "eaten"
 	if type == Type.BURROWER:
 		hole["occupied"] = false
-	queue_free()
+	if to == Vector3.INF or not is_inside_tree():
+		queue_free()
+		return
+	set_physics_process(false)
+	set_process(false)
+	set_targeted(false)
+	var tw := create_tween().set_parallel(true)
+	tw.tween_property(self, "global_position", to, 0.11).set_ease(Tween.EASE_IN).set_trans(Tween.TRANS_QUAD)
+	tw.tween_property(_vis, "scale", _vis.scale * 0.15, 0.11).set_ease(Tween.EASE_IN)
+	tw.chain().tween_callback(queue_free)
 
 
 func _physics_process(dt: float) -> void:

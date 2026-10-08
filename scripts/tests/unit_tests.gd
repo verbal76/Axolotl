@@ -51,7 +51,7 @@ func run(runner) -> void:
 	g.spores.enabled = false
 	await t.seconds(0.5)
 	var only: String = Settings.test_args.get("only", "")
-	var registry := ["_test_startup", "_test_ota_and_version", "_test_hag_infra", "_test_launch_update", "_test_mesh_winding", "_test_terrain", "_test_ravines", "_test_rim_fights_clear_of_ooze", "_test_edge_assist", "_test_ooze_bubbles", "_test_view_clearances", "_test_camera_rises_over", "_test_camera_invariant", "_test_ball_view", "_test_owner_menus_and_players", "_test_profiles_ab", "_phase_profile_write", "_phase_profile_check", "_test_hud_corner", "_test_restore_hints", "_test_spore_blooms", "_test_drawn_back", "_test_dead_area_sim", "_test_home_coherence", "_test_terrain_grounded", "_test_no_floating_platforms", "_test_parasite_locomotion", "_test_parasite_body_and_death", "_test_parasite_combat", "_test_organic_motion", "_test_gill_look", "_test_gill_idles", "_test_gill_colours", "_test_gill_patterns", "_test_tail_whip", "_test_gill_traction", "_test_gill_incline_transitions", "_test_traction_no_shortcuts", "_test_gill_body_follow", "_test_swim_body_follow", "_test_ambient_sway", "_test_placements", "_test_tutorial_route", "_test_sphere_walk", "_test_jump_and_burst", "_test_coyote_and_buffer", "_test_swipe_direction_and_stages", "_test_hard_landing", "_test_food", "_test_food_reach", "_test_food_catchable", "_test_assisted_lunge", "_test_glob_counterplay", "_test_darter_and_burrower", "_test_food_repopulates", "_test_motes", "_test_checkpoint_and_regen", "_test_crumble", "_test_restoration_gates", "_test_retract_gates_gone", "_test_bubble_columns", "_test_restoration_continuity", "_test_health_map", "_test_vortex", "_test_vortex_tints", "_test_vortex_ready_state", "_test_vortex_currents", "_test_vortex_currents_travel", "_test_current", "_test_current_brace", "_test_canopy", "_test_canopy_plain_jumps", "_test_canopy_guard_leaf", "_test_climbs_physical", "_test_jungle_ladders_physical", "_test_leaf_geometry", "_test_leaf_footing", "_test_caves", "_test_mounds", "_test_vegetation", "_test_vortex_mouths_clear", "_test_vortex_pads_clear_of_plants", "_test_stalkers_in_reeds", "_test_route_audit", "_test_new_areas", "_test_ecosystem", "_test_threat_spread", "_test_music", "_test_opening_audio", "_test_run_clock", "_test_completion_catalog", "_test_completion_frozen", "_test_run_save_file", "_test_run_timer_live", "_test_run_continue", "_test_timer_integrity", "_test_resume_points_safe", "_phase_continue_write", "_phase_continue_read", "_test_upgrades", "_test_quality_title_cap", "_test_ui", "_test_menus_no_scroll", "_test_menu_touch", "_test_primary_buttons", "_test_tier2_rules", "_test_tier2_world", "_test_ambient_fish", "_test_parasite_never_buried", "_test_tier2_loadout", "_test_aquarium_experiences", "_test_aquarium_polish", "_test_all_clear", "_test_treasure_unlock", "_test_treasure_generation", "_test_treasure_play", "_phase_treasure_stress", "_phase_live_fish_diag", "_phase_cpu_probe", "_phase_incline_survey", "_phase_loco_diag", "_phase_crawl_trace", "_phase_mouth_crawls", "_phase_organic_trace", "_phase_organic_cost", "_test_skilltree_graph", "_test_progress_store", "_test_starfish_spots", "_test_starfish_pickup", "_test_skill_ui", "_test_quick_gill", "_test_lunge_skills", "_test_burst_skills", "_test_glide_control", "_test_glide_transfers", "_test_mote_magnet", "_phase_starfish_survey", "_phase_starfish_sweep", "_phase_glide_probe", "_test_plants_terminal_growth", "_test_sea_fan_depth", "_test_repopulation", "_phase_repop_survey", "_phase_repop_sim", "_test_aquarium_gill", "_phase_aq_nav", "_test_tutorials_and_title", "_test_onb_progress", "_test_onb_owner_save", "_test_onb_per_run", "_test_onb_toggle", "_test_onb_intro", "_test_onb_feeding", "_test_onb_parasite", "_test_onb_feed_first", "_test_onb_tunnel", "_test_onb_starfish", "_test_onb_softlock", "_test_onb_guidance", "_test_onb_replay", "_test_onb_relaunch", "_test_onb_restoration_equal", "_test_hard_mode", "_test_hard_mode_save", "_test_polish_a", "_test_leaf_motion", "_test_perf_veg_cull", "_test_veg_stays_put", "_test_death_and_arrival", "_test_pause_ball_progress", "_test_arrival_view", "_test_camera_never_drawn_unsafe", "_test_startup_build_identical", "_phase_world_hash", "_phase_th_bench", "_phase_hard_write", "_phase_hard_read", "_phase_hard_newrun", "_phase_hard_finish", "_phase_hard_sim", "_phase_hard_intervals", "_phase_onb_owner", "_phase_onb_write", "_phase_onb_read", "_phase_onb_kill", "_phase_onb_toggle", "_phase_cohesion_probe", "_test_eel_reach", "_test_parasite_readability"]
+	var registry := ["_test_startup", "_test_ota_and_version", "_test_hag_infra", "_test_launch_update", "_test_mesh_winding", "_test_terrain", "_test_ravines", "_test_rim_fights_clear_of_ooze", "_test_edge_assist", "_test_ooze_bubbles", "_test_view_clearances", "_test_camera_rises_over", "_test_camera_invariant", "_test_ball_view", "_test_juice", "_test_owner_menus_and_players", "_test_profiles_ab", "_phase_profile_write", "_phase_profile_check", "_test_hud_corner", "_test_restore_hints", "_test_spore_blooms", "_test_drawn_back", "_test_dead_area_sim", "_test_home_coherence", "_test_terrain_grounded", "_test_no_floating_platforms", "_test_parasite_locomotion", "_test_parasite_body_and_death", "_test_parasite_combat", "_test_organic_motion", "_test_gill_look", "_test_gill_idles", "_test_gill_colours", "_test_gill_patterns", "_test_tail_whip", "_test_gill_traction", "_test_gill_incline_transitions", "_test_traction_no_shortcuts", "_test_gill_body_follow", "_test_swim_body_follow", "_test_ambient_sway", "_test_placements", "_test_tutorial_route", "_test_sphere_walk", "_test_jump_and_burst", "_test_coyote_and_buffer", "_test_swipe_direction_and_stages", "_test_hard_landing", "_test_food", "_test_food_reach", "_test_food_catchable", "_test_assisted_lunge", "_test_glob_counterplay", "_test_darter_and_burrower", "_test_food_repopulates", "_test_motes", "_test_checkpoint_and_regen", "_test_crumble", "_test_restoration_gates", "_test_retract_gates_gone", "_test_bubble_columns", "_test_restoration_continuity", "_test_health_map", "_test_vortex", "_test_vortex_tints", "_test_vortex_ready_state", "_test_vortex_currents", "_test_vortex_currents_travel", "_test_current", "_test_current_brace", "_test_canopy", "_test_canopy_plain_jumps", "_test_canopy_guard_leaf", "_test_climbs_physical", "_test_jungle_ladders_physical", "_test_leaf_geometry", "_test_leaf_footing", "_test_caves", "_test_mounds", "_test_vegetation", "_test_vortex_mouths_clear", "_test_vortex_pads_clear_of_plants", "_test_stalkers_in_reeds", "_test_route_audit", "_test_new_areas", "_test_ecosystem", "_test_threat_spread", "_test_music", "_test_opening_audio", "_test_run_clock", "_test_completion_catalog", "_test_completion_frozen", "_test_run_save_file", "_test_run_timer_live", "_test_run_continue", "_test_timer_integrity", "_test_resume_points_safe", "_phase_continue_write", "_phase_continue_read", "_test_upgrades", "_test_quality_title_cap", "_test_ui", "_test_menus_no_scroll", "_test_menu_touch", "_test_primary_buttons", "_test_tier2_rules", "_test_tier2_world", "_test_ambient_fish", "_test_parasite_never_buried", "_test_tier2_loadout", "_test_aquarium_experiences", "_test_aquarium_polish", "_test_all_clear", "_test_treasure_unlock", "_test_treasure_generation", "_test_treasure_play", "_phase_treasure_stress", "_phase_live_fish_diag", "_phase_cpu_probe", "_phase_incline_survey", "_phase_loco_diag", "_phase_crawl_trace", "_phase_mouth_crawls", "_phase_organic_trace", "_phase_organic_cost", "_test_skilltree_graph", "_test_progress_store", "_test_starfish_spots", "_test_starfish_pickup", "_test_skill_ui", "_test_quick_gill", "_test_lunge_skills", "_test_burst_skills", "_test_glide_control", "_test_glide_transfers", "_test_mote_magnet", "_phase_starfish_survey", "_phase_starfish_sweep", "_phase_glide_probe", "_test_plants_terminal_growth", "_test_sea_fan_depth", "_test_repopulation", "_phase_repop_survey", "_phase_repop_sim", "_test_aquarium_gill", "_phase_aq_nav", "_test_tutorials_and_title", "_test_onb_progress", "_test_onb_owner_save", "_test_onb_per_run", "_test_onb_toggle", "_test_onb_intro", "_test_onb_feeding", "_test_onb_parasite", "_test_onb_feed_first", "_test_onb_tunnel", "_test_onb_starfish", "_test_onb_softlock", "_test_onb_guidance", "_test_onb_replay", "_test_onb_relaunch", "_test_onb_restoration_equal", "_test_hard_mode", "_test_hard_mode_save", "_test_polish_a", "_test_leaf_motion", "_test_perf_veg_cull", "_test_veg_stays_put", "_test_death_and_arrival", "_test_pause_ball_progress", "_test_arrival_view", "_test_camera_never_drawn_unsafe", "_test_startup_build_identical", "_phase_world_hash", "_phase_th_bench", "_phase_hard_write", "_phase_hard_read", "_phase_hard_newrun", "_phase_hard_finish", "_phase_hard_sim", "_phase_hard_intervals", "_phase_onb_owner", "_phase_onb_write", "_phase_onb_read", "_phase_onb_kill", "_phase_onb_toggle", "_phase_cohesion_probe", "_test_eel_reach", "_test_parasite_readability"]
 	# A --only entry that names nothing is a typo (or a stale substring): fail loudly rather than run nothing.
 	for o in only.split(",", false):
 		if not registry.has(o) and not registry.has("_test_" + o):
@@ -11725,6 +11725,166 @@ func _phase_profile_check() -> void:
 	t.check("%s_untouched_by_the_other" % k, not g.run_save.earned().has(theirs[0]) and par_other.is_alive() and not g.gill.has_star(theirs[1]),
 			"", )
 	t.check("%s_still_gill" % k, GameVersion.CHARACTER_NAME == "Gill" and Settings.haptics, "")
+
+
+## Mote v107 game feel (docs/JUICE.md): it observes and never drives. The same play with it on and
+## off ends identically; it draws nothing from the gameplay random sequence, makes no water push,
+## never delays a reward, never takes control, reads (never sets) his invulnerability, keeps the
+## pearl exactly as it was, emits by time, and its sounds and puffs clean up after themselves.
+func _test_juice() -> void:
+	var b := g.balls[0]
+	var release := _hold_threats(b)
+	var j: Juice = g.juice
+	# 1. On and off: a scripted run (walk, jump, land, stop) ends in exactly the same state.
+	var run := func(on: bool) -> Array:
+		Juice.enabled = on
+		place(0, -12, -130, 0.1, 90)
+		await wait_grounded()
+		p.health = p.max_health
+		p.invuln_t = 0.0
+		var marks := []
+		for f in 150:
+			p.bot_input = Vector2(0, 1) if f < 70 or (f > 100 and f < 120) else Vector2.ZERO
+			if f == 40 or f == 110:
+				Input.action_press("jump")
+			if f == 42 or f == 112:
+				Input.action_release("jump")
+			await t.frames(1)
+			if f % 25 == 0:
+				marks.append([p.global_position.snapped(Vector3.ONE * 0.0001), p.velocity.snapped(Vector3.ONE * 0.0001), p.grounded, p.health])
+		p.bot_input = Vector2.ZERO
+		return marks
+	# (A first run in a process lands 0.1 mm off later ones, juice or not: a warm-up run first, then
+	# on and off are compared, to a millimetre, at every mark.)
+	await run.call(false)
+	var with_juice: Array = await run.call(true)
+	var counts0 := j.counts.duplicate()
+	var without: Array = await run.call(false)
+	Juice.enabled = true
+	var same := with_juice.size() == 6 and without.size() == 6
+	for i in mini(with_juice.size(), without.size()):
+		same = same and (with_juice[i][0] as Vector3).distance_to(without[i][0]) < 0.001 and (with_juice[i][1] as Vector3).distance_to(without[i][1]) < 0.001 \
+				and with_juice[i][2] == without[i][2] and with_juice[i][3] == without[i][3]
+	t.check("juice_never_drives_play", same, "on %s / off %s; juice fired %s" % [str(with_juice[-1]).left(120), str(without[-1]).left(120), counts0])
+	t.check("juice_fires_in_play", int(counts0.get("takeoff", 0)) >= 1 and (int(counts0.get("soft_land", 0)) >= 1 or int(counts0.get("start", 0)) >= 1), str(counts0))
+	# 2. Every juice event: no gameplay random number drawn, no water push made.
+	place(0, -12, -130, 0.1, 90)
+	await wait_grounded()
+	seed(4242)
+	var expect := [randi(), randi(), randi()]
+	seed(4242)
+	var imp0 := WaterFX.inst.impulses_made
+	j.on_soft_land(6.0)
+	j._on_jumped()
+	j.on_arrival()
+	j.on_vortex_enter()
+	j.on_ball_restored(b)
+	var pearl_u = null
+	for u in b.upgrades:
+		pearl_u = u
+		break
+	if pearl_u != null:
+		j.on_upgrade(pearl_u, "pearl")
+		j.on_upgrade(pearl_u, "health")
+	p.edge_stops += 1
+	j._update_edge()
+	j._look_rest = 0.0
+	j._look_scan = 0.0
+	j._update_look(0.3)
+	j._end_look()
+	j._update_steps(1.0)
+	var got := [randi(), randi(), randi()]
+	# (And the code itself: no bare randf()/randi() in the game-feel layer or its puff helpers; a
+	# scripted check of the source, since frames of ordinary play draw gameplay numbers of their own.)
+	var bare := RegEx.create_from_string("(?<![\\w.])rand[fi](_range)?\\(")
+	var src := FileAccess.get_file_as_string("res://scripts/core/juice.gd")
+	var wsrc := FileAccess.get_file_as_string("res://scripts/world/water_fx.gd")
+	var helpers := wsrc.substr(wsrc.find("func silt_kick"), wsrc.find("func burst_fx") - wsrc.find("func silt_kick"))
+	var bare_n := bare.search_all(src).size() + bare.search_all(helpers).size()
+	p.invuln_t = 0.6
+	await t.frames(20)
+	t.check("juice_draws_no_gameplay_random", got == expect and bare_n == 0, "%s vs %s; bare calls %d" % [got, expect, bare_n])
+	t.check("juice_makes_no_water_push", WaterFX.inst.impulses_made == imp0, "%d pushes during juice-only events" % (WaterFX.inst.impulses_made - imp0))
+	# 3. The 100% moment never takes control or the camera.
+	t.check("juice_celebration_never_takes_control", g.cinematic == "" and p.controls_enabled and p.state == "normal" and not g.cam.cinematic and g.state == "play",
+			"cinematic '%s', controls %s" % [g.cinematic, p.controls_enabled])
+	# 4. Invulnerability: read, never set; the shimmer follows it and goes with it.
+	var inv0 := p.invuln_t
+	t.check("juice_reads_invulnerability", p.model.invuln > 0.5 and inv0 < 0.6 and inv0 > 0.0, "shimmer %.2f, invuln %.2f" % [p.model.invuln, inv0])
+	p.invuln_t = 0.0
+	await t.frames(15)
+	t.check("juice_shimmer_ends_with_it", p.model.invuln == 0.0 and absf(float(p.model._skin_mats[0].get_shader_parameter("glow")) - 0.08) < 0.005, "%.2f" % p.model.invuln)
+	# 5. Eating: the heal is applied at once; the food is out of play at once, its picture gone soon.
+	p.health = maxi(1, p.max_health - 1)
+	var h0 := p.health
+	var f := Food.new()
+	var d := b.up_at(p.global_position + p.facing * 1.0)
+	f.setup(b, Food.Type.DRIFTER, b.surface_point(d, 0.6), d, 25.0)
+	b.add_child(f)
+	b.foods.append(f)
+	await t.frames(2)
+	g._eat(p, f)
+	var at_once := p.health == h0 + 1 and not b.foods.has(f) and f.state == "eaten" and not f.is_catchable()
+	await t.seconds(0.3)
+	t.check("juice_eating_never_delays_the_reward", at_once and not is_instance_valid(f), "healed at once %s, freed %s" % [at_once, not is_instance_valid(f)])
+	# 6. The pearl: gameplay exactly as before (a full refill, the same maximum).
+	if pearl_u != null:
+		p.health = 1
+		var mx := p.max_health
+		var was_kind = pearl_u.get("kind")
+		pearl_u.set("kind", "pearl")
+		g.upgrade_collected(pearl_u)
+		pearl_u.set("kind", was_kind)
+		t.check("juice_pearl_gameplay_unchanged", p.health == p.max_health and p.max_health == mx, "%d/%d (max was %d)" % [p.health, p.max_health, mx])
+	# 7. Emission by time: 30 and 120 frames a second give the same density.
+	var a30 := 0
+	var a120 := 0
+	for i in 30:
+		a30 += j.emit_count("test30", 1.0 / 30.0, 36.0)
+	for i in 120:
+		a120 += j.emit_count("test120", 1.0 / 120.0, 36.0)
+	t.check("juice_emission_frame_rate_independent", absi(a30 - a120) <= 1 and absi(a30 - 36) <= 1, "%d at 30 fps, %d at 120 fps (want 36)" % [a30, a120])
+	# 8. Sounds: a same-frame duplicate is dropped; a tail swipe's hit replaces the generic one.
+	var sk0 := Sfx.skipped
+	Sfx.play("swipe_hit", p.global_position)
+	Sfx.play("swipe_hit", p.global_position)
+	var dedup := Sfx.skipped == sk0 + 1
+	await t.frames(1)
+	Sfx.play("hit", p.global_position)
+	var hit_p: AudioStreamPlayer3D = Sfx.inst._frame_played["hit"]
+	Sfx.play("swipe_hit", p.global_position)
+	t.check("juice_sounds_never_doubled", dedup and not hit_p.playing, "dedup %s, generic hit stopped %s" % [dedup, not hit_p.playing])
+	# 9. Puffs: optional ones never overwrite live ones; debris retires.
+	var w := WaterFX.inst
+	for i in WaterFX.PUFF_POOL + 20:
+		w._spawn_puff(p.global_position, Vector3.ZERO, 5.0, 0.05, Color.WHITE)
+	var dropped0 := w.puffs_dropped
+	w.silt_kick(p.global_position, p.up, p.facing, 4)
+	t.check("juice_puffs_optional_when_pool_full", w.puffs_dropped == dropped0 + 4, "%d dropped" % (w.puffs_dropped - dropped0))
+	for i in WaterFX.PUFF_POOL:
+		w._puffs[i][2] = 0.0
+	w.add_debris(p.global_position + p.up * 2.0, Vector3.ZERO)
+	var di := (w._debris_next - 1 + WaterFX.DEBRIS_POOL) % WaterFX.DEBRIS_POOL
+	w._debris[di][2] = WaterFX.DEBRIS_LIFE - 0.01
+	await t.frames(3)
+	t.check("juice_debris_retires", w._debris[di] == null, "")
+	# 10. Glances never turn him: his facing is the player's alone.
+	var food2 := Food.new()
+	var d2 := b.up_at(p.global_position + p.facing * 2.5)
+	food2.setup(b, Food.Type.DRIFTER, b.surface_point(d2, 0.6), d2, 25.0)
+	b.add_child(food2)
+	b.foods.append(food2)
+	j._look_rest = 0.0
+	j._look_scan = 0.0
+	var face0 := p.facing
+	var looked := false
+	for i in 40:
+		await t.frames(1)
+		looked = looked or p.model.has_look
+	t.check("juice_glance_is_only_a_glance", looked and p.facing.angle_to(face0) < 0.001, "looked %s, facing moved %.4f rad" % [looked, p.facing.angle_to(face0)])
+	b.foods.erase(food2)
+	food2.queue_free()
+	release.call()
 
 
 func _test_ball_view() -> void:

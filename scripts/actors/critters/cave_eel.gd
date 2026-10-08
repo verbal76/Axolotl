@@ -467,6 +467,9 @@ func hit(stages: int, _from_pos: Vector3) -> bool:
 		return false
 	hp -= stages
 	WaterFX.inst.sparkle(mouth + _dir * ext, Color(0.8, 1.0, 0.7, 0.9), 10, 1.2, 0.06, 0.6)
+	# (v107: its own hit sound: a startled burst of bubbles.)
+	if Juice.enabled:
+		Sfx.play("eel_bubbles", mouth + _dir * ext, -5.0, 0.06, 1.3)
 	if hp <= 0:
 		defeated = true
 		ext = 0.0

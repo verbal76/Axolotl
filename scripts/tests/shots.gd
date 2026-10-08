@@ -397,6 +397,48 @@ func run(runner) -> void:
 				g.player.place(st[0], st[1], st[2])
 				g.cam.snap_behind()
 				await _perf_view("%s %s" % [st[3], step])
+	if only == "juice":
+		# v107 game feel: the soft-landing squash at its peak, the gulp, the invulnerability shimmer,
+		# a pearl's own colour streaming in, the batted glob's colour, and the 100% moment's line.
+		var p: Axolotl = g.player
+		p.invuln_t = 0.0
+		var b: MossBall = g.balls[0]
+		var d0 := MossBall.dir_ll(-12, -130)
+		p.place(b, b.surface_point(d0, 0.1), -MossBall.frame_at(d0, 90.0).z)
+		await t.seconds(0.8)
+		var up := p.up
+		var side := p.facing.cross(up).normalized()
+		var close := func() -> void:
+			_close(g, p.global_position + up * 0.9 + side * 2.1 + p.facing * 1.2, p.global_position + up * 0.3, up)
+		close.call()
+		await t.seconds(0.4)
+		await t.shot("juice_0_rest")
+		g.juice.on_soft_land(7.0)
+		await t.seconds(0.06)
+		await t.shot("juice_1_soft_land_squash")
+		await t.seconds(0.5)
+		p.model.gulp(1.0)
+		await t.seconds(0.06)
+		await t.shot("juice_2_gulp")
+		await t.seconds(0.5)
+		p.invuln_t = 1.2
+		await t.seconds(0.25)
+		await t.shot("juice_3_invuln_shimmer")
+		p.invuln_t = 0.0
+		await t.seconds(0.4)
+		WaterFX.inst.wisp(p.global_position + p.facing * 3.0 + up * 0.6, p.body_center(), 0.45, Juice.PEARL, 12)
+		WaterFX.inst.sparkle(p.body_center(), Juice.upgrade_colour("pearl"), 30, 2.0, 0.08, 1.4)
+		await t.seconds(0.3)
+		await t.shot("juice_4_pearl")
+		await t.seconds(1.2)
+		WaterFX.inst.silt_kick(p.global_position, up, -p.facing, 5, 0.9)
+		p.model.takeoff()
+		await t.seconds(0.05)
+		await t.shot("juice_5_takeoff_kick")
+		await t.seconds(1.0)
+		g.juice.on_ball_restored(b)
+		await t.seconds(0.9)
+		await t.shot("juice_6_ball_restored")
 	if only == "creatures":
 		# The creature/projectile pass (2026-10-07): the edible shrimp, the reed stalker prowling and
 		# rearing, and a spitter's glob in flight, each close up.

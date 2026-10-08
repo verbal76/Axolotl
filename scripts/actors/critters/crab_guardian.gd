@@ -355,6 +355,9 @@ func hit(stages: int, from_pos: Vector3) -> bool:
 		return false
 	hp -= stages
 	WaterFX.inst.sparkle(global_position + ball.up_at(global_position) * 0.4, Color(1.0, 0.7, 0.5, 0.9), 10, 1.4, 0.06, 0.6)
+	# (v107: its own hit sound: a shell's clack, higher.)
+	if Juice.enabled:
+		Sfx.play("crab_clack", global_position, -4.0, 0.06, 1.25)
 	if hp <= 0:
 		defeated = true
 		Game.inst.critter_defeated(self)

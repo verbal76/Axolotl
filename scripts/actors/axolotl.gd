@@ -959,6 +959,9 @@ func _on_land(impact: float, r: float) -> void:
 			WaterFX.inst.impulse(global_position, 0.6, 0.3)
 		Sfx.play("land_soft", global_position, -8.0 + minf(impact, 8.0))
 		landed.emit("soft")
+		# (v107: the body's squash and a small silt ring; presentation only.)
+		if Juice.inst != null:
+			Juice.inst.on_soft_land(impact)
 
 
 func _superhero_landing(extreme: bool) -> void:

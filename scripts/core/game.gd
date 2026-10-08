@@ -83,6 +83,10 @@ var repop: Repopulation
 var _repop_t := 0.0
 ## Gentle help finding what is left in an area he has searched a while (RestoreHints).
 var hints := RestoreHints.new()
+var juice: Juice
+var _applied_g := -1.0
+var _apply_t := 0.0
+var _applied_state := ""
 ## Dead areas (owner, 2026-10-06): an outstanding parasite drawn back to a roaming, stuck Gill.
 var drawn := DrawnBack.new()
 ## Toxic spore blooms on the empty ground (owner, 2026-10-06; SporeBlooms).
@@ -238,6 +242,9 @@ func _build_world() -> void:
 	add_child(sfx)
 	wake = Wake.new()
 	add_child(wake)
+	# v107 game feel (Juice): presentation that observes play and never drives it.
+	juice = Juice.new()
+	add_child(juice)
 	t2 = Tier2Combat.new()
 	add_child(t2)
 	audio = AudioDirector.new()
@@ -271,6 +278,7 @@ func _build_world() -> void:
 
 	player = Axolotl.new()
 	add_child(player)
+	juice.attach(self, player)
 	var b0 := balls[0]
 	player.place(b0, b0.surface_point(b0.start_dir, 0.1), -MossBall.frame_at(b0.start_dir, 180.0).z)
 	player.died.connect(_on_player_died)
@@ -820,7 +828,9 @@ func _earn(id: String) -> bool:
 func _on_restoration_changed(ball: MossBall) -> void:
 	if not ball.completed:
 		return
-	_earn(Completion.ball_restored_id(ball.index))
+	# (The first time this run only: v107's celebration observes the completion it does not make.)
+	if _earn(Completion.ball_restored_id(ball.index)) and juice != null:
+		juice.on_ball_restored(ball)
 	for b in balls:
 		if not b.completed:
 			return
@@ -1109,7 +1119,14 @@ func _update_restoration(dt: float) -> void:
 	g_target = total / balls.size()
 	# Continuous, gradual: tiny actions make tiny changes, never tiers.
 	g_disp = move_toward(g_disp, g_target, dt * 0.012)
-	aquarium.apply(g_disp)
+	# (v107 hygiene: apply() is a pure function of g_disp: written when it moves, else twice a second
+	# so anything that borrowed the environment meanwhile is set back as before.)
+	_apply_t -= dt
+	if g_disp != _applied_g or _apply_t <= 0.0 or state != _applied_state:
+		_applied_g = g_disp
+		_applied_state = state
+		_apply_t = 0.5
+		aquarium.apply(g_disp)
 	audio.update_mix(ball_disp, g_disp, player.ball.index)
 
 
@@ -1351,12 +1368,16 @@ func _eat(p: Axolotl, f: Food) -> void:
 	p.heal(amount)
 	stats["eaten"][f.type] += 1
 	WaterFX.inst.sparkle(f.catch_point(), Color(1.0, 0.8, 0.6, 0.8), 8, 1.0, 0.05, 0.6)
-	Sfx.play("eat_big" if f.type == Food.Type.BURROWER else "eat", p.global_position)
+	var es: Array = Juice.eat_sound(f)
+	Sfx.play(es[0], p.global_position, 0.0, 0.08, es[1])
 	p.model.happy_t = 0.0 if f.type == Food.Type.BURROWER else p.model.happy_t
 	p.ball.foods.erase(f)
 	if food != null:
 		food.on_eaten(f)
-	f.eaten()
+	# (v107: the heal above is already applied; this only shows the gulp and draws the food in.)
+	if juice != null:
+		juice.on_eat(f)
+	f.eaten(p.head_position() if Juice.enabled else Vector3.INF)
 	_hide_prompt("lunge", true)
 	# (The healing above is the real one; the lesson only paces how the frond is SHOWN coming back.)
 	onboarding.on_food_eaten(before)
@@ -1446,8 +1467,11 @@ func upgrade_collected(u: Node) -> void:
 	else:
 		player.add_max_health()
 	player.model.happy_t = 0.0
-	WaterFX.inst.sparkle(player.body_center(), Color(0.4, 1.0, 0.9, 1.0), 30, 2.0, 0.08, 1.4)
-	Sfx.play("upgrade", player.global_position)
+	WaterFX.inst.sparkle(player.body_center(), Juice.upgrade_colour(str(u.get("kind"))), 30, 2.0, 0.08, 1.4)
+	if not (Juice.enabled and u.get("kind") == "pearl"):
+		Sfx.play("upgrade", player.global_position)
+	if juice != null:
+		juice.on_upgrade(u, str(u.get("kind")))
 	Settings.haptic("heavy")
 
 
@@ -1720,6 +1744,8 @@ func _start_cinematic(kind: String, data: Dictionary) -> void:
 			player.velocity = Vector3.ZERO
 			cam.cinematic = true
 			Sfx.play("vortex_enter", player.global_position)
+			if juice != null:
+				juice.on_vortex_enter()
 			audio.travel_whoosh(true)
 		"regen":
 			player.state = "dead"
@@ -1817,8 +1843,11 @@ func _cine_travel(dt: float) -> void:
 	player.model.surf_bank = bank * 0.6
 	player.model.grounded = false
 	player.model.speed = 1.3
-	if randf() < 0.6:
-		WaterFX.inst._spawn_puff(pos + Vector3(randf() - 0.5, randf() - 0.5, randf() - 0.5) * 3.0, -fwd * 12.0, 0.4, 0.06, Color(0.8, 0.95, 1.0, 0.6), 0.5)
+	# (v107: timed, about 36 a second whatever the frame rate, and on the cosmetic generator: it used
+	# to roll the gameplay randf() once a frame.)
+	var fx := WaterFX._fx_rng
+	for i in Juice.emit_now("travel", get_process_delta_time(), 36.0):
+		WaterFX.inst._spawn_puff(pos + Vector3(fx.randf() - 0.5, fx.randf() - 0.5, fx.randf() - 0.5) * 3.0, -fwd * 12.0, 0.4, 0.06, Color(0.8, 0.95, 1.0, 0.6), 0.5)
 	# Camera: from the middle of the spiral, so he circles round it through the jets. Behind as it
 	# grabs him, then alongside, then ahead to see his face, then behind again for the landing.
 	var mid := axis_p.lerp(pos, 0.25)
@@ -1946,6 +1975,8 @@ func _cine_land(dt: float) -> void:
 		_end_cinematic()
 		_arrived(d["dest"])
 		save_run()
+		if juice != null:
+			juice.on_arrival()
 
 
 ## Owner, 2026-10-01: he lands in the ravine's ooze (RavineOoze) and sinks slowly into it until he
@@ -1961,7 +1992,7 @@ func _cine_ravine() -> void:
 	var k := minf(1.0, cine_t / OOZE_SINK_S)
 	player.model.position.y = -OOZE_SINK_M * k * k * (3.0 - 2.0 * k)
 	player.model.dissolve = smoothstep(0.65, 1.0, k)
-	if int(cine_t * 30.0) % 4 == 0:
+	for i in Juice.emit_now("ooze", get_process_delta_time(), 15.0):
 		WaterFX.inst.sparkle(player.global_position + player.up * RavineOoze.LEVEL, RavineOoze.BUBBLE_COLS[int(cine_t * 7.0) % 2], 2, 0.6, 0.08, 0.7)
 	if cine_t >= OOZE_SINK_S:
 		# Gone: from here it is the same journey to the checkpoint as any death.
@@ -1982,7 +2013,7 @@ func _cine_regen() -> void:
 	var dest_pos: Vector3 = target[1]
 	if cine_t < 0.8:
 		player.model.dissolve = cine_t / 0.8
-		if int(cine_t * 30.0) % 3 == 0:
+		for i in Juice.emit_now("regen", get_process_delta_time(), 20.0):
 			WaterFX.inst.sparkle(player.body_center(), Color(0.45, 1.0, 0.85, 0.9), 4, 1.2, 0.07, 0.8)
 		cam.cine_pos = _regen_from + player.up * 3.0 - player.facing * 4.0
 		cam.cine_look = _regen_from

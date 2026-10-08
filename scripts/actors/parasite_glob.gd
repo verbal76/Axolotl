@@ -52,7 +52,7 @@ func _ready() -> void:
 		_blob_mesh.rings = 10
 	_mat = ShaderMaterial.new()
 	_mat.shader = preload("res://shaders/glob.gdshader")
-	_mat.set_shader_parameter("seed", randf() * 10.0)
+	_mat.set_shader_parameter("seed", WaterFX._fx_rng.randf() * 10.0)
 	var core := MeshInstance3D.new()
 	core.mesh = _blob_mesh
 	core.scale = Vector3.ONE * RADIUS * 1.25
@@ -133,6 +133,11 @@ func deflect(p: Axolotl) -> void:
 	_squash = 1.0
 	_burst(5, 1.2)
 	Sfx.play("swipe_hit", global_position)
+	# (v107: once batted it is Gill's: a clear aqua, so it reads as no longer a threat to him.
+	# Its path, speed, damage and collision are exactly as before.)
+	if Juice.enabled and _mat != null:
+		_mat.set_shader_parameter("core_col", Color(0.75, 1.0, 0.95))
+		_mat.set_shader_parameter("rim_col", Color(0.35, 0.9, 1.0))
 
 
 func _splat() -> void:
@@ -152,7 +157,8 @@ func _splat() -> void:
 ## A few slimy droplets flung out (WaterFX puffs: they fade by themselves, nothing accumulates).
 func _burst(n: int, speed: float) -> void:
 	for i in n:
-		var d := Vector3(randf() - 0.5, randf() - 0.5, randf() - 0.5).normalized()
+		var fx := WaterFX._fx_rng
+		var d := Vector3(fx.randf() - 0.5, fx.randf() - 0.5, fx.randf() - 0.5).normalized()
 		WaterFX.inst._spawn_puff(global_position + d * RADIUS, d * speed, 0.35, 0.05, Color(0.78, 1.0, 0.3, 0.75), 0.45)
 
 
