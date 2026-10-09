@@ -45,5 +45,6 @@ release gates (tests, baked export, logo, signing, verification) to save minutes
 
 ## Native freeze
 
-`project.godot`, `export_presets.cfg` and `scripts/boot/*` are frozen (runtime r5);
+`project.godot`, `export_presets.cfg` and `scripts/boot/*` are frozen (runtime r6, the 2026-10-09 playtester
+APK with the neutral native launch frame; r5 = Android build 22 before it);
 `python3 tools/ota_runtime.py --check` must print OTA-compatible.

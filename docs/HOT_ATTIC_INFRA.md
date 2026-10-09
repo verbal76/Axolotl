@@ -136,6 +136,11 @@ input blocked, layer 102 over the loading screen. The world builds behind it, so
   `splash_screen/*` set explicitly (`icon=""`, `background_color` black). It cannot ship by OTA (the
   APK draws it before an OTA pack is mounted) and the native layer is frozen: **HELD by the owner
   (2026-10-04: native stays r5, OTA only)**; when approved: make it, `tools/ota_runtime.py --bump`, build, install over r5.
+  **APPLIED in runtime r6 (owner, 2026-10-09: new playtester APK baseline, "Yes: r6 with launch fix"):**
+  `boot_splash/show_image=false`, `boot_splash/bg_color` black, Android preset `splash_screen/icon=""` and
+  `splash_screen/background_color` black. `hag_native_launch_neutral_before_studio_splash` passes with no
+  exception on r6. r5 installs (build 22) keep v108 and see later OTAs as "native update required" until
+  the r6 APK is installed over them.
 - **Recurrence guard:** `StudioSplash.native_launch_problems()` + test
   `hag_native_launch_neutral_before_studio_splash` read `project.godot`, the Android export preset
   and the launch icon's pixels. r5 is the one recorded exception (exactly its two known boot-splash
