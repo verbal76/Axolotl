@@ -97,6 +97,8 @@ class Crumble extends StaticBody3D:
 			_t = 0.0
 
 	func _physics_process(dt: float) -> void:
+		if Game.paused_for_aquarium():
+			return
 		_t += dt
 		match _state:
 			"shaking":
@@ -171,7 +173,7 @@ class FlexLeaf extends AnimatableBody3D:
 			_pending_rebound = clampf(impact * 0.55, 5.0, 11.0)
 			_rebound_player = player
 		if impact > 9.0:
-			for p in ball.parasites:
+			for p in ball.hostiles():
 				if p.standing_on == self and p.is_alive():
 					var up := ball.up_at(p.global_position)
 					var out: Vector3 = (p.global_position - global_position)
@@ -236,6 +238,8 @@ class SwayLeaf extends AnimatableBody3D:
 		add_child(leaf)
 
 	func _physics_process(dt: float) -> void:
+		if Game.paused_for_aquarium():
+			return
 		_t += dt
 		var a := sin(_t * TAU * _freq + _phase) * _amp
 		global_transform = Transform3D(_base.basis * Basis(Vector3.RIGHT, a), _base.origin)
@@ -280,7 +284,8 @@ class Upgrade extends Node3D:
 		_leaf.position = Vector3(0, 0.6, 0)
 		add_child(_leaf)
 		var l := OmniLight3D.new()
-		l.light_color = Color(0.4, 1.0, 0.9)
+		# (v107: a pearl's light is its own warm peach, not the health upgrade's aqua.)
+		l.light_color = Color(1.0, 0.8, 0.66) if kind == "pearl" else Color(0.4, 1.0, 0.9)
 		l.omni_range = 4.0
 		l.light_energy = 1.2
 		l.position = Vector3(0, 0.7, 0)

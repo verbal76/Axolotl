@@ -120,6 +120,13 @@ static func _plant(ball: MossBall, family: String, dirs: Array[Vector3], rng: Ra
 	var sc: Array = f["scale"]
 	for d in dirs:
 		var s := rng.randf_range(sc[0], sc[1])
+		# (Never on a vortex's landing pad. The scale is drawn first so the other plants' sizes and
+		# turns stay exactly as they were.)
+		if ball.on_vortex_pad(d):
+			rng.randf()
+			rng.randf_range(0.85, 1.15)
+			rng.randi()
+			continue
 		var bs := MossBall.frame_at(d, rng.randf() * 360.0).scaled(Vector3(s, s * rng.randf_range(0.85, 1.15), s))
 		lists[rng.randi() % 2].append(Transform3D(bs, d * (ball.radius + ball.terrain_height(d) - 0.05)))
 	var out := []
@@ -127,15 +134,9 @@ static func _plant(ball: MossBall, family: String, dirs: Array[Vector3], rng: Ra
 		var list: Array = lists[v]
 		if list.is_empty():
 			continue
-		var mm := MultiMesh.new()
-		mm.transform_format = MultiMesh.TRANSFORM_3D
-		mm.mesh = variants[v]
-		mm.instance_count = list.size()
-		for j in list.size():
-			mm.set_instance_transform(j, list[j])
 		var mmi := MultiMeshInstance3D.new()
 		mmi.name = "Veg_%s" % family
-		mmi.multimesh = mm
+		ball.fill_chunk(mmi, variants[v], list)
 		mmi.material_override = mat
 		mmi.cast_shadow = GeometryInstance3D.SHADOW_CASTING_SETTING_OFF
 		mmi.visibility_range_end = f["vis"]
@@ -149,3 +150,40 @@ static func _plant(ball: MossBall, family: String, dirs: Array[Vector3], rng: Ra
 		ball.add_vegetation(mmi)
 		out.append(mmi)
 	return out
+
+
+# --- Ambient motion (CPU mirrors of the shaders, for the tests) -------------------------------
+
+## The ambient part of a vegetation plant's bend (shaders/vegetation.gdshader: sway, swell and the
+## blade's own flutter; not the current, impulses or wake) at time `t`, for a plant rooted at `base`
+## (world) on a ball whose centre is `centre`, for the blade whose vertex tint is `tint_r`.
+## `hlt` is the moss health there. Keep in step with the shader.
+static func ambient_bend(base: Vector3, centre: Vector3, tint_r: float, t: float, sway: float, sway_speed: float, hlt := 1.0) -> Vector3:
+	var up := (base - centre).normalized()
+	var hsh := _fract(sin(base.dot(Vector3(12.9898, 78.233, 37.719))) * 43758.5453)
+	var ph := hsh * TAU
+	var pace := sway_speed * lerpf(0.8, 1.25, _fract(hsh * 7.31))
+	var side := up.cross(Vector3(0.31 + hsh, 0.87, 0.42 - hsh).normalized()).normalized()
+	var side2 := up.cross(side)
+	var amp := lerpf(0.75, 1.25, _fract(hsh * 13.7))
+	var gust := 0.8 + 0.2 * sin(base.dot(Vector3(0.21, 0.17, 0.23)) - t * 0.45 + hsh * 2.5)
+	var h := lerpf(0.35, 1.0, hlt)
+	var bend := (side * sin(t * pace + ph) + side2 * cos(t * pace * 0.73 + ph * 1.7) * 0.5) * sway * amp * h * gust
+	var bph := _fract(tint_r * 41.3) * TAU + ph
+	bend += (side * sin(t * pace * 1.7 + bph) + side2 * cos(t * pace * 1.35 + bph * 1.3)) * sway * 0.45 * h
+	return bend
+
+
+## A platform or ladder leaf's ambient flap at its tip (shaders/plant.gdshader, leaf_data) at time
+## `t`: along the leaf's up, in metres. `leaf_ph` is its CUSTOM0.w (MeshLib.leaf_phase), `node_at`
+## the origin of the mesh it is in. Keep in step with the shader.
+static func leaf_flutter(leaf_ph: float, node_at: Vector3, t: float, flutter: float, speed: float) -> float:
+	var node_ph := _fract(sin(node_at.dot(Vector3(12.9898, 78.233, 37.719))) * 43758.5453)
+	var ph := _fract(leaf_ph + node_ph)
+	var pace := speed * lerpf(0.75, 1.3, _fract(ph * 7.31))
+	var amp := flutter * lerpf(0.6, 1.25, _fract(ph * 3.17))
+	return (sin(t * pace + ph * TAU) * 0.75 + sin(t * pace * 2.37 + ph * 17.1) * 0.25) * amp
+
+
+static func _fract(x: float) -> float:
+	return x - floorf(x)

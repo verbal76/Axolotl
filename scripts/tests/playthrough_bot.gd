@@ -13,6 +13,9 @@ var t0 := 0.0
 var sim_time := 0.0
 var timeline: Array = []
 var stuck_events := 0
+## Where each stuck recovery happened: "ball N (lat, lon)" -> count (cohesion audit, 2026-10-02:
+## a spot many recoveries share is a candidate terrain snag, not just the bot's routing).
+var stuck_at := {}
 var failures: Array = []
 var _stick := Vector2.ZERO
 var _shots := true
@@ -40,6 +43,91 @@ func run(runner) -> void:
 		t.check("debug_reached_ball1", p.ball == g.balls[0], "")
 		_report()
 		return
+	if Settings.test_args.get("start", "") == "trapprobe":
+		# Debug: can he be held somewhere near --at=x,y,z on --ball=N? Every grid point within
+		# --r m: dropped there, then the stick held each way for 1 s and a jump; points where he
+		# moves under 0.5 m whichever way he is pushed are reported.
+		g.start_play(true)
+		var tb := g.balls[int(Settings.test_args.get("ball", "7")) - 1]
+		var at_s := str(Settings.test_args.get("at", "-172,-5,55")).split(",")
+		var c0 := Vector3(float(at_s[0]), float(at_s[1]), float(at_s[2]))
+		var rr := float(Settings.test_args.get("r", "2.5"))
+		var stp := float(Settings.test_args.get("step", "0.4"))
+		var cu := tb.up_at(c0)
+		var cf := MossBall.frame_at(cu, 0.0)
+		g.audio.set_ball(tb.index, false)
+		p.invuln_t = 99999.0
+		var trapped := 0
+		var n := 0
+		var x := -rr
+		while x <= rr + 0.001:
+			var z := -rr
+			while z <= rr + 0.001:
+				if Vector2(x, z).length() <= rr:
+					var q := tb.surface_point(tb.up_at(c0 + cf.x * x + cf.z * z), 0.35)
+					p.place(tb, q, cf.z)
+					p.velocity = Vector3.ZERO
+					await wait(0.4)
+					var start := p.global_position
+					var fl: Object = p._floor_collider()
+					var most := 0.0
+					var ndir := int(Settings.test_args.get("dirs", "4"))
+					for k in ndir:
+						p.place(tb, start, cf.z)
+						p.velocity = Vector3.ZERO
+						await tick()
+						set_stick(stick_for(cf.z.rotated(cu, TAU * k / ndir)))
+						await wait(1.0)
+						most = maxf(most, p.global_position.distance_to(start))
+					set_stick(Vector2.ZERO)
+					p.place(tb, start, cf.z)
+					p.velocity = Vector3.ZERO
+					await tick()
+					await press("jump")
+					await wait(1.0)
+					most = maxf(most, p.global_position.distance_to(start))
+					n += 1
+					if Settings.test_args.has("verbose"):
+						t.log_line("probe point %s alt %.2f floor %s moved at most %.2f" % [str(start), tb.altitude(start), fl, most])
+					if most < 0.5:
+						trapped += 1
+						t.log_line("TRAP at %s (grid %.1f,%.1f) alt %.2f floor %s moved at most %.2f" % [str(start), x, z, tb.altitude(start), fl, most])
+				z += stp
+			x += stp
+		t.log_line("TRAPPROBE %d of %d points held" % [trapped, n])
+		_report()
+		return
+	if Settings.test_args.get("start", "") == "vortexrace":
+		# Regression (backtrack_to_ball1, 2026-09-29): the ride through a vortex starts while the
+		# walk to its mouth is busy elsewhere (here: forced from 30 m off), so the walk never sees
+		# him at the mouth. He must still end up on the far ball and stay there.
+		g.start_play(true)
+		var rb := g.balls[1]
+		var rv: Vortex = g.balls[0].vortex_out
+		rv.connected = true
+		var rm: Vector3 = rv.mouth_pos(true)
+		var ru := rb.up_at(rm)
+		var off := MossBall.frame_at(ru, 0).x * 30.0
+		p.place(rb, rb.surface_point(rb.up_at(rm + off), 0.3), -off)
+		g.audio.set_ball(1, false)
+		await wait(1.0)
+		_test_busy = 12.0
+		var walk := {"done": false, "ok": false}
+		var go := func():
+			walk["ok"] = await goto(func(): return rv.mouth_pos(true), 0.3, 90.0, rv)
+			walk["done"] = true
+		go.call()
+		await wait(1.0)
+		g._start_cinematic("travel", {"v": rv, "reverse": true})
+		var waited := 0.0
+		while not walk["done"] and waited < 95.0:
+			await wait(0.5)
+			waited += 0.5
+		await wait(15.0)
+		t.check("vortexrace_walk_ends_with_the_ride", walk["done"] and walk["ok"] and waited < 25.0, "done %s ok %s after %.1f s" % [walk["done"], walk["ok"], waited])
+		t.check("vortexrace_stays_on_far_ball", p.ball == g.balls[0], "on ball %d" % (p.ball.index + 1))
+		_report()
+		return
 	if Settings.test_args.get("start", "") == "b2vortex":
 		# Debug scenario: from moss ball #2's cave entrance to the vortex toward #3.
 		g.start_play(true)
@@ -61,6 +149,7 @@ func run(runner) -> void:
 		var pb := g.balls[int(Settings.test_args.get("ball", "3")) - 1]
 		var dd := MossBall.dir_ll(float(Settings.test_args.get("lat", "0")), float(Settings.test_args.get("lon", "0")))
 		var top := pb.surface_point(dd, 20.0)
+		t.log_line("probe: terrain %.2f m above the base sphere, ravine cut %.2f m ('%s'), %d hills, %d ravines" % [pb.terrain_height(dd), pb.ravine_carve(dd), pb.ravine_at(dd), pb.hills.size(), pb.carves.size()])
 		var space := g.get_world_3d().direct_space_state
 		var excl: Array[RID] = []
 		for k in 8:
@@ -119,7 +208,7 @@ func run(runner) -> void:
 		g.start_play(true)
 		for b in g.balls:
 			for c in b.critters:
-				if c is CaveEel:
+				if c is CaveEel and str(Settings.test_args.get("eel", (c as CaveEel).threat_id)) in (c as CaveEel).threat_id:
 					# Outside, beyond the eel's cave (the 100% phase arrives from elsewhere).
 					var ch: Dictionary = {}
 					for h in (b.get_meta("builder") as LevelBuilder).bot_hints:
@@ -128,9 +217,109 @@ func run(runner) -> void:
 					var out: Vector3 = ch["entry"] + ((ch["entry"] as Vector3) - (ch["door"] as Vector3)).normalized() * 9.0
 					p.place(b, b.surface_point(b.up_at(out), 0.3), Vector3.FORWARD)
 					g.audio.set_ball(b.index, false)
+					if Settings.test_args.has("hp"):
+						# (The 100% phase can reach an eel low on health, as the release run did.)
+						p.max_health = maxi(p.max_health, 5)
+						p.health = int(Settings.test_args["hp"])
 					await wait(1.0)
 					await _fight_eel(c as CaveEel)
 					t.check("debug_eel_%s" % (c as CaveEel).threat_id, (c as CaveEel).defeated, "")
+		_report()
+		return
+	if Settings.test_args.get("start", "") == "stats":
+		# Debug: the completion ids and per-ball content counts (for reports).
+		g.start_play(true)
+		t.log_line("IDS " + JSON.stringify(g.completion.order))
+		for sb in g.balls:
+			var slb: LevelBuilder = sb.get_meta("builder")
+			var climbs := 0
+			for h in slb.bot_hints:
+				if h.has("route"):
+					climbs += 1
+			var lo := INF
+			var hi := -INF
+			for k in 2000:
+				var dd := Vector3(sin(k * 2.39996) * sqrt(1.0 - pow(1.0 - 2.0 * (k + 0.5) / 2000.0, 2.0)), 1.0 - 2.0 * (k + 0.5) / 2000.0, cos(k * 2.39996) * sqrt(1.0 - pow(1.0 - 2.0 * (k + 0.5) / 2000.0, 2.0))).normalized()
+				lo = minf(lo, sb.terrain_height(dd) - sb.ravine_carve(dd))
+				hi = maxf(hi, sb.terrain_height(dd))
+			var top := 0.0
+			for h in slb.bot_hints:
+				if h.has("tops"):
+					for tp in h["tops"]:
+						top = maxf(top, sb.altitude(tp) + sb.terrain_height(sb.up_at(tp)))
+			t.log_line("BALL %d radius %.0f parasites %d motes %d blooms %d upgrades %d critters %d gates %d columns %d streams %d ravines %d crossings %d climbs %d events %d terrain %.1f..%.1f m highest climb top %.1f m" % [sb.index + 1, sb.radius,
+					sb.parasites.size(), sb.motes.size(), sb.blooms.size(), sb.upgrades.size(), sb.critters.size(), sb.gates.size(), sb.columns.size(), sb.streams.size(),
+					slb.ravines.size(), slb.crossings.size(), climbs, sb.events_total, lo, hi, top])
+		_report()
+		return
+	if Settings.test_args.get("start", "") == "cross":
+		# Debug scenario: the planned way from --from=lat,lon to --to=lat,lon on --ball=N, every
+		# restoration gate open, repeated --n times (ravine falls counted).
+		g.start_play(true)
+		var xb := g.balls[int(Settings.test_args.get("ball", "1")) - 1]
+		for gt in xb.gates:
+			(gt as RestorationGate).open(false)
+			t.log_line("gate %s %s: open %s at %.2f m up" % [gt.zone_id, gt.kind, gt.is_open, xb.altitude(gt.global_position)])
+		var fr := str(Settings.test_args.get("from", "56,33")).split(",")
+		var to := str(Settings.test_args.get("to", "67,42")).split(",")
+		var d0 := MossBall.dir_ll(float(fr[0]), float(fr[1]))
+		var d1 := MossBall.dir_ll(float(to[0]), float(to[1]))
+		p.max_health = 6
+		await wait(1.0)
+		if Settings.test_args.has("section"):
+			# Cross-section of what stands across the way at --section=lat,lon (east-west, 3 m each side).
+			var sc := str(Settings.test_args["section"]).split(",")
+			var sd := MossBall.dir_ll(float(sc[0]), float(sc[1]))
+			var fx := MossBall.frame_at(sd, 0.0).x
+			var space := g.get_world_3d().direct_space_state
+			for i in range(-12, 13):
+				var at := xb.surface_point(sd, 0.0) + fx * (i * 0.25)
+				var u := xb.up_at(at)
+				var q := PhysicsRayQueryParameters3D.create(at + u * 6.0, at - u * 5.0, 1)
+				var hit := space.intersect_ray(q)
+				t.log_line("section %+.2f m: %s" % [i * 0.25, "nothing" if hit.is_empty() else "%.2f m up, slope %.0f deg, %s (origin %.2f m up)" % [xb.altitude(hit["position"]), rad_to_deg((hit["normal"] as Vector3).angle_to(xb.up_at(hit["position"]))),
+						str(hit["collider"]), xb.altitude((hit["collider"] as Node3D).global_position)]])
+		for k in int(Settings.test_args.get("n", "3")):
+			p.place(xb, xb.surface_point(d0, 0.3), MossBall.frame_at(d0, 0.0).z)
+			p.restore_full()
+			g.audio.set_ball(xb.index, false)
+			await wait(1.0)
+			var falls0 := int(g.stats.get("ravine_falls", 0))
+			var ok := await goto(xb.surface_point(d1), 1.5, 60.0, null, false)
+			t.log_line("cross %d: arrived %s, ravine falls %d" % [k, ok, int(g.stats.get("ravine_falls", 0)) - falls0])
+		_report()
+		return
+	if Settings.test_args.get("start", "") == "clear":
+		# Debug scenario: one world cleared completely from its arrival point (--ball=N).
+		g.start_play(true)
+		var cb := g.balls[int(Settings.test_args.get("ball", "2")) - 1]
+		p.place(cb, cb.surface_point(cb.arrival_dir, 0.3), MossBall.frame_at(cb.arrival_dir, 0.0).z)
+		g.audio.set_ball(cb.index, false)
+		p.max_health = 6
+		p.restore_full()
+		await wait(1.0)
+		var t0 := sim_time
+		await clear_ball(cb.index, 1.01, [])
+		t.check("debug_clear_ball%d" % (cb.index + 1), cb.completed, "%.2f in %.0f s, deaths %d, ravine falls %d" % [cb.restoration, sim_time - t0, int(g.stats["deaths"]), int(g.stats.get("ravine_falls", 0))])
+		# (--then_eels: afterwards, the 100% eel tactic on each of its cave eels still alive.)
+		if Settings.test_args.has("then_eels"):
+			for c in cb.critters:
+				if c is CaveEel and not (c as CaveEel).defeated:
+					await _fight_eel(c as CaveEel)
+					t.check("debug_eel_%s" % (c as CaveEel).threat_id, (c as CaveEel).defeated, "")
+		_report()
+		return
+	if Settings.test_args.get("start", "") == "meadow":
+		# Debug scenario: the tutorial, then Mossy Meadow cleared completely, then its vortex.
+		g._enter_title()
+		await wait(1.0)
+		g.title._on_play()
+		await wait(0.5)
+		await tutorial()
+		await clear_ball(0, 1.01, [])
+		t.check("debug_meadow_cleared", g.balls[0].completed, "%.2f in %.0f s, deaths %d, ravine falls %d" % [g.balls[0].restoration, sim_time, int(g.stats["deaths"]), int(g.stats.get("ravine_falls", 0))])
+		await enter_vortex(g.balls[0].vortex_out, false)
+		t.check("debug_meadow_vortex", p.ball == g.balls[1], "")
 		_report()
 		return
 	g.all_clear.connect(func(): _all_clear_at = sim_time; mark("ALL CLEAR shown"))
@@ -196,6 +385,10 @@ func run(runner) -> void:
 	t.check("all_clear_shown", _all_clear_at >= 0.0, "at %.1fs" % _all_clear_at)
 	await wander(20.0)
 	t.check("free_roam_continues", p.controls_enabled and p.state == "normal" and g.state == "play", "")
+	# The camera safety invariant over a whole game (FollowCam._audit: every frame drawn).
+	var cam: FollowCam = g.cam
+	t.check("camera_never_drawn_unsafe_whole_game", cam.audited_frames > 10000 and cam.unsafe_drawn == 0,
+			"%d frames audited, %d unsafe, %d requested places corrected%s" % [cam.audited_frames, cam.unsafe_drawn, cam.corrected_frames, "" if cam.unsafe_worst == "" else ": first " + cam.unsafe_worst])
 	await t.shot("pt_60_free_roam")
 	# Expansion 6: 100% by legitimate play. The normal finish is below 100%; then the bot goes
 	# after everything the catalog still lists (blooms, species, cave eels...) the way a player
@@ -274,6 +467,22 @@ func _complete(id: String) -> void:
 			if c is CrabGuardian and (c as CrabGuardian).threat_id == id:
 				await goto(c.global_position, 3.0, 30.0)
 				await fight_crab(c as CrabGuardian, 25.0)
+	elif id.contains(".mote."):
+		# A Mote the main pass missed (the mesa's, on its living platforms, can be knocked off): up
+		# its world's climb (the mesa by its own routine), then take it.
+		for m in b.motes:
+			if str(m.get_meta("completion_id", "")) != id or not m.is_available():
+				continue
+			for attempt in 3:
+				if g.run_save.earned().has(id):
+					break
+				if m.zone_id == "mesa":
+					for h in (b.get_meta("builder") as LevelBuilder).bot_hints:
+						if h.has("mesa"):
+							await mesa(b, h)
+				else:
+					await _reach(b, m.global_position)
+					await goto(m.global_position, 0.4, 8.0)
 	else:
 		t.log_line("100%%: no play handler for %s" % id)
 
@@ -298,8 +507,11 @@ func _reach(b: MossBall, pos: Vector3) -> void:
 		for i in tops.size():
 			if (tops[i] as Vector3).distance_to(pos) < (tops[k] as Vector3).distance_to(pos):
 				k = i
-		await goto(best["start"], 1.0, 40.0)
-		await hop_chain(tops.slice(0, k + 1))
+		if best.get("lift", false):
+			await ride_column(best)
+		else:
+			await goto(best["start"], 1.0, 40.0)
+			await hop_chain(tops.slice(0, k + 1))
 	await goto(pos, 0.6, 10.0)
 
 
@@ -336,11 +548,39 @@ func _fight_eel(e: CaveEel) -> void:
 	for round_ in 12:
 		if e.defeated:
 			return
-		var front := b.surface_point(b.up_at(e.mouth + e.normal * (CaveEel.STRIKE_REACH + 0.45)), 0.1)
+		# (Knocked out by a strike, he re-forms at his last bloom, which may be on another ball.)
+		if p.ball != b:
+			await travel_to(b.index)
+		# The spot the eel offers in front of its crevice (cohesion audit P7: floor, clear strike line,
+		# its head fully out inside his swipe).
+		var front := b.surface_point(b.up_at(e.stand), 0.1)
 		if not cave_h.is_empty() and (_cave_of(p.global_position) != cave_h or height_of(p.global_position) > 1.2):
-			await goto(cave_h["entry"], 0.8, 60.0)
-			await goto(cave_h["door"], 0.8, 15.0)
+			var ok_e := await goto(cave_h["entry"], 0.8, 60.0)
+			var at_e := p.global_position.distance_to(cave_h["entry"])
+			var ok_d := await goto(cave_h["door"], 0.8, 15.0)
+			if round_ == 0:
+				var dr: Vector3 = cave_h["door"]
+				var du := b.up_at(dr)
+				var ex := []
+				var from := dr + du * 9.0
+				for k in 5:
+					var qq := PhysicsRayQueryParameters3D.create(from, dr - du * 2.0, 0xFFFFFFFF, ex)
+					var hh := p.get_world_3d().direct_space_state.intersect_ray(qq)
+					if hh.is_empty():
+						break
+					var col: Object = hh["collider"]
+					t.log_line("    over the door: %s (%s, parent %s) at alt %.2f" % [col, col.get_class(), (col as Node).get_parent().name if col is Node else "", b.altitude(hh["position"])])
+					ex.append(hh["rid"])
+				t.log_line("    him: %s alt %.2f floor %s" % [str(p.global_position.round()), b.altitude(p.global_position), p._floor_collider()])
+				t.log_line("  eel %s grotto: entry %s reached %s (%.1f m off), door %s reached %s (%.1f m off, %s), him alt %.2f, same cave as front %s" % [e.threat_id, str((cave_h["entry"] as Vector3).round()), ok_e, at_e,
+						str((cave_h["door"] as Vector3).round()), ok_d, p.global_position.distance_to(cave_h["door"]), goto_info, b.altitude(p.global_position), _cave_of(front) == cave_h])
+		# (Inside its grotto already: straight to the spot. The route planner would take him out and
+		# over the grotto's roof toward a point that is under it.)
+		var direct := not cave_h.is_empty() and _cave_of(p.global_position) == cave_h
+		var was_planning := _planning
+		_planning = _planning or direct
 		await goto(front, 0.4, 25.0, null, false)
+		_planning = was_planning
 		set_stick(Vector2.ZERO)
 		var seen := ""
 		var most := 0.0
@@ -353,6 +593,11 @@ func _fight_eel(e: CaveEel) -> void:
 				await press("swipe")
 				break
 		t.log_line("eel %s round %d: at %.2f m from the mouth (front %.2f), states %s, out %.2f of %.2f, hp %d" % [e.threat_id, round_, p.global_position.distance_to(e.mouth), p.global_position.distance_to(front), seen, most, e.reach, e.hp])
+		if round_ == 0 and p.global_position.distance_to(front) > 1.5:
+			var q := PhysicsRayQueryParameters3D.create(p.body_center(), front + b.up_at(front) * 0.3, 1)
+			var hit := p.get_world_3d().direct_space_state.intersect_ray(q)
+			t.log_line("  eel %s: front %s alt %.2f carve %.2f, cave of front %s, of him %s; mouth alt %.2f; blocked %s at %s; goto %s" % [e.threat_id, str(front.round()), b.altitude(front), b.ravine_carve(b.up_at(front)),
+					str(_cave_of(front).get("centre", "none")), str(_cave_of(p.global_position).get("centre", "none")), b.altitude(e.mouth), not hit.is_empty(), str(hit.get("position", Vector3.ZERO)), goto_info])
 		await wait(1.0)
 
 
@@ -366,9 +611,25 @@ func mark(what: String) -> void:
 	t.log_line("[%6.1fs] %s  (R: %s, hp %d/%d, deaths %d)" % [sim_time, what, " ".join(rs), p.health, p.max_health, g.stats["deaths"]])
 
 
+## His place as "ball N (lat, lon)", rounded to 2 degrees (spots a few metres apart group).
+func _here() -> String:
+	var ll: Vector2 = Levels._latlon(p.ball.up_at(p.global_position))
+	return "ball %d (%d, %d)" % [p.ball.index + 1, int(round(ll.x / 2.0) * 2), int(round(ll.y / 2.0) * 2)]
+
+
+func _note_stuck() -> void:
+	var k := _here()
+	stuck_at[k] = int(stuck_at.get(k, 0)) + 1
+
+
 func _report() -> void:
 	t.log_line("stats: " + str(g.stats))
 	t.log_line("stuck recoveries: %d" % stuck_events)
+	# The spots most recoveries share (cohesion audit).
+	var keys := stuck_at.keys()
+	keys.sort_custom(func(a, b): return stuck_at[a] > stuck_at[b])
+	for k in keys.slice(0, 15):
+		t.log_line("stuck spot: %s x%d" % [k, stuck_at[k]])
 	for f in failures:
 		t.log_line("fallback: " + f)
 	if _perf_n > 0:
@@ -399,6 +660,7 @@ var _last_us := 0
 var _perf_max := 0.0
 var _hb := 0.0
 var _last_hp := 99
+var _last_deaths := 0
 var _last_eat_try := -99.0
 var _high_logged := {}
 
@@ -406,7 +668,7 @@ var _high_logged := {}
 func _nearest_threat() -> String:
 	var best := "none"
 	var bd := 4.0
-	for par in p.ball.parasites:
+	for par in p.ball.hostiles():
 		if par.is_alive() and par.global_position.distance_to(p.global_position) < bd:
 			bd = par.global_position.distance_to(p.global_position)
 			best = "parasite %s %.1f m" % [par.zone_id, bd]
@@ -420,7 +682,14 @@ func _nearest_threat() -> String:
 func tick() -> void:
 	await t.frames(1)
 	sim_time += 1.0 / 60.0
+	# Onboarding's cards (docs/ONBOARDING.md): read for a moment, then Got it / Begin, as a player.
+	if g.onboarding != null and g.onboarding.ui.waiting_for_tap() and g.onboarding.ui.shown_t > 1.0:
+		mark("onboarding card dismissed: %s" % g.onboarding.ui._title.text)
+		g.onboarding.ui.tap()
 	_hb += 1.0 / 60.0
+	_trace_n += 1
+	if Settings.test_args.has("trace_input") and _trace_n % 60 == 0:
+		t.log_line("  input %.0fs: stick %s controls %s game %s state %s vel %.2f grounded %s floor %s pos %s goto %s stack %s" % [sim_time, str(_stick), p.controls_enabled, g.state, p.state, p.velocity.length(), p.grounded, p._floor_collider(), str(p.global_position.snapped(Vector3.ONE * 0.01)), goto_info, str(get_stack().slice(1, 4).map(func(f): return "%s:%d" % [f["function"], f["line"]]))])
 	var now := Time.get_ticks_usec()
 	if _last_us > 0:
 		var ms := (now - _last_us) / 1000.0
@@ -440,11 +709,16 @@ func tick() -> void:
 	if p.health < _last_hp:
 		t.log_line("hurt at %.1fs: hp %d (%s; nearest threat %s)" % [sim_time, p.health, activity, _nearest_threat()])
 	_last_hp = p.health
+	# Each death with its place and cause (audit P1: deaths per ball, and where on it).
+	if int(g.stats["deaths"]) > _last_deaths:
+		_last_deaths = int(g.stats["deaths"])
+		t.log_line("DEATH %d at %.1fs: %s, %s (%s; nearest threat %s)" % [_last_deaths, sim_time, _here(), "ooze" if g.cinematic == "ravine" else "hurt", activity, _nearest_threat()])
 	if _hb >= float(Settings.test_args.get("hb", "20")):
 		_hb = 0.0
 		t.log_line("heartbeat %.0fs ball %d h %.1f act '%s' R %.2f %.2f %.2f hp %d cine '%s' state %s %s" % [sim_time, p.ball.index + 1,
 				(p.global_position - p.ball.global_position).length() - p.ball.radius, activity, g.balls[0].restoration,
 				g.balls[1].restoration, g.balls[2].restoration, p.health, g.cinematic, p.state, goto_info])
+
 		if Settings.test_args.has("trace_stuck"):
 			var near: Parasite = null
 			for par in p.ball.parasites:
@@ -528,6 +802,12 @@ func _cave_of(pos: Vector3) -> Dictionary:
 func goto(target: Variant, radius := 0.9, timeout := 45.0, allow_vortex: Vortex = null, fight := true) -> bool:
 	# Leave a cave through its door when the destination is outside it.
 	var tgt0: Vector3 = target.call() if target is Callable else target
+	# World expansion: round the ravines (or over a crossing), and into walled hollows by the door.
+	if not _planning:
+		if p.ball.ravine_carve(p.ball.up_at(tgt0)) > 0.3 and p.ball.altitude(tgt0) < 1.0:
+			t.log_line("goto: target at %s is down in a ravine; not following it" % str(Levels._latlon(p.ball.up_at(tgt0)).round()))
+			return false
+		await _follow_plan(tgt0, allow_vortex, fight)
 	var inside := _cave_of(p.global_position)
 	if not inside.is_empty() and _cave_of(tgt0).is_empty() and not _in_cave_escape:
 		_in_cave_escape = true
@@ -535,13 +815,30 @@ func goto(target: Variant, radius := 0.9, timeout := 45.0, allow_vortex: Vortex 
 		await goto(inside["entry"], 0.8, 10.0, null, false)
 		_in_cave_escape = false
 	var el := 0.0
+	var ball0 := p.ball
 	var check_t := 0.0
 	var last := p.global_position
 	var escalate := 0
 	var side := 1.0
+	var falls0 := int(g.stats.get("ravine_falls", 0))
 	while el < timeout:
+		# Walking into a vortex that is allowed ends the walk once its ride starts (or has already
+		# happened inside a fight, a meal or a detour below): chasing the far mouth after the ride
+		# would walk him out of the arrival pool and straight back in.
+		if allow_vortex != null and (g.cinematic == "travel" or p.ball != ball0):
+			set_stick(Vector2.ZERO)
+			return true
+		# (Carried off to another ball by an open whirlpool it wandered into: this walk is over; the
+		# caller takes him back. Run on 2026-10-02 sat on ball 1 for 3000 s chasing ball 2's mesa.)
+		if allow_vortex == null and p.ball != ball0:
+			set_stick(Vector2.ZERO)
+			return false
 		var tgt: Vector3 = target.call() if target is Callable else target
 		var flat := tangent_to(tgt)
+		# (Off a crossing and put back on a rim, maybe not at its end: that leg is over.)
+		if _crossing and int(g.stats.get("ravine_falls", 0)) > falls0:
+			set_stick(Vector2.ZERO)
+			return false
 		goto_info = "d=%.1f pos=%s" % [flat.length(), str(Levels._latlon(p.ball.up_at(p.global_position)).round())]
 		if flat.length() < radius and absf(height_of(tgt)) < 2.5:
 			set_stick(Vector2.ZERO)
@@ -559,6 +856,11 @@ func goto(target: Variant, radius := 0.9, timeout := 45.0, allow_vortex: Vortex 
 		var ct := _critter_threat()
 		if ct:
 			await handle_critter(ct)
+		if _test_busy > 0.0:
+			# (Regression scenarios: stand in for a fight, a meal or a detour that takes a while.)
+			var busy := _test_busy
+			_test_busy = 0.0
+			await wait(busy)
 		if p.health <= 1 and p.max_health > 1 and sim_time - _last_eat_try > 12.0:
 			# (At most every 12 s, and counted against the timeout: with no food in reach this
 			# once stalled a goto for good.)
@@ -577,6 +879,16 @@ func goto(target: Variant, radius := 0.9, timeout := 45.0, allow_vortex: Vortex 
 		if not _in_cave_escape:
 			dir = _avoid_domes(dir, tgt)
 		dir = _wall_follow(dir)
+		# A ravine's edge just ahead (not on a crossing): plan a way round from here, or keep
+		# along the edge.
+		if not _crossing and not p.ball.carves.is_empty() and p.ball.ravine_carve(p.up) < 0.3 \
+				and p.ball.ravine_carve(p.ball.up_at(p.global_position + dir * 1.6)) > 0.3:
+			if not _planning and await _follow_plan(tgt, allow_vortex, fight):
+				continue
+			var side_v := dir.cross(p.up).normalized()
+			var l := p.ball.ravine_carve(p.ball.up_at(p.global_position + dir * 0.8 + side_v * 1.2))
+			var r := p.ball.ravine_carve(p.ball.up_at(p.global_position + dir * 0.8 - side_v * 1.2))
+			dir = (side_v if l < r else -side_v)
 		dir = _avoid_mouths(dir, allow_vortex)
 		var mag := 1.0 if flat.length() > 2.0 else clampf(flat.length() / 2.0, 0.35, 1.0)
 		set_stick(stick_for(dir, mag))
@@ -589,6 +901,7 @@ func goto(target: Variant, radius := 0.9, timeout := 45.0, allow_vortex: Vortex 
 			last = p.global_position
 			if moved < 1.0 and flat.length() > radius:
 				stuck_events += 1
+				_note_stuck()
 				escalate += 1
 				# Escalating detours: hop, then walk around the obstacle on alternating sides.
 				match escalate % 5:
@@ -608,8 +921,178 @@ func goto(target: Variant, radius := 0.9, timeout := 45.0, allow_vortex: Vortex 
 			else:
 				escalate = 0
 	set_stick(Vector2.ZERO)
-	failures.append("goto timeout on ball %d" % p.ball.index)
+	failures.append("goto timeout on ball %d at %s (%s)" % [p.ball.index, _here(), activity])
 	return false
+
+
+# --- paths round ravines and into walled hollows (world expansion) --------------------------
+
+var _planning := false
+var _crossing := false
+var _trace_n := 0
+## A one-off busy spell inside the next walk's loop (the vortexrace regression).
+var _test_busy := 0.0
+
+
+## Walks the planned legs to `tgt` (if any are needed).
+func _follow_plan(tgt: Vector3, allow_vortex: Vortex, fight: bool) -> bool:
+	var legs := _plan(p.global_position, tgt)
+	if legs.is_empty():
+		return false
+	t.log_line("plan %s -> %s via %s" % [str(Levels._latlon(p.ball.up_at(p.global_position)).round()), str(Levels._latlon(p.ball.up_at(tgt)).round()),
+			str(legs.map(func(w): return Levels._latlon(p.ball.up_at(w[0])).round()))])
+	_planning = true
+	for i in legs.size():
+		var leg: Array = legs[i]
+		_crossing = leg[1]
+		# (Right at a bridge's end before stepping on: a narrow stem is easy to miss from a metre off.)
+		var lining_up: bool = i + 1 < legs.size() and legs[i + 1][1]
+		var ok := await goto(leg[0], 0.4 if lining_up else 1.0, 40.0, allow_vortex, fight)
+		if _crossing and not ok:
+			var key := str(p.ball.index) + str((leg[0] as Vector3).round())
+			_failed_crossings[key] = int(_failed_crossings.get(key, 0)) + 1
+			t.log_line("crossing to %s failed (%d); planning again from here" % [str(Levels._latlon(p.ball.up_at(leg[0])).round()), _failed_crossings[key]])
+			_crossing = false
+			_planning = false
+			_replans += 1
+			if _replans > 6:
+				_replans = 0
+				return false
+			return await _follow_plan(tgt, allow_vortex, fight)
+	_replans = 0
+	_crossing = false
+	_planning = false
+	return true
+
+
+## Crossings the bot fell off (ball + far end -> times): after two it walks round instead.
+var _failed_crossings := {}
+var _replans := 0
+
+
+## Whether walking straight from `a` to `c` on the current ball keeps off every ravine.
+func _clear_path(a: Vector3, c: Vector3) -> bool:
+	var b := p.ball
+	if b.carves.is_empty():
+		return true
+	var da := b.up_at(a)
+	var dc := b.up_at(c)
+	var n := int(ceil(da.angle_to(dc) * b.radius / 0.7)) + 1
+	# (The last 2.5 m don't count: a Mote drifting out over a ravine is caught from its edge.)
+	var len_m := da.angle_to(dc) * b.radius
+	for i in n + 1:
+		if len_m * (1.0 - float(i) / n) < 2.5 and len_m > 2.5:
+			break
+		if b.ravine_carve(da.slerp(dc, float(i) / n)) > 0.3:
+			return false
+	return true
+
+
+## Ground points just past each end of each ravine (straight on and to either side).
+func _ravine_ends() -> Array:
+	var b := p.ball
+	var out := []
+	for rv in (b.get_meta("builder") as LevelBuilder).ravines:
+		var pts: Array = rv["points"]
+		for e in [[0, 1], [pts.size() - 1, pts.size() - 2]]:
+			var end_d: Vector3 = pts[e[0]]
+			var inner: Vector3 = pts[e[1]]
+			var axis := inner.cross(end_d).normalized()
+			var beyond := end_d.rotated(axis, (float(rv["half"]) + 3.0) / b.radius)
+			var side_axis := beyond.cross(axis).normalized()
+			out.append(b.surface_point(beyond))
+			for sgn in [-1.0, 1.0]:
+				out.append(b.surface_point(beyond.rotated(side_axis, sgn * (float(rv["half"]) + 3.0) / b.radius)))
+	return out
+
+
+## Waypoints from `a` to `c` on the current ball: [] when the straight way is fine (or nothing
+## better is known). Walled hollows are entered and left by their door (while it is open); ravines
+## are walked round, or crossed on a raised bridge.
+func _plan(a: Vector3, c: Vector3) -> Array:
+	var b := p.ball
+	var lb: LevelBuilder = b.get_meta("builder")
+	for h in lb.bot_hints:
+		if not h.has("hollow") or not (h["gate"] as RestorationGate).is_open:
+			continue
+		var inside: Vector3 = h["inside"]
+		var door: Vector3 = h["door"]
+		var out_dir: Vector3 = door - inside
+		out_dir = (out_dir - b.up_at(door) * out_dir.dot(b.up_at(door))).normalized()
+		var d_out := b.surface_point(b.up_at(door + out_dir * 3.5))
+		var d_in := b.surface_point(b.up_at(door - out_dir * 3.0))
+		var a_in := a.distance_to(inside) < 9.0
+		var c_in := c.distance_to(inside) < 9.0
+		if c_in and not a_in:
+			return _plan_ravines(a, d_out) + [[d_out, false], [d_in, false]]
+		if a_in and not c_in:
+			return [[d_in, false], [d_out, false]] + _plan_ravines(d_out, c)
+	return _plan_ravines(a, c)
+
+
+func _plan_ravines(a: Vector3, c: Vector3) -> Array:
+	if _clear_path(a, c):
+		return []
+	var b := p.ball
+	var lb: LevelBuilder = b.get_meta("builder")
+	var best := []
+	var best_cost := INF
+	var ends := _ravine_ends()
+	for w in ends:
+		if _clear_path(a, w) and _clear_path(w, c):
+			var cost: float = a.distance_to(w) + w.distance_to(c)
+			if cost < best_cost:
+				best_cost = cost
+				best = [[w, false]]
+	for w1 in ends:
+		if not _clear_path(a, w1):
+			continue
+		for w2 in ends:
+			if w2 != w1 and _clear_path(w1, w2) and _clear_path(w2, c):
+				var cost2: float = a.distance_to(w1) + w1.distance_to(w2) + w2.distance_to(c)
+				if cost2 < best_cost:
+					best_cost = cost2
+					best = [[w1, false], [w2, false]]
+	# A bridge standing across (not stepping stones: those are a climb).
+	for cr in lb.crossings:
+		if cr.has("stones") or (cr["gate"] != null and not (cr["gate"] as RestorationGate).is_open):
+			continue
+		for pair in [[cr["a"], cr["b"]], [cr["b"], cr["a"]]]:
+			if int(_failed_crossings.get(str(b.index) + str((pair[1] as Vector3).round()), 0)) >= 2:
+				continue
+			if _clear_path(a, pair[0]) and _clear_path(pair[1], c):
+				var cost3: float = a.distance_to(pair[0]) + (pair[0] as Vector3).distance_to(pair[1]) + (pair[1] as Vector3).distance_to(c) + 6.0
+				if cost3 < best_cost:
+					best_cost = cost3
+					best = [[pair[0], false], [pair[1], true]]
+	if best.is_empty():
+		t.log_line("plan: no way round the ravines from %s to %s (cut %.2f / %.2f m there)" % [str(Levels._latlon(b.up_at(a)).round()), str(Levels._latlon(b.up_at(c)).round()),
+				b.ravine_carve(b.up_at(a)), b.ravine_carve(b.up_at(c))])
+	return best
+
+
+## Up a bubble column from its vent to near its top, then across to the ledge beside it.
+func ride_column(h: Dictionary) -> bool:
+	var top: Vector3 = h["tops"][0]
+	var ledge: Vector3 = h["tops"][1]
+	await goto(h["start"], 0.45, 40.0)
+	for i in 60 * 8:
+		var f := tangent_to(top)
+		set_stick(stick_for(f, clampf(f.length(), 0.0, 0.4)))
+		await tick()
+		if height_of(top) < 0.6:
+			break
+	for i in 60 * 4:
+		set_stick(stick_for(tangent_to(ledge)))
+		await tick()
+		if p.grounded and i > 10:
+			break
+	set_stick(Vector2.ZERO)
+	await tick()
+	var ok := absf(height_of(ledge)) < 0.7 and tangent_to(ledge).length() < 1.8
+	if not ok:
+		t.log_line("column %s: missed the ledge (%.1f m below it, %.1f m across; rose to %.1f m up)" % [h["route"], height_of(ledge), tangent_to(ledge).length(), p.ball.altitude(p.global_position)])
+	return ok
 
 
 func detour(dir: Vector3, side: float, angle_deg: float, time: float) -> void:
@@ -756,7 +1239,7 @@ func hop_chain(tops: Array, retries := 4, start_back: Variant = null, no_settle:
 			tries += 1
 			total_fails += 1
 			if tries > retries or total_fails > retries * 3:
-				failures.append("hop chain failed at step %d on ball %d" % [i, p.ball.index])
+				failures.append("hop chain failed at step %d on ball %d at %s (%s)" % [i, p.ball.index, _here(), activity])
 				return false
 			await wait_grounded(2.0)
 			# If we fell off, climb back from the start.
@@ -783,8 +1266,10 @@ func settle_on(target: Variant) -> void:
 
 # --- combat / feeding --------------------------------------------------------------------
 
+## (Self-defence covers returners too; completion routing never does: it walks `ball.parasites`
+## only, so repopulation never sends the bot after a parasite that is not in the catalog.)
 func _threat() -> Parasite:
-	for par in p.ball.parasites:
+	for par in p.ball.hostiles():
 		if par.is_alive() and par.state in ["chase", "windup", "attack"] and par.global_position.distance_to(p.global_position) < 2.6 \
 				and absf(height_of(par.global_position)) < 1.2:
 			return par
@@ -919,6 +1404,19 @@ func fight_parasite(par: Parasite, timeout := 25.0) -> bool:
 			continue
 		if Settings.test_args.has("trace_fight") and int(el * 10) % 10 == 0:
 			t.log_line("approach t=%.1f dist %.2f dh %.2f par %s" % [sim_time, dist, height_of(cp), par.state])
+		# (Across a ravine from him: go round, never straight over the edge.)
+		if dist > 1.5 and not _planning and not _clear_path(p.global_position, cp):
+			if p.ball.ravine_carve(p.ball.up_at(cp)) > 0.3:
+				t.log_line("fight: %s parasite is down in a ravine; leaving it" % par.zone_id)
+				break
+			# (Only along a planned way round; with none, leave it for later.)
+			var t0 := sim_time
+			var went := await _follow_plan(cp, null, false)
+			el += sim_time - t0
+			if not went:
+				t.log_line("fight: no way round to the %s parasite; leaving it for now" % par.zone_id)
+				break
+			continue
 		if dist > 1.5 or absf(height_of(cp)) > 1.0:
 			if absf(height_of(cp)) > 1.0 and dist < 2.5:
 				await hop_toward(cp, true)
@@ -947,6 +1445,12 @@ func fight_parasite(par: Parasite, timeout := 25.0) -> bool:
 	return not par.is_alive()
 
 
+func _clear_line(a: Vector3, b: Vector3) -> bool:
+	var q := PhysicsRayQueryParameters3D.create(a, b, 1)
+	q.exclude = [p.get_rid()]
+	return p.get_world_3d().direct_space_state.intersect_ray(q).is_empty()
+
+
 func eat_nearby(timeout := 10.0) -> bool:
 	var el := 0.0
 	while el < timeout:
@@ -955,7 +1459,9 @@ func eat_nearby(timeout := 10.0) -> bool:
 		for f in p.ball.foods:
 			if is_instance_valid(f) and f.is_catchable():
 				var d: float = f.catch_point().distance_to(p.global_position)
-				if d < bd:
+				# Only food he can walk straight to (lunge_at goes in a straight line): not food on
+				# the far side of a cave wall or a mound.
+				if d < bd and _clear_line(p.body_center(), f.catch_point()):
 					bd = d
 					best = f
 		if best == null:
@@ -972,9 +1478,13 @@ func eat_nearby(timeout := 10.0) -> bool:
 ## Approach something small and catch it with the lunge (jumping first if it's higher).
 func lunge_at(target: Callable, timeout := 20.0, stay := false) -> bool:
 	var el := 0.0
+	if Settings.test_args.has("trace_input"):
+		t.log_line("  lunge_at %s from %s (%.1f m), timeout %.0f" % [str((target.call() as Vector3).snapped(Vector3.ONE * 0.1)), str(p.global_position.snapped(Vector3.ONE * 0.1)), (target.call() as Vector3).distance_to(p.global_position), timeout])
 	var h0 := p.health
 	var start_motes: int = g.stats["motes"]
 	var start_eat: int = g.stats["eaten"][0] + g.stats["eaten"][1] + g.stats["eaten"][2]
+	var prog_t := 0.0
+	var prog_d := INF
 	while el < timeout:
 		var tgt: Vector3 = target.call()
 		var flat := tangent_to(tgt)
@@ -986,6 +1496,17 @@ func lunge_at(target: Callable, timeout := 20.0, stay := false) -> bool:
 				set_stick(stick_for(flat))
 			await tick()
 			el += 1.0 / 60.0
+			# Walking straight at it and getting no nearer (a wall, a mound, a cave's side): give
+			# up rather than push into it for the rest of the timeout (World 7 eel grotto, 2026-09-29).
+			prog_t += 1.0 / 60.0
+			if prog_t >= 1.5:
+				if not stay and prog_d - dist < 0.3:
+					stuck_events += 1
+					_note_stuck()
+					set_stick(Vector2.ZERO)
+					return false
+				prog_t = 0.0
+				prog_d = dist
 			continue
 		# Line up.
 		for k in 4:
@@ -1032,13 +1553,13 @@ func tutorial() -> void:
 	var b := g.balls[0]
 	mark("tutorial start")
 	# 1-3: walk, jump onto M1, jump + water burst across to M2 — with a run-up, like a player.
-	var toward := b.surface_point(MossBall.dir_ll(60, 0))
+	var toward := b.surface_point(Levels.tut_dir(12.57))
 	for attempt in 5:
-		await goto(b.surface_point(MossBall.dir_ll(86.0, 0)), 0.7, 20.0, null, false)
+		await goto(b.surface_point(Levels.tut_dir(1.68)), 0.7, 20.0, null, false)
 		for i in 120:
 			set_stick(stick_for(tangent_to(toward)))
 			await tick()
-			if b.up_at(p.global_position).angle_to(MossBall.dir_ll(79, 0)) < deg_to_rad(8.5):
+			if b.surface_point(b.up_at(p.global_position)).distance_to(b.surface_point(Levels.tut_dir(Levels.TUT_M1_M))) < 3.56:
 				break
 		await press("jump")
 		for i in 50:
@@ -1050,7 +1571,7 @@ func tutorial() -> void:
 		for i in 90:
 			set_stick(stick_for(tangent_to(toward)))
 			await tick()
-			if Levels._latlon(b.up_at(p.global_position)).x <= 75.6:
+			if Levels.tut_m(b.up_at(p.global_position)) >= 6.03:
 				break
 		await press("jump")
 		for i in 18:
@@ -1058,7 +1579,7 @@ func tutorial() -> void:
 			await tick()
 		await press("jump")
 		for i in 60:
-			set_stick(stick_for(tangent_to(b.surface_point(MossBall.dir_ll(57.5, 0)))))
+			set_stick(stick_for(tangent_to(b.surface_point(Levels.tut_dir(Levels.TUT_M2_M)))))
 			await tick()
 			if p.grounded and i > 10:
 				break
@@ -1085,7 +1606,7 @@ func tutorial() -> void:
 		if g.checkpoint == bloom:
 			break
 		# Fell off the platform: climb back up.
-		await hop_toward(b.surface_point(MossBall.dir_ll(57.5, 0), 2.9), true, 0.1)
+		await hop_toward(b.surface_point(Levels.tut_dir(Levels.TUT_M2_M), Levels.TUT_M2_TOP), true, 0.1)
 	t.check("tutorial_bloom_checkpoint", g.checkpoint == bloom, "")
 	mark("tutorial complete")
 	t.check("tutorial_under_60s", sim_time < 60.0, "%.1fs" % sim_time)
@@ -1110,6 +1631,11 @@ func clear_ball(bi: int, target: float, skip_zones: Array) -> void:
 				break
 			# Nearest-first.
 			tasks.sort_custom(func(a, c): return a["pos"].call().distance_to(p.global_position) < c["pos"].call().distance_to(p.global_position))
+			if p.ball != b:
+				mark("swept off ball %d by a whirlpool; going back" % (bi + 1))
+				await travel_to(bi)
+				if p.ball != b:
+					break
 			var task: Dictionary = tasks.pop_front()
 			await _do_task(b, task, routines_done)
 	# Caves (optional content, but the bot verifies every upgrade and pearl).
@@ -1134,13 +1660,26 @@ func _collect_tasks(b: MossBall, lb: LevelBuilder, skip_zones: Array, done: Dict
 	for h in lb.bot_hints:
 		if h.has("tower") and (not done.has("tower") or done.has("retry_tower")):
 			tasks.append({"kind": "tower", "hint": h, "pos": func(): return b.surface_point(MossBall.dir_ll(h["lat"], h["lon"]))})
-		if h.has("mesa") and (not done.has("mesa") or done.has("retry_mesa")):
+		# (With a bubble column up to the mesa that is not flowing yet, come back once it is: that
+		# is the easy way up; the swaying platforms are the skilled one.)
+		var col_waiting := false
+		for hh in lb.bot_hints:
+			if str(hh.get("route", "")) == "mesa column" and b.lift_at((hh["start"] as Vector3) + b.up_at(hh["start"]) * 0.5) <= 0.0:
+				col_waiting = true
+		# (--skip_mesa=1, debug: leave the mesa to the 100% pass, to prove its Mote handler.)
+		if h.has("mesa") and not col_waiting and (not done.has("mesa") or done.has("retry_mesa")) and Settings.test_args.get("skip_mesa", "0") != "1":
 			tasks.append({"kind": "mesa", "hint": h, "pos": func(): return b.surface_point(MossBall.dir_ll(h["site"][0], h["site"][1]))})
 		if h.has("canopy") and (not done.has("canopy") or done.has("retry_canopy")):
 			tasks.append({"kind": "canopy", "hint": h, "pos": func(): return (h["spiral"][0] as Transform3D).origin})
 		# Expansion 4 climbs: needed while an elevated mote in their zones is still there.
 		if h.has("route") and not h.get("audit", false) and int(done.get("route:" + str(h["route"]), 0)) < 3 and _route_pending(b, h):
 			tasks.append({"kind": "route", "hint": h, "pos": func(): return h["start"]})
+	# (Walled hollows wait until their door opens.)
+	var shut := []
+	for h in lb.bot_hints:
+		if h.has("hollow") and not (h["gate"] as RestorationGate).is_open:
+			shut.append(h["zone"])
+	skip_zones = skip_zones + shut
 	for par in b.parasites:
 		if par.is_alive() and not par.zone_id in skip_zones and par.state != "init":
 			if not (done.has("canopy") == false and par.zone_id == "canopy") and not (par.zone_id == "mesa" and not done.has("mesa")):
@@ -1209,11 +1748,18 @@ func climb_route(b: MossBall, h: Dictionary) -> void:
 	var tops: Array = h["tops"]
 	var end: Vector3 = tops[tops.size() - 1]
 	for attempt in 3:
-		await goto(h["start"], 0.8, 45.0)
-		var ok := await hop_chain(tops, 3, h["start"])
+		var ok := false
+		if h.get("lift", false):
+			ok = await ride_column(h)
+		else:
+			await goto(h["start"], 0.8, 45.0)
+			ok = await hop_chain(tops, 3, h["start"])
 		for m in b.motes:
 			if m.is_available() and m.zone_id in h["zones"] and m.h_hint > 2.5 and m.global_position.distance_to(end) < 6.0:
 				await lunge_at(func(): return m.global_position, 12.0, true)
+		# (Off a climb that ends over a ravine: on to the far rim.)
+		if ok and h.has("exit"):
+			await hop_chain(h["exit"], 3)
 		if ok and not _route_pending(b, h):
 			mark("climbed %s" % h["route"])
 			return
@@ -1261,8 +1807,7 @@ func mesa(b: MossBall, h: Dictionary) -> void:
 		chain.append(func(): return lf.global_transform * Vector3(0, lf._stem_len + 0.15, 0))
 	chain.append(lb.at(S[0], S[1], S[2], 0, 6.3, 1.2).origin)
 	for attempt in 4:
-		await goto(start, 0.8, 40.0)
-		if await hop_chain(chain, 2, start):
+		if await _up_mesa(b, lb, start, chain):
 			break
 	var on_top := func() -> bool: return height_of(b.surface_point(b.up_at(p.global_position))) < -5.0
 	mark("on mesa top: %s" % str(on_top.call()))
@@ -1275,10 +1820,22 @@ func mesa(b: MossBall, h: Dictionary) -> void:
 				if not on_top.call():
 					# Knocked or backed off the mesa: ride the living platforms back up first.
 					t.log_line("mesa: off the top before mote attempt %d; climbing back" % attempt)
-					await goto(start, 0.8, 40.0)
-					await hop_chain(chain, 2, start)
+					await _up_mesa(b, lb, start, chain)
 				var ok := await lunge_at(func(): return m.global_position, 15.0, true)
 				t.log_line("mesa mote attempt %d: %s (on top %s, mote h %.2f above him)" % [attempt, "caught" if ok else "missed", on_top.call(), height_of(m.global_position)])
+
+
+## Up onto the mesa: by its bubble column once that flows (the arrival meadow healed), otherwise
+## over the swaying living platforms.
+func _up_mesa(b: MossBall, lb: LevelBuilder, start: Vector3, chain: Array) -> bool:
+	for hh in lb.bot_hints:
+		if str(hh.get("route", "")) == "mesa column" and b.lift_at((hh["start"] as Vector3) + b.up_at(hh["start"]) * 0.5) > 0.0:
+			if await ride_column(hh):
+				var tops: Array = hh["tops"]
+				await goto(tops[tops.size() - 1], 0.8, 8.0)
+				return true
+	await goto(start, 0.8, 40.0)
+	return await hop_chain(chain, 2, start)
 
 
 func canopy(b: MossBall, h: Dictionary) -> void:
@@ -1298,7 +1855,37 @@ func canopy(b: MossBall, h: Dictionary) -> void:
 				if m.zone_id == "canopy" and m.is_available() and m.global_position.distance_to(p.global_position) < 3.5:
 					await lunge_at(func(): return m.global_position, 8.0)
 			await settle_on(chain[6])
-			if await hop_chain(chain.slice(7), 3, start):
+			# The guarded leaf (audit P4): its medium parasite and its Mote, 12.8 m up.
+			var gl := Levels.CANOPY_GUARD_LEAF
+			if not await hop_chain(chain.slice(7, gl + 1), 3, start):
+				continue
+			for par in b.parasites:
+				if par.zone_id == "canopy" and par.kind == Parasite.Kind.MEDIUM and par.is_alive() and par.global_position.distance_to(p.global_position) < 4.0:
+					await fight_parasite(par, 15.0)
+			for m in b.motes:
+				if m.zone_id == "canopy" and m.is_available() and m.global_position.distance_to(chain[gl]) < 3.0 and absf(height_of(m.global_position)) < 2.0:
+					# (From the leaf's outer end, lunging in toward the trunk: out along it, a lunge
+					# carries him off the tip.)
+					var inward: Vector3 = (spiral[gl] as Transform3D).basis.z
+					for tries in 3:
+						if not m.is_available() or absf(height_of(chain[gl])) > 1.0:
+							break
+						await goto(Levels.leaf_mid(spiral[gl], 2.5, 0.0).origin, 0.3, 6.0)
+						for k in 8:
+							set_stick(stick_for(inward, 0.3))
+							await tick()
+						set_stick(Vector2.ZERO)
+						# (It bobs over the leaf: lunge when it is low, never a jump-lunge round the trunk.)
+						for k in 60 * 6:
+							if height_of(m.global_position) < 0.8:
+								break
+							await tick()
+						await press("lunge")
+						await wait(0.7)
+			if absf(height_of(chain[gl])) > 1.5:
+				continue
+			await settle_on(chain[gl])
+			if await hop_chain(chain.slice(gl + 1), 3, start):
 				break
 	mark("top of spiral")
 	var c1: Transform3D = h["c1"]
@@ -1314,16 +1901,10 @@ func canopy(b: MossBall, h: Dictionary) -> void:
 	# Across to C1 and its bloom.
 	await hop_chain([Levels.leaf_mid(c3, 0.8, 0.0).origin, Levels.leaf_mid(c1, 0.8, 0.0).origin], 3)
 	await goto(Levels.leaf_mid(c1, 2.6, 0.0).origin, 0.5, 6.0)   # canopy bloom
-	# Back across to C2 via C1b, fight the medium parasite, grab the mote.
+	# Back across to C2 via C1b for the extreme drop (its parasite and Mote are on the spiral's guard
+	# leaf now, audit P4).
 	await hop_chain([Levels.leaf_mid(c1, 3.8, 0.0).origin,
 			Levels.leaf_mid(c1b, 2.0, 0.0).origin, Levels.leaf_mid(c2, 1.2, 1.0).origin], 3)
-	for par in b.parasites:
-		if par.zone_id == "canopy" and par.kind == Parasite.Kind.MEDIUM and par.is_alive():
-			await fight_parasite(par, 15.0)
-	for attempt in 3:
-		for m in b.motes:
-			if m.zone_id == "canopy" and m.is_available() and m.global_position.distance_to(c2.origin) < 6.0:
-				await lunge_at(func(): return m.global_position, 10.0, true)
 	# The big one: walk off C2's tip -> uncontrolled drop -> extreme superhero landing.
 	mark("canopy drop")
 	await goto(Levels.leaf_mid(c2, 3.8, 0.0).origin, 0.5, 8.0)
@@ -1379,7 +1960,7 @@ func enter_vortex(v: Vortex, from_b: bool) -> void:
 		return
 	mark("heading into vortex %d->%d" % [mb.index + 1, dest.index + 1])
 	await goto(func(): return v.mouth_pos(from_b), 0.3, 90.0, v)
-	for i in 60 * 10:
+	for i in 60 * 20:
 		await tick()
 		if p.ball == dest and g.cinematic == "":
 			break
@@ -1415,10 +1996,26 @@ func travel_to(bi: int) -> void:
 				break
 
 
+## Whether the ground ahead along `dir` (to 3.5 m) is clear of any ravine.
+func _wander_clear(dir: Vector3) -> bool:
+	var b := p.ball
+	for dist in [1.0, 2.0, 3.5]:
+		var d := b.up_at(p.global_position + dir * dist)
+		if b.ravine_carve(d) > 0.02 or b.ravine_at(d) != "":
+			return false
+	return true
+
+
 func wander(time: float) -> void:
 	var el := 0.0
 	var dir := p.facing
 	while el < time:
+		# (Never off a ravine's rim: run 77 wandered into one three times in a row after ALL CLEAR.)
+		if not _wander_clear(dir):
+			for turn in [PI, PI * 0.5, -PI * 0.5, PI * 0.75, -PI * 0.75]:
+				if _wander_clear(dir.rotated(p.up, turn)):
+					dir = dir.rotated(p.up, turn)
+					break
 		set_stick(stick_for(dir))
 		await wait(0.5)
 		el += 0.5

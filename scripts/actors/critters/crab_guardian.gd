@@ -25,10 +25,12 @@ var _claws: Array[Node3D] = []
 var _legs: Array[Node3D] = []
 var _shell_mat: StandardMaterial3D
 var _walk := 0.0
+var _stepping := false
 
 
 func place(p_ball: MossBall, at: Vector3, face: Vector3, seed_v: int) -> void:
 	setup(p_ball, "crab", "grotto mouth", seed_v)
+	org = OrganicMotion.new(rng.seed, OrganicMotion.CRAB)
 	hp = 3
 	seen_radius = 7.0
 	p_ball.add_child(self)
@@ -220,12 +222,29 @@ func tick(dt: float) -> void:
 	var flat := to - up * to.dot(up)
 	var dist := flat.length()
 	var near_post := p != null and (p.global_position - post).length() < WARN_R + 0.5
+	# Expression (OrganicMotion): at rest a slow body turn and little sidesteps; walking home an
+	# arc; nothing at all while it warns, charges or is stunned.
+	match state:
+		"rest":
+			org.step(dt, 1.0, 1.0, 1.0)
+		"retreat":
+			org.step(dt, 0.6, 0.5, 0.3)
+		_:
+			org.step(dt, 0.0, 0.0, 0.0, true)
 	match state:
 		"rest":
 			_vel = Vector3.ZERO
 			# Small idle shuffles at the post.
 			if (global_position - post).length() > 0.5:
 				_move_toward(post, 1.2, dt)
+			elif org.lift != 0.0:
+				# (Sidesteps: it follows a spot drifting a little along the post, in short steps: off
+				# once it lags 12 cm behind, still again once it is within 3.)
+				var spot := post + facing.cross(up).normalized() * org.lift
+				var lag := (spot - global_position).length()
+				_stepping = lag > (0.03 if _stepping else 0.12)
+				if _stepping:
+					_move_toward(spot, 0.5, dt)
 			if here and wary_t <= 0.0 and dist < WARN_R and near_post and absf(to.dot(up)) < 2.0 and not line_blocked(global_position + up * 0.4, p.body_center()):
 				_go("warn")
 				Sfx.play("crab_clack", global_position)
@@ -251,7 +270,7 @@ func tick(dt: float) -> void:
 				strike_player(global_position)
 				_go("retreat")
 		"retreat":
-			_move_toward(post, 2.2, dt)
+			_move_toward(post, 2.2 * org.speed, dt, org.yaw * smoothstep(0.4, 1.6, (global_position - post).length()))
 			if (global_position - post).length() < 0.4 or state_t > 4.0:
 				_go("rest")
 				wary_t = 1.2
@@ -266,14 +285,20 @@ func _go(s: String) -> void:
 	state_t = 0.0
 
 
-func _move_toward(target: Vector3, speed: float, dt: float) -> void:
+## `bend`: expression's heading offset (radians); a bent line never walks into rock.
+func _move_toward(target: Vector3, speed: float, dt: float, bend := 0.0) -> void:
 	var up := ball.up_at(global_position)
 	var d := target - global_position
 	d -= up * d.dot(up)
 	if d.length() < 0.05:
 		return
 	_walk += dt * speed * 6.0
-	_snap(global_position + d.normalized() * minf(d.length(), speed * dt))
+	var dn := d.normalized()
+	if bend != 0.0:
+		var bent := dn.rotated(up, bend)
+		if not _blocked(bent):
+			dn = bent
+	_snap(global_position + dn * minf(d.length(), speed * dt))
 
 
 func _blocked(v: Vector3) -> bool:
@@ -290,6 +315,8 @@ func _turn_to(flat: Vector3, dt: float, rate: float) -> void:
 
 
 func _animate(dt: float) -> void:
+	# Expression, visual only: the body turns a little about its post (colliders are its position).
+	_rig.rotation.y = org.look if org != null else 0.0
 	var raise := 1.0 if state in ["warn", "charge"] else 0.0
 	for i in _claws.size():
 		var c: Node3D = _claws[i]
@@ -328,6 +355,9 @@ func hit(stages: int, from_pos: Vector3) -> bool:
 		return false
 	hp -= stages
 	WaterFX.inst.sparkle(global_position + ball.up_at(global_position) * 0.4, Color(1.0, 0.7, 0.5, 0.9), 10, 1.4, 0.06, 0.6)
+	# (v107: its own hit sound: a shell's clack, higher.)
+	if Juice.enabled:
+		Sfx.play("crab_clack", global_position, -4.0, 0.06, 1.25)
 	if hp <= 0:
 		defeated = true
 		Game.inst.critter_defeated(self)

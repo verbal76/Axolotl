@@ -110,8 +110,10 @@ all fixed in Expansion 6:
 It also found stalls in the bot itself (eels fought from the roof above their grotto, a food search
 at 1 hp that never timed out); those were the bot's.
 
-## Completion catalog (catalog version 3)
+## Completion catalog (catalog version 4)
 
+- **Version 4** came with the world expansion (seven worlds at about twice the radius): 348 entries
+  (was 172). Every v3 id is kept verbatim (`CatalogFrozen.V3`, tested); the shares are unchanged.
 - **Version 3** came with Expansion 5 (the ecosystem): a Wildlife category, 172 entries (was 157).
 - **Version 2** came with Expansion 4 (four new moss balls): 157 entries (was 87).
 - No id has ever changed.
@@ -119,13 +121,18 @@ at 1 hp that never timed out); those were the bot's.
 Each category has a fixed share of 100%. Inside a category every entry counts equally (weight 1).
 Version 3 made room for Wildlife by scaling the other shares.
 
-| Category | Share (v2 → v3) | Entries (v1 → v2 → v3) | What earns it |
+| Category | Share (v2 → v3 → v4) | Entries (v1 → v2 → v3 → v4) | What earns it |
 |---|---|---|---|
-| Moss restored (`restoration`) | 50% → 45% | 64 → 110 → 110 | a parasite cleared (50), a mote returned to the moss (60) |
-| Hidden caves (`caves`) | 20% → 18% | 3 → 7 → 7 | the reward in each hidden cave: the health upgrade (balls 1–3) or a pearl (balls 4, 5 and 7; ball 7 has two caves) |
-| Blooms found (`blooms`) | 15% → 13.5% | 14 → 26 → 26 | touching a bloom (checkpoint) |
-| Milestones (`milestones`) | 15% → 13.5% | 6 → 14 → 14 | each moss ball fully restored (7), each vortex opened (6), the aquarium all clear (1) |
-| Wildlife (`wildlife`) | — → 10% | 0 → 0 → 15 | each of the 8 species discovered (a first close look), each guardian crab (3) and cave eel (4) defeated |
+| Moss restored (`restoration`) | 50% → 45% → 45% | 64 → 110 → 110 → 262 | a parasite cleared, a mote returned to the moss |
+| Hidden caves (`caves`) | 20% → 18% → 18% | 3 → 7 → 7 → 8 | the reward in each hidden cave: the health upgrade (balls 1–3) or a pearl (balls 4, 5 and 7; ball 7 has three caves since v4) |
+| Blooms found (`blooms`) | 15% → 13.5% → 13.5% | 14 → 26 → 26 → 48 | touching a bloom (checkpoint) |
+| Milestones (`milestones`) | 15% → 13.5% → 13.5% | 6 → 14 → 14 → 14 | each moss ball fully restored (7), each vortex opened (6), the aquarium all clear (1) |
+| Wildlife (`wildlife`) | — → 10% → 10% | 0 → 0 → 15 → 16 | each of the 8 species discovered (a first close look), each guardian crab (3) and cave eel (5) defeated |
+
+A save from before v4 keeps everything it earned and counts about 67% if it had earned all of v3
+(`v3_save_migrates`); the run save format is unchanged (1), and it stores no position (a continued
+run resumes at its last bloom, by id, or at the ball's arrival point), so no save can be stranded by
+the new terrain.
 
 A pearl is a cave reward: it refills health instead of adding a heart, so the new caves count toward
 completion without making the game easier in the old balls.
@@ -140,7 +147,12 @@ and nothing about it can be farmed: each species counts once, and each guardian 
 
 ### Ids
 
-Ids are permanent and come from level-data order, which is deterministic. `b1` is Moss Ball 1.
+Ids are permanent. Since v4 every completion-bearing node authored before the expansion carries its
+v3 id explicitly (`meta fixed_id`: Mossy Meadow's by hand, the other worlds' through
+`LevelBuilder.freeze_ids()`), so adding content can never shift one. New content takes the next free
+number in its zone (new zones: b1 rim, crack, heights, coral, fern, roots; b2 cut, hollows, kelp,
+still; b3 crown, tangle; b4 grand, field, coralsh; b5 maze, secret, dell; b6 sky, garden; b7 chamber,
+undercut, shaft, columns). The v3 ids, as shipped:
 
 - Restoration: `b<n>.<zone>.parasite.<i>` and `b<n>.<zone>.mote.<i>`, where `<i>` counts from 0 within the zone.
   - b1: parasites tut 1, meadow 2, east 2, south 1, west 2, under 1; motes meadow 2, east 2, south 2, west 2, under 2.
@@ -159,7 +171,7 @@ Ids are permanent and come from level-data order, which is deterministic. `b1` i
 - Milestones: `b1.restored` … `b7.restored`; `vortex.b1-b2`, `vortex.b2-b3`, `vortex.b1-b4`,
   `vortex.b2-b5`, `vortex.b3-b6`, `vortex.b4-b7`; `ending.all_clear`.
 
-The unit test `completion_ids_unique_and_pinned` pins the count (172) and a SHA-256 of the ids in
+The unit test `completion_ids_unique_and_pinned` pins the count (348) and a SHA-256 of the ids in
 catalog order. Any change to completion content fails it on purpose.
 
 ## Extending the catalog (Expansions 2–6)

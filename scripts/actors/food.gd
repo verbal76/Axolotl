@@ -8,6 +8,22 @@ enum Type { DRIFTER, DARTER, BURROWER }
 
 const HOVER_MIN := 0.3
 const HOVER_MAX := 0.9
+## Catchable by a new player (owner, 2026-10-07: "I've never been able to eat one"; a person's
+## reaction is ~0.25 s, and the old worm gave 0.28 s once it began to duck): drawn larger so they
+## read on a phone; Gill's own lunge no longer scares them (only a fast run close by, or a missed
+## lunge: Game.lunge_miss startles them); a hopper pauses longer after a hop, a worm ducks slower.
+const VIS_SCALE := [1.8, 1.5, 1.3]
+const DART_SENSE_M := 2.2
+## A hop a lunge can still follow: 1.6 m (it was 13 m/s for 0.18 s, 2.3 m, out of the lunge's reach).
+const DART_SPEED := 8.0
+const DART_S := 0.2
+const DART_SENSE_SPEED := 3.0
+const DART_PAUSE_S := 1.3
+const BURROW_SENSE_M := 1.8
+const BURROW_SENSE_SPEED := 3.0
+const BURROW_EMERGE_M := 2.6
+const BURROW_DUCK_RATE := 0.45
+const BURROW_CATCH_EXPOSE := 0.15
 
 var type: int = Type.DRIFTER
 var ball: MossBall
@@ -26,25 +42,40 @@ var _hover := 1.0
 var _calm_t := 0.0         # ignores water pushes while the axolotl's own lunge is stirring it
 var _hole_pos := Vector3.ZERO
 var _hole_up := Vector3.UP
+## Onboarding's feeding lesson (docs/ONBOARDING.md): the jellyfish the player is asked to eat is held
+## near where it was first seen (INF: free), so it can never drift off, out of reach or out of the
+## region. No random numbers are drawn for it.
+var anchor := Vector3.INF
+## Its own generator (seeded by FoodDirector from the run and ball): food never draws from the
+## gameplay random sequence.
+var rng := RandomNumberGenerator.new()
+## The food region (index into ball.food_regions) it belongs to, or -1 (FoodDirector).
+var region := -1
+## Its materials and their resting glow, for the lunge's target highlight (set_targeted).
+var _glow: Array = []
+var targeted := false
 
 
-func setup(p_ball: MossBall, p_type: int, pos: Vector3, p_region_dir: Vector3, p_region_deg: float) -> void:
+## `seed_v`: its generator's seed (-1: one drawn from the global sequence, for test stand-ins).
+func setup(p_ball: MossBall, p_type: int, pos: Vector3, p_region_dir: Vector3, p_region_deg: float, seed_v := -1) -> void:
+	rng.seed = seed_v if seed_v >= 0 else randi()
 	ball = p_ball
 	type = p_type
 	region_dir = p_region_dir.normalized()
 	region_radius = deg_to_rad(p_region_deg)
 	position = pos
 	# Hovers at about head height so a lunge can reach it.
-	_hover = randf_range(HOVER_MIN, HOVER_MAX)
+	_hover = rng.randf_range(HOVER_MIN, HOVER_MAX)
 
 
-func setup_burrower(p_ball: MossBall, p_hole: Dictionary) -> void:
+func setup_burrower(p_ball: MossBall, p_hole: Dictionary, seed_v := -1) -> void:
+	rng.seed = seed_v if seed_v >= 0 else randi()
 	ball = p_ball
 	type = Type.BURROWER
 	hole = p_hole
 	hole["occupied"] = true
 	state = "hidden"
-	_cd = randf_range(0.2, 1.5)
+	_cd = rng.randf_range(0.2, 1.5)
 
 
 func _ready() -> void:
@@ -54,6 +85,7 @@ func _ready() -> void:
 		Type.DRIFTER: _build_drifter()
 		Type.DARTER: _build_darter()
 		Type.BURROWER: _build_burrower()
+	_vis.scale = Vector3.ONE * VIS_SCALE[type]
 
 
 func _mat(c: Color, em := 0.25) -> StandardMaterial3D:
@@ -63,6 +95,7 @@ func _mat(c: Color, em := 0.25) -> StandardMaterial3D:
 	m.emission_enabled = true
 	m.emission = c
 	m.emission_energy_multiplier = em
+	_glow.append([m, em])
 	m.rim_enabled = true
 	m.rim = 0.6
 	return m
@@ -84,20 +117,41 @@ func _ball_mesh(r: float, m: Material, p: Node3D, pos: Vector3, scl: Vector3) ->
 	return mi
 
 
+## The shrimp's meshes, built once and shared by every shrimp (CreatureMeshes).
+static var _shrimp_body: ArrayMesh
+static var _shrimp_leg: ArrayMesh
+
+
 func _build_drifter() -> void:
-	var m := _mat(Color(1.0, 0.62, 0.42), 0.35)
-	for i in 4:
-		_ball_mesh(0.045 - i * 0.008, m, _vis, Vector3(0, 0, i * 0.06), Vector3(1, 1, 1.5))
+	# A little shrimp (owner, 2026-10-07: it read as a few balls): a smooth arched body, rostrum, eyes,
+	# antennae and a tail fan in one mesh, and five pairs of swimmerets that paddle.
+	if _shrimp_body == null:
+		_shrimp_body = CreatureMeshes.shrimp_body()
+		_shrimp_leg = CreatureMeshes.shrimp_leg()
+	var m := StandardMaterial3D.new()
+	m.vertex_color_use_as_albedo = true
+	m.roughness = 0.4
+	m.emission_enabled = true
+	m.emission = Color(1.0, 0.55, 0.35)
+	m.emission_energy_multiplier = 0.3
+	m.rim_enabled = true
+	m.rim = 0.6
+	_glow.append([m, 0.3])
+	var body := MeshInstance3D.new()
+	body.mesh = _shrimp_body
+	body.material_override = m
+	body.cast_shadow = GeometryInstance3D.SHADOW_CASTING_SETTING_OFF
+	body.visibility_range_end = 35.0
+	_vis.add_child(body)
 	for i in 5:
-		var leg := Node3D.new()
-		leg.position = Vector3(0, -0.02, 0.02 + i * 0.03)
+		var leg := MeshInstance3D.new()
+		leg.mesh = _shrimp_leg
+		leg.material_override = m
+		leg.cast_shadow = GeometryInstance3D.SHADOW_CASTING_SETTING_OFF
+		leg.visibility_range_end = 35.0
+		leg.position = Vector3(0, 0, -0.05 + i * 0.022)
 		_vis.add_child(leg)
-		_ball_mesh(0.01, m, leg, Vector3(0.05, -0.02, 0), Vector3(4, 0.6, 1.2))
-		_ball_mesh(0.01, m, leg, Vector3(-0.05, -0.02, 0), Vector3(4, 0.6, 1.2))
 		_parts.append(leg)
-	var eye := _mat(Color(0.05, 0.05, 0.05), 0.0)
-	_ball_mesh(0.012, eye, _vis, Vector3(0.03, 0.02, -0.03), Vector3.ONE)
-	_ball_mesh(0.012, eye, _vis, Vector3(-0.03, 0.02, -0.03), Vector3.ONE)
 
 
 func _build_darter() -> void:
@@ -124,6 +178,7 @@ func _build_burrower() -> void:
 	m.emission_enabled = true
 	m.emission = Color(0.55, 0.3, 0.3)
 	m.emission_energy_multiplier = 0.35
+	_glow.append([m, 0.35])
 	var body := MeshInstance3D.new()
 	body.mesh = _eel_mesh()
 	body.material_override = m
@@ -247,9 +302,39 @@ static func _mound_mesh() -> ArrayMesh:
 func is_catchable() -> bool:
 	match type:
 		Type.BURROWER:
-			return (state == "exposed" or state == "emerging" or state == "retreating") and expose > 0.25
+			return (state == "exposed" or state == "emerging" or state == "retreating") and expose > BURROW_CATCH_EXPOSE
 		_:
 			return state != "eaten"
+
+
+## Startled (a fast rush close by, or a lunge that missed near it): a hopper hops away, a worm ducks.
+func startle(from: Vector3) -> void:
+	match type:
+		Type.DARTER:
+			if state != "idle":
+				return
+			var up := ball.up_at(global_position)
+			var away := global_position - from
+			away -= up * away.dot(up)
+			var side := away.cross(up).normalized() * rng.randf_range(-1.0, 1.0)
+			_dart_dir = (away.normalized() * 0.8 + side * 0.6 + up * rng.randf_range(-0.1, 0.3)).normalized()
+			state = "dart"
+			_t = 0.0
+			Sfx.play("dart", global_position, -10.0)
+		Type.BURROWER:
+			if state == "exposed" or state == "emerging":
+				state = "retreating"
+				_t = 0.0
+				Sfx.play("burrow", _hole_pos, -8.0)
+
+
+## The one the lunge would go for now glows a little brighter, so a player sees what Gill will snap at.
+func set_targeted(on: bool) -> void:
+	if on == targeted:
+		return
+	targeted = on
+	for gm in _glow:
+		(gm[0] as StandardMaterial3D).emission_energy_multiplier = float(gm[1]) * 3.0 + 0.6 if on else float(gm[1])
 
 
 func catch_point() -> Vector3:
@@ -265,16 +350,28 @@ func heal_amount(max_health: int) -> int:
 	return max_health
 
 
-func eaten() -> void:
+## Eaten: out of play at once (state "eaten", never catchable, already off its ball's list). v107:
+## given `to` (his mouth), what is left is only its picture, drawn in and shrunk over a tenth of a
+## second before it is freed; nothing in play sees it meanwhile (no processing, no state).
+func eaten(to := Vector3.INF) -> void:
 	state = "eaten"
 	if type == Type.BURROWER:
 		hole["occupied"] = false
-	queue_free()
+	if to == Vector3.INF or not is_inside_tree():
+		queue_free()
+		return
+	set_physics_process(false)
+	set_process(false)
+	set_targeted(false)
+	var tw := create_tween().set_parallel(true)
+	tw.tween_property(self, "global_position", to, 0.11).set_ease(Tween.EASE_IN).set_trans(Tween.TRANS_QUAD)
+	tw.tween_property(_vis, "scale", _vis.scale * 0.15, 0.11).set_ease(Tween.EASE_IN)
+	tw.chain().tween_callback(queue_free)
 
 
 func _physics_process(dt: float) -> void:
 	var g := Game.inst
-	if g == null or g.player.ball != ball:
+	if g == null or g.player.ball != ball or not g.near_player(global_position) or g.state == "aquarium":
 		return
 	_t += dt
 	_cd = maxf(0.0, _cd - dt)
@@ -315,6 +412,11 @@ func _update_drifter(dt: float) -> void:
 		vel += WaterFX.inst.push_at(global_position) * 4.0 * dt
 	vel += Vector3(sin(_t * 2.1), sin(_t * 1.3), cos(_t * 1.7)) * 0.15 * dt
 	_keep_in_region(up, dt, 0.4)
+	if anchor != Vector3.INF:
+		# A soft tether: free within a metre and a half, then drawn back (lunges may still push it).
+		var off := anchor - global_position
+		if off.length() > 1.5:
+			vel += off.normalized() * minf(3.0, off.length()) * 1.5 * dt
 	vel = vel.limit_length(2.5)
 	vel *= 1.0 - 0.5 * dt
 	global_position += vel * dt
@@ -338,24 +440,18 @@ func _update_darter(dt: float, pl: Axolotl) -> void:
 				vel += WaterFX.inst.push_at(global_position) * 2.0 * dt
 			vel *= 1.0 - 1.5 * dt
 			var pl_speed := pl.velocity.length()
-			if d < 3.3 and _cd <= 0.0 and (pl_speed > 1.0 or pl.lunge_t >= 0.0):
-				# Senses the axolotl: sudden short hop, then a pause.
-				var away := global_position - pl.global_position
-				away -= up * away.dot(up)
-				var side := away.cross(up).normalized() * randf_range(-1.0, 1.0)
-				_dart_dir = (away.normalized() * 0.8 + side * 0.6 + up * randf_range(-0.1, 0.3)).normalized()
-				state = "dart"
-				_t = 0.0
-				Sfx.play("dart", global_position, -10.0)
+			if d < DART_SENSE_M and _cd <= 0.0 and pl_speed > DART_SENSE_SPEED and pl.lunge_t < 0.0:
+				# Senses the axolotl rushing at it: sudden short hop, then a pause.
+				startle(pl.global_position)
 		"dart":
-			vel = _dart_dir * 13.0
-			if _t > 0.18:
+			vel = _dart_dir * DART_SPEED
+			if _t > DART_S:
 				state = "pause"
 				_t = 0.0
 				vel *= 0.1
 		"pause":
 			vel *= 1.0 - 4.0 * dt
-			if _t > 0.9:
+			if _t > DART_PAUSE_S:
 				state = "idle"
 				_cd = 0.3
 	_keep_in_region(up, dt, 1.0)
@@ -371,15 +467,16 @@ func _update_burrower(dt: float, pl: Axolotl) -> void:
 		var dir: Vector3 = hole["dir"]
 		_hole_pos = ball.surface_point(dir, hole.get("h", 0.0))
 		_hole_up = ball.up_at(_hole_pos)
-		global_transform = Transform3D(MossBall.frame_at(_hole_up, randf() * 360.0), _hole_pos - _hole_up * 0.5)
+		global_transform = Transform3D(MossBall.frame_at(_hole_up, rng.randf() * 360.0), _hole_pos - _hole_up * 0.5)
 		if _mound != null:
 			_mound.global_transform = Transform3D(MossBall.frame_at(_hole_up, 0.0), _hole_pos)
 	var d := pl.global_position.distance_to(_hole_pos)
-	var disturbed := d < 2.6 and (pl.velocity.length() > 1.5 or pl.lunge_t >= 0.0) or WaterFX.inst.push_at(_hole_pos).length() > 0.9
+	var disturbed := (d < BURROW_SENSE_M and pl.velocity.length() > BURROW_SENSE_SPEED and pl.lunge_t < 0.0) \
+			or (_calm_t <= 0.0 and WaterFX.inst.push_at(_hole_pos).length() > 0.9)
 	match state:
 		"hidden":
 			expose = move_toward(expose, 0.0, dt * 3.0)
-			if _cd <= 0.0 and d > 3.2:
+			if _cd <= 0.0 and d > BURROW_EMERGE_M:
 				state = "emerging"
 		"emerging":
 			expose = move_toward(expose, 0.5, dt * 0.6)
@@ -396,10 +493,10 @@ func _update_burrower(dt: float, pl: Axolotl) -> void:
 				Sfx.play("burrow", _hole_pos, -8.0)
 		"retreating":
 			# Short catch window while it pulls back into the moss.
-			expose = move_toward(expose, 0.0, dt * 0.9)
+			expose = move_toward(expose, 0.0, dt * BURROW_DUCK_RATE)
 			if expose <= 0.0:
 				state = "hidden"
-				_cd = randf_range(4.0, 7.0)
+				_cd = rng.randf_range(4.0, 7.0)
 	global_position = _hole_pos - _hole_up * (0.5 - expose * 0.9)
 	_vis.visible = expose > 0.02
 	# A gentle sway of the whole body from the burrow, the head nodding.

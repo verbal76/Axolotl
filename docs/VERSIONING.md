@@ -1,5 +1,37 @@
 # Identities and versioning
 
+## Public version (studio convention, owner 2026-10-04) — read this first
+
+The owner sees ONE version: **Mote v<number>** (for example **Mote v92**). Nothing else is a
+public version: not the semantic game version (0.1.0), not the Android build/versionCode (b22),
+not the runtime (r5), not the OTA id (dev-000092), not a SHA, branch or codename.
+
+- **What a version is:** one delivered playable build. In Mote every published OTA is a delivered
+  playable build (it reaches the owner's phone by itself), so **public version N = the OTA's
+  `seq`**. dev-000092 is Mote v92; the next published OTA is Mote v93.
+- **Sequential, never reused:** `ota-publish.yml` gives each new OTA `seq` = highest seq ever
+  published on the channel + 1. A failed run publishes nothing and consumes no number.
+  (Until 2026-10-04 seq was the CI run number, so v1–v92 contain a few gaps from failed runs,
+  e.g. no v81 or v83; that history is left as it is.)
+- **GitHub Releases:** each OTA release is titled exactly `Mote vN` and marked **Latest**; its
+  notes start with what to do ("Nothing to download: the app installs Mote vN by itself") and keep
+  the technical provenance (OTA id, SHA, runtime, internal version, run) below. Older OTA releases
+  are retitled `Mote vN` by the publish workflow (titles only; tags/files untouched). The
+  `ota-channel-dev` pointer release stays a technical prerelease.
+- **In the game:** the title screen shows `vN`; About / Copy diagnostics shows `Version: Mote vN`
+  first, then the technical identities (internal game version, versionCode, runtime, OTA id, SHA).
+  Source: `GameVersion.public_number()` = the active OTA's seq, or `res://public_version.txt` in an
+  APK built from a published build.
+- **Native APKs (next one is runtime r6):** an APK delivered to the owner gets the same public
+  number as the published build it contains, is named `Mote-vN.apk` and is attached to the
+  `Mote vN` release; its versionCode stays an internal counter. (No APK has been built since the
+  installed Build 22; the export step that writes `public_version.txt` and the file name belongs to
+  the r6 native batch.)
+- **Do not** put codenames, build numbers, SHAs or semantic versions in release titles or in the
+  file names the owner installs.
+
+## Technical identities
+
 Mote has several independent identities. Diagnostics shows them together, but no counter
 stands in for another, and none is derived from another.
 

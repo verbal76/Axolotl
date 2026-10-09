@@ -2,19 +2,31 @@ name: OTA publish (dev channel)
 
 # Publishes the game layer as a signed, immutable OTA for the installed Mote app.
 # No APK is built here. Order of evidence:
-#   exact SHA -> runtime gate -> tests -> PCK -> SHA-256/size -> signed manifest
+#   exact SHA -> tests (fast checks, 2 unit shards, playthrough: parallel jobs of tests.yml, on that SHA)
+#   -> runtime gate -> PCK -> SHA-256/size -> signed manifest
 #   -> client-side inspection -> immutable release -> re-download + re-verify
 #   -> channel pointer moved forward -> receipt.
 
+# The authorized Mote development branches. A push to one of them without [skip ci] publishes that
+# exact commit (GitHub itself skips push runs whose head commit says [skip ci]). A new development
+# branch is added here, explicitly, in its first release; nothing else can publish.
+#   claude/axolotl-aquarium-platformer-3y0qyy   Expansions 1-6 (dev-000015..dev-000024)
+#   claude/mote-game-continuation-bov2x9        from the dev-000024 playtest polish on
 on:
   push:
-    branches: [claude/axolotl-aquarium-platformer-3y0qyy]
+    branches:
+      - claude/axolotl-aquarium-platformer-3y0qyy
+      - claude/mote-game-continuation-bov2x9
+    # (Actions budget policy, docs/ACTIONS_BUDGET.md: a push of only docs, Markdown or workflow files
+    # changes nothing in the game pack, so it publishes nothing and uses no minutes. Any push that also
+    # touches the game still publishes, with every gate.)
+    paths-ignore: ["**/*.md", "docs/**", ".github/**", "LICENSE*"]
   workflow_dispatch:
     inputs:
       ref:
         description: Commit SHA (or branch) to publish to the dev channel
         required: true
-        default: claude/axolotl-aquarium-platformer-3y0qyy
+        default: claude/mote-game-continuation-bov2x9
 
 permissions:
   contents: write
@@ -31,21 +43,56 @@ env:
   MOTE_OTA_PUBKEY_DER_SHA256: a003a45ce422325ef1de52958bd9d4d2a06b912ae119c6c7a7f9e40ff2720cf2
 
 jobs:
+  # Resolve the requested ref to ONE full commit SHA. The tests and the publish job both check out that SHA,
+  # never a branch name, so what is published is exactly what passed.
+  resolve:
+    name: Resolve exact SHA
+    runs-on: ubuntu-latest
+    outputs:
+      sha: ${{ steps.r.outputs.sha }}
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          ref: ${{ inputs.ref || github.sha }}
+      - id: r
+        run: echo "sha=$(git rev-parse HEAD)" >> $GITHUB_OUTPUT
+
+  # The release gate: fast checks + both unit shards + the playthrough, in parallel, on the exact SHA.
+  tests:
+    name: Tests
+    needs: resolve
+    uses: ./.github/workflows/tests.yml
+    with:
+      ref: ${{ needs.resolve.outputs.sha }}
+      full: true
+
   publish:
     name: Publish OTA to dev
+    # Runs only when every test job succeeded (a skipped or failed `tests` stops the release).
+    needs: [resolve, tests]
     runs-on: ubuntu-latest
     timeout-minutes: 60
     steps:
       - uses: actions/checkout@v4
         with:
-          ref: ${{ inputs.ref || github.sha }}
+          ref: ${{ needs.resolve.outputs.sha }}
 
       - name: Exact source identity
         id: src
+        env:
+          GH_TOKEN: ${{ github.token }}
         run: |
           SHA=$(git rev-parse HEAD)
+          test "$SHA" = "${{ needs.resolve.outputs.sha }}"
           echo "sha=$SHA" >> $GITHUB_OUTPUT
-          SEQ=${{ github.run_number }}
+          # Public version (studio convention, docs/VERSIONING.md "Public version"): every published OTA
+          # is a delivered playable build "Mote vN", N = its seq. N = one more than the highest seq
+          # ever published on this channel, so numbers are sequential, never reused, and failed runs
+          # leave no gaps. (Before 2026-10-04 seq was the run number: v1-v92 have a few gaps.)
+          LAST=$(gh release list --repo "$GITHUB_REPOSITORY" --limit 1000 --json tagName \
+            --jq "[.[].tagName | select(startswith(\"ota-$CHANNEL-\")) | ltrimstr(\"ota-$CHANNEL-\") | tonumber] | max // 0")
+          test -n "$LAST"
+          SEQ=$((LAST + 1))
           ID=$(printf "%s-%06d" "$CHANNEL" "$SEQ")
           echo "seq=$SEQ" >> $GITHUB_OUTPUT
           echo "ota_id=$ID" >> $GITHUB_OUTPUT
@@ -73,14 +120,10 @@ jobs:
           echo "game_version=$(jq -r .game_version "$ID")" >> $GITHUB_OUTPUT
           echo "runtime_id=$(jq -r .runtime_id "$ID")" >> $GITHUB_OUTPUT
 
-      - name: Required checks (scripts, mechanics, playthrough)
+      - name: Required checks (scripts compile; mechanics and playthrough passed in the tests job on this exact SHA)
         run: |
           godot --headless --path . -s tools/check_scripts.gd 2>&1 | tee check.log
           if grep -E "Parse Error" check.log; then exit 1; fi
-          godot --headless --path . --fixed-fps 60 --max-fps 0 -- --test=unit --out=$PWD/test_out 2>&1 | tee unit.log
-          grep -E "\[TEST\] SUMMARY [0-9]+ passed, 0 failed" unit.log
-          godot --headless --path . --fixed-fps 60 --max-fps 0 -- --test=playthrough --out=$PWD/test_out 2>&1 | tee playthrough.log
-          grep -E "\[TEST\] SUMMARY [0-9]+ passed, 0 failed" playthrough.log
 
       - name: Signing key
         id: key
@@ -148,6 +191,9 @@ jobs:
           grep -q "Started Baking shaders" export.log || { echo "::error::shaders were not baked into the OTA pack"; exit 1; }
           test -s "out/axolotl-$ID.pck"
           python3 tools/pck_files.py "out/axolotl-$ID.pck" --require-baked
+          # Standing requirement (CLAUDE.md): the canonical Hot Attic Games logo is in the pack, pixel-exact.
+          godot --headless --path . -s tools/check_pack_logo.gd -- pck="out/axolotl-$ID.pck" | tee logo.log
+          grep -q "LOGO OK" logo.log
           URL="${{ github.server_url }}/${{ github.repository }}/releases/download/$TAG/axolotl-$ID.pck"
           godot --headless --path . -s tools/ota_make_manifest.gd -- pck="out/axolotl-$ID.pck" out=out/manifest.json \
             seq="$SEQ" sha="$SHA" url="$URL" channel="$CHANNEL" run_id="${{ github.run_id }}" \
@@ -176,9 +222,24 @@ jobs:
           if gh release view "$TAG" >/dev/null 2>&1; then
             echo "::error::$TAG already exists; OTA releases are immutable"; exit 1
           fi
-          gh release create "$TAG" --target "$SHA" --prerelease \
-            --title "OTA $ID (game v$GV, ${SHA:0:12})" \
-            --notes "Immutable dev-channel OTA. Source $SHA. Runtime ${{ steps.ident.outputs.runtime_id }}. Game v$GV. Built by run ${{ github.run_id }}." \
+          SEQ=$((10#${ID##*-}))
+          # Descriptive OTA name (owner, 2026-10-05): "Mote v97-hints-pads-reeds" when the released commit
+          # carries an "OTA-Name: hints-pads-reeds" trailer (letters, digits, dashes); else "Mote vN".
+          PURPOSE=$(git log -1 --format='%(trailers:key=OTA-Name,valueonly)' "$SHA" | head -1 | tr -cd 'a-z0-9-')
+          TITLE="Mote v$SEQ${PURPOSE:+-$PURPOSE}"
+          echo "release title: $TITLE"
+          printf '%s\n' "# $TITLE" "" \
+            "**Nothing to download:** the Mote app on your phone installs Mote v$SEQ by itself (at launch, while Mote is loading)." \
+            "New phone: install the Mote app once (Android, \`com.verbal76.axolotl\`); it then updates itself to the newest version." "" \
+            "---" "Technical provenance (for engineers):" \
+            "- OTA revision: $ID (dev channel), immutable" \
+            "- Source commit: $SHA" \
+            "- Native runtime: ${{ steps.ident.outputs.runtime_id }}" \
+            "- Internal game version: $GV" \
+            "- Built by run ${{ github.run_id }}" \
+            "- Files: axolotl-$ID.pck (game payload), manifest.json + manifest.json.sig (signed)" > notes.md
+          gh release create "$TAG" --target "$SHA" --latest \
+            --title "$TITLE" --notes-file notes.md \
             "out/axolotl-$ID.pck" out/manifest.json out/manifest.json.sig
 
       - name: Re-download published objects and verify them
@@ -233,6 +294,23 @@ jobs:
           done
           test "$GOT" = "$ID"
           echo "POINTER_MOVED=true" >> $GITHUB_ENV
+
+      - name: Release titles follow the public version (presentation only)
+        if: steps.key.outputs.ok == 'true'
+        continue-on-error: true
+        env:
+          GH_TOKEN: ${{ github.token }}
+        run: |
+          # Older OTA releases were titled "OTA dev-0000NN (...)": retitle them "Mote vN". Titles only:
+          # tags, files, signatures and the pointer are untouched (idempotent).
+          gh release list --repo "$GITHUB_REPOSITORY" --limit 1000 --json tagName,name \
+            --jq ".[] | select(.tagName | startswith(\"ota-$CHANNEL-\")) | [.tagName, .name] | @tsv" |
+          while IFS=$'\t' read -r tag name; do
+            want="Mote v$((10#${tag##*-}))"
+            # (A descriptive name, "Mote vN-purpose", is kept.)
+            case "$name" in "$want"|"$want"-*) continue ;; esac
+            gh release edit "$tag" --repo "$GITHUB_REPOSITORY" --title "$want" >/dev/null || true
+          done
 
       - name: Publication receipt
         if: always()

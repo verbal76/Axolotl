@@ -2,8 +2,9 @@ class_name QualityScaler
 extends Node
 ## Quiet thermal/performance scaling. Targets 60 FPS; when sustained frame rate drops, it
 ## steps down secondary visual cost only (the ceiling light's shadows first, then resolution
-## scale, particles, vegetation density, glow, secondary lights). Controls, camera, character and restoration readability are
-## never touched. Recovers slowly with hysteresis. No messages are ever shown.
+## scale, particles, glow, secondary lights). Controls, camera, character and restoration readability are
+## never touched, and neither is the vegetation: thinning it hid a share of the plants right round
+## Gill at every step down, which read as plants popping out (owner, 2026-10-07). Recovers slowly with hysteresis. No messages are ever shown.
 
 var level := 0
 var mote_lights := 3
@@ -16,11 +17,11 @@ var history: Array = []
 
 ## "shadow": the ceiling light's shadow distance in metres (0 = none; Expansion 6).
 const LEVELS := [
-	{"scale": 1.0, "specks": 420, "veg": 1.0, "glow": true, "lights": 3, "shadow": 30.0},
+	{"scale": 1.0, "specks": 420, "glow": true, "lights": 3, "shadow": 30.0},
 	# (Shadows go first: they are most of what the Expansion 6 lighting costs.)
-	{"scale": 0.9, "specks": 300, "veg": 0.8, "glow": true, "lights": 2, "shadow": 0.0},
-	{"scale": 0.8, "specks": 200, "veg": 0.6, "glow": false, "lights": 1, "shadow": 0.0},
-	{"scale": 0.7, "specks": 120, "veg": 0.45, "glow": false, "lights": 1, "shadow": 0.0},
+	{"scale": 0.9, "specks": 300, "glow": true, "lights": 2, "shadow": 0.0},
+	{"scale": 0.8, "specks": 200, "glow": false, "lights": 1, "shadow": 0.0},
+	{"scale": 0.7, "specks": 120, "glow": false, "lights": 1, "shadow": 0.0},
 ]
 
 
@@ -33,6 +34,15 @@ func _ready() -> void:
 
 func _process(dt: float) -> void:
 	if get_tree().paused:
+		return
+	# (The title capped at an even 30 fps (Game._title_pacing) is not a slow frame rate: its frames
+	# are never counted, and a window it interrupts starts again (ledger row 28: the cap used to step
+	# quality down to the lowest level within ~16 s).)
+	if Game.inst != null and Game.inst.title_capped:
+		_acc = 0.0
+		_frames = 0
+		_low_windows = 0
+		_high_windows = 0
 		return
 	_acc += dt
 	_frames += 1
@@ -78,8 +88,6 @@ func _apply() -> void:
 		WaterFX.inst.set_speck_density(q["specks"])
 	var g := Game.inst
 	if g:
-		for b in g.balls:
-			b.set_vegetation_density(q["veg"])
 		if g.aquarium and g.aquarium.sun:
 			g.aquarium.sun.shadow_enabled = q["shadow"] > 0.0
 			g.aquarium.sun.directional_shadow_max_distance = maxf(q["shadow"], 1.0)

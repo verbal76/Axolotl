@@ -1,0 +1,78 @@
+name: APK release (playtesters)
+
+# Owner, 2026-10-09: a playtester APK gets a public download link. The APK is never rebuilt here:
+# this copies the exact APK that a Build & Verify run already built and verified (signing, identity,
+# bundled baseline) into a GitHub Release. Started only by a push that changes
+# .github/apk-release-request.json ({"run": <Build & Verify run id>, "build": <Android build>}); such a
+# push touches only .github, so it starts no OTA publish and no Build & Verify. The release tag is
+# apk-v0.1.0-b<build> on the APK's source commit. Not marked "latest" (the OTA releases keep that);
+# OTA numbering only counts ota-* tags.
+on:
+  push:
+    branches: [claude/mote-game-continuation-bov2x9]
+    paths: [".github/apk-release-request.json"]
+
+permissions:
+  contents: write
+  actions: read
+
+jobs:
+  release:
+    runs-on: ubuntu-latest
+    timeout-minutes: 10
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          sparse-checkout: .github/apk-release-request.json
+          sparse-checkout-cone-mode: false
+      - name: Which build
+        id: which
+        run: |
+          RUN=$(jq -r .run .github/apk-release-request.json)
+          BUILD=$(jq -r .build .github/apk-release-request.json)
+          echo "$RUN" | grep -Eq '^[0-9]+$' && echo "$BUILD" | grep -Eq '^[0-9]+$' || { echo "::error::bad request file"; exit 1; }
+          echo "run=$RUN" >> $GITHUB_OUTPUT
+          echo "artifact=mote-android-v0.1.0-b$BUILD" >> $GITHUB_OUTPUT
+          echo "tag=apk-v0.1.0-b$BUILD" >> $GITHUB_OUTPUT
+      - uses: actions/download-artifact@v4
+        with:
+          name: ${{ steps.which.outputs.artifact }}
+          run-id: ${{ steps.which.outputs.run }}
+          github-token: ${{ github.token }}
+          path: dl
+      - name: Check it is the verified build
+        id: check
+        run: |
+          cd dl
+          ls -l
+          cat build-info.json
+          APK=$(jq -r .apk.file build-info.json)
+          WANT=$(jq -r .apk.sha256 build-info.json)
+          GOT=$(sha256sum "$APK" | cut -d' ' -f1)
+          test "$WANT" = "$GOT" || { echo "::error::APK sha256 $GOT != build-info $WANT"; exit 1; }
+          echo "apk=$APK" >> $GITHUB_OUTPUT
+          echo "sha=$GOT" >> $GITHUB_OUTPUT
+          echo "source=$(jq -r .source_sha build-info.json)" >> $GITHUB_OUTPUT
+          echo "runtime=$(jq -r .runtime_id build-info.json)" >> $GITHUB_OUTPUT
+          echo "build=$(jq -r .android_build build-info.json)" >> $GITHUB_OUTPUT
+      - name: Publish the release
+        env:
+          GH_TOKEN: ${{ github.token }}
+          TAG: ${{ steps.which.outputs.tag }}
+        run: |
+          cd dl
+          cat > notes.md <<EOF
+          Mote playtester APK: version 0.1.0, Android build ${{ steps.check.outputs.build }}, runtime ${{ steps.check.outputs.runtime }}.
+
+          - Source commit: ${{ steps.check.outputs.source }}
+          - APK SHA-256: ${{ steps.check.outputs.sha }}
+          - Bundled game: Mote v108 content (hints on one clock per ball, name prompt above the keyboard, v107 game feel, player profiles).
+          - Launch: neutral black native frame, then the Hot Attic Games splash, then Mote.
+
+          Install over the existing Mote app (do not uninstall first): same app and signing key, so saves and player profiles are kept. Later updates arrive by OTA as before.
+          Built and verified by Build & Verify run ${{ steps.which.outputs.run }}.
+          EOF
+          sed -i 's/^          //' notes.md
+          gh release create "$TAG" --repo "$GITHUB_REPOSITORY" --target "${{ steps.check.outputs.source }}" --latest=false \
+            --title "Mote 0.1.0 build ${{ steps.check.outputs.build }} (playtester APK)" --notes-file notes.md \
+            "${{ steps.check.outputs.apk }}" build-info.json

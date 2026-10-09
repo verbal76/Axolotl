@@ -1,0 +1,108 @@
+name: Tests (reusable)
+
+# The one definition of "this commit passes": build.yml (pull requests, main) and ota-publish.yml (the
+# release gate) both call it, so the suites are defined once and run as parallel jobs:
+#   fast         check_scripts, version-drift regression, native-runtime lock        (~3 min)
+#   unit shard 1 --test=unit --shard=1/2                                              (~23 min)
+#   unit shard 2 --test=unit --shard=2/2                                              (~23 min)
+#   playthrough  --test=playthrough                                                   (~25-35 min)
+# Wall time is the slowest job, not the sum. `full: false` runs only `fast`.
+# Every job checks out the exact `ref` it is given (a full commit SHA from the caller).
+
+on:
+  workflow_call:
+    inputs:
+      ref:
+        description: Full commit SHA to test
+        required: true
+        type: string
+      full:
+        description: Run the unit shards and the playthrough as well as the fast checks
+        required: false
+        default: true
+        type: boolean
+
+env:
+  GODOT_VERSION: 4.7.2
+  GODOT_BASE: https://github.com/godotengine/godot/releases/download/4.7.2-stable
+
+jobs:
+  fast:
+    name: Scripts, version drift, runtime lock
+    runs-on: ubuntu-latest
+    timeout-minutes: 30
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          ref: ${{ inputs.ref }}
+      - name: Install Godot
+        run: |
+          curl -sSL -o godot.zip "$GODOT_BASE/Godot_v${GODOT_VERSION}-stable_linux.x86_64.zip"
+          unzip -q godot.zip && mv Godot_v${GODOT_VERSION}-stable_linux.x86_64 /usr/local/bin/godot
+      - name: Import project
+        run: godot --headless --path . --import || true
+      - name: Check every script compiles
+        run: |
+          godot --headless --path . -s tools/check_scripts.gd 2>&1 | tee check.log
+          ! grep -E "Parse Error" check.log
+      - name: Version-drift regression (all consumers follow the canonical GAME_VERSION)
+        run: GODOT=godot tools/version_drift_check.sh
+      - name: Native-runtime lock is current
+        run: python3 tools/ota_runtime.py --check
+
+  unit:
+    name: Mechanics test suite (shard ${{ matrix.shard }}/2)
+    if: ${{ inputs.full }}
+    runs-on: ubuntu-latest
+    timeout-minutes: 60
+    strategy:
+      fail-fast: false
+      matrix:
+        shard: [1, 2]
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          ref: ${{ inputs.ref }}
+      - name: Install Godot
+        run: |
+          curl -sSL -o godot.zip "$GODOT_BASE/Godot_v${GODOT_VERSION}-stable_linux.x86_64.zip"
+          unzip -q godot.zip && mv Godot_v${GODOT_VERSION}-stable_linux.x86_64 /usr/local/bin/godot
+      - name: Import project
+        run: godot --headless --path . --import || true
+      - name: Mechanics test suite
+        run: |
+          godot --headless --path . --fixed-fps 60 --max-fps 0 -- --test=unit --shard=${{ matrix.shard }}/2 --out=$PWD/test_out 2>&1 | tee unit.log
+          grep -E "\[TEST\] SUMMARY [0-9]+ passed, 0 failed" unit.log
+      - name: Slowest tests (per-test wall time)
+        if: always()
+        run: grep -E "^\[TIME\]" unit.log | sort -k3 -n -r | head -15 || true
+      - uses: actions/upload-artifact@v4
+        if: always()
+        with:
+          name: test-results-unit-${{ matrix.shard }}
+          path: test_out/
+
+  playthrough:
+    name: Beginning-to-end playthrough bot
+    if: ${{ inputs.full }}
+    runs-on: ubuntu-latest
+    timeout-minutes: 60
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          ref: ${{ inputs.ref }}
+      - name: Install Godot
+        run: |
+          curl -sSL -o godot.zip "$GODOT_BASE/Godot_v${GODOT_VERSION}-stable_linux.x86_64.zip"
+          unzip -q godot.zip && mv Godot_v${GODOT_VERSION}-stable_linux.x86_64 /usr/local/bin/godot
+      - name: Import project
+        run: godot --headless --path . --import || true
+      - name: Beginning-to-end playthrough bot
+        run: |
+          godot --headless --path . --fixed-fps 60 --max-fps 0 -- --test=playthrough --out=$PWD/test_out 2>&1 | tee playthrough.log
+          grep -E "\[TEST\] SUMMARY [0-9]+ passed, 0 failed" playthrough.log
+      - uses: actions/upload-artifact@v4
+        if: always()
+        with:
+          name: test-results-playthrough
+          path: test_out/
