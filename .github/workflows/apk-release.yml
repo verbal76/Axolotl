@@ -2,12 +2,15 @@ name: APK release (playtesters)
 
 # Owner, 2026-10-09: a playtester APK gets a public download link. The APK is never rebuilt here:
 # this copies the exact APK that a Build & Verify run already built and verified (signing, identity,
-# bundled baseline) into a GitHub Release. Started only by pushing a tag apk-v<version>-b<build>
-# whose commit carries this file; the tag message names the Build & Verify run id ("run=<id>").
-# Not marked "latest" (the OTA releases keep that); OTA numbering only counts ota-* tags.
+# bundled baseline) into a GitHub Release. Started only by a push that changes
+# .github/apk-release-request.json ({"run": <Build & Verify run id>, "build": <Android build>}); such a
+# push touches only .github, so it starts no OTA publish and no Build & Verify. The release tag is
+# apk-v0.1.0-b<build> on the APK's source commit. Not marked "latest" (the OTA releases keep that);
+# OTA numbering only counts ota-* tags.
 on:
   push:
-    tags: ["apk-v*"]
+    branches: [claude/mote-game-continuation-bov2x9]
+    paths: [".github/apk-release-request.json"]
 
 permissions:
   contents: write
@@ -18,18 +21,19 @@ jobs:
     runs-on: ubuntu-latest
     timeout-minutes: 10
     steps:
+      - uses: actions/checkout@v4
+        with:
+          sparse-checkout: .github/apk-release-request.json
+          sparse-checkout-cone-mode: false
       - name: Which build
         id: which
-        env:
-          GH_TOKEN: ${{ github.token }}
-          TAG: ${{ github.ref_name }}
         run: |
-          MSG=$(gh api "repos/$GITHUB_REPOSITORY/git/tags/$(gh api "repos/$GITHUB_REPOSITORY/git/ref/tags/$TAG" --jq .object.sha)" --jq .message)
-          RUN=$(echo "$MSG" | sed -n 's/.*run=\([0-9][0-9]*\).*/\1/p' | head -1)
-          test -n "$RUN" || { echo "::error::tag message names no run=<id>"; exit 1; }
-          BUILD=${TAG##*-b}
+          RUN=$(jq -r .run .github/apk-release-request.json)
+          BUILD=$(jq -r .build .github/apk-release-request.json)
+          echo "$RUN" | grep -Eq '^[0-9]+$' && echo "$BUILD" | grep -Eq '^[0-9]+$' || { echo "::error::bad request file"; exit 1; }
           echo "run=$RUN" >> $GITHUB_OUTPUT
           echo "artifact=mote-android-v0.1.0-b$BUILD" >> $GITHUB_OUTPUT
+          echo "tag=apk-v0.1.0-b$BUILD" >> $GITHUB_OUTPUT
       - uses: actions/download-artifact@v4
         with:
           name: ${{ steps.which.outputs.artifact }}
@@ -54,7 +58,7 @@ jobs:
       - name: Publish the release
         env:
           GH_TOKEN: ${{ github.token }}
-          TAG: ${{ github.ref_name }}
+          TAG: ${{ steps.which.outputs.tag }}
         run: |
           cd dl
           cat > notes.md <<EOF
@@ -69,6 +73,6 @@ jobs:
           Built and verified by Build & Verify run ${{ steps.which.outputs.run }}.
           EOF
           sed -i 's/^          //' notes.md
-          gh release create "$TAG" --repo "$GITHUB_REPOSITORY" --verify-tag --latest=false \
+          gh release create "$TAG" --repo "$GITHUB_REPOSITORY" --target "${{ steps.check.outputs.source }}" --latest=false \
             --title "Mote 0.1.0 build ${{ steps.check.outputs.build }} (playtester APK)" --notes-file notes.md \
             "${{ steps.check.outputs.apk }}" build-info.json
