@@ -986,6 +986,17 @@ func magnet() -> void:
 	u.place_at(bi, m.anchor + up * 0.2 + fwd * 2.5 + fwd.cross(up) * 2.0, fwd)
 	await u.wait_grounded()
 	await t.frames(20)
+	# (Food that wandered within reach would be caught instead: the lunge then connects and carries him
+	# away from the Mote. Which food is near depends on how long the world has run before this test
+	# (2026-10-11: a shrimp 1.0 m away after one more test ran first), so it is parked out of reach
+	# for the miss and put back after.)
+	var parked: Array = []
+	for f in g.balls[bi].foods:
+		if is_instance_valid(f) and f.catch_point().distance_to(p.head_position()) < 6.0:
+			parked.append([f, f.global_position, f.is_processing(), f.is_physics_processing()])
+			f.set_process(false)
+			f.set_physics_process(false)
+			f.global_position += up * 40.0
 	var on_before := m.magnet_on
 	# (He must actually lunge for there to be a miss: a press while still settling or recovering from
 	# an earlier lunge does nothing, so press again until one happens; at most three.)
@@ -1001,6 +1012,11 @@ func magnet() -> void:
 			break
 		await t.seconds(0.6)
 	p.lunged.disconnect(count)
+	for pk in parked:
+		if is_instance_valid(pk[0]):
+			pk[0].global_position = pk[1]
+			pk[0].set_process(pk[2])
+			pk[0].set_physics_process(pk[3])
 	release.call()
 	var on_after := m.magnet_on
 	t.check("magnet_startled_by_a_miss", on_before and not on_after and m.startle_t > 0.0, "drawn before %s, after the miss %s (startled %.1f s, lunges %d)" % [on_before, on_after, m.startle_t, lunges[0]])

@@ -11643,10 +11643,6 @@ func _test_owner_menus_and_players() -> void:
 	await t.frames(5)
 
 
-## Owner, 2026-10-08: two players on one phone, end to end in real game processes sharing one
-## user:// (as on a phone). A is the original pre-profile save (no registry yet): it must stay where
-## it is, byte for byte, when profiles appear. B starts its own fresh run; each plays and saves; each
-## comes back exactly as it left, untouched by the other. Device settings are shared; Gill is Gill.
 ## Steam Deck / Steam Machine requirements (owner, 2026-10-11): every page is reachable and usable with
 ## only a controller and no setting changed (the focus lands on the page, every focusable control on it
 ## can be reached with the d-pad, B goes back), the glyphs name the pad in use and the button that
@@ -11771,6 +11767,7 @@ func _test_deck_controls() -> void:
 	nav.back()
 	t.check("deck_b_in_play_is_lunge", nav.last_back == "ignored" and not g.pause_menu.visible, nav.last_back)
 	Settings.input_mode = was_mode
+	print("DECKDBG state=%s stage='%s' obj='%s' pause=%s pres=%s ctl=%s paused=%s focus=%s cine='%s' prompts=%s" % [g.state, g.onboarding.stage, g.onboarding.objective, g.pause_menu.visible, g.presentation.active() if g.presentation else false, g.player.controls_enabled, g.get_tree().paused, g.get_viewport().gui_get_focus_owner(), g.cinematic, g.hud.prompts.keys()])
 
 
 func _focusables(root: Node) -> Array:
@@ -11790,6 +11787,10 @@ func _texts(root: Node) -> Array:
 			out.append(n)
 	return out
 
+## Owner, 2026-10-08: two players on one phone, end to end in real game processes sharing one
+## user:// (as on a phone). A is the original pre-profile save (no registry yet): it must stay where
+## it is, byte for byte, when profiles appear. B starts its own fresh run; each plays and saves; each
+## comes back exactly as it left, untouched by the other. Device settings are shared; Gill is Gill.
 func _test_profiles_ab() -> void:
 	var base: Array = ["--headless", "--fixed-fps", "60", "--max-fps", "0"]
 	var project := ProjectSettings.globalize_path("res://")
