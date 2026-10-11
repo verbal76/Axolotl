@@ -66,8 +66,7 @@ jobs:
 
           - Source commit: ${{ steps.check.outputs.source }}
           - APK SHA-256: ${{ steps.check.outputs.sha }}
-          - Bundled game: Mote v108 content (hints on one clock per ball, name prompt above the keyboard, v107 game feel, player profiles).
-          - Launch: neutral black native frame, then the Hot Attic Games splash, then Mote.
+          - Bundled game: the game at the source commit above (a fresh install is already up to date).
 
           Install over the existing Mote app (do not uninstall first): same app and signing key, so saves and player profiles are kept. Later updates arrive by OTA as before.
           Built and verified by Build & Verify run ${{ steps.which.outputs.run }}.
