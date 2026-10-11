@@ -5,7 +5,7 @@
 - Every cold launch shows, in order: APP START (neutral native frame) → HOT ATTIC GAMES SPLASH → PRODUCT TITLE → experience.
   The studio splash is the FIRST branded image: no Mote artwork in Android's launch screen or the engine
   boot splash (`application/boot_splash/*`, export `splash_screen/*`). Guarded by
-  `hag_native_launch_neutral_before_studio_splash`; the r5 APK is the one recorded exception (fixed in r6).
+  `hag_native_launch_neutral_before_studio_splash`; the r5 APK is the one recorded exception (the r6 fix was rolled back 2026-10-11; see docs/HOT_ATTIC_INFRA.md §4).
 - The only studio logo is the owner-supplied file **`Hot_Attic_Games_Master_Logo_ALPHA_FINAL.png`**
   (repo root, `res://Hot_Attic_Games_Master_Logo_ALPHA_FINAL.png`, 1536×1024 RGBA with transparency).
   Never redraw, crop, distort, recolour or substitute it. `branding/Hot_Attic_Games_Master_Logo.png` is obsolete.
@@ -45,6 +45,6 @@ release gates (tests, baked export, logo, signing, verification) to save minutes
 
 ## Native freeze
 
-`project.godot`, `export_presets.cfg` and `scripts/boot/*` are frozen (runtime r6, the 2026-10-09 playtester
-APK with the neutral native launch frame; r5 = Android build 22 before it);
+`project.godot`, `export_presets.cfg` and `scripts/boot/*` are frozen (runtime r5, Android build 22; owner
+2026-10-11: r6 rolled back so every tester on build 22 keeps receiving OTAs);
 `python3 tools/ota_runtime.py --check` must print OTA-compatible.

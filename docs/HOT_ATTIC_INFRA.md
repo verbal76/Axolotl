@@ -141,6 +141,11 @@ input blocked, layer 102 over the loading screen. The world builds behind it, so
   `splash_screen/background_color` black. `hag_native_launch_neutral_before_studio_splash` passes with no
   exception on r6. r5 installs (build 22) keep v108 and see later OTAs as "native update required" until
   the r6 APK is installed over them.
+  **ROLLED BACK (owner, 2026-10-11: "kill the new R6 ... apply all the work as an OTA to r5"):** playtesters
+  on build 22 could not take r6 OTAs (one channel pointer serves one runtime), so the native layer is r5
+  again and every OTA from dev-000111 on is built for r5. The engine boot splash shows Mote's art before
+  the studio splash again (the recorded r5 exception). Build 128 (r6) phones take a new r5 APK with a
+  higher build number, installed over it (same key; saves kept).
 - **Recurrence guard:** `StudioSplash.native_launch_problems()` + test
   `hag_native_launch_neutral_before_studio_splash` read `project.godot`, the Android export preset
   and the launch icon's pixels. r5 is the one recorded exception (exactly its two known boot-splash
