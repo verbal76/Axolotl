@@ -371,6 +371,11 @@ func _process(dt: float) -> void:
 	if not visible or _turn == null:
 		return
 	_t += dt
+	# Controller (Steam Deck, 2026-10-11): the right stick turns him (the left one moves the focus).
+	var rs := Input.get_axis("cam_left", "cam_right")
+	if absf(rs) > 0.15 and _dragging == -2:
+		turn_by(rs * 520.0 * dt)
+		_yaw_v = 0.0
 	if _dragging == -2:
 		# The flick eases out (no endless spinning).
 		yaw = wrapf(yaw + _yaw_v * dt, -PI, PI)

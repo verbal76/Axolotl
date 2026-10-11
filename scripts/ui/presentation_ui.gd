@@ -23,6 +23,7 @@ var _back: Button
 var _live_btn: Button
 var _swim_btn: Button
 var _view_btn: Button
+var _look_btn: Button
 var _stick_touch := -1
 var _stick_origin := Vector2.ZERO
 var _btn_touch := {}
@@ -59,6 +60,13 @@ func _ready() -> void:
 	_swim_btn = UiStyle.button("Swim", func(): p.go("swim"))
 	_swim_btn.name = "SwimMode"
 	_root.add_child(_swim_btn)
+	# Controller (Steam Deck, 2026-10-11): tapping the tank has no stick equivalent, so the room offers
+	# it as a button while a controller is in use.
+	_look_btn = UiStyle.button("Look closer", func(): p.go("inspect"))
+	_look_btn.name = "LookCloser"
+	_look_btn.visible = false
+	_root.add_child(_look_btn)
+	Settings.input_mode_changed.connect(func(_m): set_mode(mode))
 	_view_btn = UiStyle.button("View", func():
 		p.next_live_view()
 		_view_btn.text = view_name()
@@ -95,6 +103,9 @@ func _layout() -> void:
 	_swim_btn.size = Vector2(170, 72) * _s
 	_swim_btn.position = _safe.end - _swim_btn.size - Vector2(6, 6)
 	_live_btn.position = _swim_btn.position - Vector2(_live_btn.size.x + 16, 0)
+	_look_btn.add_theme_font_size_override("font_size", int(26 * _s))
+	_look_btn.size = Vector2(230, 72) * _s
+	_look_btn.position = _live_btn.position - Vector2(_look_btn.size.x + 16, 0)
 	_view_btn.size = Vector2(250, 60) * _s
 	_view_btn.position = Vector2(_safe.end.x - _view_btn.size.x - 6, _safe.position.y + 6)
 	# (Above the bottom row of buttons, never under them.)
@@ -114,19 +125,22 @@ func set_mode(m: String) -> void:
 	mode = m
 	if m == "live":
 		_view_btn.text = view_name()
+	var pad := Settings.input_mode == Settings.InputMode.PAD
 	_live_btn.visible = m == "room"
 	_swim_btn.visible = m == "room"
+	_look_btn.visible = m == "room" and pad
 	_view_btn.visible = m == "live"
 	_live_show = 3.0
 	match m:
 		"room":
-			_hint.text = "Tap the aquarium to look closer"
+			_hint.text = "Choose Look closer to see the tank" if pad else "Tap the aquarium to look closer"
 		"inspect":
-			_hint.text = "Drag to look around the tank"
+			_hint.text = "Look around with the sticks" if pad else "Drag to look around the tank"
 		"live":
 			_hint.text = ""
 		"swim":
-			_hint.text = "Aim %s with the stick · hold Swim to swim" % GameVersion.CHARACTER_NAME
+			_hint.text = ("Aim %s with the left stick · hold %s to swim" % [GameVersion.CHARACTER_NAME, Glyphs.button_name(JOY_BUTTON_A)]) if pad \
+					else "Aim %s with the stick · hold Swim to swim" % GameVersion.CHARACTER_NAME
 	_release()
 	_hint.modulate.a = 1.0
 	var tw := create_tween()
@@ -137,6 +151,12 @@ func set_mode(m: String) -> void:
 func _process(dt: float) -> void:
 	if not visible:
 		return
+	if mode == "live" and Settings.input_mode == Settings.InputMode.PAD:
+		_live_show = 3.0
+	if mode == "inspect" and _drag_touch < 0:
+		var look := Input.get_vector("cam_left", "cam_right", "cam_up", "cam_down") + Input.get_vector("move_left", "move_right", "move_forward", "move_back")
+		if look.length() > 0.1:
+			p.inspect_drag(look.limit_length(1.0) * 420.0 * dt)
 	if mode == "live":
 		_live_show = maxf(0.0, _live_show - dt)
 		var a := clampf(_live_show, 0.0, 1.0)

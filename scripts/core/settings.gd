@@ -74,6 +74,11 @@ func _enter_tree() -> void:
 	_apply_audio()
 	Input.joy_connection_changed.connect(_on_joy_connection_changed)
 	_pad_connected = Input.get_connected_joypads().size() > 0
+	# Steam Deck / Steam Machine (2026-10-11): on a computer, or with a pad already connected, the game
+	# starts in controller mode (no setting to change). Touch takes over at the first touch. (Automated
+	# runs keep the touch layout their checks were written for.)
+	if test_mode == "" and (not OS.has_feature("mobile") or _pad_connected):
+		input_mode = InputMode.PAD
 
 
 func _setup_input_map() -> void:

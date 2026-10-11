@@ -89,6 +89,40 @@ func run(runner) -> void:
 		g.title.players_page._close_ask()
 		await t.seconds(0.4)
 		await t.shot("owner2_players_list")
+	if only == "deck":
+		# Steam Deck (2026-10-11): the Deck's 1280x800, controller mode, the focus ring, the glyph row,
+		# the controller keyboard.
+		DisplayServer.window_set_size(Vector2i(1280, 800))
+		Settings.input_mode = Settings.InputMode.PAD
+		await t.seconds(0.5)
+		g._enter_title()
+		await t.seconds(1.5)
+		await t.shot("deck_title_focus")
+		g.pause_menu.open(true)
+		await t.seconds(0.6)
+		await t.shot("deck_settings_focus")
+		g._go_back()
+		await t.seconds(0.4)
+		Settings.test_args["players"] = "1"
+		g.title.players_page.open()
+		g.title.players_page._open_ask("")
+		await t.seconds(0.6)
+		await t.shot("deck_name_keyboard")
+		g.title.players_page._close_ask()
+		Settings.test_args.erase("players")
+		g._go_back()
+		await t.seconds(0.4)
+		g.start_play(true)
+		await t.seconds(2.0)
+		g.hud.show_prompt("lunge")
+		g.hud.show_prompt("swipe")
+		await t.seconds(0.6)
+		await t.shot("deck_play_prompts")
+		g.hud.hide_prompt("lunge")
+		g.hud.hide_prompt("swipe")
+		g.pause_menu.open()
+		await t.seconds(0.6)
+		await t.shot("deck_pause_focus")
 	if only == "applying":
 		# The activation modal over the title (HOT_ATTIC_INFRA.md §2).
 		g._enter_title()

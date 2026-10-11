@@ -475,6 +475,8 @@ func pressed_glow(action: String) -> float:
 class HudCanvas extends Control:
 	var hud: Hud
 	var scale_k := 1.0
+	## Controller mode: where the prompt row was last drawn (tests).
+	var pad_row_rect := Rect2()
 	var _t := 0.0
 
 	func _process(dt: float) -> void:
@@ -630,6 +632,18 @@ class HudCanvas extends Control:
 		Tier2Glyphs.draw(self, g.tier2.equipped, c, r * 0.46, ic, scale_k)
 
 	func _draw_prompts(pa: float) -> void:
+		# Controller (Steam Deck requirements, 2026-10-11): one row of glyph + label chips, bottom
+		# centre, glyphs for the pad in use (Glyphs). Touch: the pulsing rings on the buttons.
+		if pa <= 0.0:
+			var acts: Array = []
+			for p in hud.prompts:
+				if p == "special" and not hud.special_shown():
+					continue
+				acts.append(p)
+			if not acts.is_empty():
+				var vp := get_viewport_rect().size
+				pad_row_rect = Glyphs.draw_row(self, Vector2(vp.x * 0.5, vp.y - 26.0 * scale_k), acts, scale_k, 0.75 + 0.25 * sin(_t * 3.0), get_theme_default_font())
+			return
 		for p in hud.prompts:
 			var pulse := 0.5 + 0.5 * sin(_t * 4.0)
 			var col := Color(0.6, 1.0, 0.9, (0.25 + 0.45 * pulse))

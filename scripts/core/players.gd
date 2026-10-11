@@ -50,7 +50,7 @@ static func _load() -> Dictionary:
 		d = {"players": [], "seq": 1}
 		if not _tests():
 			var n := 1
-			for sub in DirAccess.get_directories_at(DIR):
+			for sub in (DirAccess.get_directories_at(DIR) if DirAccess.dir_exists_absolute(DIR) else PackedStringArray()):
 				if sub.begins_with("p") and sub.substr(1).is_valid_int():
 					n += 1
 					(d["players"] as Array).append({"id": sub, "name": "Player %d" % n})

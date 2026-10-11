@@ -20,6 +20,9 @@ var _ask_label: Label
 var _edit: LineEdit
 var _ask_id := ""
 var _note: Label   # "" = a new player, else the player being renamed
+## The controller keyboard under the name box (Steam Deck requirements, 2026-10-11): shown while the
+## controller is in use.
+var osk: OnScreenKeyboard
 
 
 func _ready() -> void:
@@ -80,6 +83,9 @@ func _ready() -> void:
 	cancel.name = "Cancel"
 	cancel.custom_minimum_size = Vector2(150, 60)
 	row.add_child(cancel)
+	osk = OnScreenKeyboard.new(_edit)
+	osk.done.connect(_on_ok)
+	_ask.add_child(osk)
 	_list = VBoxContainer.new()
 	_list.name = "List"
 	_list.add_theme_constant_override("separation", 8)
@@ -141,8 +147,13 @@ func _open_ask(id: String) -> void:
 	_new.visible = false
 	_note.visible = false
 	_list.visible = false
+	var pad := Settings.input_mode == Settings.InputMode.PAD
+	osk.visible = pad
 	_layout()
-	_edit.grab_focus.call_deferred()
+	if pad:
+		osk.first_key().grab_focus.call_deferred()
+	else:
+		_edit.grab_focus.call_deferred()
 
 
 func _close_ask() -> void:

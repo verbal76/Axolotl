@@ -27,7 +27,7 @@ func _init() -> void:
 	words.add_theme_constant_override("separation", 0)
 	add_child(words)
 	var head := Label.new()
-	head.text = "Tier 2 — tap to equip"
+	head.text = "Tier 2 — choose one to equip"
 	head.add_theme_font_size_override("font_size", 20)
 	words.add_child(head)
 	_name = UiStyle.note("", 18)

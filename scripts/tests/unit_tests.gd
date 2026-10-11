@@ -51,7 +51,7 @@ func run(runner) -> void:
 	g.spores.enabled = false
 	await t.seconds(0.5)
 	var only: String = Settings.test_args.get("only", "")
-	var registry := ["_test_startup", "_test_ota_and_version", "_test_hag_infra", "_test_launch_update", "_test_mesh_winding", "_test_terrain", "_test_ravines", "_test_rim_fights_clear_of_ooze", "_test_edge_assist", "_test_ooze_bubbles", "_test_view_clearances", "_test_camera_rises_over", "_test_camera_invariant", "_test_ball_view", "_test_juice", "_test_owner_menus_and_players", "_test_profiles_ab", "_phase_profile_write", "_phase_profile_check", "_test_hud_corner", "_test_restore_hints", "_test_spore_blooms", "_test_drawn_back", "_test_dead_area_sim", "_test_home_coherence", "_test_terrain_grounded", "_test_no_floating_platforms", "_test_parasite_locomotion", "_test_parasite_body_and_death", "_test_parasite_combat", "_test_organic_motion", "_test_gill_look", "_test_gill_idles", "_test_gill_colours", "_test_gill_patterns", "_test_tail_whip", "_test_gill_traction", "_test_gill_incline_transitions", "_test_traction_no_shortcuts", "_test_gill_body_follow", "_test_swim_body_follow", "_test_ambient_sway", "_test_placements", "_test_tutorial_route", "_test_sphere_walk", "_test_jump_and_burst", "_test_coyote_and_buffer", "_test_swipe_direction_and_stages", "_test_hard_landing", "_test_food", "_test_food_reach", "_test_food_catchable", "_test_assisted_lunge", "_test_glob_counterplay", "_test_darter_and_burrower", "_test_food_repopulates", "_test_motes", "_test_checkpoint_and_regen", "_test_crumble", "_test_restoration_gates", "_test_retract_gates_gone", "_test_bubble_columns", "_test_restoration_continuity", "_test_health_map", "_test_vortex", "_test_vortex_tints", "_test_vortex_ready_state", "_test_vortex_currents", "_test_vortex_currents_travel", "_test_current", "_test_current_brace", "_test_canopy", "_test_canopy_plain_jumps", "_test_canopy_guard_leaf", "_test_climbs_physical", "_test_jungle_ladders_physical", "_test_leaf_geometry", "_test_leaf_footing", "_test_caves", "_test_mounds", "_test_vegetation", "_test_vortex_mouths_clear", "_test_vortex_pads_clear_of_plants", "_test_stalkers_in_reeds", "_test_route_audit", "_test_new_areas", "_test_ecosystem", "_test_threat_spread", "_test_music", "_test_opening_audio", "_test_run_clock", "_test_completion_catalog", "_test_completion_frozen", "_test_run_save_file", "_test_run_timer_live", "_test_run_continue", "_test_timer_integrity", "_test_resume_points_safe", "_phase_continue_write", "_phase_continue_read", "_test_upgrades", "_test_quality_title_cap", "_test_ui", "_test_menus_no_scroll", "_test_menu_touch", "_test_primary_buttons", "_test_tier2_rules", "_test_tier2_world", "_test_ambient_fish", "_test_parasite_never_buried", "_test_tier2_loadout", "_test_aquarium_experiences", "_test_aquarium_polish", "_test_all_clear", "_test_treasure_unlock", "_test_treasure_generation", "_test_treasure_play", "_phase_treasure_stress", "_phase_live_fish_diag", "_phase_cpu_probe", "_phase_incline_survey", "_phase_loco_diag", "_phase_crawl_trace", "_phase_mouth_crawls", "_phase_organic_trace", "_phase_organic_cost", "_test_skilltree_graph", "_test_progress_store", "_test_starfish_spots", "_test_starfish_pickup", "_test_skill_ui", "_test_quick_gill", "_test_lunge_skills", "_test_burst_skills", "_test_glide_control", "_test_glide_transfers", "_test_mote_magnet", "_phase_starfish_survey", "_phase_starfish_sweep", "_phase_glide_probe", "_test_plants_terminal_growth", "_test_sea_fan_depth", "_test_repopulation", "_phase_repop_survey", "_phase_repop_sim", "_test_aquarium_gill", "_phase_aq_nav", "_test_tutorials_and_title", "_test_onb_progress", "_test_onb_owner_save", "_test_onb_per_run", "_test_onb_toggle", "_test_onb_intro", "_test_onb_feeding", "_test_onb_parasite", "_test_onb_feed_first", "_test_onb_tunnel", "_test_onb_starfish", "_test_onb_softlock", "_test_onb_guidance", "_test_onb_replay", "_test_onb_relaunch", "_test_onb_restoration_equal", "_test_hard_mode", "_test_hard_mode_save", "_test_polish_a", "_test_leaf_motion", "_test_perf_veg_cull", "_test_veg_stays_put", "_test_death_and_arrival", "_test_pause_ball_progress", "_test_arrival_view", "_test_camera_never_drawn_unsafe", "_test_startup_build_identical", "_phase_world_hash", "_phase_th_bench", "_phase_hard_write", "_phase_hard_read", "_phase_hard_newrun", "_phase_hard_finish", "_phase_hard_sim", "_phase_hard_intervals", "_phase_onb_owner", "_phase_onb_write", "_phase_onb_read", "_phase_onb_kill", "_phase_onb_toggle", "_phase_cohesion_probe", "_test_eel_reach", "_test_parasite_readability"]
+	var registry := ["_test_startup", "_test_ota_and_version", "_test_hag_infra", "_test_launch_update", "_test_mesh_winding", "_test_terrain", "_test_ravines", "_test_rim_fights_clear_of_ooze", "_test_edge_assist", "_test_ooze_bubbles", "_test_view_clearances", "_test_camera_rises_over", "_test_camera_invariant", "_test_ball_view", "_test_juice", "_test_owner_menus_and_players", "_test_deck_controls", "_test_profiles_ab", "_phase_profile_write", "_phase_profile_check", "_test_hud_corner", "_test_restore_hints", "_test_spore_blooms", "_test_drawn_back", "_test_dead_area_sim", "_test_home_coherence", "_test_terrain_grounded", "_test_no_floating_platforms", "_test_parasite_locomotion", "_test_parasite_body_and_death", "_test_parasite_combat", "_test_organic_motion", "_test_gill_look", "_test_gill_idles", "_test_gill_colours", "_test_gill_patterns", "_test_tail_whip", "_test_gill_traction", "_test_gill_incline_transitions", "_test_traction_no_shortcuts", "_test_gill_body_follow", "_test_swim_body_follow", "_test_ambient_sway", "_test_placements", "_test_tutorial_route", "_test_sphere_walk", "_test_jump_and_burst", "_test_coyote_and_buffer", "_test_swipe_direction_and_stages", "_test_hard_landing", "_test_food", "_test_food_reach", "_test_food_catchable", "_test_assisted_lunge", "_test_glob_counterplay", "_test_darter_and_burrower", "_test_food_repopulates", "_test_motes", "_test_checkpoint_and_regen", "_test_crumble", "_test_restoration_gates", "_test_retract_gates_gone", "_test_bubble_columns", "_test_restoration_continuity", "_test_health_map", "_test_vortex", "_test_vortex_tints", "_test_vortex_ready_state", "_test_vortex_currents", "_test_vortex_currents_travel", "_test_current", "_test_current_brace", "_test_canopy", "_test_canopy_plain_jumps", "_test_canopy_guard_leaf", "_test_climbs_physical", "_test_jungle_ladders_physical", "_test_leaf_geometry", "_test_leaf_footing", "_test_caves", "_test_mounds", "_test_vegetation", "_test_vortex_mouths_clear", "_test_vortex_pads_clear_of_plants", "_test_stalkers_in_reeds", "_test_route_audit", "_test_new_areas", "_test_ecosystem", "_test_threat_spread", "_test_music", "_test_opening_audio", "_test_run_clock", "_test_completion_catalog", "_test_completion_frozen", "_test_run_save_file", "_test_run_timer_live", "_test_run_continue", "_test_timer_integrity", "_test_resume_points_safe", "_phase_continue_write", "_phase_continue_read", "_test_upgrades", "_test_quality_title_cap", "_test_ui", "_test_menus_no_scroll", "_test_menu_touch", "_test_primary_buttons", "_test_tier2_rules", "_test_tier2_world", "_test_ambient_fish", "_test_parasite_never_buried", "_test_tier2_loadout", "_test_aquarium_experiences", "_test_aquarium_polish", "_test_all_clear", "_test_treasure_unlock", "_test_treasure_generation", "_test_treasure_play", "_phase_treasure_stress", "_phase_live_fish_diag", "_phase_cpu_probe", "_phase_incline_survey", "_phase_loco_diag", "_phase_crawl_trace", "_phase_mouth_crawls", "_phase_organic_trace", "_phase_organic_cost", "_test_skilltree_graph", "_test_progress_store", "_test_starfish_spots", "_test_starfish_pickup", "_test_skill_ui", "_test_quick_gill", "_test_lunge_skills", "_test_burst_skills", "_test_glide_control", "_test_glide_transfers", "_test_mote_magnet", "_phase_starfish_survey", "_phase_starfish_sweep", "_phase_glide_probe", "_test_plants_terminal_growth", "_test_sea_fan_depth", "_test_repopulation", "_phase_repop_survey", "_phase_repop_sim", "_test_aquarium_gill", "_phase_aq_nav", "_test_tutorials_and_title", "_test_onb_progress", "_test_onb_owner_save", "_test_onb_per_run", "_test_onb_toggle", "_test_onb_intro", "_test_onb_feeding", "_test_onb_parasite", "_test_onb_feed_first", "_test_onb_tunnel", "_test_onb_starfish", "_test_onb_softlock", "_test_onb_guidance", "_test_onb_replay", "_test_onb_relaunch", "_test_onb_restoration_equal", "_test_hard_mode", "_test_hard_mode_save", "_test_polish_a", "_test_leaf_motion", "_test_perf_veg_cull", "_test_veg_stays_put", "_test_death_and_arrival", "_test_pause_ball_progress", "_test_arrival_view", "_test_camera_never_drawn_unsafe", "_test_startup_build_identical", "_phase_world_hash", "_phase_th_bench", "_phase_hard_write", "_phase_hard_read", "_phase_hard_newrun", "_phase_hard_finish", "_phase_hard_sim", "_phase_hard_intervals", "_phase_onb_owner", "_phase_onb_write", "_phase_onb_read", "_phase_onb_kill", "_phase_onb_toggle", "_phase_cohesion_probe", "_test_eel_reach", "_test_parasite_readability"]
 	# A --only entry that names nothing is a typo (or a stale substring): fail loudly rather than run nothing.
 	for o in only.split(",", false):
 		if not registry.has(o) and not registry.has("_test_" + o):
@@ -11647,6 +11647,149 @@ func _test_owner_menus_and_players() -> void:
 ## user:// (as on a phone). A is the original pre-profile save (no registry yet): it must stay where
 ## it is, byte for byte, when profiles appear. B starts its own fresh run; each plays and saves; each
 ## comes back exactly as it left, untouched by the other. Device settings are shared; Gill is Gill.
+## Steam Deck / Steam Machine requirements (owner, 2026-10-11): every page is reachable and usable with
+## only a controller and no setting changed (the focus lands on the page, every focusable control on it
+## can be reached with the d-pad, B goes back), the glyphs name the pad in use and the button that
+## works, a name can be typed with the controller keyboard, and no text is smaller than 12 px at the
+## Deck's 1280x800 (the base canvas is 1280x720 "expand", so 1280x800 draws it 1:1).
+func _test_deck_controls() -> void:
+	# Glyph families by pad name, and glyphs read from the input map.
+	var fams := [Glyphs.family_for_name("Steam Virtual Gamepad"), Glyphs.family_for_name("Steam Deck Controller"),
+			Glyphs.family_for_name("Xbox Wireless Controller"), Glyphs.family_for_name("DualSense Wireless Controller"),
+			Glyphs.family_for_name("PS4 Controller")]
+	t.check("deck_glyph_families", fams == ["deck", "deck", "xbox", "ps", "ps"], str(fams))
+	var btns := [Glyphs.button_for("jump"), Glyphs.button_for("lunge"), Glyphs.button_for("swipe"), Glyphs.button_for("special"),
+			Glyphs.button_for("pause"), Glyphs.button_for("view_ball"), Glyphs.button_for("move"), Glyphs.button_for("camera")]
+	t.check("deck_glyphs_follow_input_map", btns == [JOY_BUTTON_A, JOY_BUTTON_B, JOY_BUTTON_X, JOY_BUTTON_Y, JOY_BUTTON_START, JOY_BUTTON_BACK, -2, -3], str(btns))
+	var was_mode := Settings.input_mode
+	Settings.input_mode = Settings.InputMode.PAD
+	var nav: PadNav = g.pad_nav
+	var bad: Array[String] = []
+	var small: Array[String] = []
+	# Every page: the focus lands on it, every focusable control on it is reachable by d-pad from there,
+	# and its text is at least 12 px.
+	var pages := [
+		["title", func() -> void: g._enter_title(), func() -> void: pass],
+		["players", func() -> void: g.title.players_page.open(), func() -> void: pass],
+		["settings", func() -> void: g.pause_menu.open(true), func() -> void: pass],
+		["colours", func() -> void: g.pause_menu._open_gill(true), func() -> void: pass],
+		["skills", func() -> void: g.pause_menu._open_skills(true), func() -> void: pass],
+		["guide", func() -> void: g.pause_menu.open(true); g.pause_menu._open_guide(), func() -> void: pass],
+		["about", func() -> void: g.diagnostics.open(), func() -> void: pass],
+		["aquarium", func() -> void: g.pause_menu.open(true); g.pause_menu._open_aquarium(), func() -> void: pass],
+	]
+	for pg in pages:
+		(pg[1] as Callable).call()
+		await t.frames(4)
+		nav._focus_t = 0.0
+		nav._process(0.2)
+		await t.frames(2)
+		var f := g.get_viewport().gui_get_focus_owner()
+		if f == null or not f.is_visible_in_tree():
+			bad.append("%s: no focus" % pg[0])
+		else:
+			var all := _focusables(nav._page_of(f))
+			var seen := {f: true}
+			var q: Array = [f]
+			while not q.is_empty():
+				var c: Control = q.pop_front()
+				var nbrs: Array = []
+				for side in [SIDE_LEFT, SIDE_TOP, SIDE_RIGHT, SIDE_BOTTOM]:
+					nbrs.append(c.find_valid_focus_neighbor(side))
+				nbrs.append(c.find_next_valid_focus())
+				nbrs.append(c.find_prev_valid_focus())
+				for n in nbrs:
+					if n != null and not seen.has(n) and (n as Control).is_visible_in_tree():
+						seen[n] = true
+						q.append(n)
+			var missing: Array[String] = []
+			for c in all:
+				if not seen.has(c):
+					missing.append(str(c.name))
+			if not missing.is_empty():
+				bad.append("%s: unreachable %s" % [pg[0], missing])
+			for l in _texts(nav._page_of(f)):
+				var fs := (l as Control).get_theme_font_size("font_size")
+				if fs < 12:
+					small.append("%s/%s %dpx" % [pg[0], l.name, fs])
+		if pg[0] == "aquarium":
+			await t.seconds(1.5)
+			var look := g.find_child("LookCloser", true, false) as Button
+			t.check("deck_aquarium_look_closer_by_controller", look != null and look.is_visible_in_tree() and nav.buttons().has(look),
+					"button %s, visible %s" % [look != null, look != null and look.is_visible_in_tree()])
+		# Back: B closes every page above the title (the title itself ignores it).
+		if pg[0] == "title":
+			nav.back()
+			t.check("deck_b_on_title_never_quits", nav.last_back == "ignored" and g.state == "title", nav.last_back)
+		else:
+			for k in 4:
+				if not nav.back():
+					break
+				await t.frames(2)
+			await t.frames(2)
+	t.check("deck_every_page_reachable_by_controller", bad.is_empty(), "; ".join(bad))
+	t.check("deck_text_at_least_12px", small.is_empty(), "; ".join(small))
+	# The controller keyboard: a new player's name with only the pad.
+	Settings.test_args["players"] = "1"
+	Players.reload()
+	g._enter_title()
+	await t.frames(3)
+	g.title.players_page.open()
+	await t.frames(2)
+	var pp: PlayersPage = g.title.players_page
+	pp._open_ask("")
+	await t.frames(3)
+	var osk := pp.osk
+	var f2 := g.get_viewport().gui_get_focus_owner()
+	var typed := ""
+	for key in ["M", "o", "t", "e"]:
+		for b in osk._keys:
+			if b.text == key:
+				b.pressed.emit()
+				break
+	typed = pp._edit.text
+	var osk_vis := osk.is_visible_in_tree()
+	var osk_ok := osk_vis and f2 == osk.first_key() and typed == "Mote"
+	pp._close_ask()
+	Settings.test_args.erase("players")
+	Players.reload()
+	t.check("deck_controller_keyboard_types_a_name", osk_ok, "visible %s, focus %s, typed '%s'" % [osk_vis, f2.name if f2 != null else "none", typed])
+	g._go_back()
+	await t.frames(2)
+	# In play: the touch HUD hides, and a lesson prompt shows the pad's glyph row on screen.
+	g.start_play(true)
+	await t.frames(5)
+	g.hud.show_prompt("lunge")
+	g.hud.show_prompt("swipe")
+	await t.frames(3)
+	var r: Rect2 = g.hud.canvas.pad_row_rect
+	var vp := g.get_viewport().get_visible_rect()
+	t.check("deck_prompt_glyph_row_on_screen", g.hud._target_alpha == 0.0 and r.size.x > 0.0 and vp.encloses(r), "touch alpha %.2f, row %s" % [g.hud._target_alpha, r])
+	g.hud.hide_prompt("lunge")
+	g.hud.hide_prompt("swipe")
+	# B in play with no menu open stays the Lunge (never opens or closes anything).
+	nav.back()
+	t.check("deck_b_in_play_is_lunge", nav.last_back == "ignored" and not g.pause_menu.visible, nav.last_back)
+	Settings.input_mode = was_mode
+
+
+func _focusables(root: Node) -> Array:
+	var out: Array = []
+	for n in root.find_children("*", "Control", true, false):
+		var c := n as Control
+		if c.is_visible_in_tree() and c.focus_mode == Control.FOCUS_ALL and c.mouse_filter != Control.MOUSE_FILTER_IGNORE \
+				and not (c is BaseButton and (c as BaseButton).disabled) and c.get_global_rect().size.x > 0.0 and not (c is LineEdit):
+			out.append(c)
+	return out
+
+
+func _texts(root: Node) -> Array:
+	var out: Array = []
+	for n in root.find_children("*", "Control", true, false):
+		if (n is Label or n is Button) and (n as Control).is_visible_in_tree() and str(n.get("text")).strip_edges() != "":
+			out.append(n)
+	return out
+
 func _test_profiles_ab() -> void:
 	var base: Array = ["--headless", "--fixed-fps", "60", "--max-fps", "0"]
 	var project := ProjectSettings.globalize_path("res://")

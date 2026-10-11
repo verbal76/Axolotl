@@ -44,6 +44,7 @@ var starfish: StarfishField
 var onboarding: Onboarding
 ## The whole-ball view on demand (ledger row 21): pause menu "View whole ball", pad Back, key V.
 var ball_view: BallView
+var pad_nav: PadNav
 
 var state := "title"          # title | play | aquarium (the experiences; the clock never counts)
 var cinematic := ""
@@ -337,6 +338,9 @@ func _build_world() -> void:
 	ball_view.name = "BallView"
 	ball_view.g = self
 	add_child(ball_view)
+	# Controller navigation for every menu (Steam Deck requirements, 2026-10-11; PadNav).
+	pad_nav = PadNav.new(self)
+	add_child(pad_nav)
 	StartupTrace.mark("pause menu built")
 	title = TitleScreen.new()
 	add_child(title)

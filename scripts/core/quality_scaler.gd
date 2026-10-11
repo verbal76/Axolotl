@@ -28,9 +28,12 @@ const LEVELS := [
 func _ready() -> void:
 	# Polish pass (owner, 2026-10-11: "smoothness and crispness"): the 3D pass starts at native
 	# resolution on phones (it was 85%, stretched with a plain bilinear filter, which softened
-	# everything). When the scaler has to lower it, FSR 1 upscales with sharpening instead.
-	get_viewport().scaling_3d_mode = Viewport.SCALING_3D_MODE_FSR
-	get_viewport().fsr_sharpness = 0.3
+	# everything). (FSR 1 would sharpen a lowered resolution, but the engine offers it only with the
+	# Forward+ renderer; Mote uses Mobile everywhere, so a lowered level stays bilinear.)
+	var fsr := str(ProjectSettings.get_setting("rendering/renderer/rendering_method", "")) == "forward_plus"
+	get_viewport().scaling_3d_mode = Viewport.SCALING_3D_MODE_FSR if fsr else Viewport.SCALING_3D_MODE_BILINEAR
+	if fsr:
+		get_viewport().fsr_sharpness = 0.3
 	_apply()
 
 
