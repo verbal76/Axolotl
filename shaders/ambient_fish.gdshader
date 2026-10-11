@@ -4,6 +4,9 @@ shader_type spatial;
 // grows toward the tail. `swim` (0.2..2.5) is how hard it is swimming; `phase` desynchronises fish.
 render_mode cull_disabled;
 #include "res://shaders/creature_light.gdshaderinc"
+// The one light model every world and creature material shares (mote_shade.gdshaderinc).
+#define MOTE_SHADE_SPEC 0.3
+#include "res://shaders/mote_shade.gdshaderinc"
 
 instance uniform float phase = 0.0;
 instance uniform float wag = 5.0;

@@ -13,6 +13,9 @@ render_mode cull_disabled, world_vertex_coords, diffuse_lambert, specular_disabl
 #include "res://shaders/variegation.gdshaderinc"
 #include "res://shaders/health_field.gdshaderinc"
 #include "res://shaders/aquarium_light.gdshaderinc"
+// The one light model every world and creature material shares (mote_shade.gdshaderinc).
+#define MOTE_SHADE_TWO_SIDED
+#include "res://shaders/mote_shade.gdshaderinc"
 
 uniform sampler2D noise_tex : filter_linear_mipmap, repeat_enable;
 
@@ -147,7 +150,7 @@ void fragment() {
 		healthy = mix(healthy, variegate_leaf(healthy, abs(UV.x - 0.5) * 2.0, v_t, v_ph, vari_style, vari_edge, vari_stripe), variegate);
 	}
 	vec3 dead = mix(dead_a, dead_b, v_t);
-	vec3 alb = mix(dead, healthy, h) * mix(0.55, 1.0, v_t) * COLOR.rgb;
+	vec3 alb = mix(dead, healthy, h) * mix(0.8, 1.0, v_t) * COLOR.rgb;
 	float in_cave = cave_factor(v_wpos);
 	alb *= 1.0 - in_cave * 0.62;
 	ALBEDO = alb;

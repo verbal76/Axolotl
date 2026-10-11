@@ -702,8 +702,8 @@ func bubble_column(dir: Vector3, radius: float, height: float, speed := 5.0, zon
 	var st := SurfaceTool.new()
 	st.begin(Mesh.PRIMITIVE_TRIANGLES)
 	var sm := SphereMesh.new()
-	sm.radial_segments = 8
-	sm.rings = 4
+	sm.radial_segments = 14
+	sm.rings = 7
 	for k in 9:
 		var a := TAU * k / 9.0 + rng.randf() * 0.3
 		var s := rng.randf_range(0.18, 0.3)
@@ -975,8 +975,8 @@ func cave(lat: float, lon: float, heading: float, radius := 8.0, reward := "heal
 	var sm := SphereMesh.new()
 	sm.radius = 0.04
 	sm.height = 0.08
-	sm.radial_segments = 6
-	sm.rings = 3
+	sm.radial_segments = 10
+	sm.rings = 5
 	var mm := MultiMesh.new()
 	mm.transform_format = MultiMesh.TRANSFORM_3D
 	mm.mesh = sm

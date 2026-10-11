@@ -1515,6 +1515,12 @@ static func mat(color: Color, rough := 0.85, emission := Color.BLACK, energy := 
 	var m := StandardMaterial3D.new()
 	m.albedo_color = color
 	m.roughness = rough
+	# Polish pass (2026-10-11): props turn from light to shade like the shaded world and creatures
+	# (mote_shade.gdshaderinc): a soft wrapped terminator and a faint rim.
+	m.diffuse_mode = BaseMaterial3D.DIFFUSE_LAMBERT_WRAP
+	m.rim_enabled = true
+	m.rim = 0.2
+	m.rim_tint = 0.6
 	if energy > 0.0:
 		m.emission_enabled = true
 		m.emission = emission
@@ -1535,7 +1541,7 @@ static func merge(parts: Array) -> ArrayMesh:
 	return st.commit()
 
 
-static func sphere(r: float, radial := 10, rings := 5) -> SphereMesh:
+static func sphere(r: float, radial := 18, rings := 9) -> SphereMesh:
 	var s := SphereMesh.new()
 	s.radius = r
 	s.height = r * 2.0
@@ -1548,6 +1554,6 @@ static func capsule(r: float, h: float) -> CapsuleMesh:
 	var c := CapsuleMesh.new()
 	c.radius = r
 	c.height = maxf(h, r * 2.0)
-	c.radial_segments = 8
-	c.rings = 2
+	c.radial_segments = 16
+	c.rings = 6
 	return c

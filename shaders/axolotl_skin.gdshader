@@ -1,6 +1,10 @@
 shader_type spatial;
 render_mode diffuse_burley, specular_schlick_ggx, cull_disabled;
 #include "res://shaders/creature_light.gdshaderinc"
+// The one light model every world and creature material shares (mote_shade.gdshaderinc).
+#define MOTE_SHADE_SPEC 0.18
+#define MOTE_SHADE_RIM 0.28
+#include "res://shaders/mote_shade.gdshaderinc"
 
 // Gill's skin (Expansion 6): soft, moist axolotl skin rather than shiny pink plastic.
 // - Tone: a warmer, slightly deeper pink along the back, a pale peach belly, and a faint mottle.

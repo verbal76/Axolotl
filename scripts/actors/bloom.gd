@@ -30,7 +30,7 @@ func _ready() -> void:
 	cm.top_radius = 0.04
 	cm.bottom_radius = 0.07
 	cm.height = 0.5
-	cm.radial_segments = 6
+	cm.radial_segments = 12
 	stem.mesh = cm
 	stem.material_override = stem_mat
 	stem.position = Vector3(0, 0.25, 0)
@@ -51,8 +51,8 @@ func _ready() -> void:
 		var s := SphereMesh.new()
 		s.radius = 0.16
 		s.height = 0.32
-		s.radial_segments = 8
-		s.rings = 4
+		s.radial_segments = 14
+		s.rings = 7
 		leaf.mesh = s
 		leaf.material_override = _petal_mat
 		leaf.scale = Vector3(0.45, 1.0, 0.18)

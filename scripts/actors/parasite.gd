@@ -323,8 +323,8 @@ func _ready() -> void:
 		var es := SphereMesh.new()
 		es.radius = seg_radius * 0.24
 		es.height = seg_radius * 0.48
-		es.radial_segments = 8
-		es.rings = 4
+		es.radial_segments = 14
+		es.rings = 7
 		e.mesh = es
 		e.material_override = eye_mat
 		e.position = Vector3(side * seg_radius * 0.55, seg_radius * 0.45, -seg_radius * 0.6)
@@ -334,7 +334,7 @@ func _ready() -> void:
 		cm.top_radius = 0.0
 		cm.bottom_radius = seg_radius * 0.18
 		cm.height = seg_radius * 0.9
-		cm.radial_segments = 6
+		cm.radial_segments = 12
 		m.mesh = cm
 		m.material_override = _mat
 		m.set_instance_shader_parameter("seg_t", 0.02)

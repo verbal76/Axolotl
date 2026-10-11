@@ -1,6 +1,9 @@
 shader_type spatial;
 render_mode diffuse_lambert;
 #include "res://shaders/creature_light.gdshaderinc"
+// The one light model every world and creature material shares (mote_shade.gdshaderinc).
+#define MOTE_SHADE_SPEC 0.12
+#include "res://shaders/mote_shade.gdshaderinc"
 
 // Parasite body (Expansion 6): one continuous, flexible, tapering body instead of a chain of
 // beads. A shared tube mesh (UV.x round the body, UV.y head to tail with rounded caps beyond both

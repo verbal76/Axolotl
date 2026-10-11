@@ -1,6 +1,9 @@
 shader_type spatial;
 render_mode diffuse_burley, specular_schlick_ggx, cull_disabled;
 #include "res://shaders/creature_light.gdshaderinc"
+// The one light model every world and creature material shares (mote_shade.gdshaderinc).
+#define MOTE_SHADE_SPEC 0.2
+#include "res://shaders/mote_shade.gdshaderinc"
 
 // Pufferfish (Expansion 6, owner reference photos): one mesh with two shapes. Calm, it is an
 // elongated porcupinefish with fins and flat-lying spines (VERTEX, NORMAL); puffed, every body

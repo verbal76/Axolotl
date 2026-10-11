@@ -10,6 +10,8 @@ render_mode diffuse_lambert;
 // Both carry the film of grime that clears as the tank is restored (`clean`).
 
 #include "res://shaders/aquarium_light.gdshaderinc"
+// The one light model every world and creature material shares (mote_shade.gdshaderinc).
+#include "res://shaders/mote_shade.gdshaderinc"
 
 uniform sampler2D gravel_tex : source_color, filter_linear_mipmap_anisotropic, repeat_enable;
 uniform sampler2D gravel_nrm : hint_normal, filter_linear_mipmap_anisotropic, repeat_enable;

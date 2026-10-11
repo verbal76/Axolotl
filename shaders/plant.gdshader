@@ -7,6 +7,9 @@ render_mode cull_disabled, diffuse_lambert, specular_disabled;
 #include "res://shaders/variegation.gdshaderinc"
 #include "res://shaders/health_field.gdshaderinc"
 #include "res://shaders/aquarium_light.gdshaderinc"
+// The one light model every world and creature material shares (mote_shade.gdshaderinc).
+#define MOTE_SHADE_TWO_SIDED
+#include "res://shaders/mote_shade.gdshaderinc"
 
 uniform sampler2D noise_tex : filter_linear_mipmap, repeat_enable;
 uniform vec3 healthy_a : source_color = vec3(0.12, 0.4, 0.12);

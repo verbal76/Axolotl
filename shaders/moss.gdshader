@@ -21,6 +21,8 @@ render_mode cull_back, diffuse_lambert, specular_disabled;
 
 #include "res://shaders/health_field.gdshaderinc"
 #include "res://shaders/aquarium_light.gdshaderinc"
+// The one light model every world and creature material shares (mote_shade.gdshaderinc).
+#include "res://shaders/mote_shade.gdshaderinc"
 
 uniform sampler2D noise_tex : filter_linear_mipmap, repeat_enable;
 uniform vec3 healthy_a : source_color = vec3(0.12, 0.36, 0.1);
@@ -151,7 +153,7 @@ void fragment() {
 	healthy *= mix(vec3(0.86, 0.95, 1.04), vec3(1.1, 1.04, 0.84), drift);
 	vec3 dead = mix(dead_a, dead_b, n1);
 	float crack = smoothstep(0.86, 0.95, mid.g) * (1.0 - h);
-	dead *= 1.0 - crack * 0.55;
+	dead *= 1.0 - crack * 0.25;
 	vec3 moss = mix(dead, healthy, h);
 	// Cushions of moss (E6f; owner reference: a sprouted moss ball): clumps a few centimetres
 	// across on lumps a hand wide, shaded gaps between them, and paler tips on the tallest strands.
@@ -163,17 +165,18 @@ void fragment() {
 	float fine = 1.0 - smoothstep(0.012, 0.035, footprint);
 	vec4 tuft_f = mix(vec4(0.5), tuft, fine);
 	float clump = tuft_f.r * 0.65 + det.g * 0.35;
-	moss *= mix(0.68, 1.1, smoothstep(0.22, 0.78, clump));
-	moss = mix(moss, moss * vec3(1.12, 1.12, 0.86) + vec3(0.02, 0.025, 0.0), smoothstep(0.62, 0.86, tuft_f.r) * 0.5 * h);
+	// (Polish pass, 2026-10-11: clumps read as soft cushions, not dark grain.)
+	moss *= mix(0.9, 1.04, smoothstep(0.22, 0.78, clump));
+	moss = mix(moss, moss * vec3(1.12, 1.12, 0.86) + vec3(0.02, 0.025, 0.0), smoothstep(0.62, 0.86, tuft_f.r) * 0.2 * h);
 
 	// Earth and stone: faint strata following the ball's layers, grains and dark seams.
 	float alt = length(v_wpos - ball_center);
 	float strata = sin(alt * 4.0 + (mid.g - 0.5) * 9.0 + (macro.b - 0.5) * 6.0) * 0.5 + 0.5;
 	float grain = strata * 0.4 + det.r * 0.6 + tuft_f.b * 0.2;
 	vec3 stone = mix(stone_a, stone_b, smoothstep(0.1, 1.0, grain));
-	stone *= mix(0.8, 1.08, tuft_f.g);
+	stone *= mix(0.95, 1.03, tuft_f.g);
 	float seam = smoothstep(0.78, 0.92, det.b);
-	stone *= 1.0 - seam * 0.45;
+	stone *= 1.0 - seam * 0.15;
 	// Stone near sick moss is a little greyer.
 	stone = mix(stone, vec3(dot(stone, vec3(0.33))), (1.0 - h) * 0.2);
 
@@ -190,7 +193,8 @@ void fragment() {
 	// derivatives are undefined in divergent control flow.)
 	float near_ = 1.0 - smoothstep(10.0, 32.0, length(VERTEX));
 	float hgt = mix(grain * 0.7 + tuft_f.g * 0.3 - seam * 0.6, clump * 1.3, cover);
-	vec3 bn = bump(wn, v_wpos, hgt, relief * near_);
+	// (Polish pass: a third of the old relief; smooth, sculpted ground rather than gritty.)
+	vec3 bn = bump(wn, v_wpos, hgt, relief * near_ * 0.35);
 	NORMAL = normalize((VIEW_MATRIX * vec4(bn, 0.0)).xyz);
 	vec3 em = healthy_b * fres * sheen * h * 0.5 * cover;
 	vec3 glow = vec3(0.0);

@@ -54,8 +54,8 @@ func _ready() -> void:
 	var s := SphereMesh.new()
 	s.radius = 0.06
 	s.height = 0.1
-	s.radial_segments = 10
-	s.rings = 5
+	s.radial_segments = 16
+	s.rings = 8
 	_core.mesh = s
 	_core.material_override = core_mat
 	add_child(_core)

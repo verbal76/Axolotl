@@ -106,8 +106,8 @@ func _ball_mesh(r: float, m: Material, p: Node3D, pos: Vector3, scl: Vector3) ->
 	var s := SphereMesh.new()
 	s.radius = r
 	s.height = r * 2.0
-	s.radial_segments = 8
-	s.rings = 4
+	s.radial_segments = 14
+	s.rings = 7
 	mi.mesh = s
 	mi.material_override = m
 	mi.position = pos

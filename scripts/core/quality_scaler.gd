@@ -26,9 +26,11 @@ const LEVELS := [
 
 
 func _ready() -> void:
-	# Mobile screens are dense; start slightly below native resolution for the 3D pass.
-	if OS.has_feature("mobile"):
-		get_viewport().scaling_3d_mode = Viewport.SCALING_3D_MODE_BILINEAR
+	# Polish pass (owner, 2026-10-11: "smoothness and crispness"): the 3D pass starts at native
+	# resolution on phones (it was 85%, stretched with a plain bilinear filter, which softened
+	# everything). When the scaler has to lower it, FSR 1 upscales with sharpening instead.
+	get_viewport().scaling_3d_mode = Viewport.SCALING_3D_MODE_FSR
+	get_viewport().fsr_sharpness = 0.3
 	_apply()
 
 
@@ -83,7 +85,7 @@ func force_level(l: int) -> void:
 
 func _apply() -> void:
 	var q: Dictionary = LEVELS[level]
-	get_viewport().scaling_3d_scale = q["scale"] * (0.85 if OS.has_feature("mobile") else 1.0)
+	get_viewport().scaling_3d_scale = q["scale"]
 	if WaterFX.inst:
 		WaterFX.inst.set_speck_density(q["specks"])
 	var g := Game.inst

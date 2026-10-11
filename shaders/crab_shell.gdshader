@@ -1,6 +1,9 @@
 shader_type spatial;
 render_mode diffuse_burley, specular_schlick_ggx;
 #include "res://shaders/creature_light.gdshaderinc"
+// The one light model every world and creature material shares (mote_shade.gdshaderinc).
+#define MOTE_SHADE_SPEC 0.3
+#include "res://shaders/mote_shade.gdshaderinc"
 
 // The crab guardian's carapace (Expansion 6, owner reference photo): a dark, wet, domed shell
 // speckled with pale flecks and faint grooves, a red-orange rim band round its edge, and a pale

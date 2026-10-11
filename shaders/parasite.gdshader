@@ -1,6 +1,9 @@
 shader_type spatial;
 render_mode diffuse_lambert;
 #include "res://shaders/creature_light.gdshaderinc"
+// The one light model every world and creature material shares (mote_shade.gdshaderinc).
+#define MOTE_SHADE_SPEC 0.12
+#include "res://shaders/mote_shade.gdshaderinc"
 
 // Parasite body segment. Stolen vitality makes it vivid; damage drains colour from the head
 // toward the rear. seg_t = 0 at the head, 1 at the tail tip.
