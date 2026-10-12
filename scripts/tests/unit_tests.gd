@@ -11620,7 +11620,11 @@ func _test_owner_menus_and_players() -> void:
 		lic_shown = g.diagnostics._tech.is_visible_in_tree()
 		lic_btn.pressed.emit()
 		await t.frames(2)
-		lic_hidden = not g.diagnostics._tech.visible
+		lic_hidden = not g.diagnostics._tech.visible and not g.diagnostics._lic
+	g.diagnostics.close()
+	g.diagnostics.open()
+	await t.frames(2)
+	lic_hidden = lic_hidden and g.diagnostics._text.text.contains("DIAGNOSTICS")
 	g.diagnostics.close()
 	var comps := Engine.get_copyright_info().size()
 	t.check("about_licences", lic_shown and lic_hidden and lic_txt.contains(Engine.get_license_text().substr(0, 60))
@@ -11783,6 +11787,7 @@ func _test_deck_controls() -> void:
 	var was_dev: String = Settings.last_device
 	var glyph_mode: int = Settings.input_mode
 	Settings.prompt_style = "auto"
+	Settings.last_device = "pad"
 	var mm := InputEventMouseMotion.new()
 	mm.relative = Vector2(30, 0)
 	Settings._input(mm)

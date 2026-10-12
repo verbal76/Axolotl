@@ -118,8 +118,9 @@ func _btn(row: Control, name_: String, text: String, cb: Callable) -> Button:
 
 ## Opens (or closes) the scrolling part with the technical report or the licences.
 func _show_scroll(lic: bool) -> void:
-	_tech.visible = not (_tech.visible and _lic == lic)
-	_lic = lic
+	var show := not (_tech.visible and _lic == lic)
+	_tech.visible = show
+	_lic = lic and show
 	_text.text = ""
 	_text_at = -100000
 	_tech.scroll_vertical = 0
@@ -129,6 +130,7 @@ func _show_scroll(lic: bool) -> void:
 func open() -> void:
 	_say = ""
 	_lic = false
+	_text.text = ""
 	_tech.visible = false
 	visible = true
 	_layout()
