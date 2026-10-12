@@ -378,6 +378,11 @@ func _render_toggle(g: Game, own: MossBall, k: String, on: bool) -> void:
 						var dir: Vector3 = (c as Node3D).global_position - b.global_position
 						if (to_cam / dist).angle_to(dir) > horizon:
 							c.visible = on
+		"creature cull":
+			# (MossBall's render-only creature cull; "off" draws the far side's creatures: a negative saving is its gain.)
+			MossBall.creature_cull = on
+			for b in g.balls:
+				b.update_visibility(g.cam.global_position)
 		"no creatures":
 			for b in g.balls:
 				for c in b.parasites + b.motes + b.foods + b.critters + b.blooms:

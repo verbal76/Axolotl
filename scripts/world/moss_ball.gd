@@ -519,6 +519,7 @@ class TileGeometry extends RefCounted:
 	## The drawn triangles, for collision; empty when the tile has no raised ground.
 	var faces: PackedVector3Array
 	var max_h := -INF
+	var min_h := INF
 	func _init(p_f: int, p_tx: int, p_ty: int, p_base: int) -> void:
 		f = p_f
 		tx = p_tx
@@ -541,6 +542,7 @@ func _tile_geometry(jb: TileGeometry, tiles: int) -> void:
 			var d := _cube_dir(face, u, v)
 			var h := terrain_height(d)
 			jb.max_h = maxf(jb.max_h, h)
+			jb.min_h = minf(jb.min_h, h)
 			if h > 0.01 and i > 0 and j > 0 and i < n - 1 and j < n - 1:
 				raised = true
 			pos[j * n + i] = d * (radius + h)
@@ -582,6 +584,7 @@ func _tile_geometry(jb: TileGeometry, tiles: int) -> void:
 ## Adds a computed tile to its chunk's arrays, with collision when it has raised ground.
 func _add_tile(jb: TileGeometry, verts: PackedVector3Array, norms: PackedVector3Array, idx: PackedInt32Array) -> void:
 	terrain_max_h = maxf(terrain_max_h, jb.max_h)
+	terrain_min_h = minf(terrain_min_h, jb.min_h)
 	verts.append_array(jb.verts)
 	norms.append_array(jb.norms)
 	idx.append_array(jb.idx)
@@ -600,6 +603,8 @@ func _add_tile(jb: TileGeometry, verts: PackedVector3Array, norms: PackedVector3
 ## Horizon culling: ground and vegetation chunks wholly below the camera's horizon (seen over the
 ## ball's bulge, allowing for the tallest ground and plants) are not drawn.
 var terrain_max_h := 0.0
+## The lowest ground (ravine floors are negative): the ball's solid core is at least this deep.
+var terrain_min_h := 0.0
 var chunks_hidden := 0
 
 
@@ -625,6 +630,83 @@ func update_visibility(cam_pos: Vector3) -> void:
 		_collect_veg_cull()
 	for i in _veg_cull.size():
 		_veg_cull[i].visible = cam_dir.angle_to(_veg_cull_dir[i]) < horizon + _veg_cull_ang[i]
+	_cull_creatures(cam_dir, dist)
+
+
+## Creatures (critters, parasites, returners) wholly behind the ball's bulge are not drawn (ledger
+## row 28: ~33 draws on the title). Render-only: a creature's `visible` is gameplay state (gone,
+## defeated, collected) and is never touched; its meshes' renderer instances are hidden instead, and
+## on the way back each takes its own node's visibility again. The bulge is the ball's solid core (its sphere
+## below its deepest ravine floor), seen past by the creature's own height, with a margin for
+## spread-out bodies (shoals, long parasites).
+const CREATURE_CULL_MARGIN_M := 8.0
+## Off draws every creature again (probes, and a switch should the rule ever be in doubt).
+static var creature_cull := true
+var creatures_culled := 0
+## creature -> the GeometryInstance3D nodes hidden for it.
+var _cr_hidden := {}
+
+
+func _cull_creatures(cam_dir: Vector3, cam_dist: float) -> void:
+	creatures_culled = 0
+	if not creature_cull:
+		for c in _cr_hidden.keys():
+			if is_instance_valid(c):
+				for m in _cr_hidden[c]:
+					if is_instance_valid(m):
+						RenderingServer.instance_set_visible((m as GeometryInstance3D).get_instance(), (m as Node3D).is_visible_in_tree())
+		_cr_hidden.clear()
+		return
+	# The occluder is the solid core under the deepest ravine floor, so a sight line through a
+	# ravine can never be mistaken for one blocked by ground.
+	var core := radius + minf(terrain_min_h, 0.0) - 0.5
+	var cam_side := acos(clampf(core / maxf(cam_dist, core), -1.0, 1.0))
+	for list in [critters, parasites, returners]:
+		for c in list:
+			if not is_instance_valid(c):
+				continue
+			var off: Vector3 = (c as Node3D).global_position - global_position
+			var r := off.length()
+			if r < 0.001:
+				continue
+			var reach := cam_side + acos(clampf(core / maxf(r, core), -1.0, 1.0)) + CREATURE_CULL_MARGIN_M / radius
+			var show := cam_dir.angle_to(off / r) < reach
+			if show == not _cr_hidden.has(c):
+				if not show:
+					creatures_culled += 1
+				continue
+			if show:
+				for m in _cr_hidden[c]:
+					if is_instance_valid(m):
+						RenderingServer.instance_set_visible((m as GeometryInstance3D).get_instance(), (m as Node3D).is_visible_in_tree())
+				_cr_hidden.erase(c)
+			else:
+				var ms: Array = []
+				_gather_geometry(c, ms)
+				for m in ms:
+					RenderingServer.instance_set_visible((m as GeometryInstance3D).get_instance(), false)
+				_cr_hidden[c] = ms
+				creatures_culled += 1
+	# (Creatures freed while culled leave nothing behind.)
+	for c in _cr_hidden.keys():
+		if not is_instance_valid(c):
+			_cr_hidden.erase(c)
+
+
+## The meshes that move with a creature: a `top_level` subtree (world-space multimeshes such as the
+## glow worms' and the reed stalkers') is drawn elsewhere and left alone.
+static func _gather_geometry(n: Node, out: Array) -> void:
+	if n is GeometryInstance3D:
+		out.append(n)
+	for k in n.get_children():
+		if k is Node3D and (k as Node3D).top_level:
+			continue
+		_gather_geometry(k, out)
+
+
+## True when the creature's meshes are currently held back by the horizon cull (tests, probes).
+func creature_culled(c: Node) -> bool:
+	return _cr_hidden.has(c)
 
 
 ## The tagged vegetation chunks with their directions and spreads, gathered once and again only
