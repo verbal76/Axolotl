@@ -34,7 +34,9 @@ DESKTOP = {
                 "options": {"binary_format/embed_pck": "true", "binary_format/architecture": '"x86_64"',
                             "texture_format/s3tc_bptc": "true", "texture_format/etc2_astc": "false",
                             "application/product_name": '"Mote"', "application/company_name": '"Hot Attic Games"',
-                            "application/modify_resources": "false"}},
+                            "application/file_description": '"Mote"', "application/copyright": '"Hot Attic Games"',
+                            # Godot writes the icon and version resources itself (no rcedit needed).
+                            "application/modify_resources": "true"}},
 }
 
 
@@ -76,6 +78,19 @@ def check_source(sha: str) -> str:
     return want
 
 
+ICON_SOURCE = ROOT / "assets" / "icon" / "icon_1024.png"   # the owner's launcher-icon artwork (unchanged)
+
+
+def windows_extra(workdir: pathlib.Path, build: int) -> dict:
+    """The Windows exe's icon (the owner's launcher icon, converted to .ico, not redrawn) and version
+    resources (Windows needs four numbers: game version + build)."""
+    from PIL import Image   # (Pillow: present on the CI runners and here; only the Windows export needs it)
+    ico = workdir / "mote.ico"
+    Image.open(ICON_SOURCE).convert("RGBA").save(ico, sizes=[(16, 16), (24, 24), (32, 32), (48, 48), (64, 64), (128, 128), (256, 256)])
+    version = f"0.1.0.{build}"
+    return {"application/icon": f'"{ico}"', "application/file_version": f'"{version}"', "application/product_version": f'"{version}"'}
+
+
 def preset_block(index: int, spec: dict, export_path: str) -> str:
     lines = ["", f"[preset.{index}]", "", f'name="{spec["preset"]}"', f'platform="{spec["platform"]}"',
              "runnable=false", "dedicated_server=false", 'custom_features=""', 'export_filter="all_resources"',
@@ -105,6 +120,8 @@ def export_desktop(plat: str, workdir: pathlib.Path, sha: str, build: int) -> pa
     out_dir.mkdir(parents=True, exist_ok=True)
     exe = out_dir / spec["exe"]
     try:
+        if plat == "windows":
+            spec = dict(spec, options=dict(spec["options"], **windows_extra(workdir, build)))
         PRESETS.write_bytes(original + preset_block(n, spec, str(exe)).encode())
         # The build's identity (About > Technical: build number, source SHA, run), as for the APK.
         run = os.environ.get("GITHUB_RUN_ID", "local")
