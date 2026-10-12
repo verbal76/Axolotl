@@ -48,6 +48,8 @@ jobs:
   resolve:
     name: Resolve exact SHA
     runs-on: ubuntu-latest
+    permissions:
+      contents: read
     outputs:
       sha: ${{ steps.r.outputs.sha }}
     steps:
@@ -64,6 +66,9 @@ jobs:
   tests:
     name: Tests
     needs: resolve
+    # (Only the publish job writes: the tests read the commit.)
+    permissions:
+      contents: read
     uses: ./.github/workflows/tests.yml
     with:
       ref: ${{ needs.resolve.outputs.sha }}

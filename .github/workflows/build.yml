@@ -17,6 +17,13 @@ on:
         type: boolean
         default: false
 
+# Least privilege: this workflow reads code and run history and uploads artifacts; it never writes to
+# the repository (releases are apk-release.yml's). Without this block the token takes the repository
+# default, which is read-write.
+permissions:
+  contents: read
+  actions: read
+
 concurrency:
   group: build-${{ github.event.pull_request.number || github.ref }}
   cancel-in-progress: true
