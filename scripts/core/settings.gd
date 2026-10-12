@@ -194,7 +194,8 @@ func haptic(kind: String) -> void:
 
 func _load() -> void:
 	var cf := ConfigFile.new()
-	if cf.load(SETTINGS_PATH) != OK:
+	# (A damaged settings.cfg falls back to the copy kept at the last save.)
+	if cf.load(SETTINGS_PATH) != OK and cf.load(SETTINGS_PATH + ".bak") != OK:
 		return
 	reduced_hud = cf.get_value("hud", "reduced", reduced_hud)
 	show_run_timer = cf.get_value("hud", "run_timer", show_run_timer)
@@ -315,10 +316,27 @@ func save() -> void:
 		var lp := Players.look_path()
 		if lp != "":
 			DirAccess.make_dir_recursive_absolute(lp.get_base_dir())
-			mine.save(lp)
-	cf.save(SETTINGS_PATH)
+			save_config(mine, lp)
+	save_config(cf, SETTINGS_PATH)
 	_apply_audio()
 	settings_changed.emit()
+
+
+## Writes a ConfigFile safely (studio audit 2026-10-12; every other save already did): to a temporary
+## file, read back, then swapped in, the previous file kept as .bak, so an interrupted write never
+## leaves a damaged settings.cfg. Returns true when the new file is in place.
+static func save_config(cf: ConfigFile, path: String) -> bool:
+	var tmp := path + ".tmp"
+	if cf.save(tmp) != OK:
+		return false
+	var back := ConfigFile.new()
+	if back.load(tmp) != OK:
+		DirAccess.remove_absolute(tmp)
+		return false
+	if FileAccess.file_exists(path):
+		DirAccess.remove_absolute(path + ".bak")
+		DirAccess.rename_absolute(path, path + ".bak")
+	return DirAccess.rename_absolute(tmp, path) == OK
 
 
 ## Identity written alongside persisted data. Compatibility decisions use save_schema only;
