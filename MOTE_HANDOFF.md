@@ -24,7 +24,8 @@ section, `CLAUDE.md` and `docs/REQUIREMENTS_LEDGER.md` win.
   `docs/RELEASES.md`, `docs/STEAM_DECK.md` (hardware checklist), `docs/RELEASE_SOURCE.md` (branch
   ledger), `docs/THIRD_PARTY_ASSETS.md`.
 - **Next action:** owner review of `claude/mote-release-source`; with the owner's go, merge it into the
-  release branch (that push publishes an OTA with the Deck pass and the overnight work) and, if wanted,
+  release branch (since `ebdcae8` that push publishes nothing; docs/INTEGRATION.md) then, when wanted, an OTA by
+  explicit request (docs/OTA_PUBLISHING.md) and,
   run *Build & Release (coordinated)* for the first "Mote Build NN" (docs/RELEASES.md).
 
 > **MOTE AUTHORIZED REPOSITORY: `verbal76/Axolotl`**
@@ -51,9 +52,9 @@ section, `CLAUDE.md` and `docs/REQUIREMENTS_LEDGER.md` win.
 > install(s) and installing b22 fresh. Earlier owner evidence: Mote **Dev** b21 discovered, downloaded and
 > verified dev-000013 (Diagnostics, 18:58 UTC). Do not treat CI results as device results.
 
-**Every push to the branch publishes a dev OTA unless the commit message contains `[skip ci]`**
-(see §12). A documentation-only push without it would publish a new OTA whose game content is
-unchanged.
+**(History; superseded 2026-10-12.)** At this point every push to the branch published a dev OTA unless
+the commit message contained `[skip ci]`. Since `ebdcae8`, OTAs are published only by an explicit request
+(docs/OTA_PUBLISHING.md).
 
 ---
 
@@ -1072,4 +1073,5 @@ You are continuing an existing game called **Mote** (protagonist **Gill**).
 - expose GitHub secret values or private key material;
 - claim physical-device verification without the owner's evidence.
 
-**Remember:** a push without `[skip ci]` publishes a dev OTA.
+**Remember:** OTAs are published only by an explicit request (docs/OTA_PUBLISHING.md); before the
+manual-only workflow (`ebdcae8`) reaches the release branch, a game-file push there still publishes.

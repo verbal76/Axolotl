@@ -44,7 +44,8 @@ signing secrets, so its APK always comes from Build & Verify (`build.py apk` nam
 
 ## Other release paths (unchanged)
 
-- **OTA** (`ota-publish.yml`): every game-file push to the release branch publishes a signed dev-channel
-  OTA for installed phones (owner process, CLAUDE.md). Not part of numbered builds.
+- **OTA** (`ota-publish.yml`): a signed dev-channel OTA for installed phones, published only on an explicit
+  request (docs/OTA_PUBLISHING.md). Its id (`dev-000NNN`) is a separate sequence: an OTA never changes a
+  build number, and a numbered build never publishes an OTA.
 - **APK only** (`apk-release.yml`): the earlier playtester-APK release (`apk-v0.1.0-bNN`), kept until
   the owner retires it in favour of numbered builds.

@@ -25,7 +25,7 @@ holds the architecture, the enforcement and the branch ledger.
 
 | Platform | Workflow | Started by | Source | Provenance shipped with it |
 |---|---|---|---|---|
-| Phone game (OTA pack, dev channel) | `ota-publish.yml` | a game-file push to the authoritative branch, or by hand | the resolved SHA (tests, pack and release all use it) | signed `manifest.json` (source SHA, runtime, version), release notes, run receipt |
+| Phone game (OTA pack, dev channel) | `ota-publish.yml` | an explicit request only: `.github/ota-publish-request.json` push or by hand (docs/OTA_PUBLISHING.md) | the resolved SHA (tests, pack and release all use it) | signed `manifest.json` (source SHA, runtime, version), release notes, run receipt |
 | Playtester APK | `build.yml` builds; `apk-release.yml` publishes | native change or by hand; then `.github/apk-release-request.json` | the Build & Verify run's `build-info.json` `source_sha` | `build-info.json` (version, Android build, source SHA, runtime, APK sha256, run) |
 | Numbered build: APK + Windows + Linux ("Mote Build NN") | `build-release.yml` (docs/RELEASES.md) | by hand, or `.github/build-release-request.json` | the requested SHA (the APK's build-info must name it) | `build-manifest.json` + `checksums.sha256` in the release; each desktop build's identity (build, source SHA, run) in About |
 
