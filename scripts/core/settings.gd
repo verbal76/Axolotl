@@ -23,6 +23,12 @@ var tutorials := true
 var music_volume := 0.8
 var sfx_volume := 0.9
 var input_mode: int = InputMode.TOUCH
+## Button prompts (Glyphs): "auto" follows the input in use; "xbox", "ps", "deck" or "keys" fixes one
+## family (studio standard §13: a manual choice where detection is unreliable).
+var prompt_style := "auto"
+## The last deliberate input: "pad" (a pad button or stick) or "keys" (a key press or a mouse click;
+## mouse movement alone never counts, so a trackpad cannot make prompts flicker).
+var last_device := "pad"
 ## The character's colours (GillLook): a morph plus fine-tuning of the body and the freckles.
 var gill_morph := "pink"
 var gill_body_hue := 0.0
@@ -130,9 +136,13 @@ func _axis(ax: JoyAxis, v: float) -> InputEventJoypadMotion:
 func _input(event: InputEvent) -> void:
 	# Automatic touch <-> controller switching.
 	if event is InputEventJoypadButton and event.pressed:
+		last_device = "pad"
 		_set_mode(InputMode.PAD)
 	elif event is InputEventJoypadMotion and absf(event.axis_value) > 0.5:
+		last_device = "pad"
 		_set_mode(InputMode.PAD)
+	elif (event is InputEventKey and event.pressed and not event.echo) or (event is InputEventMouseButton and event.pressed):
+		last_device = "keys"
 	elif event is InputEventScreenTouch and event.pressed:
 		_set_mode(InputMode.TOUCH)
 
@@ -190,6 +200,9 @@ func _load() -> void:
 	show_run_timer = cf.get_value("hud", "run_timer", show_run_timer)
 	haptics = cf.get_value("hud", "haptics", haptics)
 	swim_invert_y = bool(cf.get_value("controls", "swim_invert_y", swim_invert_y))
+	prompt_style = str(cf.get_value("controls", "prompt_style", prompt_style))
+	if not prompt_style in ["auto", "xbox", "ps", "deck", "keys"]:
+		prompt_style = "auto"
 	tutorials = bool(cf.get_value("onboarding", "tutorials", tutorials))
 	music_volume = cf.get_value("audio", "music", music_volume)
 	sfx_volume = cf.get_value("audio", "sfx", sfx_volume)
@@ -277,6 +290,7 @@ func save() -> void:
 	cf.set_value("hud", "run_timer", show_run_timer)
 	cf.set_value("hud", "haptics", haptics)
 	cf.set_value("controls", "swim_invert_y", swim_invert_y)
+	cf.set_value("controls", "prompt_style", prompt_style)
 	cf.set_value("onboarding", "tutorials", tutorials)
 	cf.set_value("audio", "music", music_volume)
 	cf.set_value("audio", "sfx", sfx_volume)

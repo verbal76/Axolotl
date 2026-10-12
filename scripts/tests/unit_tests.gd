@@ -11733,6 +11733,41 @@ func _test_deck_controls() -> void:
 	var btns := [Glyphs.button_for("jump"), Glyphs.button_for("lunge"), Glyphs.button_for("swipe"), Glyphs.button_for("special"),
 			Glyphs.button_for("pause"), Glyphs.button_for("view_ball"), Glyphs.button_for("move"), Glyphs.button_for("camera")]
 	t.check("deck_glyphs_follow_input_map", btns == [JOY_BUTTON_A, JOY_BUTTON_B, JOY_BUTTON_X, JOY_BUTTON_Y, JOY_BUTTON_START, JOY_BUTTON_BACK, -2, -3], str(btns))
+	# The approved library's art (studio standard §13): every prompted action has a texture in every
+	# family, keys included; detection follows deliberate input only; a manual style wins.
+	var no_art: Array = []
+	for fam in Glyphs.FAMILIES:
+		for act in Glyphs.LABELS:
+			if act in ["ui_accept", "ui_cancel"] and fam != Glyphs.FAMILY_KEYS:
+				continue
+			if Glyphs.texture_for(Glyphs.button_for(act), fam, act) == null:
+				no_art.append("%s/%s" % [fam, act])
+	var was_style: String = Settings.prompt_style
+	var was_dev: String = Settings.last_device
+	var glyph_mode: int = Settings.input_mode
+	Settings.prompt_style = "auto"
+	var mm := InputEventMouseMotion.new()
+	mm.relative = Vector2(30, 0)
+	Settings._input(mm)
+	var after_motion := Glyphs.family()
+	var kp := InputEventKey.new()
+	kp.keycode = KEY_J
+	kp.pressed = true
+	Settings._input(kp)
+	var after_key := Glyphs.family()
+	var jb := InputEventJoypadButton.new()
+	jb.button_index = JOY_BUTTON_A
+	jb.pressed = true
+	Settings._input(jb)
+	var after_pad := Glyphs.family()
+	Settings.prompt_style = "ps"
+	var forced := Glyphs.family()
+	Settings.prompt_style = was_style
+	Settings.last_device = was_dev
+	Settings._set_mode(glyph_mode)
+	t.check("glyph_library_art_and_switching", no_art.is_empty() and after_motion != Glyphs.FAMILY_KEYS and after_key == Glyphs.FAMILY_KEYS
+			and after_pad != Glyphs.FAMILY_KEYS and forced == Glyphs.FAMILY_PS,
+			"missing art %s; after mouse motion %s, key %s, pad %s, forced %s" % [no_art, after_motion, after_key, after_pad, forced])
 	var was_mode := Settings.input_mode
 	Settings.input_mode = Settings.InputMode.PAD
 	var nav: PadNav = g.pad_nav

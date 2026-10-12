@@ -7,12 +7,38 @@ extends RefCounted
 ##   monochrome A/B/X/Y in the Xbox layout, the View and Menu buttons as their own icons;
 ## - "xbox": the same letters, each in its Xbox colour;
 ## - "ps": the PlayStation shapes (cross, circle, square, triangle) in the same positions.
+## - "keys": keyboard keys, when the last deliberate input was a key press or a mouse click (mouse
+##   movement alone, such as the Deck's trackpad, never switches, so prompts do not flicker).
 ## The button for an action is read from the InputMap, so a glyph can never name a different button
 ## than the one that works. (When Mote has a Steam App ID, Steam Input's own glyphs can replace these.)
+## Artwork: the studio's approved library, "Input Prompts" by Julio Cacko (CC0; assets/glyphs/README.md),
+## drawn as textures; the drawn shapes below remain only for a button the library has no art for.
+## Settings.prompt_style ("auto", or one family) overrides detection (studio standard §13).
 
 const FAMILY_DECK := "deck"
 const FAMILY_XBOX := "xbox"
 const FAMILY_PS := "ps"
+const FAMILY_KEYS := "keys"
+const FAMILIES := [FAMILY_XBOX, FAMILY_PS, FAMILY_DECK, FAMILY_KEYS]
+
+const _DIR := "res://assets/glyphs/"
+## Pad art per family and button (files from the approved library, unchanged).
+const PAD_ART := {
+	FAMILY_XBOX: {JOY_BUTTON_A: "xbox/T_X_A_Color", JOY_BUTTON_B: "xbox/T_X_B_Color", JOY_BUTTON_X: "xbox/T_X_X_Color",
+			JOY_BUTTON_Y: "xbox/T_X_Y_Color", JOY_BUTTON_LEFT_SHOULDER: "xbox/T_X_LB", JOY_BUTTON_RIGHT_SHOULDER: "xbox/T_X_RB",
+			JOY_BUTTON_START: "xbox/T_X_X", JOY_BUTTON_BACK: "xbox/T_X_Share", -2: "xbox/T_X_L_2D", -3: "xbox/T_X_R_2D"},
+	FAMILY_DECK: {JOY_BUTTON_A: "xbox/T_X_A_White", JOY_BUTTON_B: "xbox/T_X_B_White", JOY_BUTTON_X: "xbox/T_X_X_White",
+			JOY_BUTTON_Y: "xbox/T_X_Y_White", JOY_BUTTON_LEFT_SHOULDER: "ps/T_P5_L1", JOY_BUTTON_RIGHT_SHOULDER: "ps/T_P5_R1",
+			JOY_BUTTON_START: "xbox/T_X_X", JOY_BUTTON_BACK: "xbox/T_X_Share", -2: "xbox/T_X_L_2D", -3: "xbox/T_X_R_2D"},
+	FAMILY_PS: {JOY_BUTTON_A: "ps/T_P5_Cross_Color", JOY_BUTTON_B: "ps/T_P5_Circle_Color", JOY_BUTTON_X: "ps/T_P5_Square_Color",
+			JOY_BUTTON_Y: "ps/T_P5_Triangle_Color", JOY_BUTTON_LEFT_SHOULDER: "ps/T_P5_L1", JOY_BUTTON_RIGHT_SHOULDER: "ps/T_P5_R1",
+			JOY_BUTTON_START: "ps/T_P5_Options", JOY_BUTTON_BACK: "ps/T_P5_Share", -2: "ps/T_P5_L_2D", -3: "ps/T_P5_R_2D"},
+}
+## Key art: the key's name as OS.get_keycode_string gives it -> the library's file stem.
+const KEY_ART := {"Escape": "Esc", "Enter": "Enter", "Space": "Space", "Left": "Left", "Right": "Right", "Up": "Up", "Down": "Down"}
+## The library's discs fill 96 of their 128 pixels: drawn at this scale, a glyph's disc has radius r.
+const ART_SCALE := 128.0 / 96.0
+static var _tex := {}
 
 ## Short labels for the game's actions, as the prompts show them.
 const LABELS := {
@@ -25,6 +51,11 @@ const LABELS := {
 ## Which family to draw for the pad in use. On a Steam Deck (SteamOS sets SteamDeck=1) and for Steam's
 ## virtual pad, the Deck family; for a Sony pad, PlayStation shapes; otherwise Xbox letters.
 static func family() -> String:
+	var style: String = str(Settings.prompt_style) if Settings != null else "auto"
+	if style in FAMILIES:
+		return style
+	if Settings != null and Settings.last_device == "keys":
+		return FAMILY_KEYS
 	if OS.get_environment("SteamDeck") == "1":
 		return FAMILY_DECK
 	var pads := Input.get_connected_joypads()
@@ -60,10 +91,51 @@ static func button_for(action: String) -> int:
 	return -1
 
 
+## The keyboard key bound to `action` (0 if none; stick actions report their first direction's key).
+static func key_for(action: String) -> int:
+	match action:
+		"move":
+			action = "move_forward"
+		"camera":
+			action = "cam_left"
+		"burst":
+			action = "jump"
+	if not InputMap.has_action(action):
+		return 0
+	for ev in InputMap.action_get_events(action):
+		if ev is InputEventKey:
+			var k := ev as InputEventKey
+			return int(k.keycode if k.keycode != KEY_NONE else k.physical_keycode)
+	return 0
+
+
+## The library texture for pad button `b` in `fam` (or for `action`'s key in the keys family); null when
+## the library has no art for it (the drawn shape is used then).
+static func texture_for(b: int, fam: String, action := "") -> Texture2D:
+	var stem := ""
+	if fam == FAMILY_KEYS:
+		var k := key_for(action)
+		if k == 0:
+			return null
+		var nm := OS.get_keycode_string(k)
+		nm = KEY_ART.get(nm, nm)
+		stem = "keys/T_%s_Key_Dark" % nm
+	else:
+		stem = (PAD_ART.get(fam, {}) as Dictionary).get(b, "")
+	if stem == "":
+		return null
+	if not _tex.has(stem):
+		var path := _DIR + stem + ".png"
+		_tex[stem] = load(path) if ResourceLoader.exists(path) else null
+	return _tex[stem]
+
+
 ## The button's name for running text, in the family in use ("A" on Deck and Xbox, "Cross" on PlayStation).
 static func button_name(b: int, fam := "") -> String:
 	if fam == "":
 		fam = family()
+	if fam == FAMILY_KEYS:
+		fam = FAMILY_XBOX
 	if fam == FAMILY_PS:
 		return {JOY_BUTTON_A: "Cross", JOY_BUTTON_B: "Circle", JOY_BUTTON_X: "Square", JOY_BUTTON_Y: "Triangle",
 				JOY_BUTTON_START: "Options", JOY_BUTTON_BACK: "Create"}.get(b, "?")
@@ -71,8 +143,14 @@ static func button_name(b: int, fam := "") -> String:
 			JOY_BUTTON_START: "Menu", JOY_BUTTON_BACK: "View"}.get(b, "?")
 
 
-## Draws the glyph for pad button `b` centred on `c`, `r` its radius, in `fam`, at opacity `a`.
-static func draw(ci: CanvasItem, c: Vector2, r: float, b: int, fam: String, a: float, font: Font = null) -> void:
+## Draws the glyph for pad button `b` (or, in the keys family, `action`'s key) centred on `c`, `r` its
+## radius, in `fam`, at opacity `a`: the library's art when it has some, else a drawn shape.
+static func draw(ci: CanvasItem, c: Vector2, r: float, b: int, fam: String, a: float, font: Font = null, action := "") -> void:
+	var tex := texture_for(b, fam, action)
+	if tex != null:
+		var s := r * ART_SCALE
+		ci.draw_texture_rect(tex, Rect2(c - Vector2(s, s), Vector2(s, s) * 2.0), false, Color(1, 1, 1, a))
+		return
 	var ink := Color(1, 1, 1, 0.95 * a)
 	var disc := Color(0.02, 0.06, 0.06, 0.62 * a)
 	var w := maxf(1.5, r * 0.16)
@@ -164,7 +242,7 @@ static func draw_row(ci: CanvasItem, bottom_center: Vector2, actions: Array, k: 
 	for i in actions.size():
 		var act: String = actions[i]
 		var c := Vector2(x + r, y)
-		draw(ci, c, r, button_for(act), fam, a, font)
+		draw(ci, c, r, button_for(act), fam, a, font, act)
 		ci.draw_string(font, Vector2(x + r * 2.0 + 8.0 * k, y + fs * 0.36), LABELS.get(act, act), HORIZONTAL_ALIGNMENT_LEFT, -1, fs, Color(1, 1, 1, 0.92 * a))
 		x += widths[i] + gap
 	return rect
