@@ -16,14 +16,11 @@ with built-in tools and Steamworks can slot in later; the controller work is sha
 
 ## The Linux build
 
-`.github/workflows/desktop-build.yml` exports a native Linux x86_64 build with the game embedded, smoke-
-runs it, and publishes a `.tar.gz`. Started by a push that changes `.github/desktop-build-request.json`
-(`{"sha": "<commit>"}`) or by hand. The Linux export preset is written into `export_presets.cfg` inside
-that run only: the committed file belongs to the Android runtime lock (r5). Desktop builds have no OTA
+Built with Windows and Android as one numbered build ("Mote Build NN Linux.tar.gz": `Mote.x86_64`,
+executable, the game embedded, with THIRD_PARTY_NOTICES.txt) by *Build & Release (coordinated)* or
+locally by `tools/build.py` (docs/RELEASES.md). The export preset is added only for the export: the
+committed `export_presets.cfg` belongs to the Android runtime lock (r5). Desktop builds have no OTA
 client (Boot runs it only with the Android `ota` feature); Steam will deliver their updates.
-Like the phone builds, it builds only a commit on the release branch that contains every earlier desktop
-release, and ships a `provenance.json` naming its source SHA (`docs/RELEASE_SOURCE.md`); a desktop build
-matching a phone OTA names that OTA's source SHA.
 
 Sideloading on a Deck: Desktop Mode, extract, Steam > Add a Non-Steam Game > `Mote.x86_64`, then play from
 Game Mode.
