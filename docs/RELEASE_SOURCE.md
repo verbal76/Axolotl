@@ -27,7 +27,7 @@ holds the architecture, the enforcement and the branch ledger.
 |---|---|---|---|---|
 | Phone game (OTA pack, dev channel) | `ota-publish.yml` | a game-file push to the authoritative branch, or by hand | the resolved SHA (tests, pack and release all use it) | signed `manifest.json` (source SHA, runtime, version), release notes, run receipt |
 | Playtester APK | `build.yml` builds; `apk-release.yml` publishes | native change or by hand; then `.github/apk-release-request.json` | the Build & Verify run's `build-info.json` `source_sha` | `build-info.json` (version, Android build, source SHA, runtime, APK sha256, run) |
-| Linux x86_64 / Steam Deck | `desktop-build.yml` | `.github/desktop-build-request.json` or by hand | the requested SHA | `provenance.json` inside the archive and next to it |
+| Numbered build: APK + Windows + Linux ("Mote Build NN") | `build-release.yml` (docs/RELEASES.md) | by hand, or `.github/build-release-request.json` | the requested SHA (the APK's build-info must name it) | `build-manifest.json` + `checksums.sha256` in the release; each desktop build's identity (build, source SHA, run) in About |
 
 All three run on the same pinned Godot version (4.7.2). `provenance.json` comes from
 `tools/release_guard.py provenance`: source SHA, branch, version, build, platform, config, engine,
@@ -105,6 +105,7 @@ contained in the authoritative line.
   runtime r6, built for APK `apk-v0.1.0-b128`. The owner rolled the native layer back to r5 on
   2026-10-11 (`0479663`) so build-22 phones keep receiving OTAs; r6 phones show "native update
   required" for r5 packs until they install build 132 (r5).
-- `ota-dev-000111` (r5 polish pass) and `apk-v0.1.0-b132` (r5) are built and verified but not yet
-  published: GitHub refuses release creation (HTTP 403) since 2026-10-11 05:30 UTC, with the token
-  holding `contents: write`. Owner action needed in the repository settings.
+- `ota-dev-000111` (r5 polish pass, source `1ed6d9f`) and `apk-v0.1.0-b132` (r5, source `0479663`, tag on
+  `a3c989d`) were published on 2026-10-12 after the owner fixed release creation; GitHub refused a
+  workflow-created tag on `0479663` itself, so APK releases tag the request commit (which contains
+  the source).

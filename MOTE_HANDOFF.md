@@ -5,6 +5,28 @@ state after the **one-app release** (Mote b22, runtime r5, OTA dev-000014), cros
 the repository, CI, the APK's own content and the published OTA. Earlier states (b18/r3, b21/r4) are
 kept below as history.
 
+## CURRENT STATE (2026-10-12) — read this before the history below
+
+The sections after this one describe earlier states and are kept as history; where they disagree, this
+section, `CLAUDE.md` and `docs/REQUIREMENTS_LEDGER.md` win.
+
+- **Release branch (authoritative):** `claude/mote-game-continuation-bov2x9` (`.github/release-source.json`).
+  Head `a3c989d`. Native runtime **r5** (Android build 22 layer; r6 rolled back 2026-10-11).
+- **Live:** OTA **dev-000111** "Mote v111-polish-pass-r5" (source `1ed6d9f`, runtime r5, verified by a
+  build-22 client, signature and pack hash); APK **build 132** `apk-v0.1.0-b132` (r5, source `0479663`,
+  SHA-256 5acd013b...6cc4). Older r6 items: dev-000109/110, APK b128.
+- **Working branch (not on the release branch, nothing published from it):** `claude/mote-release-source`
+  = the Steam Deck pass (`a3e908a`) + release-source policy and guard + the overnight standard work
+  (creature cull, audio hardening, licences, approved glyph library, safe settings writes, desktop
+  fullscreen, least-privilege workflows, coordinated numbered builds). Local gate green (see the ledger).
+- **Studio standard:** owner's "Universal Game Development, Build, Update and Distribution Standard"
+  (2026-10-12). Documents it requires: `docs/PLATFORM_SUPPORT.md`, `docs/OTA.md` (updates),
+  `docs/RELEASES.md`, `docs/STEAM_DECK.md` (hardware checklist), `docs/RELEASE_SOURCE.md` (branch
+  ledger), `docs/THIRD_PARTY_ASSETS.md`.
+- **Next action:** owner review of `claude/mote-release-source`; with the owner's go, merge it into the
+  release branch (that push publishes an OTA with the Deck pass and the overnight work) and, if wanted,
+  run *Build & Release (coordinated)* for the first "Mote Build NN" (docs/RELEASES.md).
+
 > **MOTE AUTHORIZED REPOSITORY: `verbal76/Axolotl`**
 > Work only in this repository. The previous coding environment also exposed an unrelated
 > repository. An isolation audit found it clean and untouched. Do not open, search, or change any

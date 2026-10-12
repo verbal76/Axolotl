@@ -60,3 +60,8 @@ release gates (tests, baked export, logo, signing, verification) to save minutes
   work without the owner (see the ledger). Rollback = a new reverting commit, never an older commit.
 - Enforced by `tools/release_guard.py` (`check` in every publishing workflow; `lint` + `self-test` in
   the tests' fast job). Details, architecture and the branch ledger: `docs/RELEASE_SOURCE.md`.
+- Numbered builds ("Mote Build NN": APK.apk, EXE.zip, Linux.tar.gz, build-manifest.json,
+  checksums.sha256, one release `build-NN`) only via *Build & Release (coordinated)* or
+  `tools/build.py`, on request: `docs/RELEASES.md`. Studio-standard documents: `docs/PLATFORM_SUPPORT.md`,
+  `docs/OTA.md` (updates), `docs/RELEASES.md`, `docs/STEAM_DECK.md` (hardware checklist),
+  `docs/RELEASE_SOURCE.md` (branch ledger), `docs/THIRD_PARTY_ASSETS.md`.
