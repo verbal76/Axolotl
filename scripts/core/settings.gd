@@ -29,6 +29,9 @@ var prompt_style := "auto"
 ## The last deliberate input: "pad" (a pad button or stick) or "keys" (a key press or a mouse click;
 ## mouse movement alone never counts, so a trackpad cannot make prompts flicker).
 var last_device := "pad"
+## Desktop only (Steam Deck / Steam Machine / PC; studio standard §12.5): play fullscreen. F11 or
+## Alt+Enter switches; kept per device in settings.cfg. Phones are unaffected.
+var fullscreen := true
 ## The character's colours (GillLook): a morph plus fine-tuning of the body and the freckles.
 var gill_morph := "pink"
 var gill_body_hue := 0.0
@@ -78,6 +81,7 @@ func _enter_tree() -> void:
 	if Players.current() != Players.MAIN:
 		load_player_look()
 	_apply_audio()
+	apply_window()
 	Input.joy_connection_changed.connect(_on_joy_connection_changed)
 	_pad_connected = Input.get_connected_joypads().size() > 0
 	# Steam Deck / Steam Machine (2026-10-11): on a computer, or with a pad already connected, the game
@@ -143,8 +147,28 @@ func _input(event: InputEvent) -> void:
 		_set_mode(InputMode.PAD)
 	elif (event is InputEventKey and event.pressed and not event.echo) or (event is InputEventMouseButton and event.pressed):
 		last_device = "keys"
+		var k := event as InputEventKey
+		if k != null and (k.keycode == KEY_F11 or (k.keycode == KEY_ENTER and k.alt_pressed)) and OS.has_feature("pc"):
+			fullscreen = not fullscreen
+			apply_window()
+			save()
+			get_viewport().set_input_as_handled()
 	elif event is InputEventScreenTouch and event.pressed:
 		_set_mode(InputMode.TOUCH)
+
+
+## The window mode a launch should use: fullscreen on a computer (unless the player chose a window, or
+## the command line says --windowed), and nothing on phones or in automated runs.
+static func desktop_window_mode(is_pc: bool, test: String, args: PackedStringArray, want_full: bool) -> int:
+	if not is_pc or test != "" or "--windowed" in args or "--headless" in args:
+		return -1
+	return DisplayServer.WINDOW_MODE_FULLSCREEN if want_full else DisplayServer.WINDOW_MODE_WINDOWED
+
+
+func apply_window() -> void:
+	var m := desktop_window_mode(OS.has_feature("pc"), test_mode, OS.get_cmdline_args(), fullscreen)
+	if m >= 0 and DisplayServer.get_name() != "headless":
+		DisplayServer.window_set_mode(m)
 
 
 func _set_mode(m: int) -> void:
@@ -202,6 +226,7 @@ func _load() -> void:
 	haptics = cf.get_value("hud", "haptics", haptics)
 	swim_invert_y = bool(cf.get_value("controls", "swim_invert_y", swim_invert_y))
 	prompt_style = str(cf.get_value("controls", "prompt_style", prompt_style))
+	fullscreen = bool(cf.get_value("display", "fullscreen", fullscreen))
 	if not prompt_style in ["auto", "xbox", "ps", "deck", "keys"]:
 		prompt_style = "auto"
 	tutorials = bool(cf.get_value("onboarding", "tutorials", tutorials))
@@ -292,6 +317,7 @@ func save() -> void:
 	cf.set_value("hud", "haptics", haptics)
 	cf.set_value("controls", "swim_invert_y", swim_invert_y)
 	cf.set_value("controls", "prompt_style", prompt_style)
+	cf.set_value("display", "fullscreen", fullscreen)
 	cf.set_value("onboarding", "tutorials", tutorials)
 	cf.set_value("audio", "music", music_volume)
 	cf.set_value("audio", "sfx", sfx_volume)

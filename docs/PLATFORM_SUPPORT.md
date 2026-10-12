@@ -14,8 +14,8 @@ Platform adapters in the shared code:
   `Settings` (`input_mode`, `last_device`), prompts in `Glyphs`.
 - **Updates**: Android only (signed OTA packs, `scripts/boot`, `docs/OTA.md`); desktop builds have no
   OTA client and will be updated by Steam (SteamPipe).
-- **Window**: phones landscape (project settings); desktop starts windowed 1280x720 (owner decision
-  pending: fullscreen by default).
+- **Window**: phones landscape (project settings); desktop starts fullscreen (`Settings.apply_window`;
+  F11 or Alt+Enter switches, kept per device; `--windowed` on the command line keeps a window).
 - **Paths**: `user://` (Godot's per-platform user data directory).
 
 Not available yet (need a Steam App ID / Steamworks): Steam Input action manifest and API glyphs,

@@ -7021,6 +7021,16 @@ func _test_settings_safe_write() -> void:
 	var no_tmp := not FileAccess.file_exists(path + ".tmp")
 	for x in ["", ".bak", ".tmp"]:
 		DirAccess.remove_absolute(path + x)
+	# Desktop window (studio standard §12.5): fullscreen on a computer unless the player chose a window
+	# or the command line says --windowed; nothing on phones, headless or in automated runs.
+	var W := DisplayServer.WINDOW_MODE_WINDOWED
+	var F := DisplayServer.WINDOW_MODE_FULLSCREEN
+	var modes := [Settings.desktop_window_mode(true, "", PackedStringArray([]), true),
+			Settings.desktop_window_mode(true, "", PackedStringArray([]), false),
+			Settings.desktop_window_mode(true, "", PackedStringArray(["--windowed"]), true),
+			Settings.desktop_window_mode(false, "", PackedStringArray([]), true),
+			Settings.desktop_window_mode(true, "unit", PackedStringArray([]), true)]
+	t.check("desktop_fullscreen_rule", modes == [F, W, -1, -1, -1], str(modes))
 	t.check("settings_written_safely", ok1 and ok2 and read_new and fallback and no_tmp,
 			"saved %s/%s, new value read %s, previous copy readable %s, no temp left %s" % [ok1, ok2, read_new, fallback, no_tmp])
 
