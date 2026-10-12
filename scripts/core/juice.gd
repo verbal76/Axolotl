@@ -301,6 +301,8 @@ func _update_steps(dt: float) -> void:
 	if s == null:
 		return
 	_step_side = -_step_side
+	# (Stopped before its volume changes: ledger row 37's audio-thread race; play() cuts it off anyway.)
+	_step_player.stop()
 	_step_player.stream = s
 	_step_player.global_position = p.global_position + p.facing.cross(p.up) * 0.15 * _step_side
 	_step_player.volume_db = STEP_DB + 3.0 * clampf((sp - 2.0) / 4.0, 0.0, 1.0) + _fx_rng.randf_range(-1.5, 1.5)

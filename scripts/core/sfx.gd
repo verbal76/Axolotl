@@ -78,6 +78,9 @@ static func play(sfx_name: String, pos: Variant = null, vol_db := 0.0, pitch_var
 	if pos == null:
 		var p := inst._players2d[inst._n2]
 		inst._n2 = (inst._n2 + 1) % inst._players2d.size()
+		# (Stopped before its volume changes: a volume write on a playing player is the Godot 4.7.2
+		# audio-thread race of ledger row 37. Polyphony 1, so play() would cut it off anyway.)
+		p.stop()
 		p.stream = s
 		p.volume_db = vol_db
 		p.pitch_scale = pitch * (1.0 + _fx_rng.randf_range(-pitch_var, pitch_var))
@@ -86,6 +89,7 @@ static func play(sfx_name: String, pos: Variant = null, vol_db := 0.0, pitch_var
 	else:
 		var p := inst._players3d[inst._n3]
 		inst._n3 = (inst._n3 + 1) % inst._players3d.size()
+		p.stop()
 		p.stream = s
 		p.global_position = pos
 		p.volume_db = vol_db
