@@ -7,20 +7,25 @@ name: OTA publish (dev channel)
 #   -> client-side inspection -> immutable release -> re-download + re-verify
 #   -> channel pointer moved forward -> receipt.
 
-# MANUAL ONLY (owner decision 2026-10-12; studio standard §9-§10): an OTA is published only when asked.
-# Ordinary pushes, merges, passing CI, documentation and version changes publish nothing. Two ways to ask,
-# both validated by tools/ota_request.py before anything is built (exact 40-hex SHA on the release branch
-# (.github/release-source.json), the runtime that commit builds, the channel, who authorized it, and not
-# already published):
-#   1. push a change to .github/ota-publish-request.json on the release branch (docs/OTA_PUBLISHING.md);
-#   2. Actions > OTA publish > Run workflow, with the same fields and the word PUBLISH as confirmation.
-# History: until 2026-10-12 every game-file push to the release branch published; and the retired
+# MANUAL DISPATCH ONLY (owner decisions 2026-10-12; studio standard §9-§10). The ONLY way to publish an OTA is
+# Actions > OTA publish > Run workflow, from the release branch. There is deliberately no push, pull_request,
+# tag, schedule, workflow_run or other trigger: no push (including a change to a request file), merge,
+# PR update, tag, version change, native build, schedule or other workflow can start this workflow
+# (`release_guard.py lint` refuses any other trigger: release-source.json "dispatch_only"; its self-test
+# simulates every event against this file).
+# Authorization comes from GitHub, not from the form: tools/ota_request.py requires the authenticated actor
+# (github.actor) == the account that started this attempt (github.triggering_actor) == authorized_by, the
+# actor listed in release-source.json "ota_publishers" AND a repository admin (read from the API), the run
+# dispatched from the release branch, confirm == PUBLISH, an exact 40-hex SHA on the release branch, the
+# runtime that SHA builds, the channel, the exact next OTA revision, and neither that revision nor that
+# commit already published. The resolve job checks it, and the publish job checks it all again before
+# building or signing anything. Owner-only enforcement beyond an admin account: the `ota-dev` environment
+# below; add a required reviewer to it (Settings > Environments) and every run waits for that approval.
+# docs/OTA_PUBLISHING.md.
+# History: until 2026-10-12 every game-file push to the release branch published; a request-file push
+# trigger existed briefly on 2026-10-12 and was removed before it reached the release branch; and the retired
 # Expansions branch claude/axolotl-aquarium-platformer-3y0qyy published dev-000015..dev-000024.
 on:
-  push:
-    branches:
-      - claude/mote-game-continuation-bov2x9
-    paths: [".github/ota-publish-request.json"]
   workflow_dispatch:
     inputs:
       source_sha:
@@ -33,12 +38,18 @@ on:
         type: choice
         options: [dev]
         default: dev
+      ota_revision:
+        description: The exact next OTA revision to publish, e.g. dev-000112 (python3 tools/ota_request.py next-revision)
+        required: true
       ota_name:
         description: Optional title suffix (a-z, 0-9, -), e.g. polish-pass
         required: false
       authorized_by:
-        description: Who authorized this OTA
+        description: Your GitHub login (must be the account running this workflow)
         required: true
+      reason:
+        description: Optional reason (recorded in the run)
+        required: false
       confirm:
         description: Type PUBLISH to publish an OTA to every installed phone on the channel
         required: true
@@ -68,32 +79,41 @@ jobs:
     outputs:
       sha: ${{ steps.r.outputs.sha }}
       runtime_id: ${{ steps.req.outputs.runtime_id }}
+      ota_revision: ${{ steps.req.outputs.ota_revision }}
       ota_name: ${{ steps.req.outputs.ota_name }}
     steps:
-      # The request is read from the triggering commit (push) or the form (dispatch); it is validated
-      # with the release branch's history and tags before the requested commit is checked out.
+      # The request is the form; it is validated, with GitHub's authorization context and the release
+      # branch's history and tags, before the requested commit is checked out.
       - uses: actions/checkout@v4
         with:
           fetch-depth: 0
-      - name: Validate the publication request
+      - name: Validate the authorization and the publication request
         id: req
         env:
+          GH_TOKEN: ${{ github.token }}
+          EVENT: ${{ github.event_name }}
+          ACTOR: ${{ github.actor }}
+          TRIGGERING_ACTOR: ${{ github.triggering_actor }}
+          REF: ${{ github.ref }}
           IN_SHA: ${{ inputs.source_sha }}
           IN_RT: ${{ inputs.runtime_id }}
           IN_CH: ${{ inputs.channel }}
+          IN_REV: ${{ inputs.ota_revision }}
           IN_NAME: ${{ inputs.ota_name }}
           IN_BY: ${{ inputs.authorized_by }}
+          IN_REASON: ${{ inputs.reason }}
           IN_CONFIRM: ${{ inputs.confirm }}
         run: |
-          if [ "${{ github.event_name }}" = "workflow_dispatch" ]; then
-            [ "$IN_CONFIRM" = "PUBLISH" ] || { echo "::error::OTA refused: confirm must be PUBLISH"; exit 1; }
-            jq -n --arg s "$IN_SHA" --arg r "$IN_RT" --arg c "$IN_CH" --arg n "$IN_NAME" --arg b "$IN_BY" \
-              '{source_sha:$s, runtime_id:$r, channel:$c, authorized_by:$b} + (if $n == "" then {} else {ota_name:$n} end)' > "$RUNNER_TEMP/request.json"
-          else
-            cp .github/ota-publish-request.json "$RUNNER_TEMP/request.json"
-          fi
+          [ "$EVENT" = "workflow_dispatch" ] || { echo "::error::OTA refused: publication starts only from a manual run, not '$EVENT'"; exit 1; }
+          PERM=$(gh api "repos/$GITHUB_REPOSITORY/collaborators/$ACTOR/permission" --jq .permission || echo unknown)
+          echo "actor=$ACTOR triggering_actor=$TRIGGERING_ACTOR permission=$PERM ref=$REF"
+          jq -n --arg s "$IN_SHA" --arg r "$IN_RT" --arg c "$IN_CH" --arg v "$IN_REV" --arg n "$IN_NAME" --arg b "$IN_BY" --arg why "$IN_REASON" \
+            '{source_sha:$s, runtime_id:$r, channel:$c, ota_revision:$v, authorized_by:$b}
+             + (if $n == "" then {} else {ota_name:$n} end) + (if $why == "" then {} else {reason:$why} end)' > "$RUNNER_TEMP/request.json"
           cat "$RUNNER_TEMP/request.json"
-          python3 tools/ota_request.py validate --request "$RUNNER_TEMP/request.json" | tee -a "$GITHUB_OUTPUT"
+          python3 tools/ota_request.py validate --request "$RUNNER_TEMP/request.json" --actor "$ACTOR" \
+            --triggering-actor "$TRIGGERING_ACTOR" --permission "$PERM" --ref "$REF" --confirm "$IN_CONFIRM" | tee -a "$GITHUB_OUTPUT"
+          test "${PIPESTATUS[0]}" = 0
           test "$(jq -r .channel "$RUNNER_TEMP/request.json")" = "$CHANNEL"
       - name: Check out exactly the requested commit
         run: git checkout --detach "${{ steps.req.outputs.sha }}"
@@ -122,10 +142,47 @@ jobs:
     needs: [resolve, tests]
     runs-on: ubuntu-latest
     timeout-minutes: 60
+    # GitHub-enforced approval point: when the owner adds a required reviewer to the `ota-dev` environment
+    # (Settings > Environments), this job waits for that person's approval before it can run or read secrets.
+    environment: ota-dev
     steps:
+      # Independent re-check, in this job, before anything is built or signed: the same authorization and
+      # request validation as `resolve`, with the permission read again, using this workflow's own tools.
       - uses: actions/checkout@v4
         with:
-          ref: ${{ needs.resolve.outputs.sha }}
+          fetch-depth: 0
+      - name: Re-check the authorization and the request (independently of resolve)
+        env:
+          GH_TOKEN: ${{ github.token }}
+          EVENT: ${{ github.event_name }}
+          ACTOR: ${{ github.actor }}
+          TRIGGERING_ACTOR: ${{ github.triggering_actor }}
+          REF: ${{ github.ref }}
+          IN_SHA: ${{ inputs.source_sha }}
+          IN_RT: ${{ inputs.runtime_id }}
+          IN_CH: ${{ inputs.channel }}
+          IN_REV: ${{ inputs.ota_revision }}
+          IN_NAME: ${{ inputs.ota_name }}
+          IN_BY: ${{ inputs.authorized_by }}
+          IN_CONFIRM: ${{ inputs.confirm }}
+          R_SHA: ${{ needs.resolve.outputs.sha }}
+          R_RT: ${{ needs.resolve.outputs.runtime_id }}
+          R_REV: ${{ needs.resolve.outputs.ota_revision }}
+        run: |
+          [ "$EVENT" = "workflow_dispatch" ] || { echo "::error::OTA refused: not a manual run"; exit 1; }
+          PERM=$(gh api "repos/$GITHUB_REPOSITORY/collaborators/$ACTOR/permission" --jq .permission || echo unknown)
+          jq -n --arg s "$IN_SHA" --arg r "$IN_RT" --arg c "$IN_CH" --arg v "$IN_REV" --arg n "$IN_NAME" --arg b "$IN_BY" \
+            '{source_sha:$s, runtime_id:$r, channel:$c, ota_revision:$v, authorized_by:$b} + (if $n == "" then {} else {ota_name:$n} end)' > "$RUNNER_TEMP/request.json"
+          python3 tools/ota_request.py validate --request "$RUNNER_TEMP/request.json" --actor "$ACTOR" \
+            --triggering-actor "$TRIGGERING_ACTOR" --permission "$PERM" --ref "$REF" --confirm "$IN_CONFIRM"
+          # What resolve and the tests used is exactly what was requested.
+          test "$R_SHA" = "$IN_SHA" && test "$R_RT" = "$IN_RT" && test "$R_REV" = "$IN_REV" \
+            || { echo "::error::resolve outputs differ from the request"; exit 1; }
+          python3 tools/release_guard.py check --sha "$IN_SHA" --contains-published "ota-$CHANNEL-*"
+      - name: Check out exactly the requested commit
+        run: |
+          git checkout --detach "${{ needs.resolve.outputs.sha }}"
+          git clean -ffdx
 
       - name: Exact source identity
         id: src
@@ -144,6 +201,11 @@ jobs:
           test -n "$LAST"
           SEQ=$((LAST + 1))
           ID=$(printf "%s-%06d" "$CHANNEL" "$SEQ")
+          # The revision the release list gives must be exactly the one the owner authorized.
+          test "$ID" = "${{ needs.resolve.outputs.ota_revision }}" \
+            || { echo "::error::next revision is $ID, the request authorized ${{ needs.resolve.outputs.ota_revision }}: not publishing"; exit 1; }
+          gh release view "ota-$ID" --repo "$GITHUB_REPOSITORY" >/dev/null 2>&1 \
+            && { echo "::error::ota-$ID already exists; OTA releases are immutable"; exit 1; }
           echo "seq=$SEQ" >> $GITHUB_OUTPUT
           echo "ota_id=$ID" >> $GITHUB_OUTPUT
           echo "tag=ota-$ID" >> $GITHUB_OUTPUT

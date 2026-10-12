@@ -44,8 +44,8 @@ signing secrets, so its APK always comes from Build & Verify (`build.py apk` nam
 
 ## Other release paths (unchanged)
 
-- **OTA** (`ota-publish.yml`): a signed dev-channel OTA for installed phones, published only on an explicit
-  request (docs/OTA_PUBLISHING.md). Its id (`dev-000NNN`) is a separate sequence: an OTA never changes a
+- **OTA** (`ota-publish.yml`): a signed dev-channel OTA for installed phones, published only by a manual
+  run by the owner (docs/OTA_PUBLISHING.md). Its id (`dev-000NNN`) is a separate sequence: an OTA never changes a
   build number, and a numbered build never publishes an OTA.
 - **APK only** (`apk-release.yml`): the known-working playtester-APK release (`apk-v0.1.0-bNN`; b128 and
   b132 were published with it). **Kept** until the numbered-build workflow has been proven on GitHub.

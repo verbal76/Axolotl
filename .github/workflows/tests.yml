@@ -51,10 +51,11 @@ jobs:
         run: GODOT=godot tools/version_drift_check.sh
       - name: Native-runtime lock is current
         run: python3 tools/ota_runtime.py --check
-      - name: Release policy (request-only publishing, one engine version, guard and OTA-request self-tests)
+      - name: Release policy (request-only publishing, OTA by manual dispatch only, one engine version, guard and OTA-request self-tests)
         run: |
           python3 tools/release_guard.py lint
           python3 tools/release_guard.py self-test
+          python3 tools/release_guard.py entry-points
           python3 tools/ota_request.py self-test
 
   unit:

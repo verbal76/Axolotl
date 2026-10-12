@@ -38,7 +38,7 @@ Details: `docs/UI_STYLE.md`. Tests: `primary_*` in `_test_primary_buttons`.
 Actions minutes are scarce and shared. Before any GitHub-hosted run ask: "Does this need Actions, or can I
 prove it locally?" Validate locally first (check_scripts, runtime lock, both unit shards and the playthrough;
 recipe in `docs/ACTIONS_BUDGET.md`); push to the release branch only a locally-green release candidate (OTAs are
-published only by an explicit request: `docs/OTA_PUBLISHING.md`). Docs/Markdown/workflow-only changes start no workflow and carry `[skip ci]`.
+published only by a manual run by the owner: `docs/OTA_PUBLISHING.md`). Docs/Markdown/workflow-only changes start no workflow and carry `[skip ci]`.
 No re-runs to "see if a flaky test passes", no unrequested platform builds (iOS only by manual input; APK
 only on a native change or on request), no rebuilding a SHA with a verified result. Never trim the OTA
 release gates (tests, baked export, logo, signing, verification) to save minutes.
@@ -66,10 +66,12 @@ release gates (tests, baked export, logo, signing, verification) to save minutes
   `docs/OTA.md` (updates), `docs/RELEASES.md`, `docs/STEAM_DECK.md` (hardware checklist),
   `docs/RELEASE_SOURCE.md` (branch ledger), `docs/THIRD_PARTY_ASSETS.md`.
 
-## OTA publishing is manual only (owner decision 2026-10-12)
+## OTA publishing is manual dispatch only (owner decisions 2026-10-12)
 
-No push, merge, CI result or version change publishes an OTA. An OTA needs an explicit owner-authorized
-request (`.github/ota-publish-request.json` push or a manual run with PUBLISH), validated by
-`tools/ota_request.py` (exact SHA on the release branch, its runtime, channel, authorizer, not already
-published): `docs/OTA_PUBLISHING.md`. OTA ids (`dev-000NNN`) and native build numbers ("Mote Build NN")
-are separate sequences; neither advances the other. Never commit the request file except to publish.
+No push, merge, PR, tag, schedule, request file, CI result, version change or other workflow publishes an
+OTA. The only entry point is a manual run of *OTA publish* from the release branch (Actions > Run workflow,
+confirm PUBLISH), validated twice by `tools/ota_request.py` (GitHub's authenticated actor = triggering actor =
+`authorized_by`, listed in `ota_publishers` and a repo admin; exact SHA on the release branch, its runtime,
+channel, exact next `ota_revision`, nothing already published): `docs/OTA_PUBLISHING.md`. Guarded by
+`release_guard.py lint` (`dispatch_only`) and `entry-points`. OTA ids (`dev-000NNN`) and native build numbers
+("Mote Build NN") are separate sequences; neither advances the other.

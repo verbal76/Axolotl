@@ -1,45 +1,43 @@
-# Integrating `claude/mote-release-source` into the release branch (for owner approval; not done)
+# Integrating `claude/mote-release-source` into the release branch (owner-approved 2026-10-12)
 
-Checked on 2026-10-12 against release head `a3c989d`:
+Approved conditionally by the owner on 2026-10-12 ("MOTE — FINAL OTA SAFETY CORRECTION AND CONTROLLED
+INTEGRATION"): integrate once every safety check passes; integration is **not** permission to publish.
 
-- Authoritative: `claude/mote-game-continuation-bov2x9` (`.github/release-source.json`).
-- The working branch contains the release head (0 release commits missing), so the release branch can
-  be **fast-forwarded**; `git merge-tree` finds **no conflicts** either way.
+## Conditions checked before the push
+
+- Release branch head before integration: `a3c989d`. The working branch contains it (0 release commits
+  missing), so the release branch is **fast-forwarded**; no merge commit, no conflicts.
 - Native layer unchanged (`project.godot`, `export_presets.cfg`, `scripts/boot/*`, `ota/runtime_lock.json`
   identical; `tools/ota_runtime.py --check`: r5, OTA-compatible). No save schema or save path changed;
   `settings.cfg` gains two keys (`controls/prompt_style`, `display/fullscreen`) that older games ignore;
   the r5 bootstrap reads only its `[meta] save_schema`, which is unchanged (and the file is now replaced
-  atomically, never half-written).
-- **No OTA is published by the integration.** GitHub reads a push's workflow definitions from the pushed
-  head; at this branch's head `ota-publish.yml` starts only on `.github/ota-publish-request.json`, which the
-  branch does not contain. `python3 tools/release_guard.py triggers --from <release head> --to <new head>`
-  reports "starts: nothing" for both a fast-forward and a `--no-ff` merge commit (simulated locally).
-- Installed phones therefore stay on dev-000111 until an OTA is explicitly requested afterwards.
+  atomically, never half-written). No gameplay change.
+- **No OTA and no native release can start.** GitHub reads a push's workflow definitions from the pushed
+  head. At this head `ota-publish.yml` starts only by hand (`release_guard.py entry-points`: manual
+  dispatch only); `apk-release.yml` and `build-release.yml` start only on their request files, which this
+  push does not touch. `python3 tools/release_guard.py triggers --from a3c989d --to <head>` reports
+  "starts: nothing".
+- The full local gate passed on the exact head that was pushed (the ledger row 60 records the results).
 
-## The one trap
+## The one trap (why it is a single push)
 
-Every commit **before `ebdcae8`** on this branch still carries the old rule (any game-file push to the
-release branch publishes). Integrate in **one push** whose head is this branch's head (or a merge commit
-of it). Never push an intermediate commit of this branch, or cherry-pick parts of it, to the release
-branch first.
+Every commit before `ebdcae8` on the working branch carries the old rule (any game-file push to the release
+branch publishes), and the commits from `ebdcae8` up to the dispatch-only change still start an OTA on a
+request-file push. So integration is **one push whose head is the final, corrected commit**. Never push an
+intermediate commit of the working branch, or cherry-pick parts of it, to the release branch.
 
-## Procedure
+## Procedure (as run)
 
-1. Confirm nothing new landed on the release branch: `git fetch origin` and check
-   `git rev-list --count HEAD..origin/claude/mote-game-continuation-bov2x9` is 0 (if not, merge the release
-   branch into this branch first, re-run the local gate, re-check).
-2. Check the push will start nothing:
-   `python3 tools/release_guard.py triggers --from origin/claude/mote-game-continuation-bov2x9 --to <head>`
-   must print `starts: nothing` (exit 0).
-3. Integrate in one push, either:
-   - fast-forward: `git push origin <head>:claude/mote-game-continuation-bov2x9`, or
-   - a pull request from `claude/mote-release-source` to the release branch, merged with any merge method
-     (merge, squash or rebase: each lands as one push whose head has the new workflows).
-4. Expected Actions activity: no OTA, no APK release, no numbered build. Build & Verify runs the tests on
-   PR #2 (release branch to `main`) for the new head (tests only; about three parallel jobs of 25-35 min),
-   and on the integration PR if one is used.
-5. Afterwards, when the owner wants it: publish the OTA by request (docs/OTA_PUBLISHING.md) for the new
-   head (runtime `android-godot-4.7.2-r5`), and/or a numbered build (docs/RELEASES.md).
+1. `git fetch origin claude/mote-game-continuation-bov2x9`;
+   `git rev-list --count HEAD..origin/claude/mote-game-continuation-bov2x9` must be 0 (otherwise merge the
+   release branch into the working branch, re-run the local gate, re-check).
+2. `python3 tools/release_guard.py triggers --from origin/claude/mote-game-continuation-bov2x9 --to HEAD`
+   must print `starts: nothing`; `python3 tools/release_guard.py entry-points --rev HEAD` must print
+   `manual dispatch only`.
+3. One fast-forward push, no force: `git push origin HEAD:claude/mote-game-continuation-bov2x9`.
+4. Afterwards: the remote head equals the tested SHA; the workflows at that head are the corrected ones;
+   no OTA, APK or numbered-build run started. (Build & Verify runs only on pull requests and `main`: it
+   tests PR #2's new head, tests only.)
 
 Rollback: the release branch's previous head is `a3c989d`; reverting is a new commit (CLAUDE.md), never a
 force-push.

@@ -6,5 +6,12 @@
     "ota-publish.yml",
     "apk-release.yml",
     "build-release.yml"
-  ]
+  ],
+  "dispatch_only": [
+    "ota-publish.yml"
+  ],
+  "ota_publishers": [
+    "verbal76"
+  ],
+  "_doc_ota": "dispatch_only: workflows that may start ONLY from a manual run (Actions > Run workflow); release_guard.py lint refuses any other trigger. ota_publishers: GitHub accounts allowed to start an OTA publication (each must also be a repository admin; checked from GitHub's authenticated actor by tools/ota_request.py). Change only with the owner's approval."
 }

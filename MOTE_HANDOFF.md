@@ -11,22 +11,28 @@ The sections after this one describe earlier states and are kept as history; whe
 section, `CLAUDE.md` and `docs/REQUIREMENTS_LEDGER.md` win.
 
 - **Release branch (authoritative):** `claude/mote-game-continuation-bov2x9` (`.github/release-source.json`).
-  Head `a3c989d`. Native runtime **r5** (Android build 22 layer; r6 rolled back 2026-10-11).
+  Native runtime **r5** (Android build 22 layer; r6 rolled back 2026-10-11). On 2026-10-12 it was
+  fast-forwarded from `a3c989d` to the head of `claude/mote-release-source` in one push (docs/INTEGRATION.md):
+  the Steam Deck pass (`a3e908a`), release-source policy and guard, the overnight standard work (creature
+  cull, audio hardening, licences, glyph library, safe settings writes, desktop fullscreen, least-privilege
+  workflows, coordinated numbered builds), the post-audit corrections and the dispatch-only OTA workflow.
+  Nothing was published by it.
 - **Live:** OTA **dev-000111** "Mote v111-polish-pass-r5" (source `1ed6d9f`, runtime r5, verified by a
   build-22 client, signature and pack hash); APK **build 132** `apk-v0.1.0-b132` (r5, source `0479663`,
-  SHA-256 5acd013b...6cc4). Older r6 items: dev-000109/110, APK b128.
-- **Working branch (not on the release branch, nothing published from it):** `claude/mote-release-source`
-  = the Steam Deck pass (`a3e908a`) + release-source policy and guard + the overnight standard work
-  (creature cull, audio hardening, licences, approved glyph library, safe settings writes, desktop
-  fullscreen, least-privilege workflows, coordinated numbered builds). Local gate green (see the ledger).
+  SHA-256 5acd013b...6cc4). Older r6 items: dev-000109/110, APK b128. Phones stay on dev-000111 until the
+  owner publishes the next OTA (dev-000112) by hand.
+- **OTA publishing:** manual dispatch only (Actions > OTA publish > Run workflow, from the release branch,
+  by an allowed admin account; docs/OTA_PUBLISHING.md). Recommended owner action first: configure the
+  `ota-dev` environment's required reviewer and branch rule (same doc, "Limitation").
 - **Studio standard:** owner's "Universal Game Development, Build, Update and Distribution Standard"
   (2026-10-12). Documents it requires: `docs/PLATFORM_SUPPORT.md`, `docs/OTA.md` (updates),
   `docs/RELEASES.md`, `docs/STEAM_DECK.md` (hardware checklist), `docs/RELEASE_SOURCE.md` (branch
   ledger), `docs/THIRD_PARTY_ASSETS.md`.
-- **Next action:** owner review of `claude/mote-release-source`; with the owner's go, merge it into the
-  release branch (since `ebdcae8` that push publishes nothing; docs/INTEGRATION.md) then, when wanted, an OTA by
-  explicit request (docs/OTA_PUBLISHING.md) and,
-  run *Build & Release (coordinated)* for the first "Mote Build NN" (docs/RELEASES.md).
+- **Open blockers:** music rights; glyph licence confirmation on the live listing; Steam App ID and
+  Steamworks (Steam Input, Steam Cloud, Steam's on-screen keyboard); physical Android, Windows and Steam
+  Deck testing; the engine audio race (unresolved; fix plan in docs/research/crash-2026-10-12/FINDINGS.md).
+- **Next action (owner):** when wanted, an OTA by manual dispatch (docs/OTA_PUBLISHING.md) and/or the first
+  "Mote Build NN" via *Build & Release (coordinated)* (docs/RELEASES.md).
 
 > **MOTE AUTHORIZED REPOSITORY: `verbal76/Axolotl`**
 > Work only in this repository. The previous coding environment also exposed an unrelated
@@ -53,7 +59,7 @@ section, `CLAUDE.md` and `docs/REQUIREMENTS_LEDGER.md` win.
 > verified dev-000013 (Diagnostics, 18:58 UTC). Do not treat CI results as device results.
 
 **(History; superseded 2026-10-12.)** At this point every push to the branch published a dev OTA unless
-the commit message contained `[skip ci]`. Since `ebdcae8`, OTAs are published only by an explicit request
+the commit message contained `[skip ci]`. Since 2026-10-12, OTAs are published only by a manual run
 (docs/OTA_PUBLISHING.md).
 
 ---
@@ -1073,5 +1079,5 @@ You are continuing an existing game called **Mote** (protagonist **Gill**).
 - expose GitHub secret values or private key material;
 - claim physical-device verification without the owner's evidence.
 
-**Remember:** OTAs are published only by an explicit request (docs/OTA_PUBLISHING.md); before the
-manual-only workflow (`ebdcae8`) reaches the release branch, a game-file push there still publishes.
+**Remember:** OTAs are published only by a manual run of *OTA publish* by the owner
+(docs/OTA_PUBLISHING.md); no push, merge, tag, schedule, request file or other workflow can start it.
