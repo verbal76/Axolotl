@@ -20,3 +20,14 @@ Platform adapters in the shared code:
 
 Not available yet (need a Steam App ID / Steamworks): Steam Input action manifest and API glyphs,
 Steam's gamepad text input, Steam Cloud. Details and the Valve checklist: `docs/STEAM_DECK.md`.
+
+## Graphics settings (status 2026-10-12)
+
+The phones use the Mobile renderer at native resolution with an automatic quality scaler
+(`quality_scaler.gd`: steps down only when the frame rate drops; settings stay local to the device).
+There is **no Automatic / Quality / Cool-Battery choice** today: it shipped in v103 (thermal pass + Video
+performance setting) and was **rolled back** on 2026-10-07 (`23d90f4`, v102's game restored) because v103
+froze the owner's Pixel during play; the suspected causes were GPU frame timing and MSAA switching
+mid-game. A corrective (`55fe092`: no GPU timestamp queries, MSAA never switched, Automatic watching only
+the game's own time) is preserved on `preserve/mote-audit-round` and was never shipped. Bringing either
+back needs the owner (CLAUDE.md: rolled-back work is never restored without the owner).

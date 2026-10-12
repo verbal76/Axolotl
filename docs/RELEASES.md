@@ -47,5 +47,31 @@ signing secrets, so its APK always comes from Build & Verify (`build.py apk` nam
 - **OTA** (`ota-publish.yml`): a signed dev-channel OTA for installed phones, published only on an explicit
   request (docs/OTA_PUBLISHING.md). Its id (`dev-000NNN`) is a separate sequence: an OTA never changes a
   build number, and a numbered build never publishes an OTA.
-- **APK only** (`apk-release.yml`): the earlier playtester-APK release (`apk-v0.1.0-bNN`), kept until
-  the owner retires it in favour of numbered builds.
+- **APK only** (`apk-release.yml`): the known-working playtester-APK release (`apk-v0.1.0-bNN`; b128 and
+  b132 were published with it). **Kept** until the numbered-build workflow has been proven on GitHub.
+
+## Checks on the numbered-build workflow (2026-10-12, local and static; it has not yet run on GitHub)
+
+- Starts only by hand or from `.github/build-release-request.json`; `release_guard.py lint` fails it if
+  an ordinary push, PR or other event could start it. Inputs: platform, source_sha, build_number,
+  destination, apk_run.
+- Source: full SHA, release-branch lineage, contains every earlier `build-*`; build number must be new and
+  above the last. Tests run on the SHA (fast only if the full suites already passed there).
+- Android signing is unchanged: the APK is the one Build & Verify built and signed with the existing key
+  (same package, same certificate pin), taken only if its build-info names the same SHA and number and
+  its SHA-256 matches; nothing is re-signed.
+- Windows and Linux packaging, names, manifest and checksums: proven locally with `tools/build.py`
+  (builds 133-135: Linux package started and quit cleanly; Windows PE checked: icon and version
+  resources); refusals proven for a wrong number, wrong source and a tampered artifact.
+- actionlint: clean.
+
+## Retiring apk-release.yml (later, owner-approved)
+
+1. Run one numbered build that includes Android (`platform: all`) and confirm on GitHub: release
+   "Mote Build NN" with all five files, re-download verification green, the APK installs over the
+   current app on a phone and keeps saves.
+2. Owner approves the retirement.
+3. In one commit: delete `.github/workflows/apk-release.yml` and `.github/apk-release-request.json`,
+   remove `apk-release.yml` from `publishing_workflows` in `.github/release-source.json`, keep the
+   existing `apk-v0.1.0-bNN` releases and tags untouched, and update this file and CLAUDE.md.
+4. `python3 tools/release_guard.py lint` must pass.
