@@ -25,6 +25,9 @@ var _check: Button
 var _install: Button
 var _say := ""
 var _text_at := -100000
+## The scrolling part shows the licences (Credits) instead of the technical report.
+var _lic := false
+var _lic_btn: Button
 
 
 func _ready() -> void:
@@ -82,8 +85,10 @@ func _ready() -> void:
 	_text.autowrap_mode = TextServer.AUTOWRAP_WORD_SMART
 	_text.size_flags_horizontal = Control.SIZE_EXPAND_FILL
 	scroll.add_child(_text)
-	_tech_btn = _btn(head, "TechnicalToggle", "Technical", func(): _tech.visible = not _tech.visible; _text_at = -100000; _refresh())
+	_tech_btn = _btn(head, "TechnicalToggle", "Technical", func(): _show_scroll(false))
 	_tech_btn.custom_minimum_size.x = 230
+	_lic_btn = _btn(head, "LicencesToggle", "Licences", func(): _show_scroll(true))
+	_lic_btn.custom_minimum_size.x = 200
 	var row := HBoxContainer.new()
 	row.add_theme_constant_override("separation", 10)
 	v.add_child(row)
@@ -111,8 +116,19 @@ func _btn(row: Control, name_: String, text: String, cb: Callable) -> Button:
 	return b
 
 
+## Opens (or closes) the scrolling part with the technical report or the licences.
+func _show_scroll(lic: bool) -> void:
+	_tech.visible = not (_tech.visible and _lic == lic)
+	_lic = lic
+	_text.text = ""
+	_text_at = -100000
+	_tech.scroll_vertical = 0
+	_refresh()
+
+
 func open() -> void:
 	_say = ""
+	_lic = false
 	_tech.visible = false
 	visible = true
 	_layout()
@@ -164,11 +180,16 @@ func _refresh() -> void:
 	_status.text = status_line()
 	var where := "installs on the title screen" if not waiting_update().is_empty() else ""
 	_detail.text = "\n".join(AppInfo.about_lines()) + (("\n" + where) if where != "" else "") + (("\n" + _say) if _say != "" else "")
-	_tech_btn.text = "Hide technical" if _tech.visible else "Technical"
+	_tech_btn.text = "Hide technical" if _tech.visible and not _lic else "Technical"
+	_lic_btn.text = "Hide licences" if _tech.visible and _lic else "Licences"
 	var on_title: bool = Game.inst != null and Game.inst.state == "title"
 	_install.visible = not waiting_update().is_empty() and on_title
 	_check.disabled = Boot.updater == null or not Boot.ota_enabled or Boot.updater.busy
 	# The full text only while it is shown (or first opened), at most once a second.
+	if _lic:
+		if _text.text == "":
+			_text.text = Credits.text()
+		return
 	var now := Time.get_ticks_msec()
 	if _text.text == "" or (_tech.visible and now - _text_at >= 1000):
 		_text_at = now

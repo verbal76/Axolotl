@@ -11568,6 +11568,27 @@ func _test_owner_menus_and_players() -> void:
 		back.pressed.emit()
 	await t.frames(2)
 	t.check("about_no_advanced_and_back", adv == null and back_ok and not g.diagnostics.visible, "advanced %s, back %s" % [adv != null, back_ok])
+	# Licences (studio audit 2026-10-12): Godot's licence, its third-party notices and the asset
+	# credits, from the running engine, one button away; the same button hides them again.
+	g.diagnostics.open()
+	await t.frames(2)
+	var lic_btn := g.diagnostics.find_child("LicencesToggle", true, false) as Button
+	var lic_shown := false
+	var lic_txt := ""
+	var lic_hidden := false
+	if lic_btn != null:
+		lic_btn.pressed.emit()
+		await t.frames(2)
+		lic_txt = g.diagnostics._text.text
+		lic_shown = g.diagnostics._tech.is_visible_in_tree()
+		lic_btn.pressed.emit()
+		await t.frames(2)
+		lic_hidden = not g.diagnostics._tech.visible
+	g.diagnostics.close()
+	var comps := Engine.get_copyright_info().size()
+	t.check("about_licences", lic_shown and lic_hidden and lic_txt.contains(Engine.get_license_text().substr(0, 60))
+			and lic_txt.contains("Input Prompts") and lic_txt.contains("FreeType") and comps > 50,
+			"shown %s, hidden again %s, %d chars, %d engine components" % [lic_shown, lic_hidden, lic_txt.length(), comps])
 	# The pause menu.
 	var pm := g.pause_menu
 	pm.open()
