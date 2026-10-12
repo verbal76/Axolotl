@@ -72,6 +72,9 @@ jobs:
           Built and verified by Build & Verify run ${{ steps.which.outputs.run }}.
           EOF
           sed -i 's/^          //' notes.md
-          gh release create "$TAG" --repo "$GITHUB_REPOSITORY" --target "${{ steps.check.outputs.source }}" --latest=false \
+          # The tag goes on the request commit (on the release branch, containing the APK's source commit
+          # named above and in build-info.json): GitHub refused (403) a workflow-created tag on source
+          # 0479663 three times while tagging the branch head worked (dev-000111, 2026-10-12).
+          gh release create "$TAG" --repo "$GITHUB_REPOSITORY" --target "${{ github.sha }}" --latest=false \
             --title "Mote 0.1.0 build ${{ steps.check.outputs.build }} (playtester APK)" --notes-file notes.md \
             "${{ steps.check.outputs.apk }}" build-info.json
