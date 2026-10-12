@@ -93,18 +93,31 @@ def godot(*args, check=True):
     return subprocess.run([exe, *args], cwd=ROOT, check=check)
 
 
-def export_desktop(plat: str, workdir: pathlib.Path) -> pathlib.Path:
+GENERATED = ROOT / "scripts" / "generated" / "native_build_info.gd"
+
+
+def export_desktop(plat: str, workdir: pathlib.Path, sha: str, build: int) -> pathlib.Path:
     spec = DESKTOP[plat]
     original = PRESETS.read_bytes()
+    had_info = GENERATED.read_bytes() if GENERATED.exists() else None
     n = len(re.findall(r"^\[preset\.\d+\]$", original.decode(), re.M))
     out_dir = workdir / plat
     out_dir.mkdir(parents=True, exist_ok=True)
     exe = out_dir / spec["exe"]
     try:
         PRESETS.write_bytes(original + preset_block(n, spec, str(exe)).encode())
+        # The build's identity (About > Technical: build number, source SHA, run), as for the APK.
+        run = os.environ.get("GITHUB_RUN_ID", "local")
+        url = f"{os.environ.get('GITHUB_SERVER_URL', '')}/{os.environ.get('GITHUB_REPOSITORY', '')}/actions/runs/{run}" if run != "local" else ""
+        subprocess.run([sys.executable, str(ROOT / "tools/write_native_build_info.py"), spec["preset"], "desktop", str(build), sha, run, url],
+                       cwd=ROOT, check=True)
         godot("--headless", "--path", ".", "--export-release", spec["preset"], str(exe))
     finally:
         PRESETS.write_bytes(original)   # the Android runtime lock is never left changed
+        if had_info is None:
+            GENERATED.unlink(missing_ok=True)
+        else:
+            GENERATED.write_bytes(had_info)
     if not exe.is_file() or exe.stat().st_size < 1_000_000:
         sys.exit(f"export failed: {exe} missing or too small")
     return exe
@@ -152,7 +165,7 @@ def cmd_build(a) -> None:
     out.mkdir(parents=True, exist_ok=True)
     with tempfile.TemporaryDirectory() as tmp:
         for p in plats:
-            exe = export_desktop(p, pathlib.Path(tmp))
+            exe = export_desktop(p, pathlib.Path(tmp), sha, a.build)
             print("PACKAGED", package_desktop(p, exe, sha, a.build, out))
     if git("status", "--porcelain", "--untracked-files=no"):
         sys.exit("the build left the checkout changed")
