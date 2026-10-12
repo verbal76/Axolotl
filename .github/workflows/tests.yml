@@ -35,6 +35,8 @@ jobs:
       - uses: actions/checkout@v4
         with:
           ref: ${{ inputs.ref }}
+          # (Full history and tags: the release-source and OTA-request checks read them.)
+          fetch-depth: 0
       - name: Install Godot
         run: |
           curl -sSL -o godot.zip "$GODOT_BASE/Godot_v${GODOT_VERSION}-stable_linux.x86_64.zip"
@@ -49,10 +51,11 @@ jobs:
         run: GODOT=godot tools/version_drift_check.sh
       - name: Native-runtime lock is current
         run: python3 tools/ota_runtime.py --check
-      - name: Release source policy (publishing workflows, one engine version, guard self-test)
+      - name: Release policy (request-only publishing, one engine version, guard and OTA-request self-tests)
         run: |
           python3 tools/release_guard.py lint
           python3 tools/release_guard.py self-test
+          python3 tools/ota_request.py self-test
 
   unit:
     name: Mechanics test suite (shard ${{ matrix.shard }}/2)

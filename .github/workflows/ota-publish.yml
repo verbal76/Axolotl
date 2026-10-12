@@ -7,26 +7,41 @@ name: OTA publish (dev channel)
 #   -> client-side inspection -> immutable release -> re-download + re-verify
 #   -> channel pointer moved forward -> receipt.
 
-# The authoritative Mote branch (single source of truth, .github/release-source.json and
-# docs/RELEASE_SOURCE.md). A push to it without [skip ci] publishes that exact commit (GitHub itself
-# skips push runs whose head commit says [skip ci]); the resolve job refuses any commit that is not on
-# it, whatever started the run. History: claude/axolotl-aquarium-platformer-3y0qyy published
-# Expansions 1-6 (dev-000015..dev-000024) and was retired as a publish source on 2026-10-12 (it is
-# 415 commits behind; a push there would have shipped an old game as the newest OTA).
+# MANUAL ONLY (owner decision 2026-10-12; studio standard §9-§10): an OTA is published only when asked.
+# Ordinary pushes, merges, passing CI, documentation and version changes publish nothing. Two ways to ask,
+# both validated by tools/ota_request.py before anything is built (exact 40-hex SHA on the release branch
+# (.github/release-source.json), the runtime that commit builds, the channel, who authorized it, and not
+# already published):
+#   1. push a change to .github/ota-publish-request.json on the release branch (docs/OTA_PUBLISHING.md);
+#   2. Actions > OTA publish > Run workflow, with the same fields and the word PUBLISH as confirmation.
+# History: until 2026-10-12 every game-file push to the release branch published; and the retired
+# Expansions branch claude/axolotl-aquarium-platformer-3y0qyy published dev-000015..dev-000024.
 on:
   push:
     branches:
       - claude/mote-game-continuation-bov2x9
-    # (Actions budget policy, docs/ACTIONS_BUDGET.md: a push of only docs, Markdown or workflow files
-    # changes nothing in the game pack, so it publishes nothing and uses no minutes. Any push that also
-    # touches the game still publishes, with every gate.)
-    paths-ignore: ["**/*.md", "docs/**", ".github/**", "LICENSE*"]
+    paths: [".github/ota-publish-request.json"]
   workflow_dispatch:
     inputs:
-      ref:
-        description: Commit SHA (or branch) to publish to the dev channel
+      source_sha:
+        description: Exact 40-character commit SHA on the release branch
         required: true
-        default: claude/mote-game-continuation-bov2x9
+      runtime_id:
+        description: Runtime that commit builds (installed phones must match), e.g. android-godot-4.7.2-r5
+        required: true
+      channel:
+        type: choice
+        options: [dev]
+        default: dev
+      ota_name:
+        description: Optional title suffix (a-z, 0-9, -), e.g. polish-pass
+        required: false
+      authorized_by:
+        description: Who authorized this OTA
+        required: true
+      confirm:
+        description: Type PUBLISH to publish an OTA to every installed phone on the channel
+        required: true
 
 permissions:
   contents: write
@@ -52,13 +67,40 @@ jobs:
       contents: read
     outputs:
       sha: ${{ steps.r.outputs.sha }}
+      runtime_id: ${{ steps.req.outputs.runtime_id }}
+      ota_name: ${{ steps.req.outputs.ota_name }}
     steps:
+      # The request is read from the triggering commit (push) or the form (dispatch); it is validated
+      # with the release branch's history and tags before the requested commit is checked out.
       - uses: actions/checkout@v4
         with:
-          ref: ${{ inputs.ref || github.sha }}
           fetch-depth: 0
+      - name: Validate the publication request
+        id: req
+        env:
+          IN_SHA: ${{ inputs.source_sha }}
+          IN_RT: ${{ inputs.runtime_id }}
+          IN_CH: ${{ inputs.channel }}
+          IN_NAME: ${{ inputs.ota_name }}
+          IN_BY: ${{ inputs.authorized_by }}
+          IN_CONFIRM: ${{ inputs.confirm }}
+        run: |
+          if [ "${{ github.event_name }}" = "workflow_dispatch" ]; then
+            [ "$IN_CONFIRM" = "PUBLISH" ] || { echo "::error::OTA refused: confirm must be PUBLISH"; exit 1; }
+            jq -n --arg s "$IN_SHA" --arg r "$IN_RT" --arg c "$IN_CH" --arg n "$IN_NAME" --arg b "$IN_BY" \
+              '{source_sha:$s, runtime_id:$r, channel:$c, authorized_by:$b} + (if $n == "" then {} else {ota_name:$n} end)' > "$RUNNER_TEMP/request.json"
+          else
+            cp .github/ota-publish-request.json "$RUNNER_TEMP/request.json"
+          fi
+          cat "$RUNNER_TEMP/request.json"
+          python3 tools/ota_request.py validate --request "$RUNNER_TEMP/request.json" | tee -a "$GITHUB_OUTPUT"
+          test "$(jq -r .channel "$RUNNER_TEMP/request.json")" = "$CHANNEL"
+      - name: Check out exactly the requested commit
+        run: git checkout --detach "${{ steps.req.outputs.sha }}"
       - id: r
-        run: echo "sha=$(git rev-parse HEAD)" >> $GITHUB_OUTPUT
+        run: |
+          echo "sha=$(git rev-parse HEAD)" >> $GITHUB_OUTPUT
+          test "$(git rev-parse HEAD)" = "${{ steps.req.outputs.sha }}"
       - name: Release source guard (only the authoritative branch publishes)
         run: python3 tools/release_guard.py check --sha "${{ steps.r.outputs.sha }}" --contains-published 'ota-dev-*'
 
@@ -127,6 +169,9 @@ jobs:
           test "$(jq -r .channel "$ID")" = "$CHANNEL"
           echo "game_version=$(jq -r .game_version "$ID")" >> $GITHUB_OUTPUT
           echo "runtime_id=$(jq -r .runtime_id "$ID")" >> $GITHUB_OUTPUT
+          # The runtime this build really is must be the one the request authorized.
+          test "$(jq -r .runtime_id "$ID")" = "${{ needs.resolve.outputs.runtime_id }}" \
+            || { echo "::error::built runtime $(jq -r .runtime_id "$ID") is not the requested ${{ needs.resolve.outputs.runtime_id }}"; exit 1; }
 
       - name: Required checks (scripts compile; mechanics and playthrough passed in the tests job on this exact SHA)
         run: |
@@ -233,7 +278,8 @@ jobs:
           SEQ=$((10#${ID##*-}))
           # Descriptive OTA name (owner, 2026-10-05): "Mote v97-hints-pads-reeds" when the released commit
           # carries an "OTA-Name: hints-pads-reeds" trailer (letters, digits, dashes); else "Mote vN".
-          PURPOSE=$(git log -1 --format='%(trailers:key=OTA-Name,valueonly)' "$SHA" | head -1 | tr -cd 'a-z0-9-')
+          PURPOSE="${{ needs.resolve.outputs.ota_name }}"
+          [ -n "$PURPOSE" ] || PURPOSE=$(git log -1 --format='%(trailers:key=OTA-Name,valueonly)' "$SHA" | head -1 | tr -cd 'a-z0-9-')
           TITLE="Mote v$SEQ${PURPOSE:+-$PURPOSE}"
           echo "release title: $TITLE"
           printf '%s\n' "# $TITLE" "" \

@@ -102,21 +102,116 @@ def cmd_provenance(a):
     return 0
 
 
-def push_branches(text):
-    """The branches a workflow's `on: push:` names (inline list or block list)."""
-    m = re.search(r"^on:\s*\n(.*?)(?=^\S)", text + "\nEND", re.S | re.M)
-    if not m:
-        return []
-    on = m.group(1)
-    p = re.search(r"^  push:\s*\n((?:^    .*\n|^\s*\n)*)", on, re.M)
-    if not p:
-        return []
-    block = p.group(1)
-    inline = re.search(r"branches:\s*\[([^\]]*)\]", block)
+def _list_value(block, key):
+    """A key's list in a trigger block: inline [a, b] or a block list of "- a" lines."""
+    inline = re.search(rf"^\s*{re.escape(key)}:\s*\[([^\]]*)\]", block, re.M)
     if inline:
         return [b.strip().strip("'\"") for b in inline.group(1).split(",") if b.strip()]
-    lst = re.search(r"branches:\s*\n((?:\s+-\s*.*\n)+)", block)
-    return [re.sub(r"\s*#.*", "", l).strip().lstrip("-").strip().strip("'\"") for l in lst.group(1).splitlines()] if lst else []
+    lst = re.search(rf"^\s*{re.escape(key)}:\s*\n((?:\s+-\s*.*\n?)+)", block, re.M)
+    return [re.sub(r"\s*#.*", "", l).strip().lstrip("-").strip().strip("'\"") for l in lst.group(1).splitlines() if l.strip()] if lst else []
+
+
+def triggers(text):
+    """The workflow's triggers: {event: block text} (the `on:` mapping, two-space indented keys)."""
+    m = re.search(r"^on:\s*\n(.*?)(?=^\S)", text + "\nEND", re.S | re.M)
+    if not m:
+        return {}
+    out = {}
+    for t in re.finditer(r"^  ([a-z_]+):[^\n]*\n((?:^    .*\n|^\s*\n)*)", m.group(1), re.M):
+        out[t.group(1)] = t.group(2)
+    return out
+
+
+def push_spec(text):
+    """None when the workflow has no push trigger, else its branches, paths and paths-ignore."""
+    block = triggers(text).get("push")
+    if block is None:
+        return None
+    return {"branches": _list_value(block, "branches"), "paths": _list_value(block, "paths"),
+            "paths_ignore": _list_value(block, "paths-ignore")}
+
+
+def push_branches(text):
+    spec = push_spec(text)
+    return spec["branches"] if spec else []
+
+
+REQUEST_FILE = re.compile(r"^\.github/[a-z0-9-]+-request\.json$")
+
+
+def publishing_errors(name, text, branch):
+    """Why a publishing workflow could publish without an explicit request (empty when it cannot)."""
+    errs = []
+    trig = triggers(text)
+    for ev in trig:
+        if ev not in ("push", "workflow_dispatch"):
+            errs.append(f"{name}: publishing workflows may only start on a request-file push or by hand, not on '{ev}'")
+    spec = push_spec(text)
+    if spec is not None:
+        if spec["branches"] != [branch]:
+            errs.append(f"{name}: push-triggers {spec['branches'] or 'every branch'}; only '{branch}' may publish")
+        if spec["paths_ignore"] or not spec["paths"] or not all(REQUEST_FILE.match(x) for x in spec["paths"]):
+            errs.append(f"{name}: an ordinary push could publish (its push trigger must be limited to "
+                        f"`paths: [.github/<name>-request.json]`; found paths {spec['paths']} ignore {spec['paths_ignore']})")
+    if "tools/release_guard.py check" not in text:
+        errs.append(f"{name}: does not run `tools/release_guard.py check` on the commit it publishes")
+    return errs
+
+
+def _glob_re(pattern):
+    """GitHub path filter glob: ** crosses folders, * does not."""
+    out, i = "", 0
+    while i < len(pattern):
+        if pattern.startswith("**/", i):
+            out += "(?:.*/)?"
+            i += 3
+        elif pattern.startswith("**", i):
+            out += ".*"
+            i += 2
+        elif pattern[i] == "*":
+            out += "[^/]*"
+            i += 1
+        else:
+            out += re.escape(pattern[i])
+            i += 1
+    return re.compile("^" + out + "$")
+
+
+def push_would_run(spec, branch, files, message):
+    """Whether a push of `files` to `branch` (head commit `message`) starts a workflow with this push spec."""
+    if spec is None:
+        return False
+    if re.search(r"\[(skip ci|ci skip|no ci|skip actions|actions skip)\]", message, re.I):
+        return False
+    if spec["branches"] and not any(_glob_re(b).match(branch) for b in spec["branches"]):
+        return False
+    if spec["paths"]:
+        return any(_glob_re(p).match(f) for p in spec["paths"] for f in files)
+    if spec["paths_ignore"]:
+        return any(not any(_glob_re(p).match(f) for p in spec["paths_ignore"]) for f in files)
+    return True
+
+
+def cmd_triggers(a):
+    """Which workflows a push moving the release branch from FROM to TO would start (the definitions
+    GitHub uses are the ones in TO, the pushed head)."""
+    branch = config()["authoritative_branch"]
+    files = [f for f in git("diff", "--name-only", a.frm, a.to).stdout.split("\n") if f]
+    message = git("log", "-1", "--format=%B", a.to).stdout
+    names = [n for n in git("ls-tree", "--name-only", f"{a.to}:.github/workflows").stdout.split() if n.endswith((".yml", ".yaml"))]
+    started = []
+    for n in names:
+        text = git("show", f"{a.to}:.github/workflows/{n}").stdout
+        if push_would_run(push_spec(text), branch, files, message):
+            started.append(n)
+    publishing = set(config()["publishing_workflows"])
+    print(f"push {a.frm[:12]}..{a.to[:12]} to {branch}: {len(files)} files changed")
+    print("starts: " + (", ".join(started) if started else "nothing"))
+    bad = [n for n in started if n in publishing]
+    if bad:
+        print(f"::error::this push would start publishing workflow(s): {', '.join(bad)}")
+        return 1
+    return 0
 
 
 def cmd_lint(_a):
@@ -128,19 +223,14 @@ def cmd_lint(_a):
         if not wf.exists():
             errors.append(f"{name}: listed as a publishing workflow but missing")
             continue
-        text = wf.read_text()
-        branches = push_branches(text)
-        if branches and branches != [branch]:
-            errors.append(f"{name}: push-triggers {branches}; only '{branch}' may publish")
-        if "tools/release_guard.py check" not in text:
-            errors.append(f"{name}: does not run `tools/release_guard.py check` on the commit it publishes")
+        errors += publishing_errors(name, wf.read_text(), branch)
     versions = engine_versions()
     if len(versions) != 1:
         errors.append(f"workflows pin different Godot versions: {versions}")
     for e in errors:
         print("::error::" + e)
     if not errors:
-        print(f"release workflows OK: {', '.join(cfg['publishing_workflows'])} publish only from {branch}; "
+        print(f"release workflows OK: {', '.join(cfg['publishing_workflows'])} publish only on an explicit request, from {branch}; "
               f"engine {', '.join(versions)}")
     return 1 if errors else 0
 
@@ -176,6 +266,40 @@ def cmd_self_test(_a):
             ok = got == want
             bad += 0 if ok else 1
             print(f"{'PASS' if ok else 'FAIL'} {what}: on_branch={got} {why}")
+    # Publishing workflows: only a request-file push or a manual run may start them.
+    b = "release"
+    head = "on:\n  push:\n    branches: [release]\n"
+    lint_cases = [
+        ("an ordinary game-file push publishes", head + "    paths-ignore: [\"docs/**\"]\n  workflow_dispatch:\njobs:\n", False),
+        ("every push publishes", head + "  workflow_dispatch:\njobs:\n", False),
+        ("a request file plus game files", head + "    paths: [\".github/x-request.json\", \"scripts/**\"]\njobs:\n", False),
+        ("publishing on a pull request", "on:\n  pull_request:\n  workflow_dispatch:\njobs:\n", False),
+        ("another branch publishes", "on:\n  push:\n    branches: [old]\n    paths: [\".github/x-request.json\"]\njobs:\n", False),
+        ("request file only, or by hand", head + "    paths: [\".github/x-request.json\"]\n  workflow_dispatch:\njobs:\n", True),
+        ("by hand only", "on:\n  workflow_dispatch:\njobs:\n", True),
+    ]
+    for what, text, want in lint_cases:
+        errs = publishing_errors("wf.yml", text + "  # tools/release_guard.py check\n", b)
+        ok = (not errs) == want
+        bad += 0 if ok else 1
+        print(f"{'PASS' if ok else 'FAIL'} lint, {what}: {'accepted' if not errs else 'refused'}")
+    spec = push_spec(head + "    paths: [\".github/ota-publish-request.json\"]\njobs:\n")
+    run_cases = [
+        ("game files only", ["scripts/core/game.gd"], "x", False),
+        ("the request file", [".github/ota-publish-request.json"], "x", True),
+        ("the request file with [skip ci]", [".github/ota-publish-request.json"], "x [skip ci]", False),
+    ]
+    for what, files, msg, want in run_cases:
+        got = push_would_run(spec, b, files, msg)
+        ok = got == want
+        bad += 0 if ok else 1
+        print(f"{'PASS' if ok else 'FAIL'} trigger, {what}: {'starts' if got else 'does not start'}")
+    old = push_spec(head + "    paths-ignore: [\"**/*.md\", \"docs/**\", \".github/**\"]\njobs:\n")
+    for what, files, want in [("old rule: a game file", ["scripts/a.gd"], True), ("old rule: docs only", ["docs/a.md", "x/README.md"], False)]:
+        got = push_would_run(old, b, files, "x")
+        ok = got == want
+        bad += 0 if ok else 1
+        print(f"{'PASS' if ok else 'FAIL'} trigger, {what}: {'starts' if got else 'does not start'}")
     print("self-test " + ("OK" if bad == 0 else f"FAILED ({bad})"))
     return 1 if bad else 0
 
@@ -196,9 +320,12 @@ def main():
     p.add_argument("--run-url", default="")
     p.add_argument("--out", default="")
     sub.add_parser("lint")
+    tr = sub.add_parser("triggers")
+    tr.add_argument("--from", dest="frm", required=True)
+    tr.add_argument("--to", required=True)
     sub.add_parser("self-test")
     a = ap.parse_args()
-    return {"check": cmd_check, "provenance": cmd_provenance, "lint": cmd_lint, "self-test": cmd_self_test}[a.cmd](a)
+    return {"check": cmd_check, "provenance": cmd_provenance, "lint": cmd_lint, "self-test": cmd_self_test, "triggers": cmd_triggers}[a.cmd](a)
 
 
 if __name__ == "__main__":
