@@ -1,0 +1,6 @@
+{
+  "_doc": "A push that changes this file publishes the branch head as a dev OTA (used when GitHub refuses a re-run). It is not packed into the game.",
+  "source_game": "0479663",
+  "reason": "republish the polish pass for runtime r5 (dev-000111 failed at release creation, HTTP 403)",
+  "attempt": 2
+}
