@@ -7,15 +7,15 @@ name: OTA publish (dev channel)
 #   -> client-side inspection -> immutable release -> re-download + re-verify
 #   -> channel pointer moved forward -> receipt.
 
-# The authorized Mote development branches. A push to one of them without [skip ci] publishes that
-# exact commit (GitHub itself skips push runs whose head commit says [skip ci]). A new development
-# branch is added here, explicitly, in its first release; nothing else can publish.
-#   claude/axolotl-aquarium-platformer-3y0qyy   Expansions 1-6 (dev-000015..dev-000024)
-#   claude/mote-game-continuation-bov2x9        from the dev-000024 playtest polish on
+# The authoritative Mote branch (single source of truth, .github/release-source.json and
+# docs/RELEASE_SOURCE.md). A push to it without [skip ci] publishes that exact commit (GitHub itself
+# skips push runs whose head commit says [skip ci]); the resolve job refuses any commit that is not on
+# it, whatever started the run. History: claude/axolotl-aquarium-platformer-3y0qyy published
+# Expansions 1-6 (dev-000015..dev-000024) and was retired as a publish source on 2026-10-12 (it is
+# 415 commits behind; a push there would have shipped an old game as the newest OTA).
 on:
   push:
     branches:
-      - claude/axolotl-aquarium-platformer-3y0qyy
       - claude/mote-game-continuation-bov2x9
     # (Actions budget policy, docs/ACTIONS_BUDGET.md: a push of only docs, Markdown or workflow files
     # changes nothing in the game pack, so it publishes nothing and uses no minutes. Any push that also
@@ -54,8 +54,11 @@ jobs:
       - uses: actions/checkout@v4
         with:
           ref: ${{ inputs.ref || github.sha }}
+          fetch-depth: 0
       - id: r
         run: echo "sha=$(git rev-parse HEAD)" >> $GITHUB_OUTPUT
+      - name: Release source guard (only the authoritative branch publishes)
+        run: python3 tools/release_guard.py check --sha "${{ steps.r.outputs.sha }}" --contains-published 'ota-dev-*'
 
   # The release gate: fast checks + both unit shards + the playthrough, in parallel, on the exact SHA.
   tests:

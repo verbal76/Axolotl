@@ -55,6 +55,12 @@ jobs:
           echo "source=$(jq -r .source_sha build-info.json)" >> $GITHUB_OUTPUT
           echo "runtime=$(jq -r .runtime_id build-info.json)" >> $GITHUB_OUTPUT
           echo "build=$(jq -r .android_build build-info.json)" >> $GITHUB_OUTPUT
+      - uses: actions/checkout@v4
+        with:
+          fetch-depth: 0
+          path: src
+      - name: Release source guard (the APK's source commit is on the authoritative branch)
+        run: python3 src/tools/release_guard.py check --sha "${{ steps.check.outputs.source }}" --contains-published 'apk-v*'
       - name: Publish the release
         env:
           GH_TOKEN: ${{ github.token }}

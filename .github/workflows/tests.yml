@@ -49,6 +49,10 @@ jobs:
         run: GODOT=godot tools/version_drift_check.sh
       - name: Native-runtime lock is current
         run: python3 tools/ota_runtime.py --check
+      - name: Release source policy (publishing workflows, one engine version, guard self-test)
+        run: |
+          python3 tools/release_guard.py lint
+          python3 tools/release_guard.py self-test
 
   unit:
     name: Mechanics test suite (shard ${{ matrix.shard }}/2)

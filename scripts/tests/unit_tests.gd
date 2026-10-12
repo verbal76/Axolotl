@@ -11767,7 +11767,6 @@ func _test_deck_controls() -> void:
 	nav.back()
 	t.check("deck_b_in_play_is_lunge", nav.last_back == "ignored" and not g.pause_menu.visible, nav.last_back)
 	Settings.input_mode = was_mode
-	print("DECKDBG state=%s stage='%s' obj='%s' pause=%s pres=%s ctl=%s paused=%s focus=%s cine='%s' prompts=%s" % [g.state, g.onboarding.stage, g.onboarding.objective, g.pause_menu.visible, g.presentation.active() if g.presentation else false, g.player.controls_enabled, g.get_tree().paused, g.get_viewport().gui_get_focus_owner(), g.cinematic, g.hud.prompts.keys()])
 
 
 func _focusables(root: Node) -> Array:

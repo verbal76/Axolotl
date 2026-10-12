@@ -48,3 +48,15 @@ release gates (tests, baked export, logo, signing, verification) to save minutes
 `project.godot`, `export_presets.cfg` and `scripts/boot/*` are frozen (runtime r5, Android build 22; owner
 2026-10-11: r6 rolled back so every tester on build 22 keeps receiving OTAs);
 `python3 tools/ota_runtime.py --check` must print OTA-compatible.
+
+## Single source of truth for releases (permanent, owner directive 2026-10-12)
+
+- One codebase, one release branch: every build of every platform (OTA pack, APK, Linux/Steam Deck)
+  comes from a commit on the branch named in `.github/release-source.json`; platforms differ only by
+  export configuration, and a coordinated release uses the same SHA everywhere, each artifact
+  carrying its provenance (SHA, branch, version, platform, config, engine, runtime, time, toolchain).
+- Branches are temporary; `preserve/*` are checkpoints, never release sources. Never delete a branch
+  because it looks obsolete, never rewrite shared history, never restore abandoned or rolled-back
+  work without the owner (see the ledger). Rollback = a new reverting commit, never an older commit.
+- Enforced by `tools/release_guard.py` (`check` in every publishing workflow; `lint` + `self-test` in
+  the tests' fast job). Details, architecture and the branch ledger: `docs/RELEASE_SOURCE.md`.

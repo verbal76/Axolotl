@@ -46,6 +46,9 @@ jobs:
       - uses: actions/checkout@v4
         with:
           ref: ${{ steps.which.outputs.sha }}
+          fetch-depth: 0
+      - name: Release source guard (the same authoritative branch as the phone builds)
+        run: python3 tools/release_guard.py check --sha "${{ steps.which.outputs.sha }}" --contains-published 'desktop-*'
       - name: Install Godot + export templates
         run: |
           curl -sSL -o godot.zip "$GODOT_BASE/Godot_v${GODOT_VERSION}-stable_linux.x86_64.zip"
@@ -110,6 +113,11 @@ jobs:
           cp build/linux/Mote.x86_64 "dist/$NAME/"
           printf 'Mote for Linux x86_64 / Steam Deck (build %s, source %s).\nRun ./Mote.x86_64. On a Steam Deck in Desktop Mode: Steam > Add a Non-Steam Game > Mote.x86_64, then play it from Game Mode.\n' \
             "${{ github.run_number }}" "${{ steps.which.outputs.sha }}" > "dist/$NAME/README.txt"
+          python3 tools/release_guard.py provenance --sha "${{ steps.which.outputs.sha }}" --platform linux-x86_64 \
+            --version "$(grep -oE 'GAME_VERSION := "[^"]+"' scripts/core/game_version.gd | cut -d'"' -f2)" --config release \
+            --build "${{ github.run_number }}" --run-url "${{ github.server_url }}/${{ github.repository }}/actions/runs/${{ github.run_id }}" \
+            --out "dist/$NAME/provenance.json"
+          cp "dist/$NAME/provenance.json" "dist/$NAME.provenance.json"
           tar -C dist -czf "dist/$NAME.tar.gz" "$NAME"
           sha256sum "dist/$NAME.tar.gz"
           echo "name=$NAME" >> $GITHUB_OUTPUT
@@ -126,4 +134,4 @@ jobs:
           gh release create "$TAG" --repo "$GITHUB_REPOSITORY" --target "${{ steps.which.outputs.sha }}" --latest=false --prerelease \
             --title "Mote for Linux / Steam Deck (build ${{ github.run_number }})" \
             --notes "Native Linux x86_64 build of source ${{ steps.which.outputs.sha }}. Extract and run Mote.x86_64. On Steam Deck: Desktop Mode > Steam > Add a Non-Steam Game." \
-            "dist/$N.tar.gz"
+            "dist/$N.tar.gz" "dist/$N.provenance.json"

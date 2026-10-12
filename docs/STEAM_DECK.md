@@ -21,6 +21,9 @@ runs it, and publishes a `.tar.gz`. Started by a push that changes `.github/desk
 (`{"sha": "<commit>"}`) or by hand. The Linux export preset is written into `export_presets.cfg` inside
 that run only: the committed file belongs to the Android runtime lock (r5). Desktop builds have no OTA
 client (Boot runs it only with the Android `ota` feature); Steam will deliver their updates.
+Like the phone builds, it builds only a commit on the release branch that contains every earlier desktop
+release, and ships a `provenance.json` naming its source SHA (`docs/RELEASE_SOURCE.md`); a desktop build
+matching a phone OTA names that OTA's source SHA.
 
 Sideloading on a Deck: Desktop Mode, extract, Steam > Add a Non-Steam Game > `Mote.x86_64`, then play from
 Game Mode.
