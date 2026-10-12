@@ -20,7 +20,7 @@ var _treasure: Button
 var _root: Control
 var _panel: PanelContainer
 var _status: Label
-var _startup: Label
+var _prompts: Button
 var _reduced: CheckButton
 var _timer_toggle: CheckButton
 var _run_time: Label
@@ -214,13 +214,16 @@ func _ready() -> void:
 	_status.add_theme_font_size_override("font_size", 20)
 	_status.autowrap_mode = TextServer.AUTOWRAP_WORD_SMART
 	info.add_child(_status)
-	# How long this launch took (the full timeline is in Diagnostics on newer apps).
-	_startup = Label.new()
-	_startup.name = "StartupLine"
-	_startup.add_theme_font_size_override("font_size", 17)
-	_startup.add_theme_color_override("font_color", Color(0.85, 0.95, 0.92, 0.6))
-	_startup.autowrap_mode = TextServer.AUTOWRAP_WORD_SMART
-	info.add_child(_startup)
+	# Button prompts (owner, 2026-10-12: in Settings; studio standard §13), under the controller line.
+	# Automatic (the default) follows the pad or keyboard in use; each press moves to the next fixed
+	# family, then back to Automatic. (It takes the place of the launch-time line, which About now shows
+	# beside the full startup timeline, so the page still fits without scrolling.)
+	_prompts = UiStyle.button(prompt_label(), _cycle_prompts)
+	_prompts.name = "ButtonPrompts"
+	_prompts.tooltip_text = "Which button pictures prompts show. Automatic follows the controller or keyboard in use."
+	_prompts.custom_minimum_size = Vector2(0, 60)
+	_prompts.add_theme_font_size_override("font_size", 20)
+	info.add_child(_prompts)
 	# Version, build, OTA and source identities (and OTA recovery in dev builds).
 	var about := UiStyle.button("About / Diagnostics", func(): Game.inst.diagnostics.open())
 	about.name = "AboutDiagnostics"
@@ -360,6 +363,21 @@ func _on_tutorials(on: bool) -> void:
 
 
 ## A left-column action: the column's width, 64 px tall.
+const PROMPT_STYLES := ["auto", "xbox", "ps", "deck", "keys"]
+
+
+## The button-prompt control's text for the current style.
+static func prompt_label() -> String:
+	return "Button prompts: " + {"auto": "Automatic", "xbox": "Xbox", "ps": "PlayStation", "deck": "Steam Deck",
+			"keys": "Keyboard"}.get(Settings.prompt_style, "Automatic")
+
+
+func _cycle_prompts() -> void:
+	Settings.prompt_style = PROMPT_STYLES[(PROMPT_STYLES.find(Settings.prompt_style) + 1) % PROMPT_STYLES.size()]
+	Settings.save()
+	_prompts.text = prompt_label()
+
+
 func _action(text: String, cb: Callable) -> Button:
 	var b := UiStyle.button(text, cb)
 	b.custom_minimum_size = Vector2(LEFT_W, 64)
@@ -507,7 +525,7 @@ func _refresh() -> void:
 	_music.set_value_no_signal(Settings.music_volume)
 	_sfx.set_value_no_signal(Settings.sfx_volume)
 	_status.text = Settings.controller_status()
-	_startup.text = StartupTrace.summary()
+	_prompts.text = prompt_label()
 	_layout.call_deferred()
 
 

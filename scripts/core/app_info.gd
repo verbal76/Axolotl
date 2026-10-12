@@ -154,4 +154,8 @@ static func about_lines() -> Array[String]:
 			active if active != "none" else "the bundled game"])
 	L.append("Updates: %s  ·  channel %s  ·  %s" % [update_state(), id.get("ota_channel", "none"), id.get("runtime_id", "?")])
 	L.append("%s %s%s  ·  %s  ·  %s" % [OS.get_name(), OS.get_version(), (" (API %d)" % api) if api > 0 else "", OS.get_model_name(), OS.get_locale()])
+	# (The launch-time line moved here from Settings on 2026-10-12; the full timeline is under Technical.)
+	var launch := StartupTrace.summary()
+	if launch != "":
+		L.append(launch)
 	return L

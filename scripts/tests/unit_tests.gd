@@ -11861,6 +11861,28 @@ func _test_deck_controls() -> void:
 	Settings.prompt_style = was_style
 	Settings.last_device = was_dev
 	Settings._set_mode(glyph_mode)
+	# The Settings control (owner, 2026-10-12): reached by the pad like every other control (see
+	# deck_every_page_reachable_by_controller); each press steps Automatic -> Xbox -> PlayStation ->
+	# Steam Deck -> Keyboard -> Automatic, the prompts follow and the choice is saved.
+	Settings.prompt_style = "auto"
+	g.pause_menu.open(true)
+	await t.frames(2)
+	var pbtn := g.pause_menu.find_child("ButtonPrompts", true, false) as Button
+	var pstyles: Array = []
+	var pfams: Array = []
+	if pbtn != null:
+		pbtn.grab_focus()
+		for i in 5:
+			pbtn.pressed.emit()
+			pstyles.append(Settings.prompt_style)
+			pfams.append(Glyphs.family())
+	var pcf := ConfigFile.new()
+	var psaved := pcf.load(Settings.SETTINGS_PATH) == OK and str(pcf.get_value("controls", "prompt_style", "?")) == Settings.prompt_style
+	var chooser_ok: bool = pbtn != null and pbtn.focus_mode == Control.FOCUS_ALL and pstyles == ["xbox", "ps", "deck", "keys", "auto"] \
+			and pfams.slice(0, 4) == ["xbox", "ps", "deck", "keys"] and psaved and pbtn.text == "Button prompts: Automatic"
+	g.pause_menu.close()
+	Settings.prompt_style = was_style
+	t.check("prompt_style_chooser_in_settings", chooser_ok, "styles %s, prompts %s, saved %s, label '%s'" % [pstyles, pfams, psaved, pbtn.text if pbtn else "missing"])
 	t.check("glyph_library_art_and_switching", no_art.is_empty() and after_motion != Glyphs.FAMILY_KEYS and after_key == Glyphs.FAMILY_KEYS
 			and after_pad != Glyphs.FAMILY_KEYS and forced == Glyphs.FAMILY_PS,
 			"missing art %s; after mouse motion %s, key %s, pad %s, forced %s" % [no_art, after_motion, after_key, after_pad, forced])
