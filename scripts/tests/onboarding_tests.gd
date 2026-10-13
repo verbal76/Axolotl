@@ -887,8 +887,11 @@ func tunnel() -> void:
 	if outs.size() < 2:
 		t.check("tunnel_card_has_two_tunnels", false, "%d tunnels out of ball 1" % outs.size())
 		return
+	# (Earlier tests may leave any ball past 70%, e.g. run after the whole-game tests in one process,
+	# where every ball is healed: its tunnels would reopen at once and their own card and shot would
+	# land in this test. Every ball is held below 70% for the test and put back after.)
+	var held_tunnels := _hold_tunnels_closed()
 	var reopen := func() -> void:
-		# (Earlier tests may leave ball 1 past 70%: held below it until the test opens them.)
 		b.restoration = 0.0
 		for vv in g.vortices:
 			vv.connected = false
@@ -949,10 +952,41 @@ func tunnel() -> void:
 	await t.frames(3)
 	reopen.call()
 	b.restoration = float(b.events_done) / maxf(1.0, float(b.events_total))
+	_restore_tunnels(held_tunnels, b)
 	await all_done()
 
 
 # --- Lesson 3: the first Red Starfish ----------------------------------------------------------------
+
+## Every ball held just below the tunnel threshold and every tunnel shut, for a test about the tunnel
+## card; returns what to put back (_restore_tunnels).
+func _hold_tunnels_closed() -> Dictionary:
+	var saved := {"r": [], "c": []}
+	for bb in g.balls:
+		saved["r"].append(bb.restoration)
+		if bb.restoration >= Vortex.CONNECT_AT - 0.0001:
+			bb.restoration = Vortex.CONNECT_AT - 0.05
+	for vv in g.vortices:
+		saved["c"].append(vv.connected)
+		vv.connected = false
+	g._pending_connect.clear()
+	g._tunnel_owed_t = 0.0
+	return saved
+
+
+## The other balls and their tunnels as they were, with no shot owed for them (`keep`, the ball the
+## test drives, and its own tunnels are left as the test set them).
+func _restore_tunnels(saved: Dictionary, keep: MossBall) -> void:
+	for i in g.balls.size():
+		if g.balls[i] != keep:
+			g.balls[i].restoration = saved["r"][i]
+	for i in g.vortices.size():
+		var vv: Vortex = g.vortices[i]
+		if vv.ball_a != keep:
+			vv.connected = saved["c"][i]
+			g._pending_connect.erase(vv)
+	g._tunnel_owed_t = 0.0
+
 
 func starfish() -> void:
 	await reset(["intro", "feeding", "parasite"])
@@ -1243,6 +1277,11 @@ func guidance() -> void:
 	# A lesson interrupted before its card: the moment is done (never staged twice), the card owed,
 	# kept in the run, and it comes back by itself after calm play, alone (no camera).
 	await _start_kill_stage()
+	# (This checks the parasite's owed card. Run after the whole-game tests in one process, tunnels are
+	# open, so the tunnel lesson's own owed card would also come: this run has seen that one.)
+	var ls := g.run_save.lessons().duplicate()
+	ls["tunnel"] = true
+	g.run_save.set_lessons(ls)
 	var staged := o.stage == "kill"
 	g.pause_menu.open()
 	await t.frames(3)

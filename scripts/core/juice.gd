@@ -61,6 +61,12 @@ func _init() -> void:
 	inst = self
 
 
+## (A reloaded scene's late callbacks find no Juice rather than a freed one.)
+func _exit_tree() -> void:
+	if inst == self:
+		inst = null
+
+
 func _ready() -> void:
 	_step_player = AudioStreamPlayer3D.new()
 	_step_player.bus = "SFX"

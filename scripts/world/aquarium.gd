@@ -556,8 +556,9 @@ func _build_bubbler() -> void:
 	snd.unit_size = 60.0
 	snd.max_distance = 400.0
 	snd.volume_db = -6.0
-	snd.autoplay = true
 	add_child(snd)
+	# (Plays within earshot: AudioDirector.want_loop, row 37 safeguard.)
+	AudioDirector.want_loop(snd, true)
 
 
 func _build_snail() -> void:

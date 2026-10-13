@@ -98,8 +98,9 @@ func _apply(k: float) -> void:
 			visible = k > 0.0
 			flow = k
 			for c in get_children():
-				if c is AudioStreamPlayer3D and k > 0.0 and not (c as AudioStreamPlayer3D).playing and is_inside_tree():
-					(c as AudioStreamPlayer3D).play()
+				# (Within earshot only: AudioDirector.want_loop, row 37 safeguard.)
+				if c is AudioStreamPlayer3D and k > 0.0 and not bool(c.get_meta("want_play", false)) and is_inside_tree():
+					AudioDirector.want_loop(c as AudioStreamPlayer3D, true)
 		_:
 			_set_solid(true)
 	if is_inside_tree():

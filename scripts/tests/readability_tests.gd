@@ -221,7 +221,22 @@ func parasite_readability() -> void:
 			# (A living one: earlier tests in the same world may have drained some, whose eyes are rightly out.)
 			if x.kind == Parasite.Kind.SMALL and small == null and x.is_alive() and x._gray < 0.01:
 				small = x
-	t.check("parasite_small_found", small != null, "")
+	# (Run after the whole-game tests in one process, every small parasite may already be cleared,
+	# since the all-clear and treasure tests heal the worlds: a fresh one is made here as a stand-in,
+	# exactly as the game makes one (Parasite.setup, unregistered), so the checks below always run.)
+	var stand_in: Parasite = null
+	if small == null:
+		for b in g.balls:
+			for x in b.parasites:
+				if x.kind == Parasite.Kind.SMALL and stand_in == null:
+					stand_in = Parasite.new()
+					stand_in.setup(b, Parasite.Kind.SMALL, x.zone_id, x.spawn_dir, rad_to_deg(x.home_radius), 0.0, false)
+					stand_in.name = "ReadabilityStandIn"
+					b.add_child(stand_in)
+		await t.frames(2)
+		small = stand_in
+	t.check("parasite_small_found", small != null and small.is_alive() and small._gray < 0.01,
+			"a living one in the world" if stand_in == null else "a fresh stand-in (the world's are all cleared)")
 	if small == null:
 		return
 	var m := small._body_mat
@@ -255,3 +270,6 @@ func parasite_readability() -> void:
 	for b in g.balls:
 		n += b.parasites.size()
 	t.check("parasite_eye_materials_own", mats.size() == n, "%d materials, %d parasites" % [mats.size(), n])
+	if stand_in != null:
+		stand_in.get_parent().remove_child(stand_in)
+		stand_in.free()

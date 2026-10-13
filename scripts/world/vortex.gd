@@ -626,10 +626,8 @@ func _update_rush(p: AudioStreamPlayer3D, s: float) -> void:
 	var db := linear_to_db(maxf(0.0001, s * 0.8))
 	# (Only when it moves audibly: per-frame writes raced the engine's audio thread, ledger row 37.)
 	AudioDirector.set_volume(p, db, s <= 0.0)
-	if s > 0.01 and not p.playing:
-		p.play()
-	elif s <= 0.01 and p.playing:
-		p.stop()
+	# (Plays only within earshot: AudioDirector.want_loop, row 37 safeguard.)
+	AudioDirector.want_loop(p, s > 0.01)
 
 
 ## Position/orientation along the tunnel for travel. t = 0 at A, 1 at B.

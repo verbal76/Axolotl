@@ -51,7 +51,7 @@ func run(runner) -> void:
 	g.spores.enabled = false
 	await t.seconds(0.5)
 	var only: String = Settings.test_args.get("only", "")
-	var registry := ["_test_startup", "_test_ota_and_version", "_test_hag_infra", "_test_launch_update", "_test_mesh_winding", "_test_terrain", "_test_ravines", "_test_rim_fights_clear_of_ooze", "_test_edge_assist", "_test_ooze_bubbles", "_test_view_clearances", "_test_camera_rises_over", "_test_camera_invariant", "_test_ball_view", "_test_juice", "_test_owner_menus_and_players", "_test_deck_controls", "_test_profiles_ab", "_phase_profile_write", "_phase_profile_check", "_test_hud_corner", "_test_settings_safe_write", "_test_audio_volume_writes_reviewed", "_test_save_files_classified", "_test_restore_hints", "_test_spore_blooms", "_test_drawn_back", "_test_dead_area_sim", "_test_home_coherence", "_test_terrain_grounded", "_test_no_floating_platforms", "_test_parasite_locomotion", "_test_parasite_body_and_death", "_test_parasite_combat", "_test_organic_motion", "_test_gill_look", "_test_gill_idles", "_test_gill_colours", "_test_gill_patterns", "_test_tail_whip", "_test_gill_traction", "_test_gill_incline_transitions", "_test_traction_no_shortcuts", "_test_gill_body_follow", "_test_swim_body_follow", "_test_ambient_sway", "_test_placements", "_test_tutorial_route", "_test_sphere_walk", "_test_jump_and_burst", "_test_coyote_and_buffer", "_test_swipe_direction_and_stages", "_test_hard_landing", "_test_food", "_test_food_reach", "_test_food_catchable", "_test_assisted_lunge", "_test_glob_counterplay", "_test_darter_and_burrower", "_test_food_repopulates", "_test_motes", "_test_checkpoint_and_regen", "_test_crumble", "_test_restoration_gates", "_test_retract_gates_gone", "_test_bubble_columns", "_test_restoration_continuity", "_test_health_map", "_test_vortex", "_test_vortex_tints", "_test_vortex_ready_state", "_test_vortex_currents", "_test_vortex_currents_travel", "_test_current", "_test_current_brace", "_test_canopy", "_test_canopy_plain_jumps", "_test_canopy_guard_leaf", "_test_climbs_physical", "_test_jungle_ladders_physical", "_test_leaf_geometry", "_test_leaf_footing", "_test_caves", "_test_mounds", "_test_vegetation", "_test_vortex_mouths_clear", "_test_vortex_pads_clear_of_plants", "_test_stalkers_in_reeds", "_test_route_audit", "_test_new_areas", "_test_ecosystem", "_test_threat_spread", "_test_music", "_test_opening_audio", "_test_run_clock", "_test_completion_catalog", "_test_completion_frozen", "_test_run_save_file", "_test_run_timer_live", "_test_run_continue", "_test_timer_integrity", "_test_resume_points_safe", "_phase_continue_write", "_phase_continue_read", "_test_upgrades", "_test_quality_title_cap", "_test_ui", "_test_menus_no_scroll", "_test_menu_touch", "_test_primary_buttons", "_test_tier2_rules", "_test_tier2_world", "_test_ambient_fish", "_test_parasite_never_buried", "_test_tier2_loadout", "_test_aquarium_experiences", "_test_aquarium_polish", "_test_all_clear", "_test_treasure_unlock", "_test_treasure_generation", "_test_treasure_play", "_phase_treasure_stress", "_phase_live_fish_diag", "_phase_cpu_probe", "_phase_incline_survey", "_phase_loco_diag", "_phase_crawl_trace", "_phase_mouth_crawls", "_phase_organic_trace", "_phase_organic_cost", "_test_skilltree_graph", "_test_progress_store", "_test_starfish_spots", "_test_starfish_pickup", "_test_skill_ui", "_test_quick_gill", "_test_lunge_skills", "_test_burst_skills", "_test_glide_control", "_test_glide_transfers", "_test_mote_magnet", "_phase_starfish_survey", "_phase_starfish_sweep", "_phase_glide_probe", "_test_plants_terminal_growth", "_test_sea_fan_depth", "_test_repopulation", "_phase_repop_survey", "_phase_repop_sim", "_test_aquarium_gill", "_phase_aq_nav", "_test_tutorials_and_title", "_test_onb_progress", "_test_onb_owner_save", "_test_onb_per_run", "_test_onb_toggle", "_test_onb_intro", "_test_onb_feeding", "_test_onb_parasite", "_test_onb_feed_first", "_test_onb_tunnel", "_test_onb_starfish", "_test_onb_softlock", "_test_onb_guidance", "_test_onb_replay", "_test_onb_relaunch", "_test_onb_restoration_equal", "_test_hard_mode", "_test_hard_mode_save", "_test_polish_a", "_test_leaf_motion", "_test_perf_veg_cull", "_test_creature_horizon_cull", "_test_veg_stays_put", "_test_death_and_arrival", "_test_pause_ball_progress", "_test_arrival_view", "_test_camera_never_drawn_unsafe", "_test_startup_build_identical", "_phase_world_hash", "_phase_th_bench", "_phase_hard_write", "_phase_hard_read", "_phase_hard_newrun", "_phase_hard_finish", "_phase_hard_sim", "_phase_hard_intervals", "_phase_onb_owner", "_phase_onb_write", "_phase_onb_read", "_phase_onb_kill", "_phase_onb_toggle", "_phase_cohesion_probe", "_test_eel_reach", "_test_parasite_readability"]
+	var registry := ["_test_startup", "_test_ota_and_version", "_test_hag_infra", "_test_launch_update", "_test_mesh_winding", "_test_terrain", "_test_ravines", "_test_rim_fights_clear_of_ooze", "_test_edge_assist", "_test_ooze_bubbles", "_test_view_clearances", "_test_camera_rises_over", "_test_camera_invariant", "_test_ball_view", "_test_juice", "_test_owner_menus_and_players", "_test_deck_controls", "_test_profiles_ab", "_phase_profile_write", "_phase_profile_check", "_test_hud_corner", "_test_settings_safe_write", "_test_audio_volume_writes_reviewed", "_test_audio_lifecycle", "_test_save_files_classified", "_test_restore_hints", "_test_spore_blooms", "_test_drawn_back", "_test_dead_area_sim", "_test_home_coherence", "_test_terrain_grounded", "_test_no_floating_platforms", "_test_parasite_locomotion", "_test_parasite_body_and_death", "_test_parasite_combat", "_test_organic_motion", "_test_gill_look", "_test_gill_idles", "_test_gill_colours", "_test_gill_patterns", "_test_tail_whip", "_test_gill_traction", "_test_gill_incline_transitions", "_test_traction_no_shortcuts", "_test_gill_body_follow", "_test_swim_body_follow", "_test_ambient_sway", "_test_placements", "_test_tutorial_route", "_test_sphere_walk", "_test_jump_and_burst", "_test_coyote_and_buffer", "_test_swipe_direction_and_stages", "_test_hard_landing", "_test_food", "_test_food_reach", "_test_food_catchable", "_test_assisted_lunge", "_test_glob_counterplay", "_test_darter_and_burrower", "_test_food_repopulates", "_test_motes", "_test_checkpoint_and_regen", "_test_crumble", "_test_restoration_gates", "_test_retract_gates_gone", "_test_bubble_columns", "_test_restoration_continuity", "_test_health_map", "_test_vortex", "_test_vortex_tints", "_test_vortex_ready_state", "_test_vortex_currents", "_test_vortex_currents_travel", "_test_current", "_test_current_brace", "_test_canopy", "_test_canopy_plain_jumps", "_test_canopy_guard_leaf", "_test_climbs_physical", "_test_jungle_ladders_physical", "_test_leaf_geometry", "_test_leaf_footing", "_test_caves", "_test_mounds", "_test_vegetation", "_test_vortex_mouths_clear", "_test_vortex_pads_clear_of_plants", "_test_stalkers_in_reeds", "_test_route_audit", "_test_new_areas", "_test_ecosystem", "_test_threat_spread", "_test_music", "_test_opening_audio", "_test_run_clock", "_test_completion_catalog", "_test_completion_frozen", "_test_run_save_file", "_test_run_timer_live", "_test_run_continue", "_test_timer_integrity", "_test_resume_points_safe", "_phase_continue_write", "_phase_continue_read", "_test_upgrades", "_test_quality_title_cap", "_test_ui", "_test_menus_no_scroll", "_test_pause_fits_fullest_state", "_test_menu_touch", "_test_primary_buttons", "_test_tier2_rules", "_test_tier2_world", "_test_ambient_fish", "_test_parasite_never_buried", "_test_tier2_loadout", "_test_aquarium_experiences", "_test_aquarium_polish", "_test_all_clear", "_test_treasure_unlock", "_test_treasure_generation", "_test_treasure_play", "_phase_treasure_stress", "_phase_live_fish_diag", "_phase_cpu_probe", "_phase_audio_probe", "_phase_incline_survey", "_phase_loco_diag", "_phase_crawl_trace", "_phase_mouth_crawls", "_phase_organic_trace", "_phase_organic_cost", "_test_skilltree_graph", "_test_progress_store", "_test_starfish_spots", "_test_starfish_pickup", "_test_skill_ui", "_test_quick_gill", "_test_lunge_skills", "_test_burst_skills", "_test_glide_control", "_test_glide_transfers", "_test_mote_magnet", "_phase_starfish_survey", "_phase_starfish_sweep", "_phase_glide_probe", "_test_plants_terminal_growth", "_test_sea_fan_depth", "_test_repopulation", "_phase_repop_survey", "_phase_repop_sim", "_test_aquarium_gill", "_phase_aq_nav", "_test_tutorials_and_title", "_test_onb_progress", "_test_onb_owner_save", "_test_onb_per_run", "_test_onb_toggle", "_test_onb_intro", "_test_onb_feeding", "_test_onb_parasite", "_test_onb_feed_first", "_test_onb_tunnel", "_test_onb_starfish", "_test_onb_softlock", "_test_onb_guidance", "_test_onb_replay", "_test_onb_relaunch", "_test_onb_restoration_equal", "_test_hard_mode", "_test_hard_mode_save", "_test_polish_a", "_test_leaf_motion", "_test_perf_veg_cull", "_test_creature_horizon_cull", "_test_veg_stays_put", "_test_death_and_arrival", "_test_pause_ball_progress", "_test_arrival_view", "_test_camera_never_drawn_unsafe", "_test_startup_build_identical", "_phase_world_hash", "_phase_th_bench", "_phase_hard_write", "_phase_hard_read", "_phase_hard_newrun", "_phase_hard_finish", "_phase_hard_sim", "_phase_hard_intervals", "_phase_onb_owner", "_phase_onb_write", "_phase_onb_read", "_phase_onb_kill", "_phase_onb_toggle", "_phase_cohesion_probe", "_test_eel_reach", "_test_parasite_readability"]
 	# A --only entry that names nothing is a typo (or a stale substring): fail loudly rather than run nothing.
 	for o in only.split(",", false):
 		if not registry.has(o) and not registry.has("_test_" + o):
@@ -7014,6 +7014,104 @@ const AUDIO_VOLUME_WRITES := {
 }
 
 
+## Audio lifecycle and the row 37 range gate (2026-10-13): initialization order, repeated startup and
+## rapid scene transitions without duplicated buses, no sound before the pool exists or after it is
+## freed, a long resume step, and looping 3D sources playing only within earshot of the listener.
+func _test_audio_lifecycle() -> void:
+	var a := g.audio
+	# Initialization order: the buses exist with their effects and Settings' levels before play.
+	var mi := AudioServer.get_bus_index("Music")
+	var oi := AudioServer.get_bus_index("Outside")
+	var buses := AudioServer.bus_count
+	t.check("audio_buses_initialized", mi >= 0 and oi >= 0 and AudioServer.get_bus_index("SFX") >= 0 and AudioServer.get_bus_index("Ambience") >= 0
+			and AudioServer.get_bus_effect_count(mi) == 1 and AudioServer.get_bus_effect_count(oi) == 2
+			and a._lowpass == AudioServer.get_bus_effect(mi, 0) and a._out_lowpass == AudioServer.get_bus_effect(oi, 0)
+			and is_equal_approx(AudioServer.get_bus_volume_db(mi), linear_to_db(maxf(Settings.music_volume, 0.0001))),
+			"%d buses" % buses)
+	# Repeated startup and rapid transitions: directors made and freed (some in the same frame, one
+	# mid-fade) never add buses or effects, and the game's own director keeps its song.
+	var song_was: bool = a._song.playing
+	var stream_was := a.current_song()
+	for i in 6:
+		var d := AudioDirector.new()
+		g.add_child(d)
+		if i % 2 == 0:
+			await t.frames(2)
+		if i == 4:
+			d.travel_whoosh(true)
+			d.travel_whoosh(false)
+		g.remove_child(d)
+		d.free()
+	await t.seconds(1.0)
+	t.check("audio_repeated_startup_no_duplicates", AudioServer.bus_count == buses and AudioServer.get_bus_effect_count(mi) == 1
+			and AudioServer.get_bus_effect_count(oi) == 2 and a._lowpass == AudioServer.get_bus_effect(mi, 0)
+			and a._song.playing == song_was and a.current_song() == stream_was,
+			"buses %d -> %d, song %s -> %s" % [buses, AudioServer.bus_count, song_was, a._song.playing])
+	# No sound before the pool is ready or after it is gone (a late callback during a reload).
+	var orig := Sfx.inst
+	var early := Sfx.new()
+	var before_ready := not Sfx.ready_to_play()
+	Sfx.play("ui_tap")
+	before_ready = before_ready and early._frame_played.is_empty()
+	early.free()
+	var after_free := not Sfx.ready_to_play()
+	Sfx.play("ui_tap")
+	var pool := Sfx.new()
+	g.add_child(pool)
+	var ready_in_tree := Sfx.ready_to_play()
+	Sfx.play("ui_tap")
+	var played := pool._frame_played.has("ui_tap")
+	g.remove_child(pool)
+	var cleared := Sfx.inst == null
+	Sfx.play("ui_tap")
+	pool.free()
+	Sfx.inst = orig
+	t.check("audio_sfx_lifecycle_safe", before_ready and after_free and ready_in_tree and played and cleared and Sfx.ready_to_play(),
+			"before %s, after free %s, in tree %s, played %s, cleared on exit %s" % [before_ready, after_free, ready_in_tree, played, cleared])
+	# Interruption: a long step after the app comes back (backgrounded) lands the bed on its targets.
+	a._process(30.0)
+	t.check("audio_long_resume_step_settles", a.bed_levels() == Vector2(a._water_target, a._aerator_target), str(a.bed_levels()))
+	# The range gate: looping 3D sources wanted and within earshot play; none plays out of earshot.
+	var hb: MossBall = g.balls[0]
+	place_at(0, hb.surface_point(hb.start_dir, 0.2), MossBall.frame_at(hb.start_dir, 0).z)
+	await t.seconds(0.6)
+	var cam := g.get_viewport().get_camera_3d()
+	var bad: Array[String] = []
+	var heard := 0
+	for n in g.get_tree().get_nodes_in_group(AudioDirector.RANGE_GROUP):
+		var sp := n as AudioStreamPlayer3D
+		var dist := cam.global_position.distance_to(sp.global_position)
+		var want := bool(sp.get_meta("want_play", false)) and sp.stream != null
+		if sp.playing and dist > sp.max_distance + AudioDirector.RANGE_STOP_M:
+			bad.append("%s plays %.0f m away (max %.0f)" % [sp.get_path(), dist, sp.max_distance])
+		if want and dist <= sp.max_distance:
+			heard += 1
+			if not sp.playing:
+				bad.append("%s silent within earshot (%.0f m)" % [sp.get_path(), dist])
+	t.check("audio_range_gate_holds", bad.is_empty() and heard > 0, "%d within earshot; %s" % [heard, bad])
+	var probe := AudioStreamPlayer3D.new()
+	probe.stream = load("res://assets/audio/amb_bubbler.wav")
+	probe.max_distance = 18.0
+	probe.volume_db = -80.0
+	g.add_child(probe)
+	var fwd := -cam.global_transform.basis.z
+	probe.global_position = cam.global_position + fwd * 5.0
+	AudioDirector.want_loop(probe, true)
+	var near_on := probe.playing
+	probe.global_position = cam.global_position + fwd * (18.0 + AudioDirector.RANGE_STOP_M + 10.0)
+	await t.seconds(AudioDirector.RANGE_PERIOD * 2.5)
+	var far_off := not probe.playing
+	probe.global_position = cam.global_position + fwd * (18.0 + AudioDirector.RANGE_RESUME_M - 2.0)
+	await t.seconds(AudioDirector.RANGE_PERIOD * 2.5)
+	var edge_on := probe.playing
+	AudioDirector.want_loop(probe, false)
+	var unwanted_off := not probe.playing
+	g.remove_child(probe)
+	probe.free()
+	t.check("audio_range_gate_follows_listener", near_on and far_off and edge_on and unwanted_off,
+			"near %s, far stopped %s, edge started %s, unwanted stopped %s" % [near_on, far_off, edge_on, unwanted_off])
+
+
 func _test_audio_volume_writes_reviewed() -> void:
 	var found := {}
 	var stack := ["res://scripts"]
@@ -7120,6 +7218,87 @@ func _test_settings_safe_write() -> void:
 ## every mesh of a culled creature is truly hidden by the ball's solid core from the camera, the
 ## creature's own (gameplay) `visible` is untouched, and on the way back each mesh takes its own
 ## node's visibility (a creature defeated while culled stays hidden).
+## The pause/settings page in its fullest real state fits every screen without scrolling (2026-10-13:
+## with a pad connected and a best time recorded it reached 755 px in 696 at 1280x720): a pad
+## connected (the longer status line), best Normal and Hard finishes, two Tier 2 abilities, the
+## Treasure Hunt row and the ball line; at 1280x720 (both HUD sides), 1280x800 (Steam Deck) and wide
+## Android landscape (1560, 1600, 1712 x 720); and from the title. Every control stays inside, apart,
+## at least MIN_TOUCH tall, and the status line stays one line.
+func _test_pause_fits_fullest_state() -> void:
+	var pm := g.pause_menu
+	var was_pad: bool = Settings._pad_connected
+	var was_mode := Settings.input_mode
+	var rec := g.run_save.records()
+	var was_rec := {"best_finish_s": rec.get("best_finish_s", -1.0), "best_finish_s_hard": rec.get("best_finish_s_hard", null)}
+	var saved_t2 := g.tier2
+	Settings._pad_connected = true
+	Settings.input_mode = Settings.InputMode.PAD
+	rec["best_finish_s"] = 3725.5
+	rec["best_finish_s_hard"] = 5432.1
+	g.tier2 = Tier2.new()
+	g.tier2.unlock(Tier2.CANNON)
+	g.tier2.unlock(Tier2.BUBBLE)
+	g.tier2.equip(Tier2.BUBBLE)
+	var rows: Array[String] = []
+	var ok := true
+	for from_title in [false, true]:
+		pm.open(from_title)
+		if not from_title:
+			pm._treasure.visible = true
+			pm._loadout.visible = true
+		await t.frames(2)
+		for sz in [Vector2(1280, 720), Vector2(1280, 800), Vector2(1560, 720), Vector2(1600, 720), Vector2(1712, 720)]:
+			for side in ["left", "right"]:
+				var area := Rect2(90 if side == "left" else 12, 12, sz.x - 90 - 12, sz.y - 24)
+				pm.layout_in(area)
+				await t.frames(2)
+				var why: String = _fit_problems(pm._panel, area, PauseMenu.MIN_TOUCH)
+				if not area.encloses(pm._panel.get_global_rect()):
+					why += " panel %s" % pm._panel.get_global_rect()
+				var st := pm._status
+				if st.get_line_count() > 1:
+					why += " status wraps to %d lines" % st.get_line_count()
+				ok = ok and why == ""
+				if why != "" or (sz == Vector2(1280, 720) and side == "left"):
+					rows.append("%s %dx%d %s: panel %.0f px %s" % ["title" if from_title else "play", sz.x, sz.y, side, pm._panel.size.y, why if why != "" else "fits"])
+		pm.close()
+		await t.frames(2)
+	Settings._pad_connected = was_pad
+	Settings.input_mode = was_mode
+	rec["best_finish_s"] = was_rec["best_finish_s"]
+	if was_rec["best_finish_s_hard"] == null:
+		rec.erase("best_finish_s_hard")
+	else:
+		rec["best_finish_s_hard"] = was_rec["best_finish_s_hard"]
+	g.tier2 = saved_t2
+	t.check("pause_fits_fullest_state", ok, "; ".join(rows))
+
+
+## Measurement only (run by name): how many AudioStreamPlayer3D are playing at each ball's start, and
+## how many of those are beyond their own max_distance from the listener (inaudible). Each playing 3D
+## player makes Godot 4.7.2 swap its bus details on every physics tick (row 37's race window).
+func _phase_audio_probe() -> void:
+	for bi in g.balls.size():
+		var hb: MossBall = g.balls[bi]
+		place_at(bi, hb.surface_point(hb.start_dir, 0.2), MossBall.frame_at(hb.start_dir, 0).z)
+		await t.seconds(1.5)
+		var cam := g.get_viewport().get_camera_3d()
+		var playing := 0
+		var far := 0
+		var kinds := {}
+		for n in g.get_tree().root.find_children("*", "AudioStreamPlayer3D", true, false):
+			var a := n as AudioStreamPlayer3D
+			if not a.playing:
+				continue
+			playing += 1
+			var key := "%s/%s" % [a.get_parent().get_class(), a.stream.resource_path.get_file() if a.stream else "-"]
+			kinds[key] = int(kinds.get(key, 0)) + 1
+			if a.max_distance > 0.0 and cam.global_position.distance_to(a.global_position) > a.max_distance:
+				far += 1
+		print("[LOG] audio probe ball %d: %d 3D players playing, %d beyond max_distance; %s" % [bi, playing, far, kinds])
+	t.check("audio_probe_ran", true, "")
+
+
 func _test_creature_horizon_cull() -> void:
 	var culled := 0
 	var unsafe := 0

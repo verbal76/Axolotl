@@ -1,17 +1,23 @@
 extends SceneTree
-# Reproduction probe for the Godot 4.7.2 audio bus-details race (ledger row 37).
-# mode=writes: 16 looping 2D players, volume_db rewritten every frame. mode=3d: 16 looping 3D players
-# moving each frame, no volume writes. Quits after `secs`; a crash prints a backtrace instead.
+# Reproduction probe for the Godot 4.7.2 audio bus-details race (ledger row 37), corrected 2026-10-13:
+# playback starts on the first frame, once the players are inside the tree (the 2026-10-12 version
+# called play() in _init, which Godot refuses: nothing ever played).
+# mode=writes: N looping 2D players, volume_db rewritten every frame. mode=3d: N looping 3D players
+# moving each frame (the engine swaps their bus details every physics tick). Quits after `secs`.
 var players: Array = []
 var mode := "writes"
 var secs := 240.0
-var t := 0.0
+var n := 16
+var started := false
+var wav: AudioStreamWAV
+
 
 func _init() -> void:
 	for a in OS.get_cmdline_user_args():
 		if a.begins_with("mode="): mode = a.substr(5)
 		if a.begins_with("secs="): secs = float(a.substr(5))
-	var wav := AudioStreamWAV.new()
+		if a.begins_with("n="): n = int(a.substr(2))
+	wav = AudioStreamWAV.new()
 	wav.format = AudioStreamWAV.FORMAT_16_BITS
 	wav.mix_rate = 22050
 	var data := PackedByteArray()
@@ -22,24 +28,34 @@ func _init() -> void:
 	wav.loop_mode = AudioStreamWAV.LOOP_FORWARD
 	wav.loop_end = 22050
 	if mode == "3d":
-		var cam := Camera3D.new()
-		root.add_child(cam)
-	for i in 16:
+		root.add_child.call_deferred(Camera3D.new())
+	for i in n:
 		var p: Node = AudioStreamPlayer3D.new() if mode == "3d" else AudioStreamPlayer.new()
 		p.stream = wav
-		root.add_child(p)
-		p.play()
+		root.add_child.call_deferred(p)
 		players.append(p)
-	print("RACE start mode=%s" % mode)
 
-func _process(dt: float) -> bool:
-	t += dt
+
+func _process(_dt: float) -> bool:
+	if not started:
+		var playing := 0
+		for p in players:
+			if p.is_inside_tree():
+				p.play()
+				playing += 1
+		started = playing == players.size()
+		if started:
+			print("RACE start mode=%s n=%d playing=%d" % [mode, n, playing])
+		return false
 	for p in players:
 		if mode == "3d":
 			(p as Node3D).position = Vector3(randf_range(-20, 20), randf_range(-5, 5), randf_range(-20, 20))
 		else:
 			p.volume_db = randf_range(-20.0, 0.0)
 	if Time.get_ticks_msec() > secs * 1000.0:
-		print("RACE survived %d s mode=%s" % [int(secs), mode])
+		var still := 0
+		for p in players:
+			still += 1 if p.playing else 0
+		print("RACE survived %d s mode=%s, %d still playing" % [int(secs), mode, still])
 		return true
 	return false

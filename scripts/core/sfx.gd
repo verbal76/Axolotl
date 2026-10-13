@@ -19,6 +19,19 @@ func _init() -> void:
 	inst = self
 
 
+## A scene reload frees this pool; a sound asked for afterwards (a late callback) finds no pool
+## rather than a freed one. (A newer pool that already took over is left alone.)
+func _exit_tree() -> void:
+	if inst == self:
+		inst = null
+
+
+## Ready to play: in the tree with its players made (not before _ready, not after _exit_tree).
+static func ready_to_play() -> bool:
+	return inst != null and is_instance_valid(inst) and inst.is_inside_tree() \
+			and not inst._players2d.is_empty() and not inst._players3d.is_empty()
+
+
 func _ready() -> void:
 	for i in 14:
 		var p := AudioStreamPlayer3D.new()
@@ -57,7 +70,7 @@ static var skipped := 0
 ## Plays a sound at a world position (or non-positional when pos is null). `pitch` sets its base
 ## pitch (a lighter or heavier version of the same sound); `pitch_var` varies it a little each time.
 static func play(sfx_name: String, pos: Variant = null, vol_db := 0.0, pitch_var := 0.08, pitch := 1.0) -> void:
-	if inst == null:
+	if not ready_to_play():
 		return
 	var s := inst.stream(sfx_name)
 	if s == null:

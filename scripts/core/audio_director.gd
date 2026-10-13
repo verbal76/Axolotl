@@ -51,26 +51,35 @@ func _enter_tree() -> void:
 
 
 func _setup_buses() -> void:
-	if AudioServer.get_bus_index("Music") >= 0:
-		_lowpass = AudioServer.get_bus_effect(AudioServer.get_bus_index("Music"), 0)
-		_out_lowpass = AudioServer.get_bus_effect(AudioServer.get_bus_index("Outside"), 0)
-		return
+	# Idempotent (a reloaded scene or an interrupted earlier setup): each bus and its effects are
+	# created only if missing, so a second AudioDirector never duplicates them.
+	var created := false
 	for bus_name in ["Music", "SFX", "Ambience", "Outside"]:
+		if AudioServer.get_bus_index(bus_name) >= 0:
+			continue
 		AudioServer.add_bus()
 		var i := AudioServer.bus_count - 1
 		AudioServer.set_bus_name(i, bus_name)
 		AudioServer.set_bus_send(i, "Master" if bus_name in ["Music", "SFX"] else "SFX")
-	_lowpass = AudioEffectLowPassFilter.new()
-	_lowpass.cutoff_hz = CLEAR_HZ
-	AudioServer.add_bus_effect(AudioServer.get_bus_index("Music"), _lowpass)
-	_out_lowpass = AudioEffectLowPassFilter.new()
-	_out_lowpass.cutoff_hz = 1600.0
-	AudioServer.add_bus_effect(AudioServer.get_bus_index("Outside"), _out_lowpass)
-	var rev := AudioEffectReverb.new()
-	rev.room_size = 0.6
-	rev.wet = 0.25
-	AudioServer.add_bus_effect(AudioServer.get_bus_index("Outside"), rev)
-	Settings.apply_audio()
+		created = true
+	var mi := AudioServer.get_bus_index("Music")
+	if AudioServer.get_bus_effect_count(mi) == 0:
+		var lp := AudioEffectLowPassFilter.new()
+		lp.cutoff_hz = CLEAR_HZ
+		AudioServer.add_bus_effect(mi, lp)
+	_lowpass = AudioServer.get_bus_effect(mi, 0)
+	var oi := AudioServer.get_bus_index("Outside")
+	if AudioServer.get_bus_effect_count(oi) == 0:
+		var olp := AudioEffectLowPassFilter.new()
+		olp.cutoff_hz = 1600.0
+		AudioServer.add_bus_effect(oi, olp)
+		var rev := AudioEffectReverb.new()
+		rev.room_size = 0.6
+		rev.wet = 0.25
+		AudioServer.add_bus_effect(oi, rev)
+	_out_lowpass = AudioServer.get_bus_effect(oi, 0)
+	if created:
+		Settings.apply_audio()
 
 
 func _ready() -> void:
@@ -209,9 +218,68 @@ static func set_volume(p: Node, db: float, settled := false) -> void:
 		p.volume_db = db
 
 
+## Looping 3D sources out of earshot (ledger row 37 safeguard, 2026-10-13). Godot 4.7.2 swaps a playing
+## AudioStreamPlayer3D's bus details on every physics tick, even beyond its max_distance where it is
+## silent, and each swap opens the audio-thread race. Measured: 14-15 looping 3D players (bubblers,
+## vortex rushes) playing at every ball's start, 12-15 of them beyond max_distance (~800 silent swaps
+## a second). So a looping 3D source plays only near enough to be heard: its owner says whether it
+## wants to play (want_loop), and this decides when it actually does. It starts RANGE_RESUME_M before
+## its audible edge (still silent there, so nothing is heard starting) and stops only RANGE_STOP_M
+## beyond it (hysteresis): what is heard is unchanged.
+const RANGE_GROUP := "range_gated_audio"
+const RANGE_RESUME_M := 6.0
+const RANGE_STOP_M := 12.0
+const RANGE_PERIOD := 0.2
+var _range_t := 0.0
+
+
+## The owner's wish for a looping 3D source (vortex rush, bubbler): on = play whenever within earshot.
+static func want_loop(p: AudioStreamPlayer3D, on: bool) -> void:
+	if p == null or not is_instance_valid(p):
+		return
+	if not p.is_in_group(RANGE_GROUP):
+		p.add_to_group(RANGE_GROUP)
+	p.set_meta("want_play", on)
+	if not on:
+		if p.playing:
+			p.stop()
+	elif not p.playing and p.stream != null and p.is_inside_tree() and in_earshot(p, RANGE_RESUME_M):
+		p.play()
+
+
+## Whether the listener (the current camera) is within the player's max_distance plus `margin`.
+## With no camera to measure from, it counts as near (behaves as before).
+static func in_earshot(p: AudioStreamPlayer3D, margin: float) -> bool:
+	if not p.is_inside_tree() or p.max_distance <= 0.0:
+		return true
+	var cam := p.get_viewport().get_camera_3d()
+	if cam == null:
+		return true
+	return cam.global_position.distance_to(p.global_position) <= p.max_distance + margin
+
+
+func _gate_ranges() -> void:
+	for n in get_tree().get_nodes_in_group(RANGE_GROUP):
+		var p := n as AudioStreamPlayer3D
+		if p == null or not p.is_inside_tree() or p.stream == null:
+			continue
+		if not bool(p.get_meta("want_play", false)):
+			if p.playing:
+				p.stop()
+		elif p.playing:
+			if not in_earshot(p, RANGE_STOP_M):
+				p.stop()
+		elif in_earshot(p, RANGE_RESUME_M):
+			p.play()
+
+
 func _process(dt: float) -> void:
 	_glide_cutoff(dt)
 	_glide_bed(dt)
+	_range_t -= dt
+	if _range_t <= 0.0:
+		_range_t = RANGE_PERIOD
+		_gate_ranges()
 	if not _started or Game.inst == null or Game.inst.state != "play":
 		return
 	_out_timer -= dt

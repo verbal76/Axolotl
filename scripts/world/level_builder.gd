@@ -727,10 +727,12 @@ func _bubble_sound(holder: Node3D, at: Vector3) -> void:
 	snd.unit_size = 3.0
 	snd.max_distance = 18.0
 	snd.volume_db = -14.0
-	# (Under a gate it starts when the water starts to flow: RestorationGate plays it.)
-	snd.autoplay = not holder is RestorationGate
 	holder.add_child(snd)
 	snd.global_position = at
+	# (Under a gate it starts when the water starts to flow: RestorationGate asks for it. Either way it
+	# plays only within earshot: AudioDirector.want_loop, row 37 safeguard.)
+	if not holder is RestorationGate:
+		AudioDirector.want_loop(snd, true)
 
 
 ## A current stream from `from` to `to` (points on the ground; it runs a metre above the straight

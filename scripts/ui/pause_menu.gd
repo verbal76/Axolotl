@@ -63,9 +63,10 @@ func _ready() -> void:
 	var pbox := (UiStyle.theme().get_stylebox("panel", "PanelContainer") as StyleBoxFlat).duplicate() as StyleBoxFlat
 	pbox.content_margin_left = 28
 	pbox.content_margin_right = 28
-	pbox.content_margin_top = 18
-	pbox.content_margin_bottom = 18
+	pbox.content_margin_top = MARGIN_Y
+	pbox.content_margin_bottom = MARGIN_Y
 	_panel.add_theme_stylebox_override("panel", pbox)
+	_pbox = pbox
 	_root.add_child(_panel)
 	var cols := HBoxContainer.new()
 	cols.name = "Columns"
@@ -137,7 +138,7 @@ func _ready() -> void:
 	_right.name = "Details"
 	_right.size_flags_horizontal = Control.SIZE_EXPAND_FILL
 	# (10, not 12: room for this ball's line above the run table with nothing to scroll.)
-	_right.add_theme_constant_override("separation", 10)
+	_right.add_theme_constant_override("separation", SEP_RIGHT)
 	cols.add_child(_right)
 	# This run: time, completion, finished or not, best finish (two columns of detail).
 	_run_time = Label.new()
@@ -162,7 +163,8 @@ func _ready() -> void:
 	toggles.name = "Toggles"
 	toggles.columns = 2
 	toggles.add_theme_constant_override("h_separation", 10)
-	toggles.add_theme_constant_override("v_separation", 8)
+	toggles.add_theme_constant_override("v_separation", SEP_TOGGLES)
+	_toggles = toggles
 	_right.add_child(toggles)
 	_timer_toggle = _toggle(toggles, "Show run timer", _on_timer_toggle)
 	_timer_toggle.name = "ShowRunTimer"
@@ -200,37 +202,39 @@ func _ready() -> void:
 	_music.value_changed.connect(_on_music)
 	_sfx = _slider(levels, "Sound")
 	_sfx.value_changed.connect(_on_sfx)
-	# Controller/touch status and the launch time, beside About / Diagnostics.
-	var foot := HBoxContainer.new()
+	# The foot of the column (2026-10-13): the controller/touch status the full width (one line even
+	# with a pad connected), then Button prompts beside About / Diagnostics. (Before, the status shared
+	# its width with About and wrapped once a pad was connected: with a best time recorded the page
+	# reached 755 px in a 720p screen's 696.)
+	var foot := VBoxContainer.new()
 	foot.name = "Footer"
-	foot.add_theme_constant_override("separation", 12)
+	foot.add_theme_constant_override("separation", 4)
 	_right.add_child(foot)
-	var info := VBoxContainer.new()
-	info.size_flags_horizontal = Control.SIZE_EXPAND_FILL
-	info.add_theme_constant_override("separation", 2)
-	foot.add_child(info)
 	_status = Label.new()
 	_status.name = "ControllerStatus"
 	_status.add_theme_font_size_override("font_size", 20)
 	_status.autowrap_mode = TextServer.AUTOWRAP_WORD_SMART
-	info.add_child(_status)
-	# Button prompts (owner, 2026-10-12: in Settings; studio standard §13), under the controller line.
-	# Automatic (the default) follows the pad or keyboard in use; each press moves to the next fixed
-	# family, then back to Automatic. (It takes the place of the launch-time line, which About now shows
-	# beside the full startup timeline, so the page still fits without scrolling.)
+	foot.add_child(_status)
+	var foot_buttons := HBoxContainer.new()
+	foot_buttons.name = "FooterButtons"
+	foot_buttons.add_theme_constant_override("separation", 12)
+	foot.add_child(foot_buttons)
+	# Button prompts (owner, 2026-10-12: in Settings; studio standard §13). Automatic (the default)
+	# follows the pad or keyboard in use; each press moves to the next fixed family, then back to
+	# Automatic. (The launch-time line it replaced is in About, beside the full startup timeline.)
 	_prompts = UiStyle.button(prompt_label(), _cycle_prompts)
 	_prompts.name = "ButtonPrompts"
 	_prompts.tooltip_text = "Which button pictures prompts show. Automatic follows the controller or keyboard in use."
-	_prompts.custom_minimum_size = Vector2(0, 60)
+	_prompts.custom_minimum_size = Vector2(0, 64)
+	_prompts.size_flags_horizontal = Control.SIZE_EXPAND_FILL
 	_prompts.add_theme_font_size_override("font_size", 20)
-	info.add_child(_prompts)
+	foot_buttons.add_child(_prompts)
 	# Version, build, OTA and source identities (and OTA recovery in dev builds).
 	var about := UiStyle.button("About / Diagnostics", func(): Game.inst.diagnostics.open())
 	about.name = "AboutDiagnostics"
 	about.custom_minimum_size = Vector2(0, 64)
 	about.add_theme_font_size_override("font_size", 24)
-	about.size_flags_vertical = Control.SIZE_SHRINK_CENTER
-	foot.add_child(about)
+	foot_buttons.add_child(about)
 	_session_rows = [restart, title, _run_time, _run_detail, _loadout, looks, _treasure, _replay]
 	# His colours: a page of its own in place of the menu.
 	gill_page = GillPage.new()
@@ -412,10 +416,54 @@ func _layout() -> void:
 ## to PANEL_MAX_W wide, never wider than the area, as tall as its content, centred in the area.
 ## (Wrapped text only knows its height once its width is set, so a change in the panel's minimum
 ## size lays it out again in the same area.)
+## Responsive spacing (2026-10-13): when the page at its usual spacing would be taller than a 720p
+## screen's room (FIT_H) or the screen it is on (a full run: abilities, best times, a pad connected),
+## the panel's top and bottom margins and the gaps between the right column's rows tighten. Text,
+## buttons and touch targets keep their sizes; no scrolling. (Decided by the content against FIT_H
+## too, so a page looks the same on every screen.)
+const FIT_H := 696.0
+const MARGIN_Y := 18
+const SEP_RIGHT := 10
+const SEP_TOGGLES := 8
+const COMPACT_MARGIN_Y := 10
+const COMPACT_SEP_RIGHT := 6
+const COMPACT_SEP_TOGGLES := 4
+var _pbox: StyleBoxFlat
+var _toggles: GridContainer
+var compact := false
+
+
+## The panel's height at the usual spacing (from its columns' contents, whatever the spacing now).
+func _usual_height() -> float:
+	var h := 0.0
+	var n := 0
+	for c in _right.get_children():
+		var cc := c as Control
+		if cc != null and cc.visible:
+			h += cc.get_combined_minimum_size().y
+			n += 1
+	h += SEP_RIGHT * maxi(n - 1, 0)
+	if compact and _toggles.visible:
+		# (The toggles' rows at their usual gap.)
+		h += (SEP_TOGGLES - COMPACT_SEP_TOGGLES) * maxi(ceili(_toggles.get_children().filter(func(c): return c.visible).size() / 2.0) - 1, 0)
+	return maxf(h, _left.get_combined_minimum_size().y) + 2.0 * MARGIN_Y
+
+
+func _set_compact(on: bool) -> void:
+	if on == compact:
+		return
+	compact = on
+	_pbox.content_margin_top = COMPACT_MARGIN_Y if on else MARGIN_Y
+	_pbox.content_margin_bottom = COMPACT_MARGIN_Y if on else MARGIN_Y
+	_right.add_theme_constant_override("separation", COMPACT_SEP_RIGHT if on else SEP_RIGHT)
+	_toggles.add_theme_constant_override("v_separation", COMPACT_SEP_TOGGLES if on else SEP_TOGGLES)
+
+
 func layout_in(area: Rect2) -> void:
 	_area = area
 	var w := minf(maxf(_panel.get_combined_minimum_size().x, PANEL_MAX_W), area.size.x)
 	_panel.size = Vector2(w, 0)
+	_set_compact(_usual_height() > minf(area.size.y, FIT_H))
 	_panel.size = Vector2(w, _panel.get_combined_minimum_size().y)
 	_panel.position = (area.position + (area.size - _panel.size) * 0.5).floor()
 	_panel.position.y = maxf(_panel.position.y, area.position.y)
