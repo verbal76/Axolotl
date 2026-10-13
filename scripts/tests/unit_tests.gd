@@ -7231,10 +7231,17 @@ func _test_pause_fits_fullest_state() -> void:
 	var rec := g.run_save.records()
 	var was_rec := {"best_finish_s": rec.get("best_finish_s", -1.0), "best_finish_s_hard": rec.get("best_finish_s_hard", null)}
 	var saved_t2 := g.tier2
+	var was_clock := [g.clock.state, g.clock.finish_s]
+	var run := g.run_save.run()
+	var was_run_mode = run.get("mode", null)
 	Settings._pad_connected = true
 	Settings.input_mode = Settings.InputMode.PAD
 	rec["best_finish_s"] = 3725.5
 	rec["best_finish_s_hard"] = 5432.1
+	# (A finished Hard Mode run: the longest run line, which wraps.)
+	run["mode"] = HardMode.MODE
+	g.clock.state = "finished"
+	g.clock.finish_s = 43725.5
 	g.tier2 = Tier2.new()
 	g.tier2.unlock(Tier2.CANNON)
 	g.tier2.unlock(Tier2.BUBBLE)
@@ -7246,6 +7253,8 @@ func _test_pause_fits_fullest_state() -> void:
 		if not from_title:
 			pm._treasure.visible = true
 			pm._loadout.visible = true
+			# (New Run asked: its question open in the left column, its tallest state.)
+			(pm._panel.find_child("Ask", true, false) as Button).pressed.emit()
 		await t.frames(2)
 		for sz in [Vector2(1280, 720), Vector2(1280, 800), Vector2(1560, 720), Vector2(1600, 720), Vector2(1712, 720)]:
 			for side in ["left", "right"]:
@@ -7259,10 +7268,29 @@ func _test_pause_fits_fullest_state() -> void:
 				if st.get_line_count() > 1:
 					why += " status wraps to %d lines" % st.get_line_count()
 				ok = ok and why == ""
+				if why != "":
+					var hs: Array[String] = []
+					for col in [pm._left, pm._right]:
+						for c in (col as Control).get_children():
+							if (c as Control).visible:
+								hs.append("%s %.0f" % [c.name, (c as Control).size.y])
+					why += " rows [%s]" % ", ".join(hs)
+					var rt := pm._run_time
+					why += " run line '%s' %d px font, %.0f px wide in %.0f" % [rt.text, rt.get_theme_font_size("font_size"),
+							rt.get_theme_font("font").get_string_size(rt.text, HORIZONTAL_ALIGNMENT_LEFT, -1, rt.get_theme_font_size("font_size")).x, rt.size.x]
 				if why != "" or (sz == Vector2(1280, 720) and side == "left"):
 					rows.append("%s %dx%d %s: panel %.0f px %s" % ["title" if from_title else "play", sz.x, sz.y, side, pm._panel.size.y, why if why != "" else "fits"])
+		var cancel := pm._panel.find_child("Cancel", true, false) as Button
+		if cancel != null and cancel.is_visible_in_tree():
+			cancel.pressed.emit()
 		pm.close()
 		await t.frames(2)
+	g.clock.state = was_clock[0]
+	g.clock.finish_s = was_clock[1]
+	if was_run_mode == null:
+		run.erase("mode")
+	else:
+		run["mode"] = was_run_mode
 	Settings._pad_connected = was_pad
 	Settings.input_mode = was_mode
 	rec["best_finish_s"] = was_rec["best_finish_s"]

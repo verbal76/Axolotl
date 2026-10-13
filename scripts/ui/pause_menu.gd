@@ -143,7 +143,7 @@ func _ready() -> void:
 	# This run: time, completion, finished or not, best finish (two columns of detail).
 	_run_time = Label.new()
 	_run_time.name = "RunTime"
-	_run_time.add_theme_font_size_override("font_size", 30)
+	_run_time.add_theme_font_size_override("font_size", RUN_TIME_FS)
 	_run_time.autowrap_mode = TextServer.AUTOWRAP_WORD_SMART
 	_right.add_child(_run_time)
 	_run_detail = RichTextLabel.new()
@@ -459,10 +459,31 @@ func _set_compact(on: bool) -> void:
 	_toggles.add_theme_constant_override("v_separation", COMPACT_SEP_TOGGLES if on else SEP_TOGGLES)
 
 
+## The run's headline on one line (2026-10-13): a finished run's line ("Hard Mode · Finished in … ·
+## 100% complete · Skills …") is wider than the column at 30 px and wrapped to a second line, the
+## largest single cause of the page outgrowing a 720p screen. It steps down only as far as one line
+## needs, never below RUN_TIME_MIN_FS (18 px; well above the 12 px text floor); a line that fits keeps 30 px.
+const RUN_TIME_FS := 30
+const RUN_TIME_MIN_FS := 18
+
+
+func _fit_run_time() -> void:
+	var w := _right.size.x
+	if w <= 0.0:
+		w = PANEL_MAX_W - 56.0 - LEFT_W - 28.0
+	var font := _run_time.get_theme_font("font")
+	var fs := RUN_TIME_FS
+	while fs > RUN_TIME_MIN_FS and font.get_string_size(_run_time.text, HORIZONTAL_ALIGNMENT_LEFT, -1, fs).x > w:
+		fs -= 2
+	if _run_time.get_theme_font_size("font_size") != fs:
+		_run_time.add_theme_font_size_override("font_size", fs)
+
+
 func layout_in(area: Rect2) -> void:
 	_area = area
 	var w := minf(maxf(_panel.get_combined_minimum_size().x, PANEL_MAX_W), area.size.x)
 	_panel.size = Vector2(w, 0)
+	_fit_run_time()
 	_set_compact(_usual_height() > minf(area.size.y, FIT_H))
 	_panel.size = Vector2(w, _panel.get_combined_minimum_size().y)
 	_panel.position = (area.position + (area.size - _panel.size) * 0.5).floor()
@@ -548,6 +569,7 @@ func _refresh() -> void:
 			_treasure.text = "Stop Treasure Hunt" if tp.hunting() else ("New Treasure Hunt" if TreasureHunt.is_complete(tp.st()) or not TreasureHunt.has_hunt(tp.st()) else "Resume Treasure Hunt")
 			_treasure.disabled = g.cinematic != "" or g.player.state != "normal"
 		_run_time.text = g.run_line()
+		_fit_run_time()
 		var lines: Array[String] = []
 		lines.append("Game finished: " + ("yes" if g.clock.is_finished() else "not yet"))
 		lines.append_array(g.completion.summary_lines(g.run_save.earned()))

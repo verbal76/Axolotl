@@ -115,6 +115,13 @@ func pause_ball_progress() -> void:
 			var why: String = u._fit_problems(pm._panel, area, PauseMenu.MIN_TOUCH)
 			if not area.encloses(pm._panel.get_global_rect()):
 				why += " panel %s" % pm._panel.get_global_rect()
+				# (Which rows made it tall: each visible row's height, both columns.)
+				var hs: Array[String] = []
+				for col in [pm._left, pm._right]:
+					for c in (col as Control).get_children():
+						if (c as Control).visible:
+							hs.append("%s %.0f" % [c.name, (c as Control).size.y])
+				why += " rows [%s] compact %s" % [", ".join(hs), pm.compact]
 			var font := pm._run_detail.get_theme_font("normal_font")
 			var lw := font.get_string_size(line, HORIZONTAL_ALIGNMENT_LEFT, -1, 20).x
 			if lw > pm._run_detail.size.x:
