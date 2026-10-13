@@ -69,7 +69,8 @@ binary_format/architecture="x86_64"
 make_copy() { # make_copy <name> -> path; repo copy with the Linux OTA test preset + test public key
 	local d="$W/copies/$1"
 	mkdir -p "$d"
-	tar -C "$SRC" --exclude=./.git --exclude=./build -cf - . | tar -xf - -C "$d"
+	# (Not .git, build outputs or .claude: agent worktrees there are whole copies of the repo.)
+	tar -C "$SRC" --exclude=./.git --exclude=./build --exclude=./.claude -cf - . | tar -xf - -C "$d"
 	# Godot reads presets 0, 1, 2... until one is missing: append as the next index.
 	local n; n=$(grep -cE '^\[preset\.[0-9]+\]$' "$d/export_presets.cfg")
 	printf '%s' "$LINUX_PRESET" | sed "s/preset\.2/preset.$n/g" >> "$d/export_presets.cfg"
@@ -164,7 +165,8 @@ if [ -n "$UMS" ] && [ "$UMS" -lt 10000 ]; then pass "startup: usable at ${UMS} m
 
 # The whole game, start to ALL CLEAR, with the OTA client on and its channel unreachable.
 echo "--- offline playthrough (seed 4242, channel unreachable)"
-timeout "${PLAY_TIMEOUT:-1200}" "$W/axolotl.x86_64" --headless --fixed-fps 60 --max-fps 0 -- --test=playthrough --seed=4242 \
+# (The whole game takes about 50 minutes headless since the world expansion; 1200 s cut it off.)
+timeout "${PLAY_TIMEOUT:-6000}" "$W/axolotl.x86_64" --headless --fixed-fps 60 --max-fps 0 -- --test=playthrough --seed=4242 \
 	--out="$W/offline_play" --ota-root="$W/device_offline" --ota-pointer="http://127.0.0.1:$((PORT + 2))/ota-channel-dev/latest.json" \
 	> "$W/run_offline_playthrough.log" 2>&1
 grep -E "\[TEST\] SUMMARY|^\[OTA\]" "$W/run_offline_playthrough.log" | cut -c1-200
