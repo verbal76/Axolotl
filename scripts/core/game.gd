@@ -15,6 +15,7 @@ var aquarium: Aquarium
 var water_fx: WaterFX
 var sfx: Sfx
 var audio: AudioDirector
+var spatial: SpatialAudio
 ## The movers' disturbance in the vegetation (cosmetic only).
 var wake: Wake
 ## Runs the equipped Tier-2 ability when its button is pressed.
@@ -250,6 +251,9 @@ func _build_world() -> void:
 	add_child(t2)
 	audio = AudioDirector.new()
 	add_child(audio)
+	# Positional sound (ledger row 37): after AudioDirector, whose buses its voice buses send into.
+	spatial = SpatialAudio.new()
+	add_child(spatial)
 
 	StartupTrace.mark("environment + audio nodes")
 	aquarium = Aquarium.new()

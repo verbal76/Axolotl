@@ -63,7 +63,7 @@ do not prove the race is gone.
   change and needs the owner.
 - Test-side: unit runs could use `--max-fps 120` (fewer swaps per mix step) if the crash recurs.
 
-## Status: UNRESOLVED (2026-10-12; still unresolved 2026-10-13, see below)
+## Status (2026-10-13, second pass): eliminated in Mote's game layer; engine fix prepared (needs a native build)
 
 The race is in the engine and is not fixed. The mitigations (`d76f786`) and the guard test
 (`audio_volume_writes_reviewed`) reduce how often game code hits it; they cannot remove it.
@@ -119,6 +119,9 @@ physics tick where the mix advanced, whether or not it can be heard. The last is
 **Measured exposure** (`_phase_audio_probe`, each ball's start): 14-15 looping 3D players playing (8 bubblers,
 6 vortex rushes, the tank's own bubbler among them), and 12-15 of them beyond their own `max_distance`,
 i.e. silent. That is roughly 800 silent bus-details swaps a second for at most two audible sources.
+**(Correction, second pass: wrong. The 4.7.2 source skips the swap once a 3D player has been out of
+earshot for two frames (`audio_stream_player_3d.cpp`, `skip_setting_volumes`), so those silent players
+were not swapping. The range gate saved mixing work, not race exposure.)**
 
 **Safeguard.** `AudioDirector.want_loop()` and a range gate (every 0.2 s): a looping 3D source plays only
 while the listener is within its `max_distance` plus a margin. It starts 6 m before its audible edge (still
@@ -146,3 +149,60 @@ exactly, so the classification stands.
 **Status.** The engine race is still possible: audible 3D sources, one-shot effects, music and ambience still
 mix through the same engine path. This lowers the exposure the game itself creates; it is not a fix and
 must not be described as one. The engine-side recommendation above is unchanged.
+
+## 2026-10-13, second pass: root cause from the source, eliminated in the game layer, engine patch
+
+**Source evidence (Godot 4.7.2-stable, `servers/audio/audio_server.{h,cpp}`).**
+
+| Question | Answer |
+|---|---|
+| Who creates the routing data | Main thread: `start_playback_stream` and `set_playback_bus_volumes_linear` (`new AudioStreamPlaybackBusDetails`). |
+| Who reads it | Audio thread, `_mix_step()`: `playback->bus_details.load()` then a struct copy (line 452), which copies `StringName`s (crash frame [2]). Under the driver mutex. |
+| Who replaces it | Main thread: atomic compare-and-swap in `set_playback_bus_volumes_linear`; the old pointer goes into `bus_details_graveyard`. Reached from `AudioStreamPlayer.set_volume_db`/`set_bus` on a playing player and from every playing `AudioStreamPlayer3D` within earshot on each physics tick (`_update_panning`). |
+| Who frees it | Main thread: `AudioServer::update()` -> `_cleanup_lists()` deletes it two `update()` calls later. |
+| Deferred destruction / refcounting | Deferred by main-thread frames only; no reference counting. The `SafeList` deferral guards iterators of the graveyard list itself, which the audio thread never touches ("TODO document if this is necessary"). |
+| Missing synchronisation | `_cleanup_lists()` takes no lock and does not look at the audio thread's progress: the two-frame delay is a timing assumption. A mix step preempted between load and copy for two main frames reads freed memory. |
+| Playback deletion, stop, pause, pitch | Safe: playback nodes are freed through `playback_list`'s `SafeList`, which the audio thread iterates; state, pitch and filter values are atomics. |
+| Shutdown / background | Same path; no extra exposure (no `update()` runs while the app is paused). |
+| Known upstream | Yes: godotengine/godot#124217 (opened 2026-10-06, against 4.7.2, open, no fix PR); a second report there hit it on Linux with the release template. |
+
+Also unsynchronised in 4.7.2: `AudioServer::add_bus` (resizes the bus list with no lock) and the
+`mix_count` counter.
+
+**Game-layer elimination (OTA-compatible).** Mote never lets the engine replace a playing sound's routing data:
+- no `AudioStreamPlayer3D`: every positional sound is a `SpatialEmitter` played through a `SpatialAudio`
+  voice: a plain `AudioStreamPlayer` on a voice bus of its own whose player volume and bus are set only
+  while it is stopped; the engine's own 3D model (inverse-distance attenuation, `max_db`, the
+  `max_distance` fade, stereo panning at the project's strength, the distance high-shelf) is applied
+  each frame to the voice bus (volume, `AudioEffectPanner`, `AudioEffectHighShelfFilter`): plain values
+  the audio thread reads, nothing allocated or freed;
+- levels that change while playing (the ambience bed, the life layer, the travel whoosh) are bus volumes;
+- buses are created once, under `AudioServer.lock()`, and their sends never change.
+
+Sound is unchanged: captured from the mix side by side with a real `AudioStreamPlayer3D` at six positions
+and two tones (one above the shelf), left and right levels match to 0.00 dB (`_phase_spatial_match`).
+Remaining difference: a bus volume steps between mix blocks where the engine ramps a 3D player's gain
+within a block (under 0.2 dB per frame at this game's speeds).
+
+Guarded by `audio_never_replaces_routing_data` (no `AudioStreamPlayer3D`/`2D` or `set_playback_*` in game
+code or in the running tree, every `volume_db`/`bus` write reviewed, bus layout changes only under the
+lock) and `audio_playing_players_never_rewritten` (live: through seconds of play, no playing player's
+volume or bus changes).
+
+**Verification (ThreadSanitizer, `tsan/README.md`).** Stock engine + the old usage: the race reported at
+the crash's exact frames. Stock engine + Mote's voices (also under repeated teardown and pause/resume):
+no bus-details race. Patched engine + the old usage: no reports at all.
+
+**Engine patch (prepared, not shipped: a native change).** `tsan/godot-4.7.2-audio-bus-details-uaf.patch`
+(audio_server.h/.cpp, ~40 lines): an atomic count of finished mix steps; a replaced bus-details block is
+freed only once every mix step that had started when it was retired has finished (no lock, no
+allocation on the audio thread; `mix_count` made atomic too). It is the fix proposed on #124217.
+- Compatibility: engine-internal; no API, file format or save change.
+- Native rebuild: custom export templates (Android arm64 debug/release, Linux, Windows) from 4.7.2 +
+  the patch; a new APK and runtime revision (r6+), because the engine lives in the APK, not the OTA pack.
+- OTA consequences: installed r5 phones keep the unpatched engine; with the game-layer change above they
+  no longer trigger the race, so the native fix is defence in depth, not a precondition for an OTA.
+- Regression risk: low (the freeing rule only gets stricter; at worst a few blocks live a frame longer);
+  watch memory if the audio thread ever stalls for long (retired blocks wait for it).
+- Validation: the TSan runs above on the patched build; then the full suites and playthrough on the
+  patched templates, and the device checklist (docs/DEVICE_CHECKLIST.md) on the new APK.

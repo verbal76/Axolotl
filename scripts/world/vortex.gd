@@ -102,8 +102,8 @@ var _b_open := 0.0
 var spin_phase := 0.0
 ## Helix turns along the whole path.
 var turns := 4.0
-var _rush_a: AudioStreamPlayer3D
-var _rush_b: AudioStreamPlayer3D
+var _rush_a: SpatialEmitter
+var _rush_b: SpatialEmitter
 var _length := 1.0
 ## This connection's hue (TINTS).
 var tint := Color.WHITE
@@ -483,9 +483,9 @@ func _debris(seed_v: int) -> MultiMeshInstance3D:
 	return mi
 
 
-func _make_rush(parent: Node3D) -> AudioStreamPlayer3D:
-	var p := AudioStreamPlayer3D.new()
-	p.bus = "Ambience"
+func _make_rush(parent: Node3D) -> SpatialEmitter:
+	var p := SpatialEmitter.new()
+	p.bus = &"Ambience"
 	var s = load("res://assets/audio/amb_vortex.wav") if ResourceLoader.exists("res://assets/audio/amb_vortex.wav") else null
 	p.stream = s
 	p.unit_size = 5.0
@@ -620,12 +620,12 @@ func _update_distress(dt: float) -> void:
 		(m as ShaderMaterial).set_shader_parameter("distress_x", dx)
 
 
-func _update_rush(p: AudioStreamPlayer3D, s: float) -> void:
+func _update_rush(p: SpatialEmitter, s: float) -> void:
 	if p.stream == null:
 		return
 	var db := linear_to_db(maxf(0.0001, s * 0.8))
-	# (Only when it moves audibly: per-frame writes raced the engine's audio thread, ledger row 37.)
-	AudioDirector.set_volume(p, db, s <= 0.0)
+	# (An emitter's level is safe to change while it plays: SpatialEmitter, ledger row 37.)
+	p.volume_db = db
 	# (Plays only within earshot: AudioDirector.want_loop, row 37 safeguard.)
 	AudioDirector.want_loop(p, s > 0.01)
 

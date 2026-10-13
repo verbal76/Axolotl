@@ -47,7 +47,7 @@ var _edge_seen := 0
 var _teeter_cd := 0.0
 var _step_m := 0.0
 var _step_side := 1.0
-var _step_player: AudioStreamPlayer3D
+var _step_player: SpatialEmitter
 var _look_scan := 0.0
 var _look_hold := 0.0
 var _look_rest := 0.0
@@ -68,8 +68,8 @@ func _exit_tree() -> void:
 
 
 func _ready() -> void:
-	_step_player = AudioStreamPlayer3D.new()
-	_step_player.bus = "SFX"
+	_step_player = SpatialEmitter.new()
+	_step_player.bus = &"SFX"
 	_step_player.unit_size = 4.0
 	_step_player.max_distance = 30.0
 	add_child(_step_player)

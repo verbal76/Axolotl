@@ -9,7 +9,7 @@ static var _fx_rng := RandomNumberGenerator.new()
 static var inst: Sfx
 
 var _streams := {}
-var _players3d: Array[AudioStreamPlayer3D] = []
+var _players3d: Array[SpatialEmitter] = []
 var _players2d: Array[AudioStreamPlayer] = []
 var _n3 := 0
 var _n2 := 0
@@ -34,8 +34,9 @@ static func ready_to_play() -> bool:
 
 func _ready() -> void:
 	for i in 14:
-		var p := AudioStreamPlayer3D.new()
-		p.bus = "SFX"
+		# (Positional sounds through SpatialAudio voices, never AudioStreamPlayer3D: ledger row 37.)
+		var p := SpatialEmitter.new()
+		p.bus = &"SFX"
 		p.unit_size = 6.0
 		p.max_distance = 60.0
 		p.attenuation_filter_cutoff_hz = 9000.0

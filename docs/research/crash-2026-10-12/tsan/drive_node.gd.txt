@@ -1,0 +1,130 @@
+extends Node
+# ThreadSanitizer probe for the Godot 4.7.2 audio routing-data race (Mote ledger row 37).
+# mode=stock: engine AudioStreamPlayer3D (moving) + volume_db writes on playing AudioStreamPlayers:
+#   the engine replaces and frees routing data every tick.
+# mode=voices: Mote's SpatialAudio/SpatialEmitter (copied from the game): plain players, levels on
+#   bus volumes, never a write on a playing player.
+# Both: rapid start/stop, sustained loops, a fast-moving listener; quits after `secs`.
+var mode := "stock"
+var secs := 20.0
+var n := 24
+var wav: AudioStreamWAV
+var cam: Camera3D
+var nodes: Array = []
+var bus2d := []
+var t := 0.0
+var started := false
+var level_bus := -1
+
+
+func _ready() -> void:
+	process_mode = Node.PROCESS_MODE_ALWAYS
+	for a in OS.get_cmdline_user_args():
+		if a.begins_with("mode="): mode = a.substr(5)
+		if a.begins_with("secs="): secs = float(a.substr(5))
+		if a.begins_with("n="): n = int(a.substr(2))
+	wav = AudioStreamWAV.new()
+	wav.format = AudioStreamWAV.FORMAT_16_BITS
+	wav.mix_rate = 22050
+	var data := PackedByteArray()
+	data.resize(22050 * 2)
+	for i in 22050:
+		data.encode_s16(i * 2, int(sin(i * 0.05) * 8000))
+	wav.data = data
+	wav.loop_mode = AudioStreamWAV.LOOP_FORWARD
+	wav.loop_end = 22050
+	cam = Camera3D.new()
+	add_child.call_deferred(cam)
+	AudioServer.lock()
+	for nm in ["SFX", "Ambience", "Level"]:
+		AudioServer.add_bus()
+		AudioServer.set_bus_name(AudioServer.bus_count - 1, nm)
+		AudioServer.set_bus_send(AudioServer.bus_count - 1, "Master")
+	AudioServer.unlock()
+	level_bus = AudioServer.get_bus_index("Level")
+	if mode == "voices" or mode == "churn":
+		var sa: Node = load("res://spatial_audio.gd").new()
+		add_child.call_deferred(sa)
+	for i in n:
+		var p: Node
+		if mode == "stock":
+			p = AudioStreamPlayer3D.new()
+		else:
+			p = load("res://spatial_emitter.gd").new()
+		p.set("stream", wav)
+		p.set("bus", "SFX" if i % 2 == 0 else "Ambience")
+		p.set("unit_size", 4.0)
+		p.set("max_distance", 40.0)
+		add_child.call_deferred(p)
+		nodes.append(p)
+	for i in 4:
+		var q := AudioStreamPlayer.new()
+		q.stream = wav
+		q.bus = "Master" if mode == "stock" else "Level"
+		add_child.call_deferred(q)
+		bus2d.append(q)
+
+
+var _churn_t := 0.0
+var _sa: Node = null
+
+
+## mode=churn: the voices path, plus every 1.5 s the whole SpatialAudio and every emitter are freed and
+## made again (a scene reload), and the tree pauses and resumes every 0.4 s (stream pause, as when the
+## app is backgrounded).
+func _churn(dt: float) -> void:
+	_churn_t += dt
+	if fmod(t, 0.4) < dt:
+		get_tree().paused = not get_tree().paused
+	if _churn_t < 1.5:
+		return
+	_churn_t = 0.0
+	for p in nodes:
+		p.queue_free()
+	nodes.clear()
+	for c in get_children():
+		if c.get_script() == load("res://spatial_audio.gd"):
+			c.queue_free()
+	var sa: Node = load("res://spatial_audio.gd").new()
+	add_child.call_deferred(sa)
+	for i in n:
+		var p: Node = load("res://spatial_emitter.gd").new()
+		p.set("stream", wav)
+		p.set("bus", "SFX" if i % 2 == 0 else "Ambience")
+		p.set("unit_size", 4.0)
+		p.set("max_distance", 40.0)
+		add_child.call_deferred(p)
+		nodes.append(p)
+
+
+func _process(dt: float) -> void:
+	t += dt
+	if mode == "churn":
+		_churn(dt)
+	if not started:
+		started = true
+		for q in bus2d:
+			q.play()
+		return
+	cam.position = Vector3(sin(t * 7.0) * 15.0, 0, cos(t * 5.0) * 15.0)
+	cam.rotation.y = t * 3.0
+	var k := 0
+	for p in nodes:
+		k += 1
+		(p as Node3D).position = Vector3(randf_range(-30, 30), randf_range(-5, 5), randf_range(-30, 30))
+		if randf() < 0.05:
+			p.call("stop")
+		if not p.get("playing"):
+			p.call("play")
+		if mode != "stock":
+			p.set("volume_db", randf_range(-12.0, 0.0))
+	for q in bus2d:
+		if mode == "stock":
+			q.volume_db = randf_range(-20.0, 0.0)
+		else:
+			AudioServer.set_bus_volume_db(level_bus, randf_range(-20.0, 0.0))
+		if randf() < 0.02:
+			q.play()
+	if Time.get_ticks_msec() > secs * 1000.0:
+		print("PROBE done mode=%s secs=%d" % [mode, int(secs)])
+		get_tree().quit()

@@ -51,7 +51,7 @@ func run(runner) -> void:
 	g.spores.enabled = false
 	await t.seconds(0.5)
 	var only: String = Settings.test_args.get("only", "")
-	var registry := ["_test_startup", "_test_ota_and_version", "_test_hag_infra", "_test_launch_update", "_test_mesh_winding", "_test_terrain", "_test_ravines", "_test_rim_fights_clear_of_ooze", "_test_edge_assist", "_test_ooze_bubbles", "_test_view_clearances", "_test_camera_rises_over", "_test_camera_invariant", "_test_ball_view", "_test_juice", "_test_owner_menus_and_players", "_test_deck_controls", "_test_profiles_ab", "_phase_profile_write", "_phase_profile_check", "_test_hud_corner", "_test_settings_safe_write", "_test_audio_volume_writes_reviewed", "_test_audio_lifecycle", "_test_save_files_classified", "_test_restore_hints", "_test_spore_blooms", "_test_drawn_back", "_test_dead_area_sim", "_test_home_coherence", "_test_terrain_grounded", "_test_no_floating_platforms", "_test_parasite_locomotion", "_test_parasite_body_and_death", "_test_parasite_combat", "_test_organic_motion", "_test_gill_look", "_test_gill_idles", "_test_gill_colours", "_test_gill_patterns", "_test_tail_whip", "_test_gill_traction", "_test_gill_incline_transitions", "_test_traction_no_shortcuts", "_test_gill_body_follow", "_test_swim_body_follow", "_test_ambient_sway", "_test_placements", "_test_tutorial_route", "_test_sphere_walk", "_test_jump_and_burst", "_test_coyote_and_buffer", "_test_swipe_direction_and_stages", "_test_hard_landing", "_test_food", "_test_food_reach", "_test_food_catchable", "_test_assisted_lunge", "_test_glob_counterplay", "_test_darter_and_burrower", "_test_food_repopulates", "_test_motes", "_test_checkpoint_and_regen", "_test_crumble", "_test_restoration_gates", "_test_retract_gates_gone", "_test_bubble_columns", "_test_restoration_continuity", "_test_health_map", "_test_vortex", "_test_vortex_tints", "_test_vortex_ready_state", "_test_vortex_currents", "_test_vortex_currents_travel", "_test_current", "_test_current_brace", "_test_canopy", "_test_canopy_plain_jumps", "_test_canopy_guard_leaf", "_test_climbs_physical", "_test_jungle_ladders_physical", "_test_leaf_geometry", "_test_leaf_footing", "_test_caves", "_test_mounds", "_test_vegetation", "_test_vortex_mouths_clear", "_test_vortex_pads_clear_of_plants", "_test_stalkers_in_reeds", "_test_route_audit", "_test_new_areas", "_test_ecosystem", "_test_threat_spread", "_test_music", "_test_opening_audio", "_test_run_clock", "_test_completion_catalog", "_test_completion_frozen", "_test_run_save_file", "_test_run_timer_live", "_test_run_continue", "_test_timer_integrity", "_test_resume_points_safe", "_phase_continue_write", "_phase_continue_read", "_test_upgrades", "_test_quality_title_cap", "_test_ui", "_test_menus_no_scroll", "_test_pause_fits_fullest_state", "_test_menu_touch", "_test_primary_buttons", "_test_tier2_rules", "_test_tier2_world", "_test_ambient_fish", "_test_parasite_never_buried", "_test_tier2_loadout", "_test_aquarium_experiences", "_test_aquarium_polish", "_test_all_clear", "_test_treasure_unlock", "_test_treasure_generation", "_test_treasure_play", "_phase_treasure_stress", "_phase_live_fish_diag", "_phase_cpu_probe", "_phase_audio_probe", "_phase_incline_survey", "_phase_loco_diag", "_phase_crawl_trace", "_phase_mouth_crawls", "_phase_organic_trace", "_phase_organic_cost", "_test_skilltree_graph", "_test_progress_store", "_test_starfish_spots", "_test_starfish_pickup", "_test_skill_ui", "_test_quick_gill", "_test_lunge_skills", "_test_burst_skills", "_test_glide_control", "_test_glide_transfers", "_test_mote_magnet", "_phase_starfish_survey", "_phase_starfish_sweep", "_phase_glide_probe", "_test_plants_terminal_growth", "_test_sea_fan_depth", "_test_repopulation", "_phase_repop_survey", "_phase_repop_sim", "_test_aquarium_gill", "_phase_aq_nav", "_test_tutorials_and_title", "_test_onb_progress", "_test_onb_owner_save", "_test_onb_per_run", "_test_onb_toggle", "_test_onb_intro", "_test_onb_feeding", "_test_onb_parasite", "_test_onb_feed_first", "_test_onb_tunnel", "_test_onb_starfish", "_test_onb_softlock", "_test_onb_guidance", "_test_onb_replay", "_test_onb_relaunch", "_test_onb_restoration_equal", "_test_hard_mode", "_test_hard_mode_save", "_test_polish_a", "_test_leaf_motion", "_test_perf_veg_cull", "_test_creature_horizon_cull", "_test_veg_stays_put", "_test_death_and_arrival", "_test_pause_ball_progress", "_test_arrival_view", "_test_camera_never_drawn_unsafe", "_test_startup_build_identical", "_phase_world_hash", "_phase_th_bench", "_phase_hard_write", "_phase_hard_read", "_phase_hard_newrun", "_phase_hard_finish", "_phase_hard_sim", "_phase_hard_intervals", "_phase_onb_owner", "_phase_onb_write", "_phase_onb_read", "_phase_onb_kill", "_phase_onb_toggle", "_phase_cohesion_probe", "_test_eel_reach", "_test_parasite_readability"]
+	var registry := ["_test_startup", "_test_ota_and_version", "_test_hag_infra", "_test_launch_update", "_test_mesh_winding", "_test_terrain", "_test_ravines", "_test_rim_fights_clear_of_ooze", "_test_edge_assist", "_test_ooze_bubbles", "_test_view_clearances", "_test_camera_rises_over", "_test_camera_invariant", "_test_ball_view", "_test_juice", "_test_owner_menus_and_players", "_test_deck_controls", "_test_profiles_ab", "_phase_profile_write", "_phase_profile_check", "_test_hud_corner", "_test_settings_safe_write", "_test_audio_never_replaces_routing_data", "_test_audio_lifecycle", "_test_save_files_classified", "_test_restore_hints", "_test_spore_blooms", "_test_drawn_back", "_test_dead_area_sim", "_test_home_coherence", "_test_terrain_grounded", "_test_no_floating_platforms", "_test_parasite_locomotion", "_test_parasite_body_and_death", "_test_parasite_combat", "_test_organic_motion", "_test_gill_look", "_test_gill_idles", "_test_gill_colours", "_test_gill_patterns", "_test_tail_whip", "_test_gill_traction", "_test_gill_incline_transitions", "_test_traction_no_shortcuts", "_test_gill_body_follow", "_test_swim_body_follow", "_test_ambient_sway", "_test_placements", "_test_tutorial_route", "_test_sphere_walk", "_test_jump_and_burst", "_test_coyote_and_buffer", "_test_swipe_direction_and_stages", "_test_hard_landing", "_test_food", "_test_food_reach", "_test_food_catchable", "_test_assisted_lunge", "_test_glob_counterplay", "_test_darter_and_burrower", "_test_food_repopulates", "_test_motes", "_test_checkpoint_and_regen", "_test_crumble", "_test_restoration_gates", "_test_retract_gates_gone", "_test_bubble_columns", "_test_restoration_continuity", "_test_health_map", "_test_vortex", "_test_vortex_tints", "_test_vortex_ready_state", "_test_vortex_currents", "_test_vortex_currents_travel", "_test_current", "_test_current_brace", "_test_canopy", "_test_canopy_plain_jumps", "_test_canopy_guard_leaf", "_test_climbs_physical", "_test_jungle_ladders_physical", "_test_leaf_geometry", "_test_leaf_footing", "_test_caves", "_test_mounds", "_test_vegetation", "_test_vortex_mouths_clear", "_test_vortex_pads_clear_of_plants", "_test_stalkers_in_reeds", "_test_route_audit", "_test_new_areas", "_test_ecosystem", "_test_threat_spread", "_test_music", "_test_opening_audio", "_test_run_clock", "_test_completion_catalog", "_test_completion_frozen", "_test_run_save_file", "_test_run_timer_live", "_test_run_continue", "_test_timer_integrity", "_test_resume_points_safe", "_phase_continue_write", "_phase_continue_read", "_test_upgrades", "_test_quality_title_cap", "_test_ui", "_test_menus_no_scroll", "_test_pause_fits_fullest_state", "_test_menu_touch", "_test_primary_buttons", "_test_tier2_rules", "_test_tier2_world", "_test_ambient_fish", "_test_parasite_never_buried", "_test_tier2_loadout", "_test_aquarium_experiences", "_test_aquarium_polish", "_test_all_clear", "_test_treasure_unlock", "_test_treasure_generation", "_test_treasure_play", "_phase_treasure_stress", "_phase_live_fish_diag", "_phase_cpu_probe", "_phase_audio_probe", "_phase_spatial_match", "_phase_incline_survey", "_phase_loco_diag", "_phase_crawl_trace", "_phase_mouth_crawls", "_phase_organic_trace", "_phase_organic_cost", "_test_skilltree_graph", "_test_progress_store", "_test_starfish_spots", "_test_starfish_pickup", "_test_skill_ui", "_test_quick_gill", "_test_lunge_skills", "_test_burst_skills", "_test_glide_control", "_test_glide_transfers", "_test_mote_magnet", "_phase_starfish_survey", "_phase_starfish_sweep", "_phase_glide_probe", "_test_plants_terminal_growth", "_test_sea_fan_depth", "_test_repopulation", "_phase_repop_survey", "_phase_repop_sim", "_test_aquarium_gill", "_phase_aq_nav", "_test_tutorials_and_title", "_test_onb_progress", "_test_onb_owner_save", "_test_onb_per_run", "_test_onb_toggle", "_test_onb_intro", "_test_onb_feeding", "_test_onb_parasite", "_test_onb_feed_first", "_test_onb_tunnel", "_test_onb_starfish", "_test_onb_softlock", "_test_onb_guidance", "_test_onb_replay", "_test_onb_relaunch", "_test_onb_restoration_equal", "_test_hard_mode", "_test_hard_mode_save", "_test_polish_a", "_test_leaf_motion", "_test_perf_veg_cull", "_test_creature_horizon_cull", "_test_veg_stays_put", "_test_death_and_arrival", "_test_pause_ball_progress", "_test_arrival_view", "_test_camera_never_drawn_unsafe", "_test_startup_build_identical", "_phase_world_hash", "_phase_th_bench", "_phase_hard_write", "_phase_hard_read", "_phase_hard_newrun", "_phase_hard_finish", "_phase_hard_sim", "_phase_hard_intervals", "_phase_onb_owner", "_phase_onb_write", "_phase_onb_read", "_phase_onb_kill", "_phase_onb_toggle", "_phase_cohesion_probe", "_test_eel_reach", "_test_parasite_readability"]
 	# A --only entry that names nothing is a typo (or a stale substring): fail loudly rather than run nothing.
 	for o in only.split(",", false):
 		if not registry.has(o) and not registry.has("_test_" + o):
@@ -6998,20 +6998,108 @@ func _test_perf_veg_cull() -> void:
 			"%d of %d chunk states differ from the per-node rule; added chunk hidden %s / shown %s" % [bad, checked, hid_new, shown_new])
 
 
-## Ledger row 37 (Godot 4.7.2 audio-thread use-after-free, reproduced as SIGSEGV at godot+44f7c18 on
-## 2026-10-03 and 2026-10-12): every volume_db write on a playing player swaps a struct the audio thread
-## may still be reading. Each write in game code is reviewed: at setup (before play), right after
-## stop(), inside AudioDirector.set_volume (audible steps only), or the one short travel fade. A new
-## write, or a new volume tween, fails here until it is reviewed against row 37.
-const AUDIO_VOLUME_WRITES := {
-	"scripts/core/audio_director.gd": ["_song.volume_db = SONG_DB", "p.volume_db = db", "p.volume_db = db", "_travel.volume_db = -4.0",
-			"tw.tween_property(_travel, \"volume_db\", -60.0, 0.8)"],
-	"scripts/core/sfx.gd": ["p.volume_db = vol_db", "p.volume_db = vol_db"],
-	"scripts/core/juice.gd": ["_step_player.volume_db = STEP_DB + 3.0 * clampf((sp - 2.0) / 4.0, 0.0, 1.0) + _fx_rng.randf_range(-1.5, 1.5)"],
-	"scripts/world/level_builder.gd": ["snd.volume_db = -14.0"],
-	"scripts/world/aquarium.gd": ["snd.volume_db = -6.0"],
-	"scripts/world/vortex.gd": ["p.volume_db = -40.0"],
+## Ledger row 37 (Godot 4.7.2 audio-thread use-after-free, SIGSEGV at godot+44f7c18): the engine replaces
+## a playing sound's routing data ("bus details") when a playing AudioStreamPlayer's volume_db or bus is
+## written, and on every physics tick for a playing AudioStreamPlayer3D within earshot, then frees the old
+## copy on the main thread without synchronising with the audio thread that may still be reading it
+## (servers/audio/audio_server.cpp). Since 2026-10-13 the game never triggers that replacement:
+## positional sound goes through SpatialEmitter/SpatialAudio voices, levels that change while playing are
+## bus volumes, and every volume_db/bus write below is on a SpatialEmitter (only a value it reads) or on an
+## AudioStreamPlayer before it plays or right after stop(). A new write fails here until reviewed.
+const AUDIO_WRITES := {
+	"scripts/core/audio_director.gd": ["_song.bus = \"Music\"", "_song.volume_db = SONG_DB", "_outside.bus = \"Outside\"", "p.bus = bus"],
+	"scripts/core/sfx.gd": ["p.bus = &\"SFX\"", "p.bus = \"SFX\"", "p.volume_db = vol_db", "p.volume_db = vol_db"],
+	"scripts/core/juice.gd": ["_step_player.bus = &\"SFX\"", "_step_player.volume_db = STEP_DB + 3.0 * clampf((sp - 2.0) / 4.0, 0.0, 1.0) + _fx_rng.randf_range(-1.5, 1.5)"],
+	"scripts/core/spatial_audio.gd": ["v.player.bus = name"],
+	"scripts/world/level_builder.gd": ["snd.bus = &\"Ambience\"", "snd.volume_db = -14.0"],
+	"scripts/world/aquarium.gd": ["snd.bus = &\"Ambience\"", "snd.volume_db = -6.0"],
+	"scripts/world/vortex.gd": ["p.bus = &\"Ambience\"", "p.volume_db = -40.0", "p.volume_db = db"],
 }
+## Files whose bus-layout changes (add_bus, add_bus_effect...) are made inside AudioServer.lock().
+const AUDIO_LAYOUT_LOCKED := ["scripts/core/audio_director.gd", "scripts/core/spatial_audio.gd"]
+
+
+func _test_audio_never_replaces_routing_data() -> void:
+	var found := {}
+	var forbidden: Array[String] = []
+	var layout: Array[String] = []
+	var write_re := RegEx.create_from_string("\\.(volume_db|bus)\\s*=[^=]|\"volume_db\"|\"bus\"")
+	var stack := ["res://scripts"]
+	while not stack.is_empty():
+		var d: String = stack.pop_back()
+		for sub in DirAccess.get_directories_at(d):
+			if sub != "tests" and sub != "generated":
+				stack.append(d.path_join(sub))
+		for f in DirAccess.get_files_at(d):
+			if not f.ends_with(".gd"):
+				continue
+			var path := d.path_join(f)
+			var key := path.trim_prefix("res://")
+			var text := FileAccess.get_file_as_string(path)
+			for line in text.split("\n"):
+				var s := line.strip_edges()
+				if s.begins_with("#"):
+					continue
+				if s.contains("AudioStreamPlayer3D") or s.contains("AudioStreamPlayer2D") or s.contains("set_playback_"):
+					forbidden.append("%s: %s" % [key, s])
+				if RegEx.create_from_string("AudioServer\\.(add_bus|remove_bus|move_bus|set_bus_count|add_bus_effect|remove_bus_effect|swap_bus_effects|set_bus_layout)").search(s) != null \
+						and not key in AUDIO_LAYOUT_LOCKED:
+					layout.append("%s: %s" % [key, s])
+				if write_re.search(s) != null:
+					if not found.has(key):
+						found[key] = []
+					found[key].append(s)
+			# (Every reviewed layout file locks around its changes.)
+			if key in AUDIO_LAYOUT_LOCKED and text.count("AudioServer.lock()") != text.count("AudioServer.unlock()"):
+				layout.append("%s: lock/unlock unbalanced" % key)
+	var unreviewed: Array = []
+	for key in found:
+		var allowed: Array = (AUDIO_WRITES.get(key, []) as Array).duplicate()
+		for s in found[key]:
+			if s in allowed:
+				allowed.erase(s)
+			else:
+				unreviewed.append("%s: %s" % [key, s])
+	# The pooled one-shots stop before their stream and volume are set (a stopped player has no playback).
+	var sfx := FileAccess.get_file_as_string("res://scripts/core/sfx.gd")
+	var stopped := sfx.count("p.stop()\n\t\tp.stream = s") >= 2
+	# At run time: no engine 3D/2D players anywhere in the tree.
+	var engine3d: Array[String] = []
+	for n in g.get_tree().root.find_children("*", "AudioStreamPlayer3D", true, false):
+		engine3d.append(str(n.get_path()))
+	for n in g.get_tree().root.find_children("*", "AudioStreamPlayer2D", true, false):
+		engine3d.append(str(n.get_path()))
+	t.check("audio_never_replaces_routing_data", forbidden.is_empty() and layout.is_empty() and unreviewed.is_empty() and stopped and engine3d.is_empty(),
+			"engine 3D/2D players or set_playback_ in code %s; unlocked layout changes %s; unreviewed writes %s; pooled stopped first %s; in the tree %s"
+			% [forbidden, layout, unreviewed, stopped, engine3d])
+	# Live: through several seconds of play with sounds starting and stopping (steps, swipes, vortex
+	# rushes, bubblers), no playing AudioStreamPlayer's volume_db or bus ever changes.
+	var hb: MossBall = g.balls[0]
+	place_at(0, hb.surface_point(hb.start_dir, 0.2), MossBall.frame_at(hb.start_dir, 0).z)
+	var seen := {}
+	var changed: Array[String] = []
+	var plays := 0
+	for i in 240:
+		if i % 20 == 0:
+			p.bot_input = Vector2(0.0, 1.0) if (i / 20) % 2 == 0 else Vector2(1.0, 0.0)
+			Sfx.play("swipe_hit", p.global_position + Vector3(2, 0, 0))
+			Sfx.play("ui_tap")
+		await t.frames(1)
+		for n in g.get_tree().root.find_children("*", "AudioStreamPlayer", true, false):
+			var ap := n as AudioStreamPlayer
+			var id := ap.get_instance_id()
+			if ap.playing:
+				var now := [ap.volume_db, ap.bus]
+				if seen.has(id) and seen[id] != now:
+					changed.append("%s %s -> %s" % [ap.name, seen[id], now])
+				if not seen.has(id):
+					plays += 1
+				seen[id] = now
+			else:
+				seen.erase(id)
+	p.bot_input = Vector2.ZERO
+	t.check("audio_playing_players_never_rewritten", changed.is_empty() and plays > 3 and SpatialAudio.inst.active_voices() >= 0,
+			"%d playbacks watched; changed while playing: %s" % [plays, changed])
 
 
 ## Audio lifecycle and the row 37 range gate (2026-10-13): initialization order, repeated startup and
@@ -7079,7 +7167,7 @@ func _test_audio_lifecycle() -> void:
 	var bad: Array[String] = []
 	var heard := 0
 	for n in g.get_tree().get_nodes_in_group(AudioDirector.RANGE_GROUP):
-		var sp := n as AudioStreamPlayer3D
+		var sp := n as SpatialEmitter
 		var dist := cam.global_position.distance_to(sp.global_position)
 		var want := bool(sp.get_meta("want_play", false)) and sp.stream != null
 		if sp.playing and dist > sp.max_distance + AudioDirector.RANGE_STOP_M:
@@ -7089,7 +7177,7 @@ func _test_audio_lifecycle() -> void:
 			if not sp.playing:
 				bad.append("%s silent within earshot (%.0f m)" % [sp.get_path(), dist])
 	t.check("audio_range_gate_holds", bad.is_empty() and heard > 0, "%d within earshot; %s" % [heard, bad])
-	var probe := AudioStreamPlayer3D.new()
+	var probe := SpatialEmitter.new()
 	probe.stream = load("res://assets/audio/amb_bubbler.wav")
 	probe.max_distance = 18.0
 	probe.volume_db = -80.0
@@ -7110,44 +7198,6 @@ func _test_audio_lifecycle() -> void:
 	probe.free()
 	t.check("audio_range_gate_follows_listener", near_on and far_off and edge_on and unwanted_off,
 			"near %s, far stopped %s, edge started %s, unwanted stopped %s" % [near_on, far_off, edge_on, unwanted_off])
-
-
-func _test_audio_volume_writes_reviewed() -> void:
-	var found := {}
-	var stack := ["res://scripts"]
-	while not stack.is_empty():
-		var d: String = stack.pop_back()
-		for sub in DirAccess.get_directories_at(d):
-			if sub != "tests" and sub != "generated":
-				stack.append(d.path_join(sub))
-		for f in DirAccess.get_files_at(d):
-			if not f.ends_with(".gd"):
-				continue
-			var path := d.path_join(f)
-			for line in FileAccess.get_file_as_string(path).split("\n"):
-				var s := line.strip_edges()
-				if s.begins_with("#") or s.begins_with("##"):
-					continue
-				if RegEx.create_from_string("\\.volume_db\\s*=[^=]|\"volume_db\"").search(s) != null:
-					var key := path.trim_prefix("res://")
-					if not found.has(key):
-						found[key] = []
-					found[key].append(s)
-	var unreviewed: Array = []
-	for key in found:
-		var allowed: Array = (AUDIO_VOLUME_WRITES.get(key, []) as Array).duplicate()
-		for s in found[key]:
-			if s in allowed:
-				allowed.erase(s)
-			else:
-				unreviewed.append("%s: %s" % [key, s])
-	# The pooled one-shots stop before their volume changes (2026-10-12 hardening).
-	var sfx := FileAccess.get_file_as_string("res://scripts/core/sfx.gd")
-	var juice := FileAccess.get_file_as_string("res://scripts/core/juice.gd")
-	var stopped := sfx.count("p.stop()\n\t\tp.stream = s") >= 2 \
-			and juice.contains("_step_player.stop()\n\t_step_player.stream = s")
-	t.check("audio_volume_writes_reviewed", unreviewed.is_empty() and stopped,
-			"unreviewed volume writes %s; pooled players stopped first %s" % [unreviewed, stopped])
 
 
 ## Steam Cloud preparation (docs/STEAM_CLOUD.md): every user:// path the game writes is classified as
@@ -7302,7 +7352,94 @@ func _test_pause_fits_fullest_state() -> void:
 	t.check("pause_fits_fullest_state", ok, "; ".join(rows))
 
 
-## Measurement only (run by name): how many AudioStreamPlayer3D are playing at each ball's start, and
+## Measurement only (run by name; it uses the engine's AudioStreamPlayer3D for comparison): the same
+## tone from a real AudioStreamPlayer3D and from a SpatialEmitter, at the same places around the
+## listener, captured from the mix (AudioEffectCapture) and compared: left and right RMS in dB, for a
+## low tone and a high one (the distance high-shelf filter). Prints the largest difference.
+func _phase_spatial_match() -> void:
+	var cam := g.get_viewport().get_camera_3d()
+	AudioServer.lock()
+	for nm in ["MatchA", "MatchB"]:
+		if AudioServer.get_bus_index(nm) < 0:
+			AudioServer.add_bus()
+			var i := AudioServer.bus_count - 1
+			AudioServer.set_bus_name(i, nm)
+			AudioServer.set_bus_send(i, "Master")
+			var cap := AudioEffectCapture.new()
+			cap.buffer_length = 1.0
+			AudioServer.add_bus_effect(i, cap)
+	AudioServer.unlock()
+	var cap_a: AudioEffectCapture = AudioServer.get_bus_effect(AudioServer.get_bus_index("MatchA"), 0)
+	var cap_b: AudioEffectCapture = AudioServer.get_bus_effect(AudioServer.get_bus_index("MatchB"), 0)
+	var rows: Array[String] = []
+	var worst := 0.0
+	for hz in [400.0, 7000.0]:
+		var wav := AudioStreamWAV.new()
+		wav.format = AudioStreamWAV.FORMAT_16_BITS
+		wav.mix_rate = 44100
+		var n := 44100
+		var data := PackedByteArray()
+		data.resize(n * 2)
+		for k in n:
+			data.encode_s16(k * 2, int(sin(TAU * hz * k / 44100.0) * 12000))
+		wav.data = data
+		wav.loop_mode = AudioStreamWAV.LOOP_FORWARD
+		wav.loop_end = n
+		for off in [Vector3(0, 0, -3), Vector3(-4, 0, -2), Vector3(5, 1, 1), Vector3(0, 0, 8), Vector3(-2, 0, 20), Vector3(12, -3, -30)]:
+			var world: Vector3 = cam.global_transform * off
+			var a := AudioStreamPlayer3D.new()
+			a.stream = wav
+			a.bus = "MatchA"
+			a.unit_size = 6.0
+			a.max_distance = 60.0
+			a.attenuation_filter_cutoff_hz = 9000.0
+			g.add_child(a)
+			a.global_position = world
+			var b := SpatialEmitter.new()
+			b.stream = wav
+			b.bus = &"MatchB"
+			b.unit_size = 6.0
+			b.max_distance = 60.0
+			b.attenuation_filter_cutoff_hz = 9000.0
+			g.add_child(b)
+			b.global_position = world
+			a.play()
+			b.play()
+			await t.seconds(0.4)
+			cap_a.clear_buffer()
+			cap_b.clear_buffer()
+			await t.seconds(0.5)
+			var ra := _rms_lr(cap_a)
+			var rb := _rms_lr(cap_b)
+			var dl := absf(linear_to_db(maxf(ra.x, 1e-6)) - linear_to_db(maxf(rb.x, 1e-6)))
+			var dr := absf(linear_to_db(maxf(ra.y, 1e-6)) - linear_to_db(maxf(rb.y, 1e-6)))
+			worst = maxf(worst, maxf(dl, dr))
+			rows.append("%d Hz at %s: engine L %.1f R %.1f dB, emitter L %.1f R %.1f dB" % [hz, off, linear_to_db(maxf(ra.x, 1e-6)), linear_to_db(maxf(ra.y, 1e-6)),
+					linear_to_db(maxf(rb.x, 1e-6)), linear_to_db(maxf(rb.y, 1e-6))])
+			a.stop()
+			b.stop()
+			a.queue_free()
+			b.queue_free()
+			await t.frames(3)
+	for r in rows:
+		print("[LOG] spatial match " + r)
+	print("[LOG] spatial match: largest left/right difference %.2f dB" % worst)
+	t.check("spatial_match_ran", true, "largest difference %.2f dB" % worst)
+
+
+func _rms_lr(cap: AudioEffectCapture) -> Vector2:
+	var frames := cap.get_frames_available()
+	var buf := cap.get_buffer(frames)
+	var l := 0.0
+	var r := 0.0
+	for f in buf:
+		l += f.x * f.x
+		r += f.y * f.y
+	var nf := maxf(1.0, float(buf.size()))
+	return Vector2(sqrt(l / nf), sqrt(r / nf))
+
+
+## Measurement only (run by name): how many positional sounds (SpatialEmitter) are playing at each ball's start, and
 ## how many of those are beyond their own max_distance from the listener (inaudible). Each playing 3D
 ## player makes Godot 4.7.2 swap its bus details on every physics tick (row 37's race window).
 func _phase_audio_probe() -> void:
@@ -7314,8 +7451,8 @@ func _phase_audio_probe() -> void:
 		var playing := 0
 		var far := 0
 		var kinds := {}
-		for n in g.get_tree().root.find_children("*", "AudioStreamPlayer3D", true, false):
-			var a := n as AudioStreamPlayer3D
+		for n in g.get_tree().root.find_children("*", "SpatialEmitter", true, false):
+			var a := n as SpatialEmitter
 			if not a.playing:
 				continue
 			playing += 1
@@ -10578,7 +10715,10 @@ func _test_opening_audio() -> void:
 	var ok := a._water.stream != null and a._aerator.stream != null and a._water.playing and a._aerator.playing
 	for p in [a._water, a._aerator]:
 		var st := p.stream as AudioStreamWAV
-		ok = ok and st != null and st.loop_mode != AudioStreamWAV.LOOP_DISABLED and p.bus == "Ambience"
+		# (Each layer on its own level bus, which sends into Ambience: AudioDirector.LEVEL_BUSES.)
+		var lb := AudioServer.get_bus_index(p.bus)
+		ok = ok and st != null and st.loop_mode != AudioStreamWAV.LOOP_DISABLED and lb >= 0 \
+				and AudioServer.get_bus_send(lb) == "Ambience" and lb > AudioServer.get_bus_index("Ambience")
 	var lw := (a._water.stream as AudioStreamWAV).get_length() if a._water.stream else 0.0
 	var la := (a._aerator.stream as AudioStreamWAV).get_length() if a._aerator.stream else 0.0
 	t.check("opening_bed_loops", ok and absf(lw - 17.0) < 0.1 and absf(la - 13.0) < 0.1, "water %.1f s, aerator %.1f s (co-prime loops)" % [lw, la])
@@ -12489,7 +12629,7 @@ func _test_juice() -> void:
 	var dedup := Sfx.skipped == sk0 + 1
 	await t.frames(1)
 	Sfx.play("hit", p.global_position)
-	var hit_p: AudioStreamPlayer3D = Sfx.inst._frame_played["hit"]
+	var hit_p: SpatialEmitter = Sfx.inst._frame_played["hit"]
 	Sfx.play("swipe_hit", p.global_position)
 	t.check("juice_sounds_never_doubled", dedup and not hit_p.playing, "dedup %s, generic hit stopped %s" % [dedup, not hit_p.playing])
 	# 9. Puffs: optional ones never overwrite live ones; debris retires.

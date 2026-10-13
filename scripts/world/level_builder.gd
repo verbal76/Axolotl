@@ -721,8 +721,8 @@ func bubble_column(dir: Vector3, radius: float, height: float, speed := 5.0, zon
 func _bubble_sound(holder: Node3D, at: Vector3) -> void:
 	if not ResourceLoader.exists("res://assets/audio/amb_bubbler.wav"):
 		return
-	var snd := AudioStreamPlayer3D.new()
-	snd.bus = "Ambience"
+	var snd := SpatialEmitter.new()
+	snd.bus = &"Ambience"
 	snd.stream = load("res://assets/audio/amb_bubbler.wav")
 	snd.unit_size = 3.0
 	snd.max_distance = 18.0

@@ -22,9 +22,10 @@ section, `CLAUDE.md` and `docs/REQUIREMENTS_LEDGER.md` win.
   SHA-256 5acd013b...6cc4). Older r6 items: dev-000109/110, APK b128. Phones stay on dev-000111 until the
   owner publishes the next OTA (dev-000112) by hand.
 - **Development branch `claude/mote-release-source` (ahead of the release branch, not integrated):**
-  ledger row 61 (2026-10-13): audio range gate (row 37 safeguard, not a fix), the settings page fits 720p
-  in its fullest state, unsharded test isolation. OTA-compatible (game layer only); awaiting the owner's
-  integration approval and a manual OTA (dev-000112).
+  ledger rows 61-62 (2026-10-13): the audio crash's race eliminated in the game layer (no AudioStreamPlayer3D;
+  SpatialAudio voices; ThreadSanitizer-verified; engine patch prepared for a future native build), the
+  settings page fits 720p in its fullest state, unsharded test isolation. OTA-compatible (game layer
+  only); awaiting the owner's integration approval and a manual OTA (dev-000112).
 - **OTA publishing:** manual dispatch only (Actions > OTA publish > Run workflow, from the release branch,
   by an allowed admin account; docs/OTA_PUBLISHING.md). Recommended owner action first: configure the
   `ota-dev` environment's required reviewer and branch rule (same doc, "Limitation").
@@ -34,7 +35,8 @@ section, `CLAUDE.md` and `docs/REQUIREMENTS_LEDGER.md` win.
   ledger), `docs/THIRD_PARTY_ASSETS.md`.
 - **Open blockers:** music rights; glyph licence confirmation on the live listing; Steam App ID and
   Steamworks (Steam Input, Steam Cloud, Steam's on-screen keyboard); physical Android, Windows and Steam
-  Deck testing; the engine audio race (unresolved; fix plan in docs/research/crash-2026-10-12/FINDINGS.md).
+  Deck testing (docs/DEVICE_CHECKLIST.md); the native engine patch for the audio race (prepared; needs an
+  owner-approved native build, docs/research/crash-2026-10-12/FINDINGS.md).
 - **Next action (owner):** when wanted, an OTA by manual dispatch (docs/OTA_PUBLISHING.md) and/or the first
   "Mote Build NN" via *Build & Release (coordinated)* (docs/RELEASES.md).
 

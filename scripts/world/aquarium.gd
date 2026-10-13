@@ -548,8 +548,8 @@ func _build_bubbler() -> void:
 	mmi.material_override = bm
 	mmi.cast_shadow = GeometryInstance3D.SHADOW_CASTING_SETTING_OFF
 	add_child(mmi)
-	var snd := AudioStreamPlayer3D.new()
-	snd.bus = "Ambience"
+	var snd := SpatialEmitter.new()
+	snd.bus = &"Ambience"
 	if ResourceLoader.exists("res://assets/audio/amb_bubbler.wav"):
 		snd.stream = load("res://assets/audio/amb_bubbler.wav")
 	snd.position = base + Vector3(0, 60, 0)

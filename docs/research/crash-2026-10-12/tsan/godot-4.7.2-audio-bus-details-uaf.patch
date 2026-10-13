@@ -1,0 +1,117 @@
+diff --git a/servers/audio/audio_server.cpp b/servers/audio/audio_server.cpp
+index 98bb2ce..c91c6bf 100644
+--- a/servers/audio/audio_server.cpp
++++ b/servers/audio/audio_server.cpp
+@@ -270,7 +270,7 @@ AudioDriver *AudioDriverManager::get_driver(int p_driver) {
+ //////////////////////////////////////////////
+ 
+ void AudioServer::_driver_process(int p_frames, int32_t *p_buffer) {
+-	mix_count++;
++	mix_count.fetch_add(1, std::memory_order_acq_rel);
+ 	int todo = p_frames;
+ 
+ #ifdef DEBUG_ENABLED
+@@ -347,6 +347,8 @@ void AudioServer::_driver_process(int p_frames, int32_t *p_buffer) {
+ #ifdef DEBUG_ENABLED
+ 	prof_time.add(OS::get_singleton()->get_ticks_usec() - prof_ticks);
+ #endif
++	// Every read of bus details by this step is done: anything retired before it started may go.
++	mix_count_done.fetch_add(1, std::memory_order_release);
+ }
+ 
+ void AudioServer::_mix_step() {
+@@ -1488,7 +1490,7 @@ bool AudioServer::is_playback_paused(Ref<AudioStreamPlayback> p_playback) {
+ }
+ 
+ uint64_t AudioServer::get_mix_count() const {
+-	return mix_count;
++	return mix_count.load(std::memory_order_acquire);
+ }
+ 
+ uint64_t AudioServer::get_mixed_frames() const {
+@@ -1532,7 +1534,8 @@ void AudioServer::init() {
+ 
+ 	init_channels_and_buffers();
+ 
+-	mix_count = 0;
++	mix_count.store(0);
++	mix_count_done.store(0);
+ 	set_bus_count(1);
+ 	set_bus_name(0, "Master");
+ 
+@@ -1628,15 +1631,24 @@ void AudioServer::_cleanup_lists() {
+ 	update_callback_list.maybe_cleanup();
+ 	listener_changed_callback_list.maybe_cleanup();
+ 	playback_list.maybe_cleanup();
+-	for (AudioStreamPlaybackBusDetails *bus_details : bus_details_graveyard_frame_old) {
+-		bus_details_graveyard_frame_old.erase(bus_details, [](AudioStreamPlaybackBusDetails *d) { delete d; });
+-	}
++	// Retire what was replaced since the last call, stamped with the mix steps started so far: a
++	// step that still holds one of these pointers is among them.
++	const uint64_t started = mix_count.load(std::memory_order_acquire);
+ 	for (AudioStreamPlaybackBusDetails *bus_details : bus_details_graveyard) {
+-		bus_details_graveyard_frame_old.insert(bus_details);
++		bus_details_retired.push_back({ bus_details, started });
+ 		bus_details_graveyard.erase(bus_details);
+ 	}
+ 	bus_details_graveyard.maybe_cleanup();
+-	bus_details_graveyard_frame_old.maybe_cleanup();
++	// Free those whose readers have all finished.
++	const uint64_t done = mix_count_done.load(std::memory_order_acquire);
++	for (uint32_t i = 0; i < bus_details_retired.size();) {
++		if (done >= bus_details_retired[i].started) {
++			delete bus_details_retired[i].details;
++			bus_details_retired.remove_at_unordered(i);
++		} else {
++			i++;
++		}
++	}
+ }
+ 
+ void AudioServer::load_default_bus_layout() {
+@@ -2143,6 +2155,11 @@ AudioServer::~AudioServer() {
+ 	// Cleanup resources while we still have an active AudioServer singleton,
+ 	// for resources that depend on the singleton still existing.
+ 	_cleanup_lists();
++	// The driver has stopped: nothing can still be reading these.
++	for (const RetiredBusDetails &r : bus_details_retired) {
++		delete r.details;
++	}
++	bus_details_retired.clear();
+ 
+ 	singleton = nullptr;
+ }
+diff --git a/servers/audio/audio_server.h b/servers/audio/audio_server.h
+index efb0a58..31918d8 100644
+--- a/servers/audio/audio_server.h
++++ b/servers/audio/audio_server.h
+@@ -210,7 +210,10 @@ private:
+ 	int mix_size = 0;
+ 
+ 	uint32_t buffer_size = 0;
+-	uint64_t mix_count = 0;
++	// Mix steps started and finished (audio thread; read on the main thread). A step that loaded a
++	// playback's bus details pointer has started before any later replacement of it.
++	std::atomic<uint64_t> mix_count = 0;
++	std::atomic<uint64_t> mix_count_done = 0;
+ 	uint64_t mix_frames = 0;
+ #ifdef DEBUG_ENABLED
+ 	SafeNumeric<uint64_t> prof_time;
+@@ -315,8 +318,15 @@ private:
+ 
+ 	void _cleanup_lists();
+ 
+-	// TODO document if this is necessary.
+-	SafeList<AudioStreamPlaybackBusDetails *> bus_details_graveyard_frame_old;
++	// Replaced bus details wait here until every mix step that may have read them has finished:
++	// freed once mix_count_done reaches the mix_count seen when they were retired. (Previously they
++	// were freed two main-thread frames later regardless, a use-after-free when a mix step outlasted
++	// two frames.) Main thread only.
++	struct RetiredBusDetails {
++		AudioStreamPlaybackBusDetails *details = nullptr;
++		uint64_t started = 0;
++	};
++	LocalVector<RetiredBusDetails> bus_details_retired;
+ 
+ 	Vector<Vector<AudioFrame>> temp_buffer; //temp_buffer for each level
+ 	Vector<AudioFrame> mix_buffer;
