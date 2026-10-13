@@ -41,6 +41,14 @@ before() { # before <label> <log> <first pattern> <second pattern>: both present
 USABLE="first frame drawn: (title|play) usable"
 SETTINGS="$HOME/.local/share/godot/app_userdata/Mote/settings.cfg"
 save_hash() { sha256sum "$SETTINGS" 2>/dev/null | cut -d' ' -f1; }
+# The in-process attempt record (SoftRestart.RECORD_PATH: each OTA id once per install) lives in the
+# host's user data, not under $W: a previous run's "dev-000005 tried" would make step 18 skip the
+# activation. Each run starts as a fresh install; the host's record is put back on exit.
+RECORD="$HOME/.local/share/godot/app_userdata/Mote/ota_autoupdate.json"
+RECORD_SAVED="$W/ota_autoupdate.json.host"
+if [ -f "$RECORD" ]; then mv "$RECORD" "$RECORD_SAVED"; fi
+restore_record() { rm -f "$RECORD"; if [ -f "$RECORD_SAVED" ]; then mv "$RECORD_SAVED" "$RECORD"; fi; }
+trap restore_record EXIT
 
 openssl genpkey -algorithm RSA -pkeyopt rsa_keygen_bits:2048 -out "$W/key.pem" 2>/dev/null
 openssl pkey -in "$W/key.pem" -pubout -out "$W/pub.pem"
@@ -129,7 +137,7 @@ BASE=$(make_copy base)
 
 python3 -m http.server "$PORT" --bind 127.0.0.1 --directory "$W/site" >/dev/null 2>&1 &
 SERVER=$!
-trap 'kill $SERVER 2>/dev/null' EXIT
+trap 'kill $SERVER 2>/dev/null; restore_record' EXIT
 sleep 1
 
 run_game 01_baseline_no_channel
