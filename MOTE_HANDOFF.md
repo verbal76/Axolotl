@@ -21,6 +21,10 @@ section, `CLAUDE.md` and `docs/REQUIREMENTS_LEDGER.md` win.
   build-22 client, signature and pack hash); APK **build 132** `apk-v0.1.0-b132` (r5, source `0479663`,
   SHA-256 5acd013b...6cc4). Older r6 items: dev-000109/110, APK b128. Phones stay on dev-000111 until the
   owner publishes the next OTA (dev-000112) by hand.
+- **Development branch `claude/mote-release-source` (ahead of the release branch, not integrated):**
+  ledger row 61 (2026-10-13): audio range gate (row 37 safeguard, not a fix), the settings page fits 720p
+  in its fullest state, unsharded test isolation. OTA-compatible (game layer only); awaiting the owner's
+  integration approval and a manual OTA (dev-000112).
 - **OTA publishing:** manual dispatch only (Actions > OTA publish > Run workflow, from the release branch,
   by an allowed admin account; docs/OTA_PUBLISHING.md). Recommended owner action first: configure the
   `ota-dev` environment's required reviewer and branch rule (same doc, "Limitation").

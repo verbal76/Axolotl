@@ -63,7 +63,7 @@ do not prove the race is gone.
   change and needs the owner.
 - Test-side: unit runs could use `--max-fps 120` (fewer swaps per mix step) if the crash recurs.
 
-## Status: UNRESOLVED (2026-10-12)
+## Status: UNRESOLVED (2026-10-12; still unresolved 2026-10-13, see below)
 
 The race is in the engine and is not fixed. The mitigations (`d76f786`) and the guard test
 (`audio_volume_writes_reviewed`) reduce how often game code hits it; they cannot remove it.
@@ -107,3 +107,42 @@ template differences (shader baking, PCK compatibility).
 devices: the owner's Pixel and at least one other Android phone (install over the r5 app, saves kept,
 long play sessions with music, 3D creature audio, travel fades, pause/resume and app backgrounding, an OTA
 applied on the new runtime); a Windows PC and a Steam Deck once desktop builds use the patched templates.
+
+## 2026-10-13: game-side safeguard (OTA-compatible), still not a fix
+
+**Mechanism, traced in the code paths.** The use-after-free needs a retired `AudioStreamPlaybackBusDetails`
+that the audio thread is still reading. Game code can create retirements in three ways: a `volume_db` write on
+a playing player (already reduced to audible steps, row 37), `stop()`/`play()` of a player, and simply having
+an `AudioStreamPlayer3D` playing: Godot 4.7.2 recomputes its panning and swaps its bus details on every
+physics tick where the mix advanced, whether or not it can be heard. The last is by far the largest.
+
+**Measured exposure** (`_phase_audio_probe`, each ball's start): 14-15 looping 3D players playing (8 bubblers,
+6 vortex rushes, the tank's own bubbler among them), and 12-15 of them beyond their own `max_distance`,
+i.e. silent. That is roughly 800 silent bus-details swaps a second for at most two audible sources.
+
+**Safeguard.** `AudioDirector.want_loop()` and a range gate (every 0.2 s): a looping 3D source plays only
+while the listener is within its `max_distance` plus a margin. It starts 6 m before its audible edge (still
+silent there, so nothing is heard starting) and stops 12 m past it (hysteresis). Owners (vortex rush,
+gate and column bubblers, the tank bubbler) say whether they want to play; the gate decides when. Pausing
+was not used: Godot keeps updating panning for a paused 3D player. After: 1-2 looping 3D players playing per
+ball, all within earshot; what is heard is unchanged. One-shot sound effects are untouched.
+
+**Lifecycle hardening (same pass).** `Sfx.play` does nothing before the pool exists or after it left the
+tree (`Sfx.ready_to_play`); `Sfx` and `Juice` clear their static instance on exit; the bus setup is
+idempotent (each bus and effect created only if missing), so repeated startup or an interrupted earlier
+setup never duplicates buses. Backgrounding: no game audio work runs while the app is paused (the engine
+stops its driver); a long resume step only settles the ambience glide. Tests: `_test_audio_lifecycle`
+(initialization order, repeated startup and rapid transitions, use before init and after disposal, a long
+resume step, the range gate following the listener).
+
+**Reproduction, corrected.** The probe kept here until 2026-10-12 called `play()` in `_init`, before its
+players were in the tree; Godot refuses that ("Playback can only happen when a node is inside the scene
+tree"), so it never played anything and its "survived 240 s" results were not evidence. The corrected
+`race_probe.gd.txt` starts playback on the first frame. 2026-10-13, four processes for 900 s each under CPU
+contention (two with 128 moving 3D players, two rewriting `volume_db` on 64 players every frame): all
+survived with every player still playing. The race remains **not reproduced**; its frames match row 37's
+exactly, so the classification stands.
+
+**Status.** The engine race is still possible: audible 3D sources, one-shot effects, music and ambience still
+mix through the same engine path. This lowers the exposure the game itself creates; it is not a fix and
+must not be described as one. The engine-side recommendation above is unchanged.
