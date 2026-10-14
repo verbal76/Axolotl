@@ -236,5 +236,8 @@ jobs:
           # Re-download and verify what was published.
           mkdir ../check && cd ../check
           gh release download "build-$N" --repo "$GITHUB_REPOSITORY"
+          # GitHub stores asset names with dots for spaces ("Mote.Build.NN.APK.apk"); restore the names
+          # the manifest records before verifying (Build 138 published fine but failed this check).
+          for f in "Mote.Build.$N."*; do [ -e "$f" ] && mv "$f" "Mote Build $N ${f#"Mote.Build.$N."}"; done
           python3 ../tools/build.py verify --dir .
           echo "Published: ${{ github.server_url }}/${{ github.repository }}/releases/tag/build-$N"

@@ -9,13 +9,37 @@ and OTAs are unchanged.
 
 | Item | Value |
 |---|---|
-| Source SHA | `c0055616355d746377228707b068a25c29c42584` (release branch `claude/mote-game-continuation-bov2x9`, fast-forward from `54f4070`) |
+| Source SHA | `c0055616355d746377228707b068a25c29c42584` (release branch `claude/mote-game-continuation-bov2x9`, fast-forward from `54f4070`; the branch then gained only docs and `.github` commits up to `b811ce5`) |
 | Game content | identical to `dcaea10` (later commits change only `tools/ota_e2e_local.sh` and docs) |
 | Engine | Godot 4.7.2 stable templates (no engine patch) |
 | Android native runtime | r5, build 22 native layer, unchanged (`ota_runtime.py --check`: OTA-compatible); existing signing key (certificate pin `A8:4F:BA:D5:...:E2:C2:E3`) |
 | Latest published OTA | `dev-000111` (Mote v111-polish-pass-r5). Build 138 bundles the c005561 game, which is newer than dev-000111; no `dev-000112` exists |
 | Build number | 138 (= the APK's Android build / Build & Verify run 138) |
 | Desktop export | `tools/build.py` presets (Mobile renderer, Vulkan, PCK embedded); Windows resources 0.1.0.138, Hot Attic Games |
+
+## Published packages (GitHub prerelease `build-138`, not Latest)
+
+Release: https://github.com/verbal76/Axolotl/releases/tag/build-138 (tag on the release-branch head
+`b811ce5`, which contains the source `c005561`; Latest is still `ota-dev-000111`). GitHub stores the asset
+names with dots for spaces. SHA-256 below = manifest = GitHub's server-side digest.
+
+| Platform | File | SHA-256 | Size |
+|---|---|---|---|
+| Android | `Mote.Build.138.APK.apk` | `c4cff175e29415db7d5686fdca6a7118c20c8d965404d28cb1809071cb779770` | 45,679,802 |
+| Windows | `Mote.Build.138.EXE.zip` (folder `Mote Build 138/`: `Mote.exe`) | `fd645fa53cf9d97c5a7aefb66ca02f45940125080b32ebb96936a29e8694bc7d` | 52,295,770 |
+| Linux / Deck | `Mote.Build.138.Linux.tar.gz` (folder `Mote Build 138/`: `Mote.x86_64`, mode 755) | `cc6a2f9e81641cfc8e3a2a741171637b4aa23aa6aea1d4be9083f0e5995a4876` | 42,365,537 |
+
+How they were made: APK by Build & Verify run 138 (38568395109: both unit shards, playthrough, runtime
+lock and the APK checks: identity, permissions, signature against the Mote certificate pin, baked shaders,
+bundled baseline, all green on `c005561`); Windows and Linux exported by Build & Release run 38571894408
+from `c005561` (Linux smoke test on the runner: started, rendered, quit, no script errors). The local
+pre-builds (same SHA and number, not published) also started and reached the title under xvfb; the Windows
+PE is x86-64 GUI with version 0.1.0.138 and imports only Windows system DLLs.
+
+Workflow fixes made on the way (all `.github` only): Pillow for the Windows icon on the runner; the tag
+goes on the run's own commit (GitHub refuses a workflow-created tag on an older commit, as for
+apk-release.yml); the post-publish re-download check now maps GitHub's dotted asset names back (Build 138
+itself published correctly but this check reported its files "missing").
 
 ## Audio-crash safety (the r5 workaround is in all three builds)
 
@@ -96,18 +120,18 @@ existing saves; left as is.
 
 ## Owner test instructions
 
-**Android (Pixel 10 Pro XL):** download `Mote Build 138 APK.apk`, install over the existing app (saves are
+**Android (Pixel 10 Pro XL):** download `Mote.Build.138.APK.apk`, install over the existing app (saves are
 kept; same signing key). Settings > About should show build 138 and runtime r5. The APK contains the c005561
 game, which is newer than the published `dev-000111`. Run docs/DEVICE_CHECKLIST.md A1-A12 (most important:
 A3 positional sound, A5 15 minutes of play, A6/A7 background and lock screen, A11 return to title / new run).
 
-**Windows (desktop and laptop):** download `Mote Build 138 EXE.zip`, extract the whole folder, run
+**Windows (desktop and laptop):** download `Mote.Build.138.EXE.zip`, extract the whole folder, run
 `Mote Build 138\Mote.exe` (SmartScreen may warn about an unsigned app: More info > Run anyway). It starts
 fullscreen; F11 or Alt+Enter toggles windowed. Test keyboard and mouse, then a controller; sound;
 quit and relaunch to check Continue. Saves: `%APPDATA%\Godot\app_userdata\Mote\`.
 
-**Steam Deck:** in Desktop Mode download `Mote Build 138 Linux.tar.gz`, right-click > Extract here (or
-`tar -xzf "Mote Build 138 Linux.tar.gz"`). In the folder `Mote Build 138`, the executable is
+**Steam Deck:** in Desktop Mode download `Mote.Build.138.Linux.tar.gz`, right-click > Extract here (or
+`tar -xzf Mote.Build.138.Linux.tar.gz`). In the folder `Mote Build 138`, the executable is
 `Mote.x86_64` (already executable; if not: Properties > Permissions > Is executable, or
 `chmod +x Mote.x86_64`). Steam > Games > Add a Non-Steam Game to My Library > Browse > `Mote.x86_64`.
 Return to Gaming Mode, launch Mote from the library (Non-Steam). Test controller-only navigation, gameplay,
