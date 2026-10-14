@@ -30,7 +30,7 @@ func _ready() -> void:
 	cm.top_radius = 0.04
 	cm.bottom_radius = 0.07
 	cm.height = 0.5
-	cm.radial_segments = 6
+	cm.radial_segments = 12
 	stem.mesh = cm
 	stem.material_override = stem_mat
 	stem.position = Vector3(0, 0.25, 0)
@@ -51,8 +51,8 @@ func _ready() -> void:
 		var s := SphereMesh.new()
 		s.radius = 0.16
 		s.height = 0.32
-		s.radial_segments = 8
-		s.rings = 4
+		s.radial_segments = 14
+		s.rings = 7
 		leaf.mesh = s
 		leaf.material_override = _petal_mat
 		leaf.scale = Vector3(0.45, 1.0, 0.18)
@@ -109,10 +109,27 @@ func _process(dt: float) -> void:
 			var p: Vector3 = hit.position if not hit.is_empty() else ball.surface_point(dir)
 			global_transform = Transform3D(MossBall.frame_at(ball.up_at(p), 0.0), p - ball.up_at(p) * 0.05)
 			_ready_pos = true
+	var was_open := _open
 	_open = move_toward(_open, 1.0 if active else 0.0, dt * 1.4)
 	_bright = maxf(0.0, _bright - dt)
+	# (v107 hygiene: a settled bloom far from the camera (or not drawn) skips its petal sway and glow
+	# pulse; too far to see either. Opening, closing or brightening always animates.)
+	var settled := is_equal_approx(was_open, _open) and _bright <= 0.0
+	if settled and _ready_pos and (not is_visible_in_tree() or _far_from_camera()):
+		return
 	for p in _petals:
 		p.rotation.x = lerpf(0.15, 1.15, smoothstep(0.0, 1.0, _open)) + sin(_t * 1.5) * 0.04
 	var e := _open * (1.6 + sin(_t * 2.0) * 0.3) + _bright * 4.0
 	_petal_mat.emission_energy_multiplier = e * 0.5
 	_glow_mat.emission_energy_multiplier = 0.3 + e * 1.5
+
+
+## Beyond FAR_M of the camera (checked against the game's camera; never when there is none).
+const FAR_M := 45.0
+
+
+func _far_from_camera() -> bool:
+	var g := Game.inst
+	if g == null or g.cam == null:
+		return false
+	return g.cam.global_position.distance_squared_to(global_position) > FAR_M * FAR_M

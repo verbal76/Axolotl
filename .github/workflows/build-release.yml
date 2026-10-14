@@ -1,0 +1,243 @@
+name: Build & Release (coordinated)
+
+# The studio's one coordinated numbered build (standard §5-§9; docs/RELEASES.md): ONE source SHA, ONE
+# build number, the selected platforms, ONE GitHub Release "Mote Build NN" (tag build-NN) holding
+#   Mote Build NN APK.apk   Mote Build NN EXE.zip   Mote Build NN Linux.tar.gz
+#   build-manifest.json     checksums.sha256
+# Runs only when asked: by hand (Actions > Build & Release > Run workflow) or by a push that changes
+# .github/build-release-request.json. Never on an ordinary push, merge or tag; it never publishes an
+# OTA and never uploads to Steam or Google Play.
+# Android: the APK comes from a Build & Verify run (it holds the signing secrets) built from the same
+# SHA; its Android build (versionCode) is the build number, so the APK and the coordinated build share
+# one number. Windows / Linux are exported here by tools/build.py from that SHA.
+on:
+  workflow_dispatch:
+    inputs:
+      platform:
+        type: choice
+        options: [all, android, windows, linux]
+        default: all
+      source_sha:
+        description: Exact approved commit (on the release branch)
+        required: true
+      build_number:
+        description: Coordinated build number (with Android, the APK's Android build)
+        required: true
+      destination:
+        type: choice
+        options: [github_releases, local_only]
+        default: github_releases
+      apk_run:
+        description: Build & Verify run id whose APK to release (platform all/android)
+        required: false
+  push:
+    branches: [claude/mote-game-continuation-bov2x9]
+    paths: [".github/build-release-request.json"]
+
+permissions:
+  contents: read
+
+concurrency:
+  group: build-release
+  cancel-in-progress: false
+
+env:
+  GODOT_VERSION: 4.7.2
+  GODOT_BASE: https://github.com/godotengine/godot/releases/download/4.7.2-stable
+
+jobs:
+  plan:
+    name: Source, number and platforms
+    runs-on: ubuntu-latest
+    permissions:
+      contents: read
+      actions: read
+    outputs:
+      sha: ${{ steps.p.outputs.sha }}
+      build: ${{ steps.p.outputs.build }}
+      destination: ${{ steps.p.outputs.destination }}
+      apk_run: ${{ steps.p.outputs.apk_run }}
+      android: ${{ steps.p.outputs.android }}
+      desktop: ${{ steps.p.outputs.desktop }}
+      covered: ${{ steps.p.outputs.covered }}
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          fetch-depth: 0
+      - id: p
+        env:
+          GH_TOKEN: ${{ github.token }}
+        run: |
+          if [ "${{ github.event_name }}" = "workflow_dispatch" ]; then
+            PLATFORM="${{ inputs.platform }}"; SHA="${{ inputs.source_sha }}"; BUILD="${{ inputs.build_number }}"
+            DEST="${{ inputs.destination }}"; APK_RUN="${{ inputs.apk_run }}"
+          else
+            R=.github/build-release-request.json
+            PLATFORM=$(jq -r '.platform // "all"' $R); SHA=$(jq -r .source_sha $R); BUILD=$(jq -r .build_number $R)
+            DEST=$(jq -r '.destination // "github_releases"' $R); APK_RUN=$(jq -r '.apk_run // ""' $R)
+          fi
+          echo "$BUILD" | grep -Eq '^[0-9]+$' || { echo "::error::build number must be a whole number"; exit 1; }
+          case "$PLATFORM" in all|android|windows|linux) ;; *) echo "::error::bad platform $PLATFORM"; exit 1;; esac
+          case "$DEST" in github_releases|local_only) ;; *) echo "::error::bad destination $DEST"; exit 1;; esac
+          SHA=$(git rev-parse --verify "$SHA^{commit}") || { echo "::error::unknown commit"; exit 1; }
+          # Authorised lineage: on the release branch and containing every earlier coordinated build.
+          python3 tools/release_guard.py check --sha "$SHA" --contains-published 'build-*'
+          # Never reuse a build number: build-NN must not exist and NN must exceed every earlier one.
+          if git rev-parse -q --verify "refs/tags/build-$BUILD" >/dev/null; then echo "::error::build-$BUILD already exists"; exit 1; fi
+          MAX=$(git tag -l 'build-*' | sed 's/^build-//' | grep -E '^[0-9]+$' | sort -n | tail -1)
+          if [ -n "$MAX" ] && [ "$BUILD" -le "$MAX" ]; then echo "::error::build $BUILD is not above the last build ($MAX)"; exit 1; fi
+          ANDROID=false; DESKTOP='[]'
+          case "$PLATFORM" in all) ANDROID=true; DESKTOP='["linux","windows"]';; android) ANDROID=true;; windows) DESKTOP='["windows"]';; linux) DESKTOP='["linux"]';; esac
+          if [ "$ANDROID" = true ]; then echo "$APK_RUN" | grep -Eq '^[0-9]+$' || { echo "::error::Android needs apk_run (a Build & Verify run of this SHA)"; exit 1; }; fi
+          # Tests already passed on this exact SHA in an OTA publish or Build & Verify run? Then the
+          # full suites are not repeated here (the fast checks always run).
+          COVERED=false
+          for wf in ota-publish.yml build.yml; do
+            N=$(gh api "repos/$GITHUB_REPOSITORY/actions/workflows/$wf/runs?head_sha=$SHA&status=success&per_page=1" --jq '.total_count' || echo 0)
+            [ "${N:-0}" -gt 0 ] && COVERED=true
+          done
+          { echo "sha=$SHA"; echo "build=$BUILD"; echo "destination=$DEST"; echo "apk_run=$APK_RUN"; echo "android=$ANDROID"
+            echo "desktop=$DESKTOP"; echo "covered=$COVERED"; } >> "$GITHUB_OUTPUT"
+          echo "Mote Build $BUILD from $SHA: platform $PLATFORM, destination $DEST, tests already passed: $COVERED"
+
+  tests:
+    name: Tests
+    needs: plan
+    permissions:
+      contents: read
+    uses: ./.github/workflows/tests.yml
+    with:
+      ref: ${{ needs.plan.outputs.sha }}
+      full: ${{ needs.plan.outputs.covered != 'true' }}
+
+  desktop:
+    name: Build ${{ matrix.platform }}
+    needs: [plan, tests]
+    if: needs.plan.outputs.desktop != '[]'
+    runs-on: ubuntu-latest
+    timeout-minutes: 45
+    strategy:
+      fail-fast: true
+      matrix:
+        platform: ${{ fromJSON(needs.plan.outputs.desktop) }}
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          ref: ${{ needs.plan.outputs.sha }}
+      - name: Install Godot + export templates
+        run: |
+          curl -sSL -o godot.zip "$GODOT_BASE/Godot_v${GODOT_VERSION}-stable_linux.x86_64.zip"
+          unzip -q godot.zip && sudo mv Godot_v${GODOT_VERSION}-stable_linux.x86_64 /usr/local/bin/godot
+          curl -sSL -o tpl.tpz "$GODOT_BASE/Godot_v${GODOT_VERSION}-stable_export_templates.tpz"
+          mkdir -p ~/.local/share/godot/export_templates/${GODOT_VERSION}.stable
+          unzip -q tpl.tpz -d tpl && mv tpl/templates/* ~/.local/share/godot/export_templates/${GODOT_VERSION}.stable/
+          rm -rf tpl tpl.tpz godot.zip
+      - name: "Pillow (Windows only: tools/build.py makes the exe icon with it; not on the runner image)"
+        if: matrix.platform == 'windows'
+        run: |
+          python3 -c "import PIL" 2>/dev/null || sudo apt-get install -y -qq python3-pil >/dev/null
+          python3 -c "import PIL; print('Pillow', PIL.__version__)"
+      - name: Export and package
+        run: |
+          godot --headless --path . --import || true
+          git checkout -- . && git status --porcelain --untracked-files=no
+          python3 tools/build.py build --platform ${{ matrix.platform }} --sha ${{ needs.plan.outputs.sha }} --build ${{ needs.plan.outputs.build }} --out dist
+      - name: "Smoke test (Linux: the packaged build starts, renders and quits)"
+        if: matrix.platform == 'linux'
+        run: |
+          sudo apt-get update -qq && sudo apt-get install -y -qq xvfb mesa-vulkan-drivers >/dev/null
+          mkdir run && tar -C run -xzf "dist/Mote Build ${{ needs.plan.outputs.build }} Linux.tar.gz"
+          cd "run/Mote Build ${{ needs.plan.outputs.build }}"
+          timeout 600 xvfb-run -a -s "-screen 0 1280x800x24" ./Mote.x86_64 --rendering-method mobile --quit-after 300 > smoke.log 2>&1
+          ! grep -E "SCRIPT ERROR|Parse Error" smoke.log
+      - uses: actions/upload-artifact@v4
+        with:
+          name: build-${{ needs.plan.outputs.build }}-${{ matrix.platform }}
+          path: dist/
+          retention-days: 7
+
+  android:
+    name: Android APK (from Build & Verify)
+    needs: [plan, tests]
+    if: needs.plan.outputs.android == 'true'
+    runs-on: ubuntu-latest
+    permissions:
+      contents: read
+      actions: read
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          fetch-depth: 0
+      - uses: actions/download-artifact@v4
+        with:
+          pattern: mote-android-*-b${{ needs.plan.outputs.build }}
+          merge-multiple: true
+          run-id: ${{ needs.plan.outputs.apk_run }}
+          github-token: ${{ github.token }}
+          path: apk
+      - name: Same source, same number, same bytes
+        run: |
+          APK=$(jq -r .apk.file apk/build-info.json)
+          python3 tools/build.py apk --apk "apk/$APK" --build-info apk/build-info.json \
+            --sha ${{ needs.plan.outputs.sha }} --build ${{ needs.plan.outputs.build }} --out dist
+      - uses: actions/upload-artifact@v4
+        with:
+          name: build-${{ needs.plan.outputs.build }}-android
+          path: dist/
+          retention-days: 7
+
+  release:
+    name: Manifest, checksums, release
+    needs: [plan, desktop, android]
+    # Every selected platform must have succeeded: never a partial build presented as complete.
+    if: ${{ !cancelled() && needs.plan.result == 'success' && (needs.desktop.result == 'success' || needs.desktop.result == 'skipped') && (needs.android.result == 'success' || needs.android.result == 'skipped') && !(needs.desktop.result == 'skipped' && needs.android.result == 'skipped') }}
+    runs-on: ubuntu-latest
+    permissions:
+      contents: write
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          fetch-depth: 0
+      - uses: actions/download-artifact@v4
+        with:
+          pattern: build-${{ needs.plan.outputs.build }}-*
+          merge-multiple: true
+          path: dist
+      - name: Manifest and checksums (verified against the files)
+        env:
+          BUILD_RUN_URL: ${{ github.server_url }}/${{ github.repository }}/actions/runs/${{ github.run_id }}
+        run: |
+          python3 tools/build.py manifest --dir dist --sha ${{ needs.plan.outputs.sha }} --build ${{ needs.plan.outputs.build }}
+          cat dist/build-manifest.json
+      - uses: actions/upload-artifact@v4
+        with:
+          name: Mote-Build-${{ needs.plan.outputs.build }}
+          path: dist/
+          retention-days: 7
+      - name: GitHub Release "Mote Build ${{ needs.plan.outputs.build }}"
+        if: needs.plan.outputs.destination == 'github_releases'
+        env:
+          GH_TOKEN: ${{ github.token }}
+          N: ${{ needs.plan.outputs.build }}
+          SHA: ${{ needs.plan.outputs.sha }}
+        run: |
+          cd dist
+          printf '%s\n' "# Mote Build $N" "" "Playtest build. Download the file for your device:" \
+            "- Android phone: Mote Build $N APK.apk (install over the existing Mote app; saves are kept)" \
+            "- Windows: Mote Build $N EXE.zip (unzip, run Mote.exe)" \
+            "- Linux / Steam Deck: Mote Build $N Linux.tar.gz (extract, run Mote.x86_64)" "" \
+            "Source commit $SHA. Checksums: checksums.sha256; details: build-manifest.json." > notes.md
+          FILES=(); for f in "Mote Build $N "* build-manifest.json checksums.sha256; do FILES+=("$f"); done
+          # The tag goes on the commit this run started from (the release-branch head, which contains $SHA;
+          # the plan job checked that): GitHub refuses (403) a workflow-created tag on an older source
+          # commit (Build 138, as for apk-release.yml on 2026-10-12). The build itself is $SHA (manifest, notes).
+          gh release create "build-$N" --repo "$GITHUB_REPOSITORY" --target "$GITHUB_SHA" --title "Mote Build $N" \
+            --notes-file notes.md --prerelease --latest=false "${FILES[@]}"
+          # Re-download and verify what was published.
+          mkdir ../check && cd ../check
+          gh release download "build-$N" --repo "$GITHUB_REPOSITORY"
+          # GitHub stores asset names with dots for spaces ("Mote.Build.NN.APK.apk"); restore the names
+          # the manifest records before verifying (Build 138 published fine but failed this check).
+          for f in "Mote.Build.$N."*; do [ -e "$f" ] && mv "$f" "Mote Build $N ${f#"Mote.Build.$N."}"; done
+          python3 ../tools/build.py verify --dir .
+          echo "Published: ${{ github.server_url }}/${{ github.repository }}/releases/tag/build-$N"

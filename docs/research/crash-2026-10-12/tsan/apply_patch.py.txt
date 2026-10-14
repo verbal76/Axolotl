@@ -1,0 +1,54 @@
+# Applies the proposed engine fix for the 4.7.2 bus-details use-after-free to a Godot source tree.
+import pathlib, sys
+root = pathlib.Path(sys.argv[1])
+h = root / "servers/audio/audio_server.h"
+c = root / "servers/audio/audio_server.cpp"
+hs = h.read_text(); cs = c.read_text()
+def rep(s, a, b):
+    assert a in s, a[:80]
+    return s.replace(a, b, 1)
+hs = rep(hs, "\tuint64_t mix_count = 0;",
+ "\t// Mix steps started and finished (audio thread; read on the main thread). A step that loaded a\n"
+ "\t// playback's bus details pointer has started before any later replacement of it.\n"
+ "\tstd::atomic<uint64_t> mix_count = 0;\n"
+ "\tstd::atomic<uint64_t> mix_count_done = 0;")
+hs = rep(hs, "\t// TODO document if this is necessary.\n\tSafeList<AudioStreamPlaybackBusDetails *> bus_details_graveyard_frame_old;",
+ "\t// Replaced bus details wait here until every mix step that may have read them has finished:\n"
+ "\t// freed once mix_count_done reaches the mix_count seen when they were retired. (Previously they\n"
+ "\t// were freed two main-thread frames later regardless, a use-after-free when a mix step outlasted\n"
+ "\t// two frames.) Main thread only.\n"
+ "\tstruct RetiredBusDetails {\n\t\tAudioStreamPlaybackBusDetails *details = nullptr;\n\t\tuint64_t started = 0;\n\t};\n"
+ "\tLocalVector<RetiredBusDetails> bus_details_retired;")
+cs = rep(cs, "void AudioServer::_driver_process(int p_frames, int32_t *p_buffer) {\n\tmix_count++;",
+ "void AudioServer::_driver_process(int p_frames, int32_t *p_buffer) {\n\tmix_count.fetch_add(1, std::memory_order_acq_rel);")
+cs = rep(cs, "#ifdef DEBUG_ENABLED\n\tprof_time.add(OS::get_singleton()->get_ticks_usec() - prof_ticks);\n#endif\n}\n\nvoid AudioServer::_mix_step() {",
+ "#ifdef DEBUG_ENABLED\n\tprof_time.add(OS::get_singleton()->get_ticks_usec() - prof_ticks);\n#endif\n"
+ "\t// Every read of bus details by this step is done: anything retired before it started may go.\n"
+ "\tmix_count_done.fetch_add(1, std::memory_order_release);\n}\n\nvoid AudioServer::_mix_step() {")
+cs = rep(cs, "uint64_t AudioServer::get_mix_count() const {\n\treturn mix_count;",
+ "uint64_t AudioServer::get_mix_count() const {\n\treturn mix_count.load(std::memory_order_acquire);")
+cs = rep(cs, "\tmix_count = 0;", "\tmix_count.store(0);\n\tmix_count_done.store(0);")
+cs = rep(cs,
+ "\tfor (AudioStreamPlaybackBusDetails *bus_details : bus_details_graveyard_frame_old) {\n"
+ "\t\tbus_details_graveyard_frame_old.erase(bus_details, [](AudioStreamPlaybackBusDetails *d) { delete d; });\n\t}\n"
+ "\tfor (AudioStreamPlaybackBusDetails *bus_details : bus_details_graveyard) {\n"
+ "\t\tbus_details_graveyard_frame_old.insert(bus_details);\n\t\tbus_details_graveyard.erase(bus_details);\n\t}\n"
+ "\tbus_details_graveyard.maybe_cleanup();\n\tbus_details_graveyard_frame_old.maybe_cleanup();",
+ "\t// Retire what was replaced since the last call, stamped with the mix steps started so far: a\n"
+ "\t// step that still holds one of these pointers is among them.\n"
+ "\tconst uint64_t started = mix_count.load(std::memory_order_acquire);\n"
+ "\tfor (AudioStreamPlaybackBusDetails *bus_details : bus_details_graveyard) {\n"
+ "\t\tbus_details_retired.push_back({ bus_details, started });\n\t\tbus_details_graveyard.erase(bus_details);\n\t}\n"
+ "\tbus_details_graveyard.maybe_cleanup();\n"
+ "\t// Free those whose readers have all finished.\n"
+ "\tconst uint64_t done = mix_count_done.load(std::memory_order_acquire);\n"
+ "\tfor (uint32_t i = 0; i < bus_details_retired.size();) {\n"
+ "\t\tif (done >= bus_details_retired[i].started) {\n"
+ "\t\t\tdelete bus_details_retired[i].details;\n\t\t\tbus_details_retired.remove_at_unordered(i);\n"
+ "\t\t} else {\n\t\t\ti++;\n\t\t}\n\t}")
+cs = rep(cs, "AudioServer::~AudioServer() {\n\t// Cleanup resources while we still have an active AudioServer singleton,\n\t// for resources that depend on the singleton still existing.\n\t_cleanup_lists();",
+ "AudioServer::~AudioServer() {\n\t// Cleanup resources while we still have an active AudioServer singleton,\n\t// for resources that depend on the singleton still existing.\n\t_cleanup_lists();\n"
+ "\t// The driver has stopped: nothing can still be reading these.\n"
+ "\tfor (const RetiredBusDetails &r : bus_details_retired) {\n\t\tdelete r.details;\n\t}\n\tbus_details_retired.clear();")
+h.write_text(hs); c.write_text(cs)
+print("patched")

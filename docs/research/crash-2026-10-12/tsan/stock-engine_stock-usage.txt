@@ -1,0 +1,143 @@
+# stock-engine_stock-usage.txt: 3 ThreadSanitizer report(s), 90 s run, Godot 4.7.2 template_debug built with use_tsan=yes (gcc 13)
+
+==================
+WARNING: ThreadSanitizer: data race (pid=16656)
+  Write of size 8 at 0x72400000c408 by main thread:
+    #0 StringName::unref() <null> 
+    #1 std::_Function_handler<void (AudioServer::AudioStreamPlaybackBusDetails*), AudioServer::_cleanup_lists()::{lambda(AudioServer::AudioStreamPlaybackBusDetails*)#1}>::_M_invoke(std::_Any_data const&, AudioServer::AudioStreamPlaybackBusDetails*&&) <null> 
+    #2 AudioServer::_cleanup_lists() <null> 
+    #3 AudioServer::update() <null> 
+    #4 Main::iteration() <null> 
+    #5 OS_LinuxBSD::run() <null> 
+
+  Previous read of size 8 at 0x72400000c408 by thread T6 (mutexes: write M0):
+    #0 StringName::StringName(StringName const&) <null> 
+    #1 AudioServer::_mix_step() <null> 
+    #2 AudioServer::_driver_process(int, int*) <null> 
+    #3 AudioDriver::audio_server_process(int, int*, bool) <null> 
+    #4 AudioDriverDummy::thread_func(void*) <null> 
+    #5 Thread::callback(unsigned long, Thread::Settings const&, void (*)(void*), void*) <null> 
+
+  As if synchronized via sleep:
+    #0 nanosleep ../../../../src/libsanitizer/tsan/tsan_interceptors_posix.cpp:397 
+    #1 OS_Unix::delay_usec(unsigned int) const <null> 
+    #2 OS::add_frame_delay(bool, bool) <null> 
+    #3 Main::iteration() <null> 
+    #4 OS_LinuxBSD::run() <null> 
+    #5 main <null> 
+
+  Location is heap block of size 248 at 0x72400000c400 allocated by main thread:
+    #0 operator new(unsigned long) ../../../../src/libsanitizer/tsan/tsan_new_delete.cpp:64 
+    #1 AudioServer::set_playback_bus_volumes_linear(Ref<AudioStreamPlayback>, HashMap<StringName, Vector<AudioFrame>, HashMapHasherDefault, HashMapComparatorDefault<StringName, void>, DefaultTypedAllocator<HashMapElement<StringName, Vector<AudioFrame> > > > const&) <null> 
+    #2 AudioStreamPlayer3D::_update_panning() <null> 
+    #3 AudioStreamPlayer3D::_notification(int) <null> 
+    #4 AudioStreamPlayer3D::_notification_forwardv(int) <null> 
+    #5 Object::_notification_forward(int) <null> 
+
+  Mutex M0 (0x55d50ff45c70) created at:
+    #0 pthread_mutex_lock ../../../../src/libsanitizer/tsan/tsan_interceptors_posix.cpp:1341 
+    #1 AudioDriverDummy::lock() <null> 
+    #2 AudioServer::set_bus_count(int) <null> 
+    #3 AudioServer::init() <null> 
+    #4 Main::setup2(bool) <null> 
+    #5 Main::setup(char const*, int, char**, bool) <null> 
+
+  Thread T6 (tid=16664, running) created by main thread at:
+    #0 pthread_create ../../../../src/libsanitizer/tsan/tsan_interceptors_posix.cpp:1022 
+    #1 std::thread::_M_start_thread(std::unique_ptr<std::thread::_State, std::default_delete<std::thread::_State> >, void (*)()) <null> 
+    #2 AudioDriverDummy::init() <null> 
+    #3 AudioDriverManager::initialize(int) <null> 
+    #4 Main::setup2(bool) <null> 
+    #5 Main::setup(char const*, int, char**, bool) <null> 
+
+SUMMARY: ThreadSanitizer: data race (godot_tsan_stock+0x3e8a053) in StringName::unref()
+==================
+==================
+WARNING: ThreadSanitizer: data race (pid=16656)
+  Write of size 8 at 0x72400000c410 by main thread:
+    #0 operator delete(void*, unsigned long) ../../../../src/libsanitizer/tsan/tsan_new_delete.cpp:150 
+    #1 std::_Function_handler<void (AudioServer::AudioStreamPlaybackBusDetails*), AudioServer::_cleanup_lists()::{lambda(AudioServer::AudioStreamPlaybackBusDetails*)#1}>::_M_invoke(std::_Any_data const&, AudioServer::AudioStreamPlaybackBusDetails*&&) <null> 
+    #2 AudioServer::_cleanup_lists() <null> 
+    #3 AudioServer::update() <null> 
+    #4 Main::iteration() <null> 
+    #5 OS_LinuxBSD::run() <null> 
+
+  Previous read of size 8 at 0x72400000c410 by thread T6 (mutexes: write M0):
+    #0 StringName::StringName(StringName const&) <null> 
+    #1 AudioServer::_mix_step() <null> 
+    #2 AudioServer::_driver_process(int, int*) <null> 
+    #3 AudioDriver::audio_server_process(int, int*, bool) <null> 
+    #4 AudioDriverDummy::thread_func(void*) <null> 
+    #5 Thread::callback(unsigned long, Thread::Settings const&, void (*)(void*), void*) <null> 
+
+  Mutex M0 (0x55d50ff45c70) created at:
+    #0 pthread_mutex_lock ../../../../src/libsanitizer/tsan/tsan_interceptors_posix.cpp:1341 
+    #1 AudioDriverDummy::lock() <null> 
+    #2 AudioServer::set_bus_count(int) <null> 
+    #3 AudioServer::init() <null> 
+    #4 Main::setup2(bool) <null> 
+    #5 Main::setup(char const*, int, char**, bool) <null> 
+
+  Thread T6 (tid=16664, running) created by main thread at:
+    #0 pthread_create ../../../../src/libsanitizer/tsan/tsan_interceptors_posix.cpp:1022 
+    #1 std::thread::_M_start_thread(std::unique_ptr<std::thread::_State, std::default_delete<std::thread::_State> >, void (*)()) <null> 
+    #2 AudioDriverDummy::init() <null> 
+    #3 AudioDriverManager::initialize(int) <null> 
+    #4 Main::setup2(bool) <null> 
+    #5 Main::setup(char const*, int, char**, bool) <null> 
+
+SUMMARY: ThreadSanitizer: data race ../../../../src/libsanitizer/tsan/tsan_new_delete.cpp:150 in operator delete(void*, unsigned long)
+==================
+==================
+WARNING: ThreadSanitizer: data race (pid=16656)
+  Read of size 8 at 0x725400016e28 by main thread:
+    #0 AudioServer::get_mix_count() const <null> 
+    #1 AudioStreamPlayer3D::_notification(int) <null> 
+    #2 AudioStreamPlayer3D::_notification_forwardv(int) <null> 
+    #3 Object::_notification_forward(int) <null> 
+    #4 SceneTree::_process_group(SceneTree::ProcessGroup*, bool) <null> 
+    #5 SceneTree::_process(bool) <null> 
+
+  Previous write of size 8 at 0x725400016e28 by thread T6 (mutexes: write M0):
+    #0 AudioServer::_driver_process(int, int*) <null> 
+    #1 AudioDriver::audio_server_process(int, int*, bool) <null> 
+    #2 AudioDriverDummy::thread_func(void*) <null> 
+    #3 Thread::callback(unsigned long, Thread::Settings const&, void (*)(void*), void*) <null> 
+    #4 std::thread::_State_impl<std::thread::_Invoker<std::tuple<void (*)(unsigned long, Thread::Settings const&, void (*)(void*), void*), unsigned long, Thread::Settings, void (*)(void*), void*> > >::_M_run() <null> 
+    #5 execute_native_thread_routine <null> 
+
+  As if synchronized via sleep:
+    #0 nanosleep ../../../../src/libsanitizer/tsan/tsan_interceptors_posix.cpp:397 
+    #1 OS_Unix::delay_usec(unsigned int) const <null> 
+    #2 OS::add_frame_delay(bool, bool) <null> 
+    #3 Main::iteration() <null> 
+    #4 OS_LinuxBSD::run() <null> 
+    #5 main <null> 
+
+  Location is heap block of size 600 at 0x725400016d00 allocated by main thread:
+    #0 malloc ../../../../src/libsanitizer/tsan/tsan_interceptors_posix.cpp:665 
+    #1 void* Memory::alloc_static<false>(unsigned long, bool) <null> 
+    #2 operator new(unsigned long, DefaultAllocator) <null> 
+    #3 Main::setup2(bool) <null> 
+    #4 Main::setup(char const*, int, char**, bool) <null> 
+    #5 main <null> 
+
+  Mutex M0 (0x55d50ff45c70) created at:
+    #0 pthread_mutex_lock ../../../../src/libsanitizer/tsan/tsan_interceptors_posix.cpp:1341 
+    #1 AudioDriverDummy::lock() <null> 
+    #2 AudioServer::set_bus_count(int) <null> 
+    #3 AudioServer::init() <null> 
+    #4 Main::setup2(bool) <null> 
+    #5 Main::setup(char const*, int, char**, bool) <null> 
+
+  Thread T6 (tid=16664, running) created by main thread at:
+    #0 pthread_create ../../../../src/libsanitizer/tsan/tsan_interceptors_posix.cpp:1022 
+    #1 std::thread::_M_start_thread(std::unique_ptr<std::thread::_State, std::default_delete<std::thread::_State> >, void (*)()) <null> 
+    #2 AudioDriverDummy::init() <null> 
+    #3 AudioDriverManager::initialize(int) <null> 
+    #4 Main::setup2(bool) <null> 
+    #5 Main::setup(char const*, int, char**, bool) <null> 
+
+SUMMARY: ThreadSanitizer: data race (godot_tsan_stock+0x24ad9ad) in AudioServer::get_mix_count() const
+==================
+ThreadSanitizer: reported 3 warnings

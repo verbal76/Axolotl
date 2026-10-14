@@ -1,5 +1,10 @@
 shader_type spatial;
 render_mode cull_disabled, diffuse_lambert, specular_schlick_ggx;
+#include "res://shaders/creature_light.gdshaderinc"
+// The one light model every world and creature material shares (mote_shade.gdshaderinc).
+#define MOTE_SHADE_TWO_SIDED
+#define MOTE_SHADE_RIM 0.28
+#include "res://shaders/mote_shade.gdshaderinc"
 // Feathery external gill. Vertex colour carries the warm-core to hot-pink-fringe gradient;
 // UV.y runs base (0) to tip (1), UV.x is distance from the stalk (0) to the fringe (1).
 // These gills double as the axolotl's health display (see AxolotlModel._update_gills).
@@ -33,4 +38,6 @@ void fragment() {
 	RIM_TINT = 0.7;
 	float fringe = smoothstep(0.35, 1.0, UV.x);
 	EMISSION = mix(c, glow_tint, 0.35 + 0.4 * fringe) * glow * (1.0 - desat);
+	// The tank's caustic light on him/it (creature_light).
+	EMISSION += creature_caustics(ALBEDO, VERTEX, NORMAL, INV_VIEW_MATRIX);
 }

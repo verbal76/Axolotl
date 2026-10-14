@@ -20,6 +20,14 @@ One material for each ball's ground, its mounds and its caves.
   - the moss/stone boundary and the rock strata;
   - detail;
   - a soft grain of moss tufts, sampled on a rotated grid so it never visibly repeats.
+- **Moss cushions and relief (E6f, 2026-10-02).** Up close the moss used to read as marble swirls
+  and radial streaks: the mid layer is warped by the macro layer, and the macro layer's fine grain,
+  magnified by a 14 m warp, smeared it. The macro layer is now read from a coarse mip (24 times the
+  filter footprint) and the warp is 8 m (`warp`). Seen from afar, the balls show the same broad
+  bands as before. The tuft and detail samples also shape the moss into clumps a few centimetres across,
+  with shaded gaps and paler tips. Within about 10–30 m of the camera, a bump from the same samples
+  (`relief`, 3.5 cm) tilts the normal, so moss clumps and the stone's grain, strata and seams catch
+  the light. It uses screen-space derivatives and adds no texture fetches.
 - **Restoration.** Restoration still turns the moss from grey to green and stays the main thing the
   eye reads. Stone only greys slightly near sick moss.
 - **Per-ball palette.** Each ball's palette in `Levels.PALETTES` sets `moss_*`, `stone_a`,
@@ -66,6 +74,30 @@ open slot inside the wall. The new generator:
   (2.3–2.6 m), and lumps. Expansion 4 can call `LevelBuilder.cave` for new caves and get distinct
   natural shapes. `MeshLib.cave_mound` takes the parameters directly for anything else.
 
+## Stone pillars (`MeshLib.stone_pillar`, `LevelBuilder.stone_column`, `rising_stone`; E6f)
+
+The stepping stones (Mossy Meadow's ravine), the Stone Field and its rising stones (Terrace Steps)
+and the Basalt Columns (Hollow Grotto) used to be plain 14-sided cylinders. They are now stone
+prisms:
+- 7 faces (6 for basalt, 9 for the broad rising stones). The corners are unevenly spaced and sit at
+  slightly different distances from the centre. Each face is lit flat, like split stone.
+- The top is flat at exactly the design height, with a bevelled rim. Its outline is never inside
+  the old radius (the narrowest point is at least 1.0 × radius), so no landing got smaller. Gaps
+  between columns are at most about 0.15 m narrower.
+- The sides lean out slightly going down, with a short flare at the foot. Above the bottom 0.3 m
+  they are steeper than 52° and never overhang, so there is no lip to pull up on. They are buried
+  0.6 m, as the cylinders were.
+- The shape is seeded by position, so it is the same on every launch. Collision is exactly the
+  drawn triangles.
+
+## Stems and trunks (`shaders/plant.gdshader`, `bark`; E6f)
+
+The stem material shows 24 shallow ribs round each stem, wandering with the noise and
+anti-aliased with `fwidth`, so far or thin stems fade to plain. It also has long lighter and darker
+streaks (one extra stretched fetch), a darker foot where the stem leaves the moss, and near the
+camera a bump from the ribs. Before, the stems were smooth tubes. Only the stem material sets
+`bark`; leaves and roots are unchanged.
+
 ## Gill's head
 
 Gill collides as one 0.3 m sphere at his body, but his head is 0.4–0.55 m ahead of it, so walking
@@ -108,3 +140,22 @@ under a software Vulkan renderer. The frame times are a relative proxy, not phon
 - Open views: frame time within run-to-run noise.
 - Cave interior: about 20% slower. The same geometry with the old material costs the same, so this
   is the tunnel filling more of the screen at that camera position, not the material.
+
+### E6f materials (moss relief, stone pillars, stem ribs)
+
+Measured on a quiet machine with `--test=shots --only=perflook` (xvfb, Vulkan Mobile renderer,
+software rasteriser): 3 alternating runs each of the base `7d7dffd` (A) and the E6f branch (B),
+one Godot process at a time. Median ms/frame (a relative proxy, not phone numbers):
+
+| View | A | B | Change |
+|---|---|---|---|
+| ball 1 open moss (10, 30) | 879 | 864 | −2% |
+| ball 1 mounds (−59, 31) | 391 | 394 | +1% |
+| ball 2 (10, 70) | 341 | 341 | 0% |
+| ball 3 stems (10, 110) | 248 | 262 | +6% |
+| ball 1 cave | 294 | 288 | −2% |
+| ball 7 cave | 255 | 273 | +7% |
+| ball 7 first route | 216 | 219 | +1% |
+
+Every view is within run-to-run spread (single runs vary up to ±15%); none is over 10% slower.
+Triangles and draw calls are unchanged within noise.

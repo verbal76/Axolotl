@@ -30,7 +30,7 @@ PY
 "$GODOT" --headless --path "$W" --import >/dev/null 2>&1 || true
 
 echo "-- in-game consumers (title, diagnostics, save metadata, identity separation)"
-"$GODOT" --headless --path "$W" --fixed-fps 60 --max-fps 0 -- --test=unit --only=ota_and_version \
+"$GODOT" --headless --path "$W" --fixed-fps 60 --max-fps 0 -- --test=unit --only=_test_ota_and_version \
     --expect_version="$NEW" --out="$W/out" > "$W/unit.log" 2>&1 || true
 grep -E "\[TEST\] (FAIL|SUMMARY)|version|title_" "$W/unit.log" | grep -v "^\[TEST\] PASS ota_" || true
 grep -qE "\[TEST\] SUMMARY [0-9]+ passed, 0 failed" "$W/unit.log"

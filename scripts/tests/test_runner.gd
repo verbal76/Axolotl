@@ -13,6 +13,9 @@ var _fails := 0
 func _ready() -> void:
 	g = Game.inst
 	out_dir = Settings.test_args.get("out", out_dir)
+	# --org=off: the organic-motion expression layer off for the whole run (on/off comparisons).
+	if Settings.test_args.get("org", "") == "off":
+		OrganicMotion.enabled = false
 	DirAccess.make_dir_recursive_absolute(out_dir)
 	process_mode = Node.PROCESS_MODE_ALWAYS
 	_run.call_deferred()

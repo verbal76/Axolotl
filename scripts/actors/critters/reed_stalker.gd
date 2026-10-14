@@ -40,11 +40,15 @@ var _trail: Array[Vector3] = []
 var _mm: MultiMesh
 var _head: Node3D
 var _frill: MeshInstance3D
+static var _seg_mesh: ArrayMesh
+static var _head_mesh: ArrayMesh
+static var _frill_mesh: ArrayMesh
 var _near_t := 0.0
 
 
 func place(p_ball: MossBall, p_patch: Vector3, p_deg: float, seed_v: int) -> void:
 	setup(p_ball, "stalker", "tall reeds", seed_v)
+	org = OrganicMotion.new(rng.seed, OrganicMotion.STALKER)
 	hp = 2
 	seen_radius = 4.5
 	p_ball.add_child(self)
@@ -71,7 +75,12 @@ func _build() -> void:
 	_mm = MultiMesh.new()
 	_mm.transform_format = MultiMesh.TRANSFORM_3D
 	_mm.use_colors = true
-	_mm.mesh = Critter.sphere(0.2, 8)
+	# (Owner, 2026-10-07: armoured, crested segments with legs, not spheres: CreatureMeshes.)
+	if _seg_mesh == null:
+		_seg_mesh = CreatureMeshes.stalker_segment()
+		_head_mesh = CreatureMeshes.stalker_head()
+		_frill_mesh = CreatureMeshes.stalker_frill()
+	_mm.mesh = _seg_mesh
 	_mm.instance_count = SEGS
 	for i in SEGS:
 		_mm.set_instance_color(i, Color(0.34, 0.4, 0.16) if i % 2 == 0 else Color(0.52, 0.46, 0.2))
@@ -85,11 +94,10 @@ func _build() -> void:
 	_head = Node3D.new()
 	_head.top_level = true
 	add_child(_head)
-	var head := [[Critter.sphere(0.2, 10), Color(0.34, 0.4, 0.16), Critter.xf(Vector3.ZERO, Vector3(0.85, 0.6, 1.5))]]
-	for side in [-1.0, 1.0]:
-		head.append([Critter.sphere(0.04, 6), Color(0.95, 0.85, 0.3), Critter.xf(Vector3(side * 0.1, 0.07, -0.2))])
-	Critter.part(Critter.merge(head), Critter.vc_mat(), _head)
-	_frill = Critter.part(Critter.sphere(0.25, 10), Critter.mat(Color(0.75, 0.4, 0.14)), _head, Vector3(0, 0.06, 0.14), Vector3(1.4, 0.8, 0.2))
+	Critter.part(_head_mesh, Critter.vc_mat(), _head)
+	_frill = Critter.part(_frill_mesh, Critter.vc_mat(), _head, Vector3(0, 0.08, 0.1), Vector3(1.0, 0.45, 1.0))
+	# (Leaning back over the neck, so the fan reads from the side as well as head-on.)
+	_frill.rotation.x = deg_to_rad(-40.0)
 
 
 func _in_patch(pos: Vector3, margin := 0.0) -> bool:
@@ -122,9 +130,20 @@ func tick(dt: float) -> void:
 	var dist := to.length()
 	var hunting := here and _in_patch(p.global_position, 1.5) and dist < NOTICE_R \
 			and not line_blocked(global_position + up * 0.3, p.body_center())
+	# Expression (OrganicMotion): prowling slinks in curves with stop-and-go pauses; stalking keeps a
+	# little of it; the telegraph, pounce and recovery have none.
 	match state:
 		"prowl":
-			_walk_to(_target, 1.0, dt)
+			org.step(dt, 1.0, 1.0, 1.0)
+		"stalk":
+			org.step(dt, 0.3, 0.35, 0.5, false, false)
+		"flee":
+			org.step(dt, 0.0, 0.4, 0.0)
+		_:
+			org.step(dt, 0.0, 0.0, 0.0, true)
+	match state:
+		"prowl":
+			_walk_to(_target, 1.0, dt, true)
 			if global_position.distance_to(_target) < 0.6 or state_t > 8.0:
 				_pick_target()
 				state_t = 0.0
@@ -182,23 +201,44 @@ func _go(s: String) -> void:
 	state_t = 0.0
 
 
-func _walk_to(target: Vector3, speed: float, dt: float) -> void:
+## `glide`: it walks where its head points (prowling: turns are curves, never corners).
+func _walk_to(target: Vector3, speed: float, dt: float, glide := false) -> void:
 	var up := ball.up_at(global_position)
 	var d := target - global_position
 	d -= up * d.dot(up)
 	if d.length() < 0.05:
 		_vel = Vector3.ZERO
 		return
-	var step := d.normalized() * minf(d.length(), speed * dt)
+	var dn := d.normalized()
+	var along := dn
+	var spd := speed
+	if OrganicMotion.enabled and (org.w_path > 0.0005 or org.w_speed > 0.0005):
+		# Expression bends the way it wants to go (straight in at the spot) and its pace.
+		along = dn.rotated(up, org.yaw * smoothstep(0.3, 1.5, d.length()))
+		spd *= org.speed
+		if glide:
+			heading = heading.slerp(along, clampf(dt * 4.0 * org.turn, 0.0, 1.0)).normalized()
+			heading = (heading - up * heading.dot(up)).normalized()
+			along = heading
+	var step := along * minf(d.length(), spd * dt)
 	# Stays in its patch and out of rock.
 	var next := global_position + step
-	if not _in_patch(next, 2.0) or line_blocked(global_position + up * 0.3, next + up * 0.3 + step.normalized() * 0.3):
+	if along != dn and step.length() > 0.0 and _walk_blocked(up, next, step):
+		# (Blocked on its curve: the plain line, as without expression.)
+		step = dn * minf(d.length(), spd * dt)
+		next = global_position + step
+	if step.length() <= 0.0 or _walk_blocked(up, next, step):
 		_pick_target()
 		_vel = Vector3.ZERO
 		return
 	_vel = step / dt
-	heading = heading.slerp(d.normalized(), clampf(dt * 4.0, 0.0, 1.0)).normalized()
+	heading = heading.slerp(dn if along == dn else along, clampf(dt * 4.0, 0.0, 1.0)).normalized()
 	_snap(next)
+
+
+## A step to `nx` would leave its patch or go into rock.
+func _walk_blocked(up: Vector3, nx: Vector3, st: Vector3) -> bool:
+	return not _in_patch(nx, 2.0) or line_blocked(global_position + up * 0.3, nx + up * 0.3 + st.normalized() * 0.3)
 
 
 func _face(dir: Vector3, dt: float) -> void:
@@ -225,8 +265,14 @@ func _update_body(_dt: float) -> void:
 		_mm.set_instance_transform(i, Transform3D(Basis(fwd.cross(u).normalized(), u, -fwd).orthonormalized().scaled(Vector3(sc, sc * 0.7, sc * 1.4)),
 				p + u * (0.16 + rear * 0.25 * maxf(0.0, 1.0 - i * 0.5))))
 	var hp_ := global_position + up * (0.2 + rear * 0.6)
-	_head.global_transform = Transform3D(Basis(heading.cross(up).normalized(), up, -heading).orthonormalized(), hp_)
-	_frill.scale = Vector3(1.4, 0.8 + rear * 1.4, 0.2)
+	var hb := Basis(heading.cross(up).normalized(), up, -heading).orthonormalized()
+	if org != null and (org.look != 0.0 or org.lift != 0.0):
+		# Expression, visual only: the head bobs and scans (its trail, which hit tests use, does not).
+		hp_ += up * org.lift
+		hb = Basis(up, org.look) * hb * Basis(Vector3.RIGHT, org.nod)
+	_head.global_transform = Transform3D(hb, hp_)
+	# (Folded flat along the neck while it prowls; fanned wide and tall as it rears.)
+	_frill.scale = Vector3(0.7 + rear * 0.5, 0.45 + rear * 0.75, 1.0)
 
 
 ## Head and mid-body: the reeds part where it really is. The telegraph thrashes them.
@@ -268,6 +314,9 @@ func hit(stages: int, _from_pos: Vector3) -> bool:
 		return false
 	hp -= stages
 	WaterFX.inst.sparkle(global_position + ball.up_at(global_position) * 0.3, Color(0.9, 0.85, 0.5, 0.9), 10, 1.4, 0.06, 0.6)
+	# (v107: its own hit sound: a short, sharp hiss.)
+	if Juice.enabled:
+		Sfx.play("stalker_hiss", global_position, -7.0, 0.06, 1.5)
 	if hp <= 0:
 		defeated = true
 		gone_at = Game.inst.clock.play_s

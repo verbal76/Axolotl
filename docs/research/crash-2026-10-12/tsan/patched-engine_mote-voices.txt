@@ -1,0 +1,95 @@
+# patched-engine_mote-voices.txt: 2 ThreadSanitizer report(s), 90 s run, Godot 4.7.2 template_debug built with use_tsan=yes (gcc 13)
+
+==================
+WARNING: ThreadSanitizer: data race (pid=17055)
+  Read of size 8 at 0x7218001c37e0 by thread T6 (mutexes: write M0):
+    #0 AudioServer::_mix_step() <null> 
+    #1 AudioServer::_driver_process(int, int*) <null> 
+    #2 AudioDriver::audio_server_process(int, int*, bool) <null> 
+    #3 AudioDriverDummy::thread_func(void*) <null> 
+    #4 Thread::callback(unsigned long, Thread::Settings const&, void (*)(void*), void*) <null> 
+    #5 std::thread::_State_impl<std::thread::_Invoker<std::tuple<void (*)(unsigned long, Thread::Settings const&, void (*)(void*), void*), unsigned long, Thread::Settings, void (*)(void*), void*> > >::_M_run() <null> 
+
+  Previous write of size 8 at 0x7218001c37e0 by main thread:
+    #0 AudioServer::update() <null> 
+    #1 Main::iteration() <null> 
+    #2 OS_LinuxBSD::run() <null> 
+    #3 main <null> 
+
+  As if synchronized via sleep:
+    #0 nanosleep ../../../../src/libsanitizer/tsan/tsan_interceptors_posix.cpp:397 
+    #1 OS_Unix::delay_usec(unsigned int) const <null> 
+    #2 AudioDriverDummy::thread_func(void*) <null> 
+    #3 Thread::callback(unsigned long, Thread::Settings const&, void (*)(void*), void*) <null> 
+    #4 std::thread::_State_impl<std::thread::_Invoker<std::tuple<void (*)(unsigned long, Thread::Settings const&, void (*)(void*), void*), unsigned long, Thread::Settings, void (*)(void*), void*> > >::_M_run() <null> 
+    #5 execute_native_thread_routine <null> 
+
+  Location is heap block of size 96 at 0x7218001c37a0 allocated by main thread:
+    #0 malloc ../../../../src/libsanitizer/tsan/tsan_interceptors_posix.cpp:665 
+    #1 void* Memory::alloc_static<false>(unsigned long, bool) <null> 
+    #2 CowData<AudioServer::Bus::Effect>::push_back(AudioServer::Bus::Effect&&) [clone .isra.0] <null> 
+    #3 AudioServer::add_bus_effect(int, Ref<AudioEffect> const&, int) <null> 
+    #4 MethodBindT<int, Ref<AudioEffect> const&, int>::call(Object*, Variant const**, int, Callable::CallError&) const <null> 
+    #5 GDScriptFunction::call(GDScriptInstance*, Variant const**, int, Callable::CallError&, GDScriptFunction::CallState*) <null> 
+
+  Mutex M0 (0x55f0a6782c70) created at:
+    #0 pthread_mutex_lock ../../../../src/libsanitizer/tsan/tsan_interceptors_posix.cpp:1341 
+    #1 AudioDriverDummy::lock() <null> 
+    #2 AudioServer::set_bus_count(int) <null> 
+    #3 AudioServer::init() <null> 
+    #4 Main::setup2(bool) <null> 
+    #5 Main::setup(char const*, int, char**, bool) <null> 
+
+  Thread T6 (tid=17063, running) created by main thread at:
+    #0 pthread_create ../../../../src/libsanitizer/tsan/tsan_interceptors_posix.cpp:1022 
+    #1 std::thread::_M_start_thread(std::unique_ptr<std::thread::_State, std::default_delete<std::thread::_State> >, void (*)()) <null> 
+    #2 AudioDriverDummy::init() <null> 
+    #3 AudioDriverManager::initialize(int) <null> 
+    #4 Main::setup2(bool) <null> 
+    #5 Main::setup(char const*, int, char**, bool) <null> 
+
+SUMMARY: ThreadSanitizer: data race (godot_tsan_patched+0x24c6797) in AudioServer::_mix_step()
+==================
+==================
+WARNING: ThreadSanitizer: data race (pid=17055)
+  Write of size 8 at 0x7218001c37e0 by main thread:
+    #0 AudioServer::update() <null> 
+    #1 Main::iteration() <null> 
+    #2 OS_LinuxBSD::run() <null> 
+    #3 main <null> 
+
+  Previous write of size 8 at 0x7218001c37e0 by thread T6 (mutexes: write M0):
+    #0 AudioServer::_mix_step() <null> 
+    #1 AudioServer::_driver_process(int, int*) <null> 
+    #2 AudioDriver::audio_server_process(int, int*, bool) <null> 
+    #3 AudioDriverDummy::thread_func(void*) <null> 
+    #4 Thread::callback(unsigned long, Thread::Settings const&, void (*)(void*), void*) <null> 
+    #5 std::thread::_State_impl<std::thread::_Invoker<std::tuple<void (*)(unsigned long, Thread::Settings const&, void (*)(void*), void*), unsigned long, Thread::Settings, void (*)(void*), void*> > >::_M_run() <null> 
+
+  Location is heap block of size 96 at 0x7218001c37a0 allocated by main thread:
+    #0 malloc ../../../../src/libsanitizer/tsan/tsan_interceptors_posix.cpp:665 
+    #1 void* Memory::alloc_static<false>(unsigned long, bool) <null> 
+    #2 CowData<AudioServer::Bus::Effect>::push_back(AudioServer::Bus::Effect&&) [clone .isra.0] <null> 
+    #3 AudioServer::add_bus_effect(int, Ref<AudioEffect> const&, int) <null> 
+    #4 MethodBindT<int, Ref<AudioEffect> const&, int>::call(Object*, Variant const**, int, Callable::CallError&) const <null> 
+    #5 GDScriptFunction::call(GDScriptInstance*, Variant const**, int, Callable::CallError&, GDScriptFunction::CallState*) <null> 
+
+  Mutex M0 (0x55f0a6782c70) created at:
+    #0 pthread_mutex_lock ../../../../src/libsanitizer/tsan/tsan_interceptors_posix.cpp:1341 
+    #1 AudioDriverDummy::lock() <null> 
+    #2 AudioServer::set_bus_count(int) <null> 
+    #3 AudioServer::init() <null> 
+    #4 Main::setup2(bool) <null> 
+    #5 Main::setup(char const*, int, char**, bool) <null> 
+
+  Thread T6 (tid=17063, running) created by main thread at:
+    #0 pthread_create ../../../../src/libsanitizer/tsan/tsan_interceptors_posix.cpp:1022 
+    #1 std::thread::_M_start_thread(std::unique_ptr<std::thread::_State, std::default_delete<std::thread::_State> >, void (*)()) <null> 
+    #2 AudioDriverDummy::init() <null> 
+    #3 AudioDriverManager::initialize(int) <null> 
+    #4 Main::setup2(bool) <null> 
+    #5 Main::setup(char const*, int, char**, bool) <null> 
+
+SUMMARY: ThreadSanitizer: data race (godot_tsan_patched+0x24c05ba) in AudioServer::update()
+==================
+ThreadSanitizer: reported 2 warnings

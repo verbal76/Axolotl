@@ -30,6 +30,9 @@ var hp := 0
 var defeated := false
 ## Distance at which the axolotl discovers the species (and it must be in view: not hidden).
 var seen_radius := 6.0
+## Expression layer (Open Issue #3; OrganicMotion), for the creatures that move: seeded from `rng.seed`
+## (read, never drawn from).
+var org: OrganicMotion = null
 
 
 func setup(p_ball: MossBall, p_species: String, p_habitat: String, seed_v: int) -> void:
@@ -200,10 +203,11 @@ static func xf(pos: Vector3, scl := Vector3.ONE) -> Transform3D:
 	return Transform3D(Basis().scaled(scl), pos)
 
 
-static func sphere(r: float, segs := 10) -> SphereMesh:
+static func sphere(r: float, segs := 18) -> SphereMesh:
 	var s := SphereMesh.new()
 	s.radius = r
 	s.height = r * 2.0
-	s.radial_segments = segs
-	s.rings = maxi(4, segs / 2)
+	# (Polish pass, 2026-10-11: never fewer than 14 sides; the old 4-8 read as faceted beads.)
+	s.radial_segments = maxi(segs, 14)
+	s.rings = maxi(7, s.radial_segments / 2)
 	return s

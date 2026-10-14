@@ -101,7 +101,7 @@ GODOT=godot tools/version_drift_check.sh                                     # p
 GODOT=godot tools/ota_e2e_local.sh                                           # full OTA loop (needs Linux templates)
 python3 tools/ota_runtime.py --check                                         # native layer unchanged?
 ```
-Add `--only=<name>` to the unit run to run a single test.
+Add `--only=<name>[,<name>...]` to the unit run to run exact tests (the `_test_` prefix is optional; a name that matches nothing fails). `--shard=1/2` and `--shard=2/2` run half of the suite each.
 
 ---
 

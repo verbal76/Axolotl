@@ -24,6 +24,20 @@ var cutoff_target := CLEAR_HZ
 var _lowpass: AudioEffectLowPassFilter
 var _out_lowpass: AudioEffectLowPassFilter
 var _water: AudioStreamPlayer
+var _aerator: AudioStreamPlayer
+## The aquarium bed's levels (dB). It fades in at launch, eases under the music once the title's
+## songs start, and in play follows update_mix; every change glides (BED_GLIDE dB/s), never jumps.
+const WATER_DB := -12.0
+const AERATOR_DB := -17.0
+const BED_UNDER_MUSIC_DB := -3.0
+const BED_FADE_IN := 1.5
+const BED_GLIDE := 4.0
+var _water_target := WATER_DB
+var _aerator_target := AERATOR_DB
+var _bed_in := 0.0
+## The bed's gliding levels (their level buses follow them).
+var _water_db := -80.0
+var _aerator_db := -80.0
 var _life: AudioStreamPlayer
 var _travel: AudioStreamPlayer
 var _outside: AudioStreamPlayer
@@ -36,27 +50,68 @@ func _enter_tree() -> void:
 	_setup_buses()
 
 
+## Per-source level buses (2026-10-13, ledger row 37): the ambience bed, the life layer and the travel
+## whoosh change level while they play. A playing player's volume_db write makes Godot 4.7.2 replace its
+## routing data and free the old copy unsynchronised with the audio thread (see SpatialAudio), so
+## their players keep a fixed volume and each level is its bus's volume (a plain value, nothing freed).
+const LEVEL_BUSES := {"Bed.Water": "Ambience", "Bed.Aerator": "Ambience", "Bed.Life": "Ambience", "Travel": "SFX"}
+const SILENT_DB := -80.0
+
+
 func _setup_buses() -> void:
-	if AudioServer.get_bus_index("Music") >= 0:
-		_lowpass = AudioServer.get_bus_effect(AudioServer.get_bus_index("Music"), 0)
-		_out_lowpass = AudioServer.get_bus_effect(AudioServer.get_bus_index("Outside"), 0)
-		return
+	# Idempotent (a reloaded scene or an interrupted earlier setup): each bus and its effects are
+	# created only if missing, so a second AudioDirector never duplicates them. Bus layout changes are
+	# not synchronised with the mix in 4.7.2 (AudioServer.add_bus takes no lock): made with the audio
+	# driver locked, once, during loading.
+	var created := false
+	AudioServer.lock()
 	for bus_name in ["Music", "SFX", "Ambience", "Outside"]:
+		if AudioServer.get_bus_index(bus_name) >= 0:
+			continue
 		AudioServer.add_bus()
 		var i := AudioServer.bus_count - 1
 		AudioServer.set_bus_name(i, bus_name)
 		AudioServer.set_bus_send(i, "Master" if bus_name in ["Music", "SFX"] else "SFX")
-	_lowpass = AudioEffectLowPassFilter.new()
-	_lowpass.cutoff_hz = CLEAR_HZ
-	AudioServer.add_bus_effect(AudioServer.get_bus_index("Music"), _lowpass)
-	_out_lowpass = AudioEffectLowPassFilter.new()
-	_out_lowpass.cutoff_hz = 1600.0
-	AudioServer.add_bus_effect(AudioServer.get_bus_index("Outside"), _out_lowpass)
-	var rev := AudioEffectReverb.new()
-	rev.room_size = 0.6
-	rev.wet = 0.25
-	AudioServer.add_bus_effect(AudioServer.get_bus_index("Outside"), rev)
-	Settings.apply_audio()
+		created = true
+	for bus_name in LEVEL_BUSES:
+		if AudioServer.get_bus_index(bus_name) >= 0:
+			continue
+		AudioServer.add_bus()
+		var i := AudioServer.bus_count - 1
+		AudioServer.set_bus_name(i, bus_name)
+		AudioServer.set_bus_send(i, LEVEL_BUSES[bus_name])
+		AudioServer.set_bus_volume_db(i, SILENT_DB)
+	var mi := AudioServer.get_bus_index("Music")
+	if AudioServer.get_bus_effect_count(mi) == 0:
+		var lp := AudioEffectLowPassFilter.new()
+		lp.cutoff_hz = CLEAR_HZ
+		AudioServer.add_bus_effect(mi, lp)
+	_lowpass = AudioServer.get_bus_effect(mi, 0)
+	var oi := AudioServer.get_bus_index("Outside")
+	if AudioServer.get_bus_effect_count(oi) == 0:
+		var olp := AudioEffectLowPassFilter.new()
+		olp.cutoff_hz = 1600.0
+		AudioServer.add_bus_effect(oi, olp)
+		var rev := AudioEffectReverb.new()
+		rev.room_size = 0.6
+		rev.wet = 0.25
+		AudioServer.add_bus_effect(oi, rev)
+	_out_lowpass = AudioServer.get_bus_effect(oi, 0)
+	AudioServer.unlock()
+	if created:
+		Settings.apply_audio()
+
+
+## A level bus's volume (its source's level).
+static func bus_db(bus_name: String) -> float:
+	var i := AudioServer.get_bus_index(bus_name)
+	return AudioServer.get_bus_volume_db(i) if i >= 0 else SILENT_DB
+
+
+static func set_bus_db(bus_name: String, db: float) -> void:
+	var i := AudioServer.get_bus_index(bus_name)
+	if i >= 0:
+		AudioServer.set_bus_volume_db(i, db)
 
 
 func _ready() -> void:
@@ -67,9 +122,12 @@ func _ready() -> void:
 	_song.volume_db = SONG_DB
 	_song.finished.connect(next_song)
 	add_child(_song)
-	_water = _loop_player("res://assets/audio/amb_water.wav", "Ambience", -12.0)
-	_life = _loop_player("res://assets/audio/amb_life.wav", "Ambience", -40.0)
-	_travel = _loop_player("res://assets/audio/amb_travel.wav", "SFX", -80.0, false)
+	# The household-aquarium bed, heard from the loading screen on (two co-prime loops; see
+	# tools/gen_audio.py aquarium_bed): it starts silent and fades in over BED_FADE_IN.
+	_water = _loop_player("res://assets/audio/amb_water.wav", "Bed.Water", SILENT_DB)
+	_aerator = _loop_player("res://assets/audio/amb_aerator.wav", "Bed.Aerator", SILENT_DB)
+	_life = _loop_player("res://assets/audio/amb_life.wav", "Bed.Life", -40.0)
+	_travel = _loop_player("res://assets/audio/amb_travel.wav", "Travel", SILENT_DB, false)
 	_outside = AudioStreamPlayer.new()
 	_outside.bus = "Outside"
 	add_child(_outside)
@@ -79,11 +137,12 @@ func _load(path: String) -> AudioStream:
 	return load(path) if ResourceLoader.exists(path) else null
 
 
+## A player on its own level bus: the player's volume stays 0 dB; `db` is the bus's starting level.
 func _loop_player(path: String, bus: String, db: float, autoplay := true) -> AudioStreamPlayer:
 	var p := AudioStreamPlayer.new()
 	p.bus = bus
 	p.stream = _load(path)
-	p.volume_db = db
+	set_bus_db(bus, db)
 	add_child(p)
 	if autoplay and p.stream:
 		p.play()
@@ -95,6 +154,9 @@ func _loop_player(path: String, bus: String, db: float, autoplay := true) -> Aud
 func set_ball(_i: int, _fade: bool) -> void:
 	if not _song.playing:
 		_play_song(song_index)
+		# (The songs take the lead: the bed eases a little under them.)
+		_water_target = WATER_DB + BED_UNDER_MUSIC_DB
+		_aerator_target = AERATOR_DB + BED_UNDER_MUSIC_DB
 	_started = true
 
 
@@ -118,11 +180,11 @@ func travel_whoosh(on: bool) -> void:
 	if _travel.stream == null:
 		return
 	if on:
-		_travel.volume_db = -4.0
+		set_bus_db("Travel", -4.0)
 		_travel.play()
 	else:
 		var tw := create_tween()
-		tw.tween_property(_travel, "volume_db", -60.0, 0.8)
+		tw.tween_method(func(db: float) -> void: set_bus_db("Travel", db), bus_db("Travel"), -60.0, 0.8)
 		tw.tween_callback(_travel.stop)
 
 
@@ -133,8 +195,9 @@ func update_mix(ball_r: Array[float], g: float, current: int) -> void:
 	var rc: float = ball_r[current]
 	cutoff_target = lerpf(MURKY_HZ, CLEAR_HZ, pow(rc, 1.4))
 	# The aquarium's own soundscape grows; outside sounds recede.
-	_water.volume_db = lerpf(-13.0, -10.0, g)
-	_life.volume_db = linear_to_db(maxf(0.0001, g * 0.55))
+	_water_target = lerpf(-13.0, -10.0, g) + BED_UNDER_MUSIC_DB
+	_aerator_target = lerpf(-18.0, -15.0, g) + BED_UNDER_MUSIC_DB
+	set_bus_db("Bed.Life", linear_to_db(maxf(0.0001, g * 0.55)))
 	var ob := AudioServer.get_bus_index("Outside")
 	if ob >= 0:
 		AudioServer.set_bus_volume_db(ob, lerpf(-3.0, -22.0, pow(g, 0.8)))
@@ -152,8 +215,86 @@ func _glide_cutoff(dt: float) -> void:
 	_lowpass.cutoff_hz = exp(move_toward(l, log(target), dt * 1.4))
 
 
+## The bed's level: a linear fade-in from silence at launch, then gliding toward its targets.
+func bed_levels() -> Vector2:
+	return Vector2(_water_db, _aerator_db)
+
+
+func _glide_bed(dt: float) -> void:
+	if _bed_in < 1.0:
+		_bed_in = minf(1.0, _bed_in + dt / BED_FADE_IN)
+		var k := linear_to_db(maxf(0.0001, _bed_in))
+		_water_db = _water_target + k
+		_aerator_db = _aerator_target + k
+	else:
+		_water_db = move_toward(_water_db, _water_target, BED_GLIDE * dt)
+		_aerator_db = move_toward(_aerator_db, _aerator_target, BED_GLIDE * dt)
+	set_bus_db("Bed.Water", _water_db)
+	set_bus_db("Bed.Aerator", _aerator_db)
+
+
+## Looping positional sources play only within earshot (2026-10-13). A SpatialEmitter holds a voice
+## (SpatialAudio) while it plays, and voices are few: a bubbler or a vortex rush far away is silent
+## (beyond its max_distance) and needs none. Its owner says whether it wants to play (want_loop); this
+## decides when it actually does: it starts RANGE_RESUME_M before its audible edge (still silent there,
+## so nothing is heard starting) and stops RANGE_STOP_M beyond it (hysteresis). What is heard is
+## unchanged. (Measured at each ball's start: 14-15 looping sources playing, 12-15 of them out of
+## earshot, now 1-2. An earlier note here said those out-of-earshot AudioStreamPlayer3Ds swapped
+## routing data every tick; the engine skips that beyond max_distance, so they did not.)
+const RANGE_GROUP := "range_gated_audio"
+const RANGE_RESUME_M := 6.0
+const RANGE_STOP_M := 12.0
+const RANGE_PERIOD := 0.2
+var _range_t := 0.0
+
+
+## The owner's wish for a looping 3D source (vortex rush, bubbler): on = play whenever within earshot.
+static func want_loop(p: SpatialEmitter, on: bool) -> void:
+	if p == null or not is_instance_valid(p):
+		return
+	if not p.is_in_group(RANGE_GROUP):
+		p.add_to_group(RANGE_GROUP)
+	p.set_meta("want_play", on)
+	if not on:
+		if p.playing:
+			p.stop()
+	elif not p.playing and p.stream != null and p.is_inside_tree() and in_earshot(p, RANGE_RESUME_M):
+		p.play()
+
+
+## Whether the listener (the current camera) is within the player's max_distance plus `margin`.
+## With no camera to measure from, it counts as near (behaves as before).
+static func in_earshot(p: SpatialEmitter, margin: float) -> bool:
+	if not p.is_inside_tree() or p.max_distance <= 0.0:
+		return true
+	var cam := p.get_viewport().get_camera_3d()
+	if cam == null:
+		return true
+	return cam.global_position.distance_to(p.global_position) <= p.max_distance + margin
+
+
+func _gate_ranges() -> void:
+	for n in get_tree().get_nodes_in_group(RANGE_GROUP):
+		var p := n as SpatialEmitter
+		if p == null or not p.is_inside_tree() or p.stream == null:
+			continue
+		if not bool(p.get_meta("want_play", false)):
+			if p.playing:
+				p.stop()
+		elif p.playing:
+			if not in_earshot(p, RANGE_STOP_M):
+				p.stop()
+		elif in_earshot(p, RANGE_RESUME_M):
+			p.play()
+
+
 func _process(dt: float) -> void:
 	_glide_cutoff(dt)
+	_glide_bed(dt)
+	_range_t -= dt
+	if _range_t <= 0.0:
+		_range_t = RANGE_PERIOD
+		_gate_ranges()
 	if not _started or Game.inst == null or Game.inst.state != "play":
 		return
 	_out_timer -= dt

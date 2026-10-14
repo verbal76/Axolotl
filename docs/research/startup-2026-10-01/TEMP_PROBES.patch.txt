@@ -1,0 +1,379 @@
+diff -ru pristine/scripts/core/game.gd probe/scripts/core/game.gd
+--- pristine/scripts/core/game.gd	2026-10-01 09:54:02.000000000 +0000
++++ probe/scripts/core/game.gd	2026-10-01 12:22:44.999503277 +0000
+@@ -98,6 +98,7 @@
+ 
+ 
+ func _init() -> void:
++	StartupTrace.mark("PROBE Game._init (main scene scripts loaded+compiled)")
+ 	inst = self
+ 	add_to_group("mote_game")
+ 
+@@ -258,6 +259,7 @@
+ 	ecosystem = Ecosystem.new()
+ 	add_child(ecosystem)
+ 	ecosystem.populate(balls)
++	StartupTrace.mark("PROBE ecosystem populated")
+ 	fish = AmbientFish.new()
+ 	fish.name = "AmbientFish"
+ 	add_child(fish)
+@@ -304,14 +306,137 @@
+ 	cam.current = true
+ 
+ 
++## TEMP PROBE: tile height sampling serial vs WorkerThreadPool, bit-exact comparison.
++func _thread_bench() -> void:
++	for bi in [0, 2]:
++		var b: MossBall = balls[bi]
++		var tiles := maxi(2, int(ceil(b.radius * PI * 0.5 / MossBall.TILE_M)))
++		tiles = int(ceil(float(tiles) / MossBall.CHUNKS_PER_EDGE)) * MossBall.CHUNKS_PER_EDGE
++		var q := MossBall.TILE_Q
++		var n := q + 3
++		# one job per (face, tx): all ty rows of that column
++		var jobs: Array = []
++		for f in MossBall.FACES.size():
++			for tx in tiles:
++				jobs.append([f, tx])
++		var calc := func(job: Array) -> PackedFloat64Array:
++			var out := PackedFloat64Array()
++			var face: Array = MossBall.FACES[job[0]]
++			for ty in tiles:
++				for j in n:
++					for i in n:
++						var u := -1.0 + 2.0 * (job[1] + float(i - 1) / q) / tiles
++						var v := -1.0 + 2.0 * (ty + float(j - 1) / q) / tiles
++						out.append(b.terrain_height(MossBall._cube_dir(face, u, v)))
++			return out
++		var t0 := Time.get_ticks_usec()
++		var serial: Array = []
++		for jb in jobs:
++			serial.append(calc.call(jb))
++		var ts := Time.get_ticks_usec() - t0
++		var par: Array = []
++		par.resize(jobs.size())
++		t0 = Time.get_ticks_usec()
++		var gid := WorkerThreadPool.add_group_task(func(k: int) -> void: par[k] = calc.call(jobs[k]), jobs.size(), -1, true)
++		WorkerThreadPool.wait_for_group_task_completion(gid)
++		var tp := Time.get_ticks_usec() - t0
++		var same := true
++		for k in jobs.size():
++			if serial[k] != par[k]:
++				same = false
++		print("[PROBE] thread-bench ball %d: %d tiles, %d samples; serial %.1f ms, WorkerThreadPool %.1f ms (%d threads), bit-identical %s" % [bi + 1, 6 * tiles * tiles, 6 * tiles * tiles * n * n, ts / 1000.0, tp / 1000.0, OS.get_processor_count(), same])
++		# Typed re-implementation of terrain_height (same arithmetic, precomputed cos, typed storage).
++		var hd := PackedVector3Array(); var ha := PackedFloat64Array(); var hc := PackedFloat64Array(); var hh := PackedFloat64Array()
++		var hp := PackedByteArray(); var he := PackedFloat64Array()
++		for hl in b.hills:
++			hd.append(hl[0]); ha.append(float(hl[1])); hc.append(cos(float(hl[1]))); hh.append(float(hl[2]))
++			var pl: bool = hl.size() > 3 and hl[3] == "plateau"
++			hp.append(1 if pl else 0); he.append(float(hl[4]) if pl else 0.0)
++		var cpts: Array[PackedVector3Array] = []; var chw := PackedFloat64Array(); var cdp := PackedFloat64Array(); var cwl := PackedFloat64Array()
++		for cv in b.carves:
++			cpts.append(cv[0]); chw.append(float(cv[1])); cdp.append(float(cv[2])); cwl.append(float(cv[3]))
++		var cells_h := {}; var cells_c := {}
++		for key in b._cells:
++			var ce: Array = b._cells[key]
++			cells_h[key] = PackedInt32Array(ce[0]); cells_c[key] = PackedInt32Array(ce[1])
++		var rad: float = b.radius
++		var fast := func(dir: Vector3) -> float:
++			var key := MossBall._cell_key(dir)
++			if not cells_h.has(key):
++				return 0.0
++			var h := 0.0
++			for k: int in cells_h[key] as PackedInt32Array:
++				var c: float = hd[k].dot(dir)
++				var ang: float = ha[k]
++				if c <= hc[k]:
++					continue
++				var a := acos(minf(c, 1.0))
++				if hp[k] == 1:
++					h += hh[k] * (1.0 - smoothstep(ang - he[k], ang, a))
++				else:
++					h += hh[k] * (0.5 + 0.5 * cos(PI * a / ang))
++			var carve := 0.0
++			for k: int in cells_c[key] as PackedInt32Array:
++				var dist := MossBall._polyline_angle(dir, cpts[k]) * rad
++				carve = maxf(carve, cdp[k] * (1.0 - smoothstep(chw[k], chw[k] + cwl[k], dist)))
++			return maxf(0.0, h - carve)
++		var dirs := PackedVector3Array()
++		for jb in jobs:
++			var face: Array = MossBall.FACES[jb[0]]
++			for ty in tiles:
++				for j in n:
++					for i in n:
++						dirs.append(MossBall._cube_dir(face, -1.0 + 2.0 * (jb[1] + float(i - 1) / q) / tiles, -1.0 + 2.0 * (ty + float(j - 1) / q) / tiles))
++		t0 = Time.get_ticks_usec()
++		var r1 := PackedFloat64Array(); r1.resize(dirs.size())
++		for k in dirs.size():
++			r1[k] = b.terrain_height(dirs[k])
++		var t_orig := Time.get_ticks_usec() - t0
++		t0 = Time.get_ticks_usec()
++		var r2 := PackedFloat64Array(); r2.resize(dirs.size())
++		for k in dirs.size():
++			r2[k] = fast.call(dirs[k])
++		var t_fast := Time.get_ticks_usec() - t0
++		print("[PROBE] typed terrain_height ball %d: original %.1f ms, typed %.1f ms over %d samples, bit-identical %s" % [bi + 1, t_orig / 1000.0, t_fast / 1000.0, dirs.size(), r1 == r2])
++
++
+ ## Measurement harness (desktop or device): report the timeline once the first usable frame has
+ ## been drawn, then quit. Never used in normal play.
+ func _startup_probe() -> void:
+ 	get_tree().process_frame.connect(func() -> void: StartupTrace.mark("probe: first process_frame (before _process)"), CONNECT_ONE_SHOT)
+ 	get_tree().physics_frame.connect(func() -> void: StartupTrace.mark("probe: first physics_frame"), CONNECT_ONE_SHOT)
+ 	RenderingServer.frame_pre_draw.connect(func() -> void: StartupTrace.mark("probe: first frame_pre_draw (scripts done)"), CONNECT_ONE_SHOT)
+-	while not StartupTrace.has("first frame drawn: %s usable" % state):
++	var _want := 2 if Engine.has_meta("probe_np") else 1
++	while StartupTrace.marks.filter(func(m) -> bool: return str(m[0]).begins_with("first frame drawn:") and str(m[0]).ends_with("usable")).size() < _want:
+ 		await get_tree().process_frame
++	print("[PROBE] terrain_height calls: ", MossBall.th_calls)
++	StartupTrace.pdump()
++	if OS.get_cmdline_user_args().has("--thread-bench"):
++		_thread_bench()
++	if OS.get_cmdline_user_args().has("--newrun-probe") and not Engine.has_meta("probe_np"):
++		Engine.set_meta("probe_np", true)
++		await get_tree().create_timer(1.0).timeout
++		StartupTrace.acc.clear()
++		StartupTrace.acc_order.clear()
++		StartupTrace.mark("PROBE New Run pressed")
++		restart_experience()
++		return
++	if OS.get_cmdline_user_args().has("--continue-probe"):
++		await get_tree().create_timer(1.0).timeout
++		StartupTrace.mark("PROBE Continue/Play pressed (state %s, saved run %s)" % [state, has_run_in_progress()])
++		title._on_play()
++		var _t0 := Time.get_ticks_usec()
++		var dts: Array = []
++		var _last := Time.get_ticks_usec()
++		for _k in 240:
++			await get_tree().process_frame
++			var _n := Time.get_ticks_usec()
++			dts.append((_n - _last) / 1000.0)
++			_last = _n
++		StartupTrace.mark("PROBE 240 frames after Continue (state %s, controls %s)" % [state, player.controls_enabled])
++		var sd := dts.duplicate()
++		sd.sort()
++		print("[PROBE] post-Continue frame ms: first10=", dts.slice(0, 10), " median=", sd[sd.size() / 2], " p95=", sd[int(sd.size() * 0.95)], " max=", sd[-1])
+ 	var pc := {}
+ 	for k in ["PIPELINE_COMPILATIONS_CANVAS", "PIPELINE_COMPILATIONS_MESH", "PIPELINE_COMPILATIONS_SURFACE", "PIPELINE_COMPILATIONS_DRAW", "PIPELINE_COMPILATIONS_SPECIALIZATION"]:
+ 		if ClassDB.class_has_integer_constant("Performance", k):
+@@ -412,13 +537,16 @@
+ ## After the world is built: the catalog stamps ids on the world, the run save is opened (tests
+ ## start from a fresh one unless given their own file) and a run in progress is restored.
+ func _open_run() -> void:
++	StartupTrace.mark("PROBE _open_run begins")
+ 	completion = Completion.build_from_world(balls, vortices)
++	StartupTrace.mark("PROBE completion catalog built")
+ 	var path := run_save_path()
+ 	if Settings.test_mode != "" and not Settings.test_args.has("run-save"):
+ 		RunSave.erase(path)
+ 	run_save = RunSave.open(path)
+ 	clock = RunClock.from_dict(run_save.run()["clock"])
+ 	tier2 = Tier2.from_dict(run_save.run().get("tier2", {}))
++	StartupTrace.mark("PROBE run save read")
+ 	# Food and repopulation hash from the run (food's first organisms too, so they wait for it).
+ 	food = FoodDirector.new()
+ 	food.setup(rng_key(), balls)
+@@ -441,8 +569,10 @@
+ 	repop.key = rng_key()
+ 	repop.build(balls, vortices)
+ 	repop.from_dict((run_save.run().get("world", {}) as Dictionary).get("repop", {}))
++	StartupTrace.mark("PROBE repop built")
+ 	_open_gill()
+ 	_apply_run()
++	StartupTrace.mark("PROBE _apply_run done")
+ 	if hard != null:
+ 		hard.build(balls, vortices)
+ 		hard.from_dict((run_save.run().get("world", {}) as Dictionary).get("vitality", {}))
+diff -ru pristine/scripts/core/startup_trace.gd probe/scripts/core/startup_trace.gd
+--- pristine/scripts/core/startup_trace.gd	2026-10-01 09:54:02.000000000 +0000
++++ probe/scripts/core/startup_trace.gd	2026-10-01 12:03:48.375435713 +0000
+@@ -10,6 +10,19 @@
+ ## Engine clock zero, measured from process start (ms); -1 when the platform cannot say.
+ static var process_offset_ms := -1.0
+ 
++# --- TEMP PROBE (scratch copy only) ---
++static var acc := {}
++static var acc_order: Array = []
++static func pa(key: String, t0: int) -> void:
++	if not acc.has(key):
++		acc[key] = [0, 0]
++		acc_order.append(key)
++	acc[key][0] += Time.get_ticks_usec() - t0
++	acc[key][1] += 1
++static func pdump() -> void:
++	for k in acc_order:
++		print("[PROBE] %-48s %9.1f ms  n=%d" % [k, acc[k][0] / 1000.0, acc[k][1]])
++
+ 
+ static func mark(label: String) -> void:
+ 	if marks.is_empty():
+diff -ru pristine/scripts/world/levels.gd probe/scripts/world/levels.gd
+--- pristine/scripts/world/levels.gd	2026-10-01 09:54:02.000000000 +0000
++++ probe/scripts/world/levels.gd	2026-10-01 12:04:04.159436651 +0000
+@@ -46,12 +46,14 @@
+ 
+ 
+ static func build_ball(i: int, game: Node) -> MossBall:
++	var _t := Time.get_ticks_usec()
+ 	var b := MossBall.new()
+ 	game.add_child(b)
+ 	b.position = CENTERS[i]
+ 	b.setup(i, RADII[i], PALETTES[i])
+ 	var lb := LevelBuilder.new(b, game)
+ 	b.display_name = NAMES[i]
++	StartupTrace.pa("ball%d setup" % (i + 1), _t); _t = Time.get_ticks_usec()
+ 	match i:
+ 		0: _materials(lb, Color(0.14, 0.36, 0.1), Color(0.42, 0.62, 0.22), Color(0.12, 0.4, 0.1), Color(0.45, 0.78, 0.25))
+ 		1: _materials(lb, Color(0.1, 0.34, 0.16), Color(0.36, 0.6, 0.28), Color(0.08, 0.36, 0.18), Color(0.4, 0.75, 0.35))
+@@ -60,6 +62,7 @@
+ 		4: _materials(lb, Color(0.08, 0.3, 0.26), Color(0.28, 0.56, 0.5), Color(0.05, 0.34, 0.28), Color(0.25, 0.66, 0.55))
+ 		5: _materials(lb, Color(0.26, 0.2, 0.1), Color(0.5, 0.42, 0.22), Color(0.08, 0.36, 0.12), Color(0.36, 0.78, 0.3))
+ 		6: _materials(lb, Color(0.12, 0.2, 0.22), Color(0.3, 0.44, 0.46), Color(0.06, 0.26, 0.26), Color(0.3, 0.58, 0.6))
++	StartupTrace.pa("ball%d materials" % (i + 1), _t); _t = Time.get_ticks_usec()
+ 	match i:
+ 		0: _ball1(lb)
+ 		1: _ball2(lb)
+@@ -68,9 +71,13 @@
+ 		4: WorldExpansion.reed_canyon(lb)
+ 		5: WorldExpansion.canopy_spire(lb)
+ 		6: WorldExpansion.hollow_grotto(lb)
++	StartupTrace.pa("ball%d layout(_ballN)" % (i + 1), _t); _t = Time.get_ticks_usec()
+ 	_accent_flora(lb, i)
++	StartupTrace.pa("ball%d accent_flora" % (i + 1), _t); _t = Time.get_ticks_usec()
+ 	_sprouts(lb, i)
++	StartupTrace.pa("ball%d sprouts" % (i + 1), _t); _t = Time.get_ticks_usec()
+ 	b.finalize_terrain()
++	StartupTrace.pa("ball%d finalize_terrain" % (i + 1), _t); _t = Time.get_ticks_usec()
+ 	# Selective shadows: the climbing leaves and the stems cast; formations and ground do not.
+ 	# The detailed climbing leaves cast through a flat stand-in (a few triangles per leaf).
+ 	var shadow_mat := StandardMaterial3D.new()
+@@ -84,6 +91,7 @@
+ 				_leaf_shadow(n, shadow_mat)
+ 		elif n.has_meta("leaves"):
+ 			_leaf_shadow(n, shadow_mat)
++	StartupTrace.pa("ball%d shadows" % (i + 1), _t); _t = Time.get_ticks_usec()
+ 	b.set_meta("builder", lb)
+ 	return b
+ 
+diff -ru pristine/scripts/world/moss_ball.gd probe/scripts/world/moss_ball.gd
+--- pristine/scripts/world/moss_ball.gd	2026-10-01 09:54:02.000000000 +0000
++++ probe/scripts/world/moss_ball.gd	2026-10-01 12:21:46.135499778 +0000
+@@ -280,7 +280,9 @@
+ 
+ 
+ ## Ground height above the base sphere at `dir` (features minus ravines, never below 0).
++static var th_calls := 0
+ func terrain_height(dir: Vector3) -> float:
++	th_calls += 1
+ 	if hills.is_empty() and carves.is_empty():
+ 		return 0.0
+ 	if _cells_dirty:
+@@ -399,8 +401,10 @@
+ 
+ ## Rebuilds the visible ground and its collision once the level is laid out.
+ func finalize_terrain() -> void:
++	var _t0 := Time.get_ticks_usec()
+ 	if _cells_dirty:
+ 		_build_cells()
++	StartupTrace.pa("ft: build_cells", _t0)
+ 	var tiles := maxi(2, int(ceil(radius * PI * 0.5 / TILE_M)))
+ 	tiles = int(ceil(float(tiles) / CHUNKS_PER_EDGE)) * CHUNKS_PER_EDGE
+ 	var per := tiles / CHUNKS_PER_EDGE
+@@ -420,9 +424,12 @@
+ 				var st_v := PackedVector3Array()
+ 				var st_n := PackedVector3Array()
+ 				var st_i := PackedInt32Array()
++				var _t1 := Time.get_ticks_usec()
+ 				for tx in range(cx * per, (cx + 1) * per):
+ 					for ty in range(cy * per, (cy + 1) * per):
+ 						_build_tile(FACES[f], tx, ty, tiles, st_v, st_n, st_i)
++				StartupTrace.pa("ft: tiles (incl collision)", _t1)
++				_t1 = Time.get_ticks_usec()
+ 				var arr := []
+ 				arr.resize(Mesh.ARRAY_MAX)
+ 				arr[Mesh.ARRAY_VERTEX] = st_v
+@@ -443,8 +450,11 @@
+ 				var corner := _cube_dir(FACES[f], -1.0 + 2.0 * cx / CHUNKS_PER_EDGE, -1.0 + 2.0 * cy / CHUNKS_PER_EDGE)
+ 				_chunk_dirs.append(cd)
+ 				_chunk_ang.append(cd.angle_to(corner) * 1.15)
++				StartupTrace.pa("ft: chunk mesh+node", _t1)
+ 	# The far mesh: the whole ball, light (hills and ravines at a coarse spacing).
++	var _t2 := Time.get_ticks_usec()
+ 	_surface.mesh = _far_mesh()
++	StartupTrace.pa("ft: far mesh", _t2)
+ 	_surface.visibility_range_begin = radius + FAR_LOD_M
+ 	_surface.visibility_range_begin_margin = 4.0
+ 
+@@ -456,6 +466,7 @@
+ 	var pos := PackedVector3Array()
+ 	pos.resize(n * n)
+ 	var raised := false
++	var _tb := Time.get_ticks_usec()
+ 	for j in n:
+ 		for i in n:
+ 			var u := -1.0 + 2.0 * (tx + float(i - 1) / q) / tiles
+@@ -466,6 +477,8 @@
+ 			if h > 0.01 and i > 0 and j > 0 and i < n - 1 and j < n - 1:
+ 				raised = true
+ 			pos[j * n + i] = d * (radius + h)
++	StartupTrace.pa("tile: height sampling (13x13)", _tb)
++	_tb = Time.get_ticks_usec()
+ 	var base := verts.size()
+ 	for j in range(1, n - 1):
+ 		for i in range(1, n - 1):
+@@ -492,14 +505,17 @@
+ 				idx.append_array([a, b, c, b, d, c])
+ 			if raised:
+ 				faces.append_array([verts[a], verts[b], verts[c], verts[b], verts[d], verts[c]])
++	StartupTrace.pa("tile: normals+indices+faces", _tb)
+ 	terrain_tile_count += 1
+ 	if raised:
++		var _t3 := Time.get_ticks_usec()
+ 		var shape := ConcavePolygonShape3D.new()
+ 		shape.set_faces(faces)
+ 		shape.backface_collision = true
+ 		var cs := CollisionShape3D.new()
+ 		cs.shape = shape
+ 		static_body.add_child(cs)
++		StartupTrace.pa("ft: concave shapes (set_faces+add)", _t3)
+ 		_terrain_shapes.append(cs)
+ 		terrain_collision_tiles += 1
+ 
+@@ -1089,6 +1105,7 @@
+ ## Instances are chunked by direction so the far side of the ball is frustum culled.
+ func scatter(mesh: Mesh, mat: Material, count: int, seed_v: int, scale_min: float, scale_max: float,
+ 		accept: Callable = Callable(), vis_end := 70.0, sink := 0.05) -> Array:
++	var _ts := Time.get_ticks_usec()
+ 	var rng := RandomNumberGenerator.new()
+ 	rng.seed = seed_v
+ 	# World expansion: instances go into cells about 35 m across (a grid on each face of a cube
+@@ -1127,6 +1144,7 @@
+ 		mmi.set_meta("veg_transforms", xfs)
+ 		_veg_parent.add_child(mmi)
+ 		out.append(mmi)
++	StartupTrace.pa("scatter (moss carpet etc)", _ts)
+ 	return out
+ 
+ 
+diff -ru pristine/scripts/world/vegetation.gd probe/scripts/world/vegetation.gd
+--- pristine/scripts/world/vegetation.gd	2026-10-01 09:54:02.000000000 +0000
++++ probe/scripts/world/vegetation.gd	2026-10-01 12:04:37.931438659 +0000
+@@ -115,7 +115,10 @@
+ 	var mat: ShaderMaterial = opts.get("material", null)
+ 	if mat == null:
+ 		mat = material(ball, family, opts.get("colors", []))
++	var _tm := Time.get_ticks_usec()
+ 	var variants := meshes(family, rng.randi() % 100000)
++	StartupTrace.pa("veg: meshes (tuft/reed gen)", _tm)
++	_tm = Time.get_ticks_usec()
+ 	var lists := [[], []]
+ 	var sc: Array = f["scale"]
+ 	for d in dirs:
+@@ -142,6 +145,7 @@
+ 		mmi.set_meta("veg_transforms", xfs)
+ 		ball.add_vegetation(mmi)
+ 		out.append(mmi)
++	StartupTrace.pa("veg: place+multimesh", _tm)
+ 	return out
+ 
+ 

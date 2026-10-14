@@ -103,6 +103,10 @@ static func new_run() -> Dictionary:
 		"game_versions": [],
 		"ota_ids": [],
 		"finish": {},
+		# Tier-2 abilities found this run (Tier2.to_dict); not completion entries.
+		"tier2": {},
+		# Treasure Hunt, the postgame search (TreasureHunt.state_of); not completion entries.
+		"treasure": {},
 	}
 
 
@@ -118,6 +122,24 @@ func earned() -> Dictionary:
 	return run()["earned"]
 
 
+## This run's tutorial record (docs/ONBOARDING.md, once per run): lesson -> true once done this run
+## ("intro", "feeding", "parasite", "starfish"), and "frond": true while the run's empty frond is
+## still waiting for the feeding lesson. Not in new_run(), and never filled in by migrate(): a run
+## saved before the record existed has none, and Game counts all its lessons as done. Game gives a
+## genuinely new run an empty record when it opens it, so it survives Continue and New Run resets it.
+func has_lessons() -> bool:
+	return run().get("onboarding") is Dictionary
+
+
+## The record itself (a detached empty one when the run has none: check has_lessons()).
+func lessons() -> Dictionary:
+	return run()["onboarding"] if has_lessons() else {}
+
+
+func set_lessons(d: Dictionary) -> void:
+	run()["onboarding"] = d
+
+
 ## A fresh run; records (best time, past finishes) are kept.
 func start_new_run() -> void:
 	data["run"] = new_run()
@@ -125,14 +147,28 @@ func start_new_run() -> void:
 
 
 ## Records a finish (called once per run, when its clock finishes).
-func record_finish(finish_s: float, pct: float, catalog_version: int, identity: Dictionary) -> void:
+## `skills`: skill-tree nodes owned at the finish (shown with it as "Skills n/15"; there is no
+## skills-off mode). Older records without it read as the current count.
+## `mode`: "hard" for a Hard Mode run (ledger row 12): its records carry `"mode": "hard"` and its best
+## time is kept apart (`best_finish_s_hard`). A Normal finish is recorded exactly as before (no mode
+## key: missing = Normal).
+func record_finish(finish_s: float, pct: float, catalog_version: int, identity: Dictionary, skills := 0, mode := "") -> void:
 	var r := run()
 	r["finish"] = {"finish_s": finish_s, "percent": pct, "catalog_version": catalog_version,
 			"game_version": GameVersion.GAME_VERSION, "ota_id": identity.get("ota_id", "none"),
-			"timer_model": RunClock.TIMER_MODEL}
+			"timer_model": RunClock.TIMER_MODEL, "skills": skills}
 	var rec := records()
-	(rec["finishes"] as Array).append({"run_id": r["id"], "finish_s": finish_s, "percent": pct,
-			"catalog_version": catalog_version, "game_version": GameVersion.GAME_VERSION})
+	var entry := {"run_id": r["id"], "finish_s": finish_s, "percent": pct,
+			"catalog_version": catalog_version, "game_version": GameVersion.GAME_VERSION, "skills": skills}
+	if mode == "hard":
+		r["finish"]["mode"] = mode
+		entry["mode"] = mode
+		(rec["finishes"] as Array).append(entry)
+		if float(rec.get("best_finish_s_hard", -1.0)) < 0.0 or finish_s < float(rec["best_finish_s_hard"]):
+			rec["best_finish_s_hard"] = finish_s
+			rec["best_run_id_hard"] = r["id"]
+		return
+	(rec["finishes"] as Array).append(entry)
 	if rec["best_finish_s"] < 0.0 or finish_s < rec["best_finish_s"]:
 		rec["best_finish_s"] = finish_s
 		rec["best_run_id"] = r["id"]
