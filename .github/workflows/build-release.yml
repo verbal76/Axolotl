@@ -132,6 +132,11 @@ jobs:
           mkdir -p ~/.local/share/godot/export_templates/${GODOT_VERSION}.stable
           unzip -q tpl.tpz -d tpl && mv tpl/templates/* ~/.local/share/godot/export_templates/${GODOT_VERSION}.stable/
           rm -rf tpl tpl.tpz godot.zip
+      - name: "Pillow (Windows only: tools/build.py makes the exe icon with it; not on the runner image)"
+        if: matrix.platform == 'windows'
+        run: |
+          python3 -c "import PIL" 2>/dev/null || sudo apt-get install -y -qq python3-pil >/dev/null
+          python3 -c "import PIL; print('Pillow', PIL.__version__)"
       - name: Export and package
         run: |
           godot --headless --path . --import || true

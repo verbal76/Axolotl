@@ -1,5 +1,5 @@
 {
-  "_doc": "Mote Build 138: owner-authorised release candidate (2026-10-14). GitHub prerelease, never Latest. docs/RELEASES.md, docs/RELEASE_CANDIDATE_138.md.",
+  "_doc": "Mote Build 138: owner-authorised release candidate (2026-10-14). GitHub prerelease, never Latest. Second request: the first run stopped before publishing (no Pillow on the runner for the Windows icon). docs/RELEASES.md, docs/RELEASE_CANDIDATE_138.md.",
   "platform": "all",
   "source_sha": "c0055616355d746377228707b068a25c29c42584",
   "build_number": 138,
