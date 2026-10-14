@@ -34,6 +34,15 @@ func run(runner) -> void:
 	if mode == "probe":
 		await _probe()
 		return
+	if mode == "parasite":
+		await _parasite_parts()
+		return
+	if mode == "veg":
+		await _veg_budget()
+		return
+	if mode == "nodes":
+		await _nodes()
+		return
 	if mode == "title" or mode == "play":
 		await _run_state(mode)
 		return
@@ -221,6 +230,149 @@ func _direct(mode: String, groups: Dictionary) -> void:
 	for row in rows:
 		if row[0] >= 0.01:
 			t.log_line("PERF %s  %-28s x%-4d %6.3f ms per frame (p90 %.3f)" % [mode, row[1], row[2], row[0], row[3]])
+
+
+## Per-node cost of the many-instance scripts (`--perf=nodes`, in play or `--state=title`): each node's
+## own _physics_process/_process timed by hand (median of 30), summed by whether the node is on his
+## ball and near him, so sleeping and awake instances show separately.
+func _nodes() -> void:
+	var g: Game = t.g
+	if str(Settings.test_args.get("state", "play")) == "title":
+		g._enter_title()
+	await t.seconds(2.0)
+	var dt := 1.0 / 60.0
+	var groups := _groups()
+	for key in ["parasite.gd", "mote.gd", "food.gd", "bloom.gd", "starfish.gd"]:
+		if not groups.has(key):
+			continue
+		var buckets := {}
+		for nd in groups[key]:
+			var per: Array = []
+			for rep in 30:
+				if rep % 10 == 0:
+					await t.get_tree().process_frame
+				var t0 := Time.get_ticks_usec()
+				if nd.is_physics_processing() and nd.has_method("_physics_process"):
+					nd._physics_process(dt)
+				if nd.is_processing() and nd.has_method("_process"):
+					nd._process(dt)
+				per.append((Time.get_ticks_usec() - t0) / 1000.0)
+			per.sort()
+			var same: bool = "ball" in nd and nd.ball == g.player.ball
+			var near: bool = g.near_player((nd as Node3D).global_position)
+			var st: String = str(nd.state) if "state" in nd else "-"
+			var b := "%s ball, %s, %s" % ["his" if same else "other", "near" if near else "far", st]
+			if not buckets.has(b):
+				buckets[b] = [0, 0.0]
+			buckets[b][0] += 1
+			buckets[b][1] += per[15]
+		for b in buckets:
+			t.log_line("NODES %-14s %-34s x%-4d %.3f ms per frame (%.1f us each)" % [key, b, buckets[b][0], buckets[b][1], buckets[b][1] * 1000.0 / buckets[b][0]])
+
+
+## One awake parasite's update split into its parts (`--perf=parasite`): medians over the awake ones.
+func _parasite_parts() -> void:
+	var g: Game = t.g
+	await t.seconds(2.0)
+	var dt := 1.0 / 60.0
+	var awake: Array = []
+	for b in g.balls:
+		for p in b.parasites:
+			if is_instance_valid(p) and p.ball == g.player.ball and g.near_player(p.global_position) and p.state == "graze":
+				awake.append(p)
+	var parts := {
+		"whole _physics_process": func(p): p._physics_process(dt),
+		"_update_segments": func(p): p._update_segments(dt),
+		"  _push_body": func(p): p._push_body(),
+		"_snap_ground (1 ray)": func(p): p._snap_ground(),
+		"_ground_ahead (1 ray)": func(p): p._ground_ahead(p.global_position + p.heading * 0.3),
+		"_wall_ahead (1 ray)": func(p): p._wall_ahead(p.heading * 0.05),
+		"_ravine_ahead": func(p): p._ravine_ahead(p.heading * 0.05),
+		"_express": func(p): p._express(dt, g.player),
+		"set_look": func(p): p.set_look(p._gray, p._flash, 0.0),
+		"_avoid_blooms": func(p): p._avoid_blooms(p.heading),
+		"_angle_from_home": func(p): p._angle_from_home(p.global_position),
+	}
+	t.log_line("PARASITE %d awake grazing near him; seg_count %s" % [awake.size(), str(awake.map(func(p): return p.seg_count))])
+	for k in parts:
+		var per: Array = []
+		for rep in 40:
+			if rep % 10 == 0:
+				await t.get_tree().process_frame
+			var t0 := Time.get_ticks_usec()
+			for p in awake:
+				parts[k].call(p)
+			per.append((Time.get_ticks_usec() - t0) / 1000.0 / maxf(1, awake.size()))
+		per.sort()
+		t.log_line("PARASITE %-24s %6.1f us each (p90 %.1f)" % [k, per[20] * 1000.0, per[36] * 1000.0])
+
+
+## Vegetation triangles the camera's view draws (`--perf=veg`, `--state=title|play`): every
+## vegetation MultiMesh that is visible (horizon cull) and within its visibility range, its mesh's
+## triangles x instances, by plant mesh and by each instance's distance from the camera.
+func _veg_budget() -> void:
+	var g: Game = t.g
+	if str(Settings.test_args.get("state", "title")) == "title":
+		g._enter_title()
+	await t.seconds(2.0)
+	var cam: Vector3 = g.cam.global_position
+	var frustum: Array[Plane] = g.get_viewport().get_camera_3d().get_frustum()
+	t.log_line("VEG camera %s, player %.1f m away, state %s" % [str(cam), cam.distance_to(g.player.global_position), g.state])
+	var bands := [10.0, 20.0, 30.0, 45.0, 60.0, 1e9]
+	var by_mesh := {}
+	var by_band := PackedFloat64Array()
+	by_band.resize(bands.size())
+	var total := 0.0
+	var tri_cache := {}
+	for b in g.balls:
+		b.update_visibility(cam)
+		for c in b._veg_parent.get_children():
+			if not (c is MultiMeshInstance3D) or not c.is_visible_in_tree():
+				continue
+			var mmi: MultiMeshInstance3D = c
+			var mm := mmi.multimesh
+			if mm == null or mm.mesh == null:
+				continue
+			var aabb := mmi.global_transform * mmi.get_aabb()
+			var inside := true
+			for pl in frustum:
+				# (Outside if the whole box is in front of a plane.)
+				var far_pt := aabb.position + Vector3(aabb.size.x if pl.normal.x < 0.0 else 0.0, aabb.size.y if pl.normal.y < 0.0 else 0.0, aabb.size.z if pl.normal.z < 0.0 else 0.0)
+				if pl.distance_to(far_pt) > 0.0:
+					inside = false
+					break
+			if not inside:
+				continue
+			var d0 := mmi.global_position.distance_to(cam)
+			if mmi.visibility_range_end > 0.0 and d0 > mmi.visibility_range_end + mmi.visibility_range_end_margin:
+				continue
+			if not tri_cache.has(mm.mesh):
+				tri_cache[mm.mesh] = MossBall._mesh_tris(mm.mesh)
+			var tris: int = tri_cache[mm.mesh]
+			var name: String = mm.mesh.resource_name if mm.mesh.resource_name != "" else ("%s/%s" % [mmi.material_override.resource_name if mmi.material_override else "?", str(mm.mesh.get_aabb().size.snapped(Vector3.ONE * 0.01))])
+			if not by_mesh.has(name):
+				by_mesh[name] = [0.0, 0, tris]
+			for j in mm.instance_count:
+				var p := mmi.global_transform * mm.get_instance_transform(j).origin
+				var d := p.distance_to(cam)
+				var k := 0
+				while d > bands[k]:
+					k += 1
+				by_band[k] += tris
+				by_mesh[name][0] += tris
+				by_mesh[name][1] += 1
+				total += tris
+	t.log_line("VEG drawn vegetation: %.0f k triangles" % (total / 1000.0))
+	var lo := 0.0
+	for k in bands.size():
+		t.log_line("VEG   %5.0f-%-5s m: %7.1f k tris (%2.0f%%)" % [lo, ("%.0f" % bands[k]) if bands[k] < 1e8 else "far", by_band[k] / 1000.0, 100.0 * by_band[k] / maxf(total, 1.0)])
+		lo = bands[k]
+	var rows: Array = []
+	for n in by_mesh:
+		rows.append([by_mesh[n][0], n, by_mesh[n][1], by_mesh[n][2]])
+	rows.sort_custom(func(a, b2): return a[0] > b2[0])
+	for r in rows.slice(0, 18):
+		t.log_line("VEG   %-26s %7.1f k tris  %6d instances x %4d tris" % [r[1], r[0] / 1000.0, r[2], r[3]])
 
 
 ## Direct timings of known periodic work (`--perf=probe`).

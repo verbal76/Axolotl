@@ -968,6 +968,8 @@ func run_diagnostics_text() -> String:
 	if frame_stats != null:
 		L.append("  Frames " + frame_stats.line("title"))
 		L.append("  Frames " + frame_stats.line("play"))
+		if quality != null:
+			L.append("  Quality level %d (3D scale %.2f)%s" % [quality.level, get_viewport().scaling_3d_scale, ", title capped at 30 fps" if title_capped else ""])
 	if repop != null:
 		L.append("  " + repop.summary())
 	L.append("  " + drawn.summary())
