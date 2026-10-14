@@ -228,7 +228,10 @@ jobs:
             "- Linux / Steam Deck: Mote Build $N Linux.tar.gz (extract, run Mote.x86_64)" "" \
             "Source commit $SHA. Checksums: checksums.sha256; details: build-manifest.json." > notes.md
           FILES=(); for f in "Mote Build $N "* build-manifest.json checksums.sha256; do FILES+=("$f"); done
-          gh release create "build-$N" --repo "$GITHUB_REPOSITORY" --target "$SHA" --title "Mote Build $N" \
+          # The tag goes on the commit this run started from (the release-branch head, which contains $SHA;
+          # the plan job checked that): GitHub refuses (403) a workflow-created tag on an older source
+          # commit (Build 138, as for apk-release.yml on 2026-10-12). The build itself is $SHA (manifest, notes).
+          gh release create "build-$N" --repo "$GITHUB_REPOSITORY" --target "$GITHUB_SHA" --title "Mote Build $N" \
             --notes-file notes.md --prerelease --latest=false "${FILES[@]}"
           # Re-download and verify what was published.
           mkdir ../check && cd ../check
