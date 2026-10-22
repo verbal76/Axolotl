@@ -575,6 +575,7 @@ func sim() -> void:
 	var us_food := 0
 	var phys_with: Array[float] = []
 	var phys_without: Array[float] = []
+	var cpu_last := _main_cpu_ns()
 	var total_arrivals := 0
 	var food_on_cam := 0
 	var food_near_min := 999
@@ -616,7 +617,11 @@ func sim() -> void:
 				p.place(b, b.surface_point(dd, 0.3), -MossBall.frame_at(dd, rng.randf() * 360.0).z)
 				g.cam.snap_behind()
 			await t.frames(1)
-			var pt: float = Performance.get_monitor(Performance.TIME_PHYSICS_PROCESS) * 1000.0
+			# (The main thread's own CPU time this frame, from the kernel: the engine's TIME_* monitors
+			# read from a script are not usable in 4.7.2.)
+			var c1 := _main_cpu_ns()
+			var pt: float = (c1 - cpu_last) / 1e6
+			cpu_last = c1
 			var alive := r.alive_on_ball(b)
 			if alive > 0:
 				phys_with.append(pt)
@@ -728,7 +733,7 @@ func sim() -> void:
 		if not earned0.has(id) and (str(id).contains(".parasite") or str(id).contains(".mote")):
 			earned_ok = false
 	var res_ok := g.balls.map(func(b): return [b.events_done, b.restoration]) == res0
-	t.log_line("SIM cost: repopulation update %.1f us per look (%d looks); median physics frame %.2f ms with returners alive (%d frames), %.2f ms without (%d)" % [float(us_repop) / maxi(1, n_repop), n_repop,
+	t.log_line("SIM cost: repopulation update %.1f us per look (%d looks); median main-thread cpu %.2f ms per frame with returners alive (%d frames), %.2f ms without (%d)" % [float(us_repop) / maxi(1, n_repop), n_repop,
 			_median(phys_with), phys_with.size(), _median(phys_without), phys_without.size()])
 	t.log_line("SIM " + r.summary() + "; %d killed by him" % kills)
 	t.check("repop_sim_returners", restored and total_arrivals > 0 and problems.is_empty(), "%d arrivals over 7 balls; %s" % [total_arrivals, "; ".join(problems.slice(0, 6))])
@@ -739,6 +744,12 @@ func sim() -> void:
 			"local regions filled (lowest per-ball mean, of what the cap allows) %.0f%% [%s]; food within 55 m: lowest per-ball mean %.1f, %d of %d samples empty, min %d; %d arrivals in view or too close; eaten vs bound per ball %s" % [fill_min * 100.0, ", ".join(fill_lines), food_mean_min,
 			food_zero, food_samples, food_near_min, food_on_cam, ", ".join(exploit_lines)])
 	_clear_returners()
+
+
+## The main thread's CPU time so far (Linux schedstat, ns; 0 elsewhere).
+static func _main_cpu_ns() -> float:
+	var f := FileAccess.open("/proc/%d/schedstat" % OS.get_process_id(), FileAccess.READ)
+	return float(f.get_line().get_slice(" ", 0)) if f != null else 0.0
 
 
 static func _median(a: Array[float]) -> float:

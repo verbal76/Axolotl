@@ -7683,6 +7683,12 @@ func _test_polish_a() -> void:
 	await t.frames(40)
 	var fl: String = g.frame_stats.line("play")
 	t.check("frame_stats_in_diagnostics", fl.contains("fps") and g.run_diagnostics_text().contains("Frames title"), fl)
+	# The quality line does not depend on the frame statistics (ledger row 63).
+	var fs := g.frame_stats
+	g.frame_stats = null
+	var no_fs := g.run_diagnostics_text()
+	g.frame_stats = fs
+	t.check("quality_line_without_frame_stats", no_fs.contains("Quality level %d" % g.quality.level) and not no_fs.contains("Frames title"), no_fs.get_slice("Quality", 1).get_slice("\n", 0))
 	# Automatic updates: a return from the background stays a safe moment for RESUME_WINDOW_S, so a
 	# native check starting at the same instant no longer costs the install (owner phone 2026-10-01).
 	var au: AutoUpdate = g.auto_update
@@ -9177,10 +9183,16 @@ func _lunge_at_current(tp: TreasurePlay) -> bool:
 	return false
 
 
+## The main thread's CPU time so far (Linux schedstat, ns; 0 elsewhere).
+func _main_cpu_ns() -> float:
+	var f := FileAccess.open("/proc/%d/schedstat" % OS.get_process_id(), FileAccess.READ)
+	return float(f.get_line().get_slice(" ", 0)) if f != null else 0.0
+
+
 ## Stress (run by name only, after _test_all_clear): --hunts=N seeded hunts from --seed0, every
 ## object attempted by a real approach and lunge; each miss is logged (seed, kind, spot, world,
-## Diagnostic (by name only): Gill running a curve for 10 s on ball 1; the engine's own process and
-## physics time per frame (the locomotion's per-frame cost, like for like between builds).
+## Diagnostic (by name only): Gill running a curve for 10 s on ball 1; the main thread's CPU
+## time per frame (the locomotion's per-frame cost, like for like between builds).
 func _phase_cpu_probe() -> void:
 	var b := g.balls[0]
 	var spot := _quiet_spot(0)
@@ -9188,18 +9200,20 @@ func _phase_cpu_probe() -> void:
 	place_at(0, spot + up * 0.2, -MossBall.frame_at(up, 0.0).z)
 	await t.seconds(1.0)
 	p.use_bot_input = true
-	var proc := 0.0
-	var phys := 0.0
-	var n := 0
+	# (The main thread's own CPU time per frame, from the kernel: Performance.TIME_PROCESS and
+	# TIME_PHYSICS_PROCESS read from a script are not usable in 4.7.2 (0.0 or implausible values).)
+	var cpu: Array[float] = []
+	var c0 := _main_cpu_ns()
 	for i in 600:
 		p.bot_input = Vector2(sin(i * 0.02), cos(i * 0.02)).normalized()
 		await t.frames(1)
+		var c1 := _main_cpu_ns()
 		if i >= 60:
-			proc += Performance.get_monitor(Performance.TIME_PROCESS)
-			phys += Performance.get_monitor(Performance.TIME_PHYSICS_PROCESS)
-			n += 1
+			cpu.append((c1 - c0) / 1e6)
+		c0 = c1
 	p.bot_input = Vector2.ZERO
-	t.log_line("CPUPROBE process %.3f ms physics %.3f ms per frame over %d frames" % [proc / n * 1000.0, phys / n * 1000.0, n])
+	cpu.sort()
+	t.log_line("CPUPROBE main-thread cpu median %.3f ms, p90 %.3f ms per frame over %d frames (process + physics + render submission)" % [cpu[cpu.size() / 2], cpu[int(cpu.size() * 0.9)], cpu.size()])
 	# His own per-frame work, timed directly (medians, so other load on the machine barely counts).
 	var mt: Array[float] = []
 	var pt: Array[float] = []
